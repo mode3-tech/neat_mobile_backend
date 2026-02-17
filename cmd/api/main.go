@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +11,8 @@ import (
 	"time"
 	"xpress/internal/config"
 	"xpress/internal/server"
+
+	"github.com/joho/godotenv"
 )
 
 func run(ctx context.Context) error {
@@ -61,16 +61,10 @@ func run(ctx context.Context) error {
 }
 
 func main() {
-	ctx := context.Background()
-	b := make([]byte, 32)
-
-	_, err := rand.Read(b)
-	if err != nil {
-		panic(err)
+	if err := godotenv.Load("../../.env"); err != nil {
+		log.Println(".env file not found (using system environment)")
 	}
-
-	secret := base64.StdEncoding.EncodeToString(b)
-	fmt.Println(secret)
+	ctx := context.Background()
 	if err := run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
