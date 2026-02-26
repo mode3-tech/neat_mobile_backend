@@ -1,9 +1,9 @@
 package server
 
 import (
+	"neat_mobile_app_backend/internal/config"
 	"net/http"
 	"time"
-	"xpress/internal/config"
 )
 
 type Server struct {

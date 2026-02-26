@@ -3,8 +3,8 @@ package models
 import "time"
 
 type User struct {
-	ID           string
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
+	ID           string    `gorm:"column:id"`
+	Email        string    `gorm:"column:email"`
+	PasswordHash string    `gorm:"column:password"`
+	CreatedAt    time.Time `gorm:"column:created_at"`
 }

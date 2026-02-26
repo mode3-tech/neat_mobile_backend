@@ -6,9 +6,22 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken string `json:"access_token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type SMSOTPRequest struct {
+	Phone string `json:"phone binding:required"`
+}
+
+type EmailOTPRequest struct {
+	Email string `json:"email binding:required"`
 }

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/config"
+	"neat_mobile_app_backend/internal/server"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"time"
-	"xpress/internal/config"
-	"xpress/internal/server"
 
 	"github.com/joho/godotenv"
 )
@@ -61,7 +61,7 @@ func run(ctx context.Context) error {
 }
 
 func main() {
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(); err != nil {
 		log.Println(".env file not found (using system environment)")
 	}
 	ctx := context.Background()

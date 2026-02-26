@@ -23,14 +23,18 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.service.Login(c.Request.Context(), req.Email, req.Password)
+	userAgent := c.GetHeader("User-Agent")
+	ip := c.ClientIP()
+	deviceID := c.GetHeader("X-Device-ID")
+
+	tokenObj, err := h.service.Login(c.Request.Context(), deviceID, ip, userAgent, req.Email, req.Password)
 
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err})
 		return
 	}
 
-	c.JSON(http.StatusOK, LoginResponse{AccessToken: token})
+	c.JSON(http.StatusOK, LoginResponse{AccessToken: tokenObj.AccessToken, RefreshToken: tokenObj.RefreshToken})
 }
 
 func (h *Handler) Logout(c *gin.Context) {
@@ -57,4 +61,21 @@ func (h *Handler) Logout(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+}
+
+func (h *Handler) RefreshAccessToken(c *gin.Context) {
+	var req RefreshTokenRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh token missing"})
+	}
+}
+
+func (h *Handler) SendOTP(c *gin.Context) {
+	var req SMSOTPRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is missing"})
+	}
+
 }
