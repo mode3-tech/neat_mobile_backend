@@ -177,8 +177,8 @@ Startup behavior:
 Swagger docs:
 
 - UI: `http://localhost:<PORT>/swagger/index.html`
-- JSON spec: `http://localhost:<PORT>/swagger/doc.json`
-- YAML spec: `http://localhost:<PORT>/swagger/doc.yaml`
+- JSON spec: `http://localhost:<PORT>/openapi/doc.json`
+- YAML spec: `http://localhost:<PORT>/openapi/doc.yaml`
 
 ## API Endpoints (Current)
 
