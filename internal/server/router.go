@@ -13,6 +13,8 @@ import (
 	"neat_mobile_app_backend/providers/sms"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func NewRouter(cfg config.Config) (*gin.Engine, error) {
@@ -28,6 +30,9 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(gin.Logger())
+	r.StaticFile("/swagger/doc.json", "./docs/swagger.json")
+	r.StaticFile("/swagger/doc.yaml", "./docs/swagger.yaml")
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/swagger/doc.json")))
 
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")

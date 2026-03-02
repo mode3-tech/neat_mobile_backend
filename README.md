@@ -40,6 +40,9 @@ neat_mobile_app_backend/
 |   `-- api/
 |       |-- main.go
 |       `-- tmp/                  # local build artifacts (generated)
+|-- docs/
+|   |-- swagger.json
+|   `-- swagger.yaml
 |-- internal/
 |   |-- config/
 |   |   `-- config.go
@@ -105,6 +108,7 @@ Dependency roles:
 - `modules/*`: feature HTTP handlers, business logic, and persistence behavior
 - `providers/*`: external integrations (JWT, SMS, email)
 - `models/*`: shared DB model structs
+- `docs/*`: checked-in OpenAPI specification files
 - `templates/*`: HTML email templates
 
 ## Environment Variables
@@ -169,6 +173,12 @@ Startup behavior:
 - Builds router + providers
 - Runs GORM migrations (`User`, `AuthSession`, `RefreshToken`, `OTPModel`)
 - Starts HTTP server with graceful shutdown on `Ctrl+C`
+
+Swagger docs:
+
+- UI: `http://localhost:<PORT>/swagger/index.html`
+- JSON spec: `http://localhost:<PORT>/swagger/doc.json`
+- YAML spec: `http://localhost:<PORT>/swagger/doc.yaml`
 
 ## API Endpoints (Current)
 
@@ -335,6 +345,21 @@ go test ./...
 ```
 
 Current automated coverage includes repository tests using `sqlmock` for the auth repository (`modules/auth/repository_test.go`).
+
+## Swagger Documentation
+
+Swagger UI is served directly by the app at:
+
+- `/swagger/index.html`
+
+The checked-in OpenAPI files live in:
+
+- `docs/swagger.json`
+- `docs/swagger.yaml`
+
+Deployment note:
+
+- If you deploy only the compiled binary, include the `docs/` directory alongside it so the Swagger spec routes can be served at runtime.
 
 ## Known Gaps / Implementation Notes
 
