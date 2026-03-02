@@ -6,6 +6,8 @@ import (
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/auth/otp"
+	"neat_mobile_app_backend/providers/bvn/prembly"
+	"neat_mobile_app_backend/providers/bvn/tendar"
 	"neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/sms"
@@ -31,9 +33,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	apiV1 := api.Group("/v1")
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
+	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
+	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
 
 	authRepo := auth.NewRespository(db)
-	authService := auth.NewService(authRepo, tokenSigner)
+	authService := auth.NewService(authRepo, tokenSigner, bvnProvider, premblyProvider)
 	authHandler := auth.NewHandler(authService)
 	auth.RegisterRoutes(apiV1, authHandler)
 

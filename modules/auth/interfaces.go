@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+	"neat_mobile_app_backend/providers/bvn"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,4 +17,12 @@ type JWTSigner interface {
 	ValidRefreshToken(tokenString string) bool
 	ExtractAccessTokenIdentifiers(tokenString string) (string, string, error)
 	ExtractRefreshTokenIdentifiers(tokenString string) (string, string, string, error)
+}
+
+type TendarValidation interface {
+	ValidateBVNWithTendar(ctx context.Context, BVN string) (*bvn.TendarBVNValidationSuccessResponse, error)
+}
+
+type PremblyValidation interface {
+	ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.PremblyBVNValidationSuccessResponse, error)
 }

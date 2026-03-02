@@ -15,6 +15,8 @@ type Config struct {
 	SMTPPort        string
 	SMTPUser        string
 	SMTPPass        string
+	TendarAPIKey    string
+	PremblyAPIKey   string
 }
 
 func Load() Config {
@@ -29,6 +31,8 @@ func Load() Config {
 		SMTPPort:        getEnv("SMTP_PORT", ""),
 		SMTPUser:        getEnv("SMTP_USER", ""),
 		SMTPPass:        getEnv("SMTP_PASS", ""),
+		TendarAPIKey:    getEnv("TENDAR_APIKEY", ""),
+		PremblyAPIKey:   getEnv("PREMBLY_APIKEY", ""),
 	}
 }
 

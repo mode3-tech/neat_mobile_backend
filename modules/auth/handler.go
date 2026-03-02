@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -48,6 +49,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing authorization header"})
+		return
 	}
 	splittedAuthHeader := strings.Fields(authHeader)
 	if len(splittedAuthHeader) != 2 || splittedAuthHeader[0] != "Bearer" {
@@ -78,4 +80,49 @@ func (h *Handler) SendOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is missing"})
 	}
 
+}
+
+func (h *Handler) VerifyBVN(c *gin.Context) {
+	var req BVNValidationRequest
+
+	selectedBVNService := BVNServiceType(c.Query("service"))
+
+	fmt.Println(selectedBVNService)
+
+	if selectedBVNService != TendarServiceType && selectedBVNService != PremblyServiceType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "service must be 'tendar' or 'prembly'"})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bvn is missing"})
+		return
+	}
+
+	switch selectedBVNService {
+	case TendarServiceType:
+		bvnInfo, err := h.service.ValidateBVNWithTendar(c.Request.Context(), req.BVN)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, &BVNValidationResponse{
+			Name:        bvnInfo.name,
+			DOB:         bvnInfo.dob,
+			PhoneNumber: bvnInfo.phone,
+		})
+	case PremblyServiceType:
+		bvnInfo, err := h.service.ValidateBVNWithPrembly(c.Request.Context(), req.BVN)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, &BVNValidationResponse{
+			Name:        bvnInfo.name,
+			DOB:         bvnInfo.dob,
+			PhoneNumber: bvnInfo.phone,
+		})
+	}
 }

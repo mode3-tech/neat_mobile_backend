@@ -11,15 +11,89 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type Service struct {
 	repo      *Repository
 	jwtSigner JWTSigner
+	tender    TendarValidation
+	prembly   PremblyValidation
 }
 
-func NewService(repo *Repository, signer JWTSigner) *Service {
-	return &Service{repo: repo, jwtSigner: signer}
+type bvnInfo struct {
+	name  string
+	dob   string
+	phone string
+}
+
+func NewService(repo *Repository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation) *Service {
+	return &Service{repo: repo, jwtSigner: signer, tender: tender, prembly: prembly}
+}
+
+func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.tender == nil {
+		return nil, errors.New("tendar validator is not configured")
+	}
+
+	if bvn == "" {
+		return nil, errors.New("bvn is required")
+	}
+
+	if len(bvn) < 11 || len(bvn) > 11 {
+		return nil, errors.New("bvn is longer or shorter than 11 digits")
+	}
+
+	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
+	if err != nil {
+		return nil, err
+	}
+	if bvnDetails == nil {
+		return nil, errors.New("empty bvn validation response")
+	}
+
+	caser := cases.Title(language.English)
+
+	fullName := fmt.Sprintf("%s %s %s", caser.String(bvnDetails.Data.Details.FirstName), caser.String(bvnDetails.Data.Details.MiddleName), caser.String(bvnDetails.Data.Details.LastName))
+
+	return &bvnInfo{
+		name:  fullName,
+		dob:   bvnDetails.Data.Details.DateOfBirth,
+		phone: bvnDetails.Data.Details.PhoneNumber,
+	}, nil
+}
+
+func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.prembly == nil {
+		return nil, errors.New("prembly validator is not configured")
+	}
+
+	if bvn == "" {
+		return nil, errors.New("bvn is required")
+	}
+
+	if len(bvn) < 11 || len(bvn) > 11 {
+		return nil, errors.New("bvn is longer or shorter than 11 digits")
+	}
+
+	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
+	if err != nil {
+		return nil, err
+	}
+	if bvnDetails == nil {
+		return nil, errors.New("empty bvn validation response")
+	}
+
+	caser := cases.Title(language.English)
+
+	fullName := fmt.Sprintf("%s %s %s", caser.String(bvnDetails.Data.FirstName), caser.String(bvnDetails.Data.MiddleName), caser.String(bvnDetails.Data.LastName))
+
+	return &bvnInfo{
+		name:  fullName,
+		dob:   bvnDetails.Data.DateOfBirth,
+		phone: bvnDetails.Data.PhoneNumber,
+	}, nil
 }
 
 func (s *Service) Login(ctx context.Context, deviceID, ip, userAgent, email, password string) (*AuthObject, error) {

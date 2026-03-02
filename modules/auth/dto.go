@@ -19,9 +19,19 @@ type RefreshTokenRequest struct {
 }
 
 type SMSOTPRequest struct {
-	Phone string `json:"phone binding:required"`
+	Phone string `json:"phone" binding:"required"`
 }
 
 type EmailOTPRequest struct {
-	Email string `json:"email binding:required"`
+	Email string `json:"email" binding:"required"`
+}
+
+type BVNValidationRequest struct {
+	BVN string `json:"bvn" binding:"required"`
+}
+
+type BVNValidationResponse struct {
+	Name        string `json:"name"`
+	DOB         string `json:"dob"`
+	PhoneNumber string `json:"phone_number"`
 }
