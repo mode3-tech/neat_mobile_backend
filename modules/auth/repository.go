@@ -112,7 +112,7 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 			Updates(map[string]any{
 				"revoked_at":      now,
 				"replaced_by_jti": newToken.JTI,
-				"last_used_at":    now, // optional
+				"last_used_at":    now,
 			}).Error; err != nil {
 			return err
 		}
@@ -125,6 +125,6 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 	})
 }
 
-// func (r *Repository) RotateRefreshToken(ctx context.Context, jti string) error {
-// 	return r.db.WithContext(ctx).
-// }
+func (r *Repository) AddVerification(ctx context.Context, verification *models.VerificationRecord) error {
+	return r.db.WithContext(ctx).Create(verification).Error
+}

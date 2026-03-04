@@ -19,3 +19,7 @@ type OTPModel struct {
 	NextSendAt   *time.Time `gorm:"column:next_send_at"`
 	IssuedAt     time.Time  `gorm:"column:issued_at; not null;autoCreateTime"`
 }
+
+func (OTPModel) TableName() string {
+	return "wallet_otps"
+}

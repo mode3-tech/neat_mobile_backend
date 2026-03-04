@@ -26,3 +26,7 @@ type TendarValidation interface {
 type PremblyValidation interface {
 	ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.PremblyBVNValidationSuccessResponse, error)
 }
+
+type BVNProviderSource interface {
+	GetCurrentProvider(ctx context.Context) (Provider, error)
+}

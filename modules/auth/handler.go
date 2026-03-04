@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,6 +13,16 @@ type Handler struct {
 
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
+}
+
+func (h *Handler) Register(c *gin.Context) {
+	var req RegisterRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -85,44 +94,21 @@ func (h *Handler) SendOTP(c *gin.Context) {
 func (h *Handler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
 
-	selectedBVNService := BVNServiceType(c.Query("service"))
-
-	fmt.Println(selectedBVNService)
-
-	if selectedBVNService != TendarServiceType && selectedBVNService != PremblyServiceType {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "service must be 'tendar' or 'prembly'"})
-		return
-	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bvn is missing"})
 		return
 	}
 
-	switch selectedBVNService {
-	case TendarServiceType:
-		bvnInfo, err := h.service.ValidateBVNWithTendar(c.Request.Context(), req.BVN)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, &BVNValidationResponse{
-			Name:        bvnInfo.name,
-			DOB:         bvnInfo.dob,
-			PhoneNumber: bvnInfo.phone,
-		})
-	case PremblyServiceType:
-		bvnInfo, err := h.service.ValidateBVNWithPrembly(c.Request.Context(), req.BVN)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, &BVNValidationResponse{
-			Name:        bvnInfo.name,
-			DOB:         bvnInfo.dob,
-			PhoneNumber: bvnInfo.phone,
-		})
+	bvnInfo, err := h.service.ValidateBVN(c.Request.Context(), req.BVN)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
+	c.JSON(http.StatusOK, &BVNValidationResponse{
+		Name:           bvnInfo.name,
+		DOB:            bvnInfo.dob,
+		PhoneNumber:    bvnInfo.phone,
+		VerificationID: bvnInfo.verificationID,
+	})
 }

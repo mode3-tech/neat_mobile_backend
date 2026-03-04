@@ -110,17 +110,7 @@ paths:
       tags:
         - Auth
       summary: Validate BVN
-      description: Validates a BVN with the selected provider.
-      parameters:
-        - in: query
-          name: service
-          required: true
-          description: BVN provider to use.
-          schema:
-            type: string
-            enum:
-              - tendar
-              - prembly
+      description: Validates a BVN using the provider currently configured by CBA.
       requestBody:
         required: true
         content:
@@ -135,13 +125,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/BVNValidationResponse'
         '400':
-          description: Missing body or unsupported provider
+          description: Missing or invalid request body
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Provider or internal error
+          description: CBA lookup, provider, or internal error
           content:
             application/json:
               schema:

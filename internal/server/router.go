@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"neat_mobile_app_backend/internal/adapters/cba"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/modules/auth"
@@ -41,8 +42,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
 	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
 
+	var providerSource auth.BVNProviderSource
+	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
+		providerSource = cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
+	} else {
+		log.Print("CBA provider source is not fully configured; BVN validation will fail until CBA_INTERNAL_URL and CBA_INTERNAL_KEY are set")
+	}
+
 	authRepo := auth.NewRespository(db)
-	authService := auth.NewService(authRepo, tokenSigner, bvnProvider, premblyProvider)
+	authService := auth.NewService(authRepo, tokenSigner, bvnProvider, premblyProvider, providerSource)
 	authHandler := auth.NewHandler(authService)
 	auth.RegisterRoutes(apiV1, authHandler)
 

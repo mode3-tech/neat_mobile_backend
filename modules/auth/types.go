@@ -7,9 +7,9 @@ type AuthObject struct {
 	RefreshToken string
 }
 
-type BVNServiceType string
+type Provider string
 
 const (
-	TendarServiceType  BVNServiceType = "tendar"
-	PremblyServiceType BVNServiceType = "prembly"
+	ProviderTendar  Provider = "tendar"
+	ProviderPrembly Provider = "prembly"
 )

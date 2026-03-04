@@ -18,7 +18,7 @@ type Tendar struct {
 
 func NewTendar(apiKey string) *Tendar {
 	return &Tendar{apiKey: apiKey, httpClient: &http.Client{
-		Timeout: time.Second * 30,
+		Timeout: time.Second * 60,
 	}}
 }
 

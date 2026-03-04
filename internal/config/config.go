@@ -17,6 +17,8 @@ type Config struct {
 	SMTPPass        string
 	TendarAPIKey    string
 	PremblyAPIKey   string
+	CBAInternalURL  string
+	CBAInternalKey  string
 }
 
 func Load() Config {
@@ -33,6 +35,8 @@ func Load() Config {
 		SMTPPass:        getEnv("SMTP_PASS", ""),
 		TendarAPIKey:    getEnv("TENDAR_APIKEY", ""),
 		PremblyAPIKey:   getEnv("PREMBLY_APIKEY", ""),
+		CBAInternalURL:  getEnv("CBA_INTERNAL_URL", ""),
+		CBAInternalKey:  getEnv("CBA_INTERNAL_KEY", ""),
 	}
 }
 

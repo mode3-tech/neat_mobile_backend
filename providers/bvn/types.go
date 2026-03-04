@@ -3,9 +3,10 @@ package bvn
 import "time"
 
 type TendarBVNValidationSuccessResponse struct {
-	Data    TendarBVNValidationSuccessData `json:"data"`
-	Error   bool                           `json:"error"`
-	Message string                         `json:"message"`
+	VerificationID string                         `json:"verification_id"`
+	Data           TendarBVNValidationSuccessData `json:"data"`
+	Error          bool                           `json:"error"`
+	Message        string                         `json:"message"`
 }
 
 type TendarBVNValidationSuccessData struct {
@@ -52,6 +53,7 @@ type TendarBVNDetails struct {
 }
 
 type PremblyBVNValidationSuccessResponse struct {
+	VerificationID     string                           `json:"verification_id"`
 	Status             bool                             `json:"status"`
 	ResponseCode       string                           `json:"response_code"`
 	Message            string                           `json:"message"`

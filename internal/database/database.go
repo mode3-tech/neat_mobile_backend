@@ -38,6 +38,7 @@ func Migrate(db *gorm.DB) error {
 		&models.User{},
 		&models.AuthSession{},
 		&models.RefreshToken{},
+		&models.VerificationRecord{},
 		&otp.OTPModel{},
 	)
 }
