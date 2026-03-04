@@ -72,5 +72,7 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 		return nil, err
 	}
 
+	fmt.Print(result)
+
 	return &result, nil
 }

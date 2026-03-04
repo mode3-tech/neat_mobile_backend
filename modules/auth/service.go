@@ -86,6 +86,10 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 		UpdatedAt:     now,
 	}
 
+	if fullName == "" || resp.Data.BirthDate == "" || resp.Data.TelephoneNo == "" {
+		return nil, errors.New("bvn validation response is incomplete")
+	}
+
 	if err := s.verification.AddVerification(ctx, record); err != nil {
 		return nil, err
 	}
@@ -336,6 +340,10 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		record.VerifiedDOB = &dob
 	}
 
+	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
+		return nil, errors.New("bvn validation response is incomplete")
+	}
+
 	if err := s.verification.AddVerification(ctx, record); err != nil {
 		return nil, err
 	}
@@ -415,6 +423,10 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 	if dob := strings.TrimSpace(bvnDetails.Data.DateOfBirth); dob != "" {
 		record.VerifiedDOB = &dob
+	}
+
+	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
+		return nil, errors.New("bvn validation response is incomplete")
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
