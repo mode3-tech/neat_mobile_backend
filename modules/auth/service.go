@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"neat_mobile_app_backend/models"
+	"neat_mobile_app_backend/modules/auth/verification"
 	"strings"
 	"time"
 
@@ -18,9 +19,11 @@ import (
 
 type Service struct {
 	repo           *Repository
+	verification   *verification.VerificationRepo
 	jwtSigner      JWTSigner
 	tender         TendarValidation
 	prembly        PremblyValidation
+	nin            NINValidation
 	providerSource BVNProviderSource
 }
 
@@ -31,14 +34,68 @@ type bvnInfo struct {
 	verificationID string
 }
 
-func NewService(repo *Repository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, providerSource BVNProviderSource) *Service {
+type ninInfo struct {
+	name           string
+	dob            string
+	phone          string
+	verificationID string
+}
+
+func NewService(repo *Repository, verification *verification.VerificationRepo, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *Service {
 	return &Service{
 		repo:           repo,
+		verification:   verification,
 		jwtSigner:      signer,
 		tender:         tender,
 		prembly:        prembly,
+		nin:            nin,
 		providerSource: providerSource,
 	}
+}
+
+func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error) {
+	if nin == "" || len(nin) < 11 || len(nin) > 11 {
+		return nil, errors.New("invalid nin")
+	}
+
+	resp, err := s.nin.ValidateNIN(ctx, nin)
+	if err != nil {
+		return nil, err
+	}
+
+	firstName := TitleCase(resp.Data.FirstName)
+	middleName := TitleCase(resp.Data.MiddleName)
+	lastName := TitleCase(resp.Data.Surname)
+	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
+
+	verificationID := uuid.NewString()
+	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
+	subjectHash := hex.EncodeToString(subjectHashBytes[:])
+	now := time.Now().UTC()
+	expiresAt := now.Add(15 * time.Minute)
+	maskedNIN := MaskSub(nin)
+
+	record := &models.VerificationRecord{
+		ID:            verificationID,
+		Type:          models.VerificationTypeNIN,
+		Provider:      string(ProviderPrembly),
+		SubjectHash:   subjectHash,
+		SubjectMasked: &maskedNIN,
+		ExpiresAt:     &expiresAt,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := s.verification.AddVerification(ctx, record); err != nil {
+		return nil, err
+	}
+
+	return &ninInfo{
+		name:           fullName,
+		dob:            resp.Data.BirthDate,
+		phone:          resp.Data.TelephoneNo,
+		verificationID: verificationID,
+	}, nil
 }
 
 func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
@@ -59,171 +116,6 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 	default:
 		return nil, fmt.Errorf("unsupported bvn provider %q", provider)
 	}
-}
-
-func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.tender == nil {
-		return nil, errors.New("tendar validator is not configured")
-	}
-
-	if bvn == "" {
-		return nil, errors.New("bvn is required")
-	}
-
-	if len(bvn) < 11 || len(bvn) > 11 {
-		return nil, errors.New("bvn is longer or shorter than 11 digits")
-	}
-
-	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
-	if err != nil {
-		return nil, err
-	}
-	if bvnDetails == nil {
-		return nil, errors.New("empty bvn validation response")
-	}
-
-	caser := cases.Title(language.English)
-
-	//Convert the names to titlecase
-	fullName := fmt.Sprintf("%s %s %s",
-		caser.String(bvnDetails.Data.Details.FirstName),
-		caser.String(bvnDetails.Data.Details.MiddleName),
-		caser.String(bvnDetails.Data.Details.LastName))
-
-	verificationID := uuid.NewString()
-	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
-	subjectHash := hex.EncodeToString(subjectHashBytes[:])
-	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
-	maskedBVN := maskBVN(bvn)
-
-	record := &models.VerificationRecord{
-		ID:            verificationID,
-		Type:          models.VerificationTypeBVN,
-		Provider:      string(ProviderPrembly),
-		Status:        models.VerificationStatusVerified,
-		SubjectHash:   subjectHash,
-		SubjectMasked: &maskedBVN,
-		VerifiedAt:    &now,
-		ExpiresAt:     &expiresAt,
-	}
-
-	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
-		record.ProviderVerificationID = &providerVerificationID
-	}
-	if fullName != "" {
-		record.VerifiedName = &fullName
-	}
-	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
-		record.VerifiedPhone = &phone
-	}
-	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
-		record.VerifiedEmail = &email
-	}
-	if dob := strings.TrimSpace(bvnDetails.Data.Details.DateOfBirth); dob != "" {
-		record.VerifiedDOB = &dob
-	}
-
-	if err := s.repo.AddVerification(ctx, record); err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("tendar verification id: %s\n", verificationID)
-
-	return &bvnInfo{
-		name:           fullName,
-		dob:            bvnDetails.Data.Details.DateOfBirth,
-		phone:          bvnDetails.Data.Details.PhoneNumber,
-		verificationID: verificationID,
-	}, nil
-}
-
-func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.prembly == nil {
-		return nil, errors.New("prembly validator is not configured")
-	}
-
-	if bvn == "" {
-		return nil, errors.New("bvn is required")
-	}
-
-	if len(bvn) < 11 || len(bvn) > 11 {
-		return nil, errors.New("bvn is longer or shorter than 11 digits")
-	}
-
-	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
-	if err != nil {
-		return nil, err
-	}
-	if bvnDetails == nil {
-		return nil, errors.New("empty bvn validation response")
-	}
-
-	caser := cases.Title(language.English)
-	fullName := strings.Join(strings.Fields(fmt.Sprintf(
-		"%s %s %s",
-		caser.String(bvnDetails.Data.FirstName),
-		caser.String(bvnDetails.Data.MiddleName),
-		caser.String(bvnDetails.Data.LastName),
-	)), " ")
-	verificationID := uuid.NewString()
-	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
-	subjectHash := hex.EncodeToString(subjectHashBytes[:])
-	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
-	maskedBVN := maskBVN(bvn)
-
-	record := &models.VerificationRecord{
-		ID:            verificationID,
-		Type:          models.VerificationTypeBVN,
-		Provider:      string(ProviderPrembly),
-		Status:        models.VerificationStatusVerified,
-		SubjectHash:   subjectHash,
-		SubjectMasked: &maskedBVN,
-		VerifiedAt:    &now,
-		ExpiresAt:     &expiresAt,
-	}
-
-	if providerVerificationID := strings.TrimSpace(bvnDetails.Verification.VerificationID); providerVerificationID != "" {
-		record.ProviderVerificationID = &providerVerificationID
-	}
-	if referenceID := strings.TrimSpace(bvnDetails.ReferenceID); referenceID != "" {
-		record.ReferenceID = &referenceID
-	}
-	if fullName != "" {
-		record.VerifiedName = &fullName
-	}
-	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
-		record.VerifiedPhone = &phone
-	}
-	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
-		record.VerifiedEmail = &email
-	}
-	if dob := strings.TrimSpace(bvnDetails.Data.DateOfBirth); dob != "" {
-		record.VerifiedDOB = &dob
-	}
-
-	if err := s.repo.AddVerification(ctx, record); err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("prembly verification id: %s\n", verificationID)
-
-	return &bvnInfo{
-		name:           fullName,
-		dob:            bvnDetails.Data.DateOfBirth,
-		phone:          bvnDetails.Data.PhoneNumber,
-		verificationID: verificationID,
-	}, nil
-}
-
-func maskBVN(bvn string) string {
-	trimmed := strings.TrimSpace(bvn)
-	if len(trimmed) <= 4 {
-		return trimmed
-	}
-
-	return strings.Repeat("*", len(trimmed)-4) + trimmed[len(trimmed)-4:]
 }
 
 func (s *Service) Login(ctx context.Context, deviceID, ip, userAgent, email, password string) (*AuthObject, error) {
@@ -379,4 +271,162 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken string) (
 
 	return &AuthObject{AccessToken: accessToken, RefreshToken: newRefreshToken}, nil
 
+}
+
+func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.tender == nil {
+		return nil, errors.New("tendar validator is not configured")
+	}
+
+	if bvn == "" {
+		return nil, errors.New("bvn is required")
+	}
+
+	if len(bvn) < 11 || len(bvn) > 11 {
+		return nil, errors.New("bvn is longer or shorter than 11 digits")
+	}
+
+	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
+	if err != nil {
+		return nil, err
+	}
+	if bvnDetails == nil {
+		return nil, errors.New("empty bvn validation response")
+	}
+
+	caser := cases.Title(language.English)
+
+	//Convert the names to titlecase
+	fullName := fmt.Sprintf("%s %s %s",
+		caser.String(bvnDetails.Data.Details.FirstName),
+		caser.String(bvnDetails.Data.Details.MiddleName),
+		caser.String(bvnDetails.Data.Details.LastName))
+
+	verificationID := uuid.NewString()
+	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
+	subjectHash := hex.EncodeToString(subjectHashBytes[:])
+	now := time.Now().UTC()
+	expiresAt := now.Add(15 * time.Minute)
+	maskedBVN := MaskSub(bvn)
+
+	record := &models.VerificationRecord{
+		ID:            verificationID,
+		Type:          models.VerificationTypeBVN,
+		Provider:      string(ProviderPrembly),
+		Status:        models.VerificationStatusVerified,
+		SubjectHash:   subjectHash,
+		SubjectMasked: &maskedBVN,
+		VerifiedAt:    &now,
+		ExpiresAt:     &expiresAt,
+	}
+
+	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
+		record.ProviderVerificationID = &providerVerificationID
+	}
+	if fullName != "" {
+		record.VerifiedName = &fullName
+	}
+	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
+		record.VerifiedPhone = &phone
+	}
+	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
+		record.VerifiedEmail = &email
+	}
+	if dob := strings.TrimSpace(bvnDetails.Data.Details.DateOfBirth); dob != "" {
+		record.VerifiedDOB = &dob
+	}
+
+	if err := s.verification.AddVerification(ctx, record); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("tendar verification id: %s\n", verificationID)
+
+	return &bvnInfo{
+		name:           fullName,
+		dob:            bvnDetails.Data.Details.DateOfBirth,
+		phone:          bvnDetails.Data.Details.PhoneNumber,
+		verificationID: verificationID,
+	}, nil
+}
+
+func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.prembly == nil {
+		return nil, errors.New("prembly validator is not configured")
+	}
+
+	if bvn == "" {
+		return nil, errors.New("bvn is required")
+	}
+
+	if len(bvn) < 11 || len(bvn) > 11 {
+		return nil, errors.New("bvn is longer or shorter than 11 digits")
+	}
+
+	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
+	if err != nil {
+		return nil, err
+	}
+	if bvnDetails == nil {
+		return nil, errors.New("empty bvn validation response")
+	}
+
+	firstName := TitleCase(bvnDetails.Data.FirstName)
+	middleName := TitleCase(bvnDetails.Data.MiddleName)
+	lastName := TitleCase(bvnDetails.Data.LastName)
+	fullName := strings.Join(strings.Fields(fmt.Sprintf(
+		"%s %s %s",
+		firstName,
+		middleName,
+		lastName,
+	)), " ")
+	verificationID := uuid.NewString()
+	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
+	subjectHash := hex.EncodeToString(subjectHashBytes[:])
+	now := time.Now().UTC()
+	expiresAt := now.Add(15 * time.Minute)
+	maskedBVN := MaskSub(bvn)
+
+	record := &models.VerificationRecord{
+		ID:            verificationID,
+		Type:          models.VerificationTypeBVN,
+		Provider:      string(ProviderPrembly),
+		Status:        models.VerificationStatusVerified,
+		SubjectHash:   subjectHash,
+		SubjectMasked: &maskedBVN,
+		VerifiedAt:    &now,
+		ExpiresAt:     &expiresAt,
+	}
+
+	if providerVerificationID := strings.TrimSpace(bvnDetails.Verification.VerificationID); providerVerificationID != "" {
+		record.ProviderVerificationID = &providerVerificationID
+	}
+	if referenceID := strings.TrimSpace(bvnDetails.ReferenceID); referenceID != "" {
+		record.ReferenceID = &referenceID
+	}
+	if fullName != "" {
+		record.VerifiedName = &fullName
+	}
+	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
+		record.VerifiedPhone = &phone
+	}
+	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
+		record.VerifiedEmail = &email
+	}
+	if dob := strings.TrimSpace(bvnDetails.Data.DateOfBirth); dob != "" {
+		record.VerifiedDOB = &dob
+	}
+
+	if err := s.verification.AddVerification(ctx, record); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("prembly verification id: %s\n", verificationID)
+
+	return &bvnInfo{
+		name:           fullName,
+		dob:            bvnDetails.Data.DateOfBirth,
+		phone:          bvnDetails.Data.PhoneNumber,
+		verificationID: verificationID,
+	}, nil
 }

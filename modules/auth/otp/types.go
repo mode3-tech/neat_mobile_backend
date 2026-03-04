@@ -2,6 +2,7 @@ package otp
 
 type Purpose string
 type Channel string
+type Provider string
 
 const (
 	PurposeLogin         Purpose = "login"
@@ -12,4 +13,8 @@ const (
 const (
 	ChannelSMS   Channel = "sms"
 	ChannelEmail Channel = "email"
+)
+
+const (
+	ProviderTermii Provider = "termii"
 )

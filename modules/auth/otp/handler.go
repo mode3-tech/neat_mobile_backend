@@ -68,12 +68,14 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	if err := o.service.VerifyOTP(c.Request.Context(), req.OTP, req.Destination, channel, purpose); err != nil {
+	resp, err := o.service.VerifyOTP(c.Request.Context(), req.OTP, req.Destination, channel, purpose)
+
+	if err != nil {
 		writeOTPError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "otp verified"})
+	c.JSON(http.StatusOK, resp)
 }
 
 func parsePurpose(v string) (Purpose, error) {

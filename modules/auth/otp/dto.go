@@ -12,3 +12,8 @@ type VerifyOTPRequest struct {
 	Destination string `json:"destination" binding:"required"`
 	OTP         string `json:"otp" binding:"required,len=6,numeric"`
 }
+
+type VerifyOTPResponse struct {
+	Message        string `json:"message" binding:"required"`
+	VerificationID string `json:"verification_id" binding:"required"`
+}

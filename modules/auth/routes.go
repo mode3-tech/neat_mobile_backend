@@ -11,5 +11,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 		auth.POST("/logout", handler.Logout)
 		auth.POST("/refresh", handler.RefreshAccessToken)
 		auth.POST("/validate-bvn", handler.VerifyBVN)
+		auth.POST("/validate-nin", handler.VerifyNIN)
 	}
 }

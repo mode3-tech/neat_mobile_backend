@@ -29,12 +29,15 @@ func (s *SMS) Send(ctx context.Context, destination, message string) error {
 		return errors.New("sms service not configured")
 	}
 
-	url := "https://api.smslive247.com/api/v4/sms"
+	url := "https://v3.api.termii.com/api/sms/send"
 
 	payload := map[string]string{
-		"senderID":     s.senderID,
-		"mobileNumber": destination,
-		"messageText":  "Your OTP is 123456. It expires in 5 minutes.",
+		"api_key": strings.TrimSpace(s.apiKey),
+		"from":    s.senderID,
+		"to":      destination,
+		"sms":     message,
+		"type":    "plain",
+		"channel": "generic",
 	}
 
 	body, err := json.Marshal(payload)
@@ -49,7 +52,6 @@ func (s *SMS) Send(ctx context.Context, destination, message string) error {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", s.apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

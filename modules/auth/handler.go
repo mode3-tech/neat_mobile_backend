@@ -82,14 +82,14 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 	}
 }
 
-func (h *Handler) SendOTP(c *gin.Context) {
-	var req SMSOTPRequest
+// func (h *Handler) SendOTP(c *gin.Context) {
+// 	var req SMSOTPRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is missing"})
-	}
+// 	if err := c.ShouldBindJSON(&req); err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is missing"})
+// 	}
 
-}
+// }
 
 func (h *Handler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
@@ -110,5 +110,27 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 		DOB:            bvnInfo.dob,
 		PhoneNumber:    bvnInfo.phone,
 		VerificationID: bvnInfo.verificationID,
+	})
+}
+
+func (h *Handler) VerifyNIN(c *gin.Context) {
+	var req NINValidationRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nin is missing"})
+		return
+	}
+
+	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.NIN)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, &NINValidationResponse{
+		Name:           ninInfo.name,
+		DOB:            ninInfo.dob,
+		PhoneNumber:    ninInfo.phone,
+		VerificationID: ninInfo.verificationID,
 	})
 }

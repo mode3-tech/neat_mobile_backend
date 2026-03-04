@@ -42,10 +42,11 @@ func (o *OTPRepository) UpdateForResend(ctx context.Context, id string, newHash 
 		Model(&OTPModel{}).
 		Where("id = ? AND consumed_at IS NULL", id).
 		Updates(map[string]any{
-			"otp_hash":     newHash,
-			"expires_at":   newExp,
-			"next_send_at": nextSendAt,
-			"resend_count": gorm.Expr("resend_count + 1"),
+			"otp_hash":      newHash,
+			"expires_at":    newExp,
+			"next_send_at":  nextSendAt,
+			"attempt_count": 0,
+			"resend_count":  gorm.Expr("resend_count + 1"),
 		}).Error
 }
 

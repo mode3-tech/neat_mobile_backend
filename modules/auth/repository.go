@@ -124,7 +124,3 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 		return nil
 	})
 }
-
-func (r *Repository) AddVerification(ctx context.Context, verification *models.VerificationRecord) error {
-	return r.db.WithContext(ctx).Create(verification).Error
-}

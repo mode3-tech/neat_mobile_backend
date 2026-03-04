@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"neat_mobile_app_backend/providers/bvn"
+	"neat_mobile_app_backend/providers/nin"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -29,4 +30,8 @@ type PremblyValidation interface {
 
 type BVNProviderSource interface {
 	GetCurrentProvider(ctx context.Context) (Provider, error)
+}
+
+type NINValidation interface {
+	ValidateNIN(ctx context.Context, nin string) (*nin.PremblyNINValidationSuccessResponse, error)
 }

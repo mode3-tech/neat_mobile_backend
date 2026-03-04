@@ -59,3 +59,14 @@ type BVNValidationResponse struct {
 	PhoneNumber    string `json:"phone_number"`
 	VerificationID string `json:"verification_id"`
 }
+
+type NINValidationRequest struct {
+	NIN string `json:"nin" binding:"required"`
+}
+
+type NINValidationResponse struct {
+	Name           string `json:"name"`
+	DOB            string `json:"dob"`
+	PhoneNumber    string `json:"phone_number"`
+	VerificationID string `json:"verification_id"`
+}

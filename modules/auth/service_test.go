@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/providers/bvn"
 )
 
@@ -62,9 +63,11 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 	premblyValidator := &stubPremblyValidation{}
 	service := NewService(
 		nil,
+		&verification.VerificationRepo{},
 		nil,
 		tendarValidator,
 		premblyValidator,
+		nil,
 		stubProviderSource{provider: ProviderTendar},
 	)
 
@@ -94,7 +97,7 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 
 func TestService_ValidateBVN_ReturnsProviderSourceError(t *testing.T) {
 	wantErr := errors.New("cba unavailable")
-	service := NewService(nil, nil, nil, nil, stubProviderSource{err: wantErr})
+	service := NewService(nil, nil, nil, nil, nil, nil, stubProviderSource{err: wantErr})
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
 	if !errors.Is(err, wantErr) {
