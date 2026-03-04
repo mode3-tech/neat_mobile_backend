@@ -40,7 +40,7 @@ func (h *Handler) Login(c *gin.Context) {
 	tokenObj, err := h.service.Login(c.Request.Context(), deviceID, ip, userAgent, req.Email, req.Password)
 
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	accessToken := splittedAuthHeader[1]
 
 	if err := h.service.Logout(c.Request.Context(), req.RefreshToken, accessToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
@@ -81,15 +81,6 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh token missing"})
 	}
 }
-
-// func (h *Handler) SendOTP(c *gin.Context) {
-// 	var req SMSOTPRequest
-
-// 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is missing"})
-// 	}
-
-// }
 
 func (h *Handler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
