@@ -15,21 +15,18 @@ import (
 var nonDigit = regexp.MustCompile(`\D`)
 
 func NormalizeNigerianNumber(input string) (string, error) {
-	if input == "" {
-		return "", errors.New("empty phone number")
+	cleaned := nonDigit.ReplaceAllString(strings.TrimSpace(input), "")
+	if cleaned == "" {
+		return "", errors.New("invalid Nigerian number")
 	}
-
-	cleaned := nonDigit.ReplaceAllString(input, "")
 
 	switch {
 	case strings.HasPrefix(cleaned, "0") && len(cleaned) == 11:
-		return "+234" + cleaned[1:], nil
+		return "234" + cleaned[1:], nil
 	case strings.HasPrefix(cleaned, "234") && len(cleaned) == 13:
-		return "+" + cleaned, nil
+		return cleaned, nil
 	case len(cleaned) == 10:
-		return "+234" + cleaned, nil
-	case strings.HasPrefix(cleaned, "+234") && len(cleaned) == 14:
-		return "+234" + cleaned[3:], nil
+		return "234" + cleaned, nil
 	}
 
 	return "", errors.New("invalid Nigerian number")
@@ -47,7 +44,7 @@ func NormalizeDestination(destination string, channel Channel) (string, error) {
 		}
 		return dst, nil
 	case ChannelSMS:
-		return destination, nil
+		return NormalizeNigerianNumber(destination)
 	default:
 		return "", errors.New("unsupported channel")
 	}
