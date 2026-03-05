@@ -3,6 +3,7 @@ package auth
 import (
 	"strings"
 
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -19,4 +20,9 @@ func MaskSub(bvn string) string {
 	}
 
 	return strings.Repeat("*", len(trimmed)-4) + trimmed[len(trimmed)-4:]
+}
+
+func CheckPassword(storedHash, plainPassword string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(plainPassword))
+	return err == nil
 }

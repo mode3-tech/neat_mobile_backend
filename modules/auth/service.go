@@ -328,6 +328,8 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		SubjectMasked: &maskedBVN,
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
+		VerifiedName:  &fullName,
+		VerifiedDOB:   &bvnDetails.Data.Details.DateOfBirth,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
@@ -410,6 +412,8 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		SubjectMasked: &maskedBVN,
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
+		VerifiedName:  &fullName,
+		VerifiedDOB:   &bvnDetails.Data.DateOfBirth,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.Verification.VerificationID); providerVerificationID != "" {
