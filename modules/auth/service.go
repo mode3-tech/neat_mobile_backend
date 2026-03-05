@@ -87,7 +87,7 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 	}
 
 	if fullName == "" || resp.Data.BirthDate == "" || resp.Data.TelephoneNo == "" {
-		return nil, errors.New("bvn validation response is incomplete")
+		return nil, errors.New("invalid nin number")
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
@@ -104,12 +104,12 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 
 func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
-		return nil, errors.New("bvn provider source is not configured")
+		return nil, errors.New("something went wrong")
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
-		return nil, err
+		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
 
 	switch provider {
@@ -120,6 +120,11 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 	default:
 		return nil, fmt.Errorf("unsupported bvn provider %q", provider)
 	}
+}
+
+func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (*models.User, error) {
+
+	return &models.User{}, nil
 }
 
 func (s *Service) Login(ctx context.Context, deviceID, ip, userAgent, email, password string) (*AuthObject, error) {
@@ -287,15 +292,16 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 
 	if len(bvn) < 11 || len(bvn) > 11 {
-		return nil, errors.New("bvn is longer or shorter than 11 digits")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
+		fmt.Printf("service %s\n", err.Error())
 		return nil, err
 	}
 	if bvnDetails == nil {
-		return nil, errors.New("empty bvn validation response")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	caser := cases.Title(language.English)
@@ -341,7 +347,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
-		return nil, errors.New("bvn validation response is incomplete")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
@@ -360,7 +366,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
-		return nil, errors.New("prembly validator is not configured")
+		return nil, errors.New("couldn't resolve prembly provider")
 	}
 
 	if bvn == "" {
@@ -368,7 +374,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	if len(bvn) < 11 || len(bvn) > 11 {
-		return nil, errors.New("bvn is longer or shorter than 11 digits")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
@@ -376,7 +382,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		return nil, err
 	}
 	if bvnDetails == nil {
-		return nil, errors.New("empty bvn validation response")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	firstName := TitleCase(bvnDetails.Data.FirstName)
@@ -426,7 +432,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
-		return nil, errors.New("bvn validation response is incomplete")
+		return nil, errors.New("invalid bvn number")
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {

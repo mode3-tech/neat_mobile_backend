@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -92,7 +93,22 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 
 	bvnInfo, err := h.service.ValidateBVN(c.Request.Context(), req.BVN)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if isBadRequestBVNError(err) {
+			switch err.Error() {
+			case "tendar bvn validation failed with status 404":
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bvn"})
+				return
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		return
+	}
+
+	if bvnInfo == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
 	}
 
@@ -102,6 +118,28 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 		PhoneNumber:    bvnInfo.phone,
 		VerificationID: bvnInfo.verificationID,
 	})
+}
+
+func isBadRequestBVNError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "bvn is required", "invalid bvn number":
+		return true
+	}
+
+	const tendarStatusPrefix = "tendar bvn validation failed with status "
+	if strings.HasPrefix(msg, tendarStatusPrefix) {
+		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, tendarStatusPrefix))
+		statusCode, convErr := strconv.Atoi(statusCodeText)
+		if convErr == nil {
+			switch statusCode {
+			case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (h *Handler) VerifyNIN(c *gin.Context) {
@@ -114,7 +152,22 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 
 	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.NIN)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if isBadRequestNINError(err) {
+			switch err.Error() {
+			case "prembly nin validation failed with status 404":
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid nin"})
+				return
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		return
+	}
+
+	if ninInfo == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
 	}
 
@@ -124,4 +177,26 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 		PhoneNumber:    ninInfo.phone,
 		VerificationID: ninInfo.verificationID,
 	})
+}
+
+func isBadRequestNINError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "nin is required", "invalid nin", "invalid nin number":
+		return true
+	}
+
+	const premblyStatusPrefix = "prembly nin validation failed with status "
+	if strings.HasPrefix(msg, premblyStatusPrefix) {
+		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, premblyStatusPrefix))
+		statusCode, convErr := strconv.Atoi(statusCodeText)
+		if convErr == nil {
+			switch statusCode {
+			case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -3,7 +3,7 @@
   "info": {
     "title": "Neat Mobile App Backend API",
     "version": "1.0.0",
-    "description": "HTTP API for authentication, OTP workflows, and BVN validation.\n\nNote: `POST /auth/refresh` is registered, but the current HTTP handler is still incomplete."
+    "description": "HTTP API for authentication, OTP workflows, and BVN/NIN validation.\n\nNote: `POST /auth/refresh` is registered, but the current HTTP handler is still incomplete."
   },
   "servers": [
     {
@@ -201,7 +201,7 @@
             }
           },
           "400": {
-            "description": "Missing or invalid request body",
+            "description": "Missing or invalid request body, invalid BVN, or provider validation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -212,6 +212,57 @@
           },
           "500": {
             "description": "CBA lookup, provider, or internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/validate-nin": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validate NIN",
+        "description": "Validates a NIN using the configured NIN provider.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NINValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "NIN validated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NINValidationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body, invalid NIN, or provider validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or internal error",
             "content": {
               "application/json": {
                 "schema": {
@@ -290,6 +341,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -317,13 +378,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/VerifyOTPResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request body, purpose, channel, email, or phone number",
+            "description": "Invalid request body, purpose, or channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -342,28 +403,8 @@
               }
             }
           },
-          "429": {
-            "description": "Too many requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "SMS delivery failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SMS service not configured",
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -469,6 +510,45 @@
           "phone_number": {
             "type": "string",
             "example": "08012345678"
+          },
+          "verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "NINValidationRequest": {
+        "type": "object",
+        "required": [
+          "nin"
+        ],
+        "properties": {
+          "nin": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 11,
+            "example": "12345678901"
+          }
+        }
+      },
+      "NINValidationResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Jane Doe"
+          },
+          "dob": {
+            "type": "string",
+            "example": "1994-01-02"
+          },
+          "phone_number": {
+            "type": "string",
+            "example": "08012345678"
+          },
+          "verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           }
         }
       },
@@ -538,6 +618,19 @@
             "minLength": 6,
             "maxLength": 6,
             "example": "123456"
+          }
+        }
+      },
+      "VerifyOTPResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "OTP verification was successful"
+          },
+          "verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           }
         }
       },
