@@ -35,6 +35,30 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
+	// Keep production data intact when migrating from old schema that used `pin`.
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+				  AND column_name = 'pin'
+			) AND NOT EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+				  AND column_name = 'pin_hash'
+			) THEN
+				ALTER TABLE wallet_users RENAME COLUMN pin TO pin_hash;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.AuthSession{},
