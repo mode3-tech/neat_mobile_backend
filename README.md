@@ -1,160 +1,193 @@
 # Neat Mobile App Backend
 
-Go HTTP API backend for authentication and OTP workflows, built with Gin, PostgreSQL, GORM, JWT, and SMS/SMTP providers.
+Go HTTP API backend for authentication, OTP, and device-security workflows using Gin, PostgreSQL, GORM, and JWT.
 
-## Current Stage
+## Current Status
 
-This project currently includes:
+Implemented:
 
-- Auth login with JWT access + refresh token issuance
-- Logout endpoint that invalidates session/refresh token records
-- Refresh token rotation logic in the service/repository layer
-- OTP request/verify flows (SMS and email channels)
-- PostgreSQL-backed session, refresh token, and OTP persistence
-- Automatic GORM migrations on startup
+- User registration with transactional user creation and initial device bind
+- Login with `phone + password + X-Device-ID`
+- Device-aware login initialization responses:
+  - `challenge_required`
+  - `new_device_detected`
+- Logout endpoint (session/refresh invalidation)
+- Refresh token rotation (`/auth/refresh`)
+- OTP request and OTP verify endpoints (`/auth/otp/request`, `/auth/otp/verify`)
+- BVN and NIN validation endpoints
+- In-memory login rate limiting with shard-based locking and bounded key capacity
+- Auto migration on startup for auth + verification + device tables
 
-Current implementation notes:
+Important current gap:
 
-- `POST /auth/refresh` is registered, but the HTTP handler is still incomplete
-- OTP email delivery is implemented over SMTP (TLS/STARTTLS) and depends on correct DNS + a trusted mail certificate
+- Login is still missing OTP administration for new devices.
+  - On `new_device_detected`, login returns a `session_token` but does not send OTP automatically yet.
 
-## Tech Stack
+## Runtime Architecture
 
-- Go `1.25.5`
-- Gin (`github.com/gin-gonic/gin`)
-- GORM (`gorm.io/gorm`)
-- PostgreSQL (GORM Postgres driver `gorm.io/driver/postgres`, `github.com/lib/pq`)
-- JWT (`github.com/golang-jwt/jwt/v5`, HS256 signing)
-- UUIDs (`github.com/google/uuid`)
-- Password hashing (`golang.org/x/crypto/bcrypt`)
-- Env loading (`github.com/joho/godotenv`)
-- SMTP email (`net/smtp`, `crypto/tls`, `html/template`)
-- SMS provider integration (SMSLive247 HTTP API)
-- Testing (`github.com/DATA-DOG/go-sqlmock`)
+Execution flow:
 
-## Project Structure
+1. `cmd/api/main.go` loads environment and starts the HTTP server.
+2. `internal/server/router.go` composes DB, providers, middleware, and routes.
+3. `internal/database/database.go` opens Postgres and runs migrations.
+4. Features follow `handler -> service -> repository`.
+5. Transactional work uses `internal/database/tx/transactor.go`.
+
+Main modules:
+
+- `modules/auth`: registration, login init, logout, refresh, BVN/NIN
+- `modules/auth/otp`: OTP request/verification
+- `modules/auth/verification`: verification record persistence
+- `modules/device`: device/challenge/pending-session persistence + challenge generation
+
+## Project Structure (Current)
 
 ```text
 neat_mobile_app_backend/
-|-- cmd/
-|   `-- api/
-|       |-- main.go
-|       `-- tmp/                  # local build artifacts (generated)
+|-- cmd/api/
+|   |-- main.go
+|   `-- tmp/                   # local build artifacts
 |-- docs/
 |   |-- swagger.json
 |   `-- swagger.yaml
 |-- internal/
+|   |-- adapters/cba/
 |   |-- config/
-|   |   `-- config.go
 |   |-- database/
-|   |   `-- database.go
+|   |   |-- database.go
+|   |   `-- tx/transactor.go
+|   |-- middleware/
+|   |   `-- login_rate_limit.go
 |   |-- notify/
-|   |   `-- interfaces.go
-|   `-- server/
-|       |-- router.go
-|       `-- server.go
+|   |-- server/
+|   `-- validators/
 |-- models/
 |   |-- auth_session.go
+|   |-- device_challenge.go
+|   |-- pending_device_session.go
 |   |-- refresh_token.go
-|   `-- user.go
+|   |-- user.go
+|   `-- verification_record.go
 |-- modules/
-|   `-- auth/
+|   |-- auth/
+|   |   |-- dto.go
+|   |   |-- handler.go
+|   |   |-- helper.go
+|   |   |-- interfaces.go
+|   |   |-- models.go
+|   |   |-- repository.go
+|   |   |-- routes.go
+|   |   |-- service.go
+|   |   |-- types.go
+|   |   |-- otp/
+|   |   `-- verification/
+|   `-- device/
 |       |-- dto.go
 |       |-- handler.go
-|       |-- interfaces.go
+|       |-- models.go
 |       |-- repository.go
-|       |-- repository_test.go
-|       |-- routes.go
-|       |-- service.go
-|       |-- types.go
-|       `-- otp/
-|           |-- dto.go
-|           |-- handler.go
-|           |-- helper.go
-|           |-- otp_model.go
-|           |-- repository.go
-|           |-- routes.go
-|           |-- service.go
-|           `-- types.go
+|       `-- service.go
 |-- providers/
+|   |-- bvn/
 |   |-- email/
-|   |   `-- email.go
 |   |-- jwt/
-|   |   `-- signer.go
+|   |-- nin/
 |   `-- sms/
-|       `-- sms.go
 |-- templates/
 |   `-- otp_email.html
 |-- .env
 |-- .env.example
-|-- README.md
 |-- go.mod
 `-- go.sum
 ```
 
-## Architecture (Current)
+## Auth API (Current Behavior)
 
-The app follows a simple composition pattern:
+Base URL: `http://localhost:<PORT>/api/v1`
 
-1. `cmd/api/main.go` loads env vars and starts the HTTP server
-2. `internal/server.New` builds the server and timeouts
-3. `internal/server/router.go` wires config, DB, providers, and routes
-4. `internal/database/database.go` opens PostgreSQL and runs `AutoMigrate`
-5. Feature routes delegate to `handler -> service -> repository`
+### `POST /auth/register`
 
-Dependency roles:
+- Creates user + binds initial device in one transaction.
+- On success returns access + refresh tokens.
 
-- `internal/*`: app composition, config, DB setup, server wiring
-- `modules/*`: feature HTTP handlers, business logic, and persistence behavior
-- `providers/*`: external integrations (JWT, SMS, email)
-- `models/*`: shared DB model structs
-- `docs/*`: checked-in OpenAPI specification files
-- `templates/*`: HTML email templates
+### `POST /auth/login`
+
+- Request body: `phone`, `password`
+- Required header: `X-Device-ID`
+- Returns:
+  - `{"status":"challenge_required","challenge":"..."}`
+  - or `{"status":"new_device_detected","session_token":"..."}`
+
+Current limitation:
+
+- `new_device_detected` path does not automatically send/administer OTP yet.
+
+### `POST /auth/logout`
+
+- Requires `Authorization: Bearer <access_token>` and `refresh_token` in body.
+
+### `POST /auth/refresh`
+
+- Validates refresh token, rotates token row, returns new access + refresh tokens.
+
+### `POST /auth/validate-bvn`
+### `POST /auth/validate-nin`
+
+- Provider-backed identity validation endpoints.
+
+### `POST /auth/otp/request`
+### `POST /auth/otp/verify`
+
+- OTP issuance and verification for `login`, `signup`, `password_reset`.
 
 ## Environment Variables
 
-Core app config:
+Core:
 
-- `PORT`: API port (example: `8080`)
-- `DB_URL`: PostgreSQL DSN
-- `JWT_SECRET`: JWT signing secret
+- `PORT`
+- `DB_URL`
+- `JWT_SECRET`
 
-OTP and provider config:
+OTP and messaging:
 
-- `PEPPER`: HMAC pepper used to hash OTP values
-- `SMSLIVE_APIKEY`: SMSLive247 API key
-- `SMSLIVE_SENDERID`: SMS sender ID
-- `SMTP_HOST`: SMTP hostname (must resolve in DNS)
-- `SMTP_PORT`: SMTP port (`465` for implicit TLS, `587` commonly used for STARTTLS)
-- `SMTP_USER`: SMTP username / sender account
-- `SMTP_PASS`: SMTP password
+- `PEPPER`
+- `TERMII_APIKEY`
+- `TERMII_SENDERID`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
 
-Recommendations:
+Identity providers:
 
-- Keep real values out of version control
-- Use `.env.example` as the shared contract
-- Rotate any leaked secrets immediately
+- `TENDAR_APIKEY`
+- `PREMBLY_APIKEY`
+- `CBA_INTERNAL_URL`
+- `CBA_INTERNAL_KEY`
 
-## SMTP TLS/DNS Notes (OTP Email)
+Login rate limiter:
 
-The OTP email sender validates the SMTP server certificate. Misconfigured mail DNS or certificates commonly cause:
+- `LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS`
+- `LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS` (name retained for backward compatibility; currently used for phone key budget in login limiter path)
+- `LOGIN_RATE_LIMIT_WINDOW_MINUTES`
+- `LOGIN_RATE_LIMIT_BLOCK_MINUTES`
 
-- `TLS connection failed: tls: failed to verify certificate: x509: certificate signed by unknown authority`
-- `TLS connection failed: dial tcp: lookup <host>: no such host`
+## Database and Migrations
 
-Use these rules for `SMTP_HOST`:
+Startup migration (`internal/database/database.go`) currently includes:
 
-- Prefer a hostname (for example `mail.example.com`), not a raw IP address
-- The hostname in `SMTP_HOST` must resolve in public DNS (`A` or `AAAA`)
-- The SMTP certificate must match that hostname (CN/SAN)
-- The certificate should be signed by a trusted CA (self-signed certs fail by default)
-- Avoid using a VPS panel hostname unless you also publish DNS for it and install a trusted mail certificate
+- `models.User`
+- `models.AuthSession`
+- `models.RefreshToken`
+- `models.VerificationRecord`
+- `models.PendingDeviceSession`
+- `modules/auth/otp.OTPModel`
+- `modules/device.UserDevice`
+- `modules/device.DeviceChallenge`
 
-Examples:
+Also creates partial unique index:
 
-- Good: `SMTP_HOST=mail.neatmicrocredit.com.ng`
-- Risky: `SMTP_HOST=209.74.88.150` (TLS name mismatch if cert is issued to a hostname)
-- Broken: `SMTP_HOST=server1.www.neatmicrocredit.xyz` when no public DNS record exists
+- `uq_device_challenges_active` on `(user_id, device_id)` where `used_at IS NULL`
 
 ## Local Run
 
@@ -163,221 +196,14 @@ go mod download
 go run ./cmd/api
 ```
 
-Default base path:
-
-- `http://localhost:<PORT>/api/v1`
-
-Startup behavior:
-
-- Loads `.env` if present
-- Builds router + providers
-- Runs GORM migrations (`User`, `AuthSession`, `RefreshToken`, `OTPModel`)
-- Starts HTTP server with graceful shutdown on `Ctrl+C`
-
-Swagger docs:
+Swagger:
 
 - UI: `http://localhost:<PORT>/swagger/index.html`
-- JSON spec: `http://localhost:<PORT>/openapi/doc.json`
-- YAML spec: `http://localhost:<PORT>/openapi/doc.yaml`
+- JSON: `http://localhost:<PORT>/openapi/doc.json`
+- YAML: `http://localhost:<PORT>/openapi/doc.yaml`
 
-## API Endpoints (Current)
+## Known Gaps
 
-Base URL:
-
-- `http://localhost:<PORT>/api/v1`
-
-### `POST /auth/login`
-
-Authenticates a user and returns access and refresh tokens.
-
-Request body:
-
-```json
-{
-  "email": "user@example.com",
-  "password": "your-password"
-}
-```
-
-Success response (`200 OK`):
-
-```json
-{
-  "access_token": "<jwt-access-token>",
-  "refresh_token": "<jwt-refresh-token>"
-}
-```
-
-Common errors:
-
-- `400 Bad Request`: invalid request body
-- `401 Unauthorized`: invalid email/password
-
-### `POST /auth/logout`
-
-Revokes the current auth session + refresh token record.
-
-Headers:
-
-- `Authorization: Bearer <access-token>`
-
-Request body:
-
-```json
-{
-  "refresh_token": "<jwt-refresh-token>"
-}
-```
-
-Success response (`200 OK`):
-
-```json
-{
-  "message": "logout successful"
-}
-```
-
-### `POST /auth/refresh`
-
-Route is registered, but the current handler is incomplete and does not yet return rotated tokens over HTTP.
-
-Current expected request body shape:
-
-```json
-{
-  "refresh_token": "<jwt-refresh-token>"
-}
-```
-
-### `POST /auth/otp/request`
-
-Requests an OTP for login/signup/password reset over SMS or email.
-
-Request body:
-
-```json
-{
-  "purpose": "login",
-  "channel": "email",
-  "destination": "user@example.com"
-}
-```
-
-Supported values:
-
-- `purpose`: `login`, `signup`, `password_reset`
-- `channel`: `sms`, `email`
-
-Success response (`200 OK`):
-
-```json
-{
-  "message": "otp sent"
-}
-```
-
-### `POST /auth/otp/verify`
-
-Verifies a previously issued OTP.
-
-Request body:
-
-```json
-{
-  "purpose": "login",
-  "channel": "email",
-  "destination": "user@example.com",
-  "otp": "123456"
-}
-```
-
-Success response (`200 OK`):
-
-```json
-{
-  "message": "otp verified"
-}
-```
-
-Common error responses include:
-
-- `400 Bad Request`: invalid request body / invalid purpose / invalid channel / invalid email or phone
-- `401 Unauthorized`: invalid OTP
-- `429 Too Many Requests`: cooldown/resend limit reached
-- `502 Bad Gateway`: SMS provider delivery failure
-- `503 Service Unavailable`: SMS provider not configured
-
-## OTP Behavior (Current)
-
-Implemented OTP rules in `modules/auth/otp/*`:
-
-- 6-digit OTP generation
-- HMAC-SHA256 OTP hashing using `PEPPER`
-- Email normalization (lowercased/trimmed)
-- Nigerian phone normalization during hashing/verification
-- Expiry window: `10 minutes`
-- Resend cooldown: `30 seconds`
-- Max resends: `3`
-- Max verification attempts: `5`
-- DB transaction wrapping for request and verify flows
-
-## Database Notes
-
-Startup currently runs `AutoMigrate` for:
-
-- `models.User`
-- `models.AuthSession`
-- `models.RefreshToken`
-- `modules/auth/otp.OTPModel`
-
-Auth repository behavior to be aware of:
-
-- Login lookups query the existing `wallet_users` table directly
-- Session and refresh token models use explicit wallet table names (`wallet_auth_sessions`, `wallet_refresh_tokens`)
-- `OTPModel` currently uses GORM's default table naming (no explicit `TableName()` override)
-
-## Testing
-
-Run tests:
-
-```bash
-go test ./...
-```
-
-Current automated coverage includes repository tests using `sqlmock` for the auth repository (`modules/auth/repository_test.go`).
-
-## Swagger Documentation
-
-Swagger UI is served directly by the app at:
-
-- `/swagger/index.html`
-
-The checked-in OpenAPI files live in:
-
-- `docs/swagger.json`
-- `docs/swagger.yaml`
-
-Deployment note:
-
-- If you deploy only the compiled binary, include the `docs/` directory alongside it so the Swagger spec routes can be served at runtime.
-
-## Known Gaps / Implementation Notes
-
-- `POST /auth/refresh` handler is not finished even though service/repository refresh rotation logic exists
-- `providers/sms/sms.go` currently sends a hardcoded OTP text (`123456`) instead of using the `message` argument passed into `Send`
-- `internal/server/router.go` currently logs SMTP credentials at startup (should be removed or masked before production)
-
-## Ownership Guidance
-
-When editing, prefer these boundaries:
-
-- Routing and dependency wiring: `internal/server/*`
-- Runtime config and env mapping: `internal/config/*`
-- DB connection/migrations: `internal/database/*`
-- Notification interfaces shared across modules/providers: `internal/notify/*`
-- Feature behavior: `modules/<feature>/*`
-- External integrations: `providers/*`
-- Shared DB models: `models/*`
-- Email templates: `templates/*`
-
-This keeps changes localized and reduces accidental cross-layer coupling.
+- Login is missing OTP administration for new-device flow:
+  - `new_device_detected` currently stops at issuing `session_token`.
+  - Automatic OTP dispatch and follow-up new-device verification endpoint flow are not yet wired end-to-end.

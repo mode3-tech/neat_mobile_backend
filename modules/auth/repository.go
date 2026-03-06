@@ -32,6 +32,15 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.
 	return &u, nil
 }
 
+func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.User, error) {
+	var u models.User
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password,created_at").Where("phone = ?", phone).First(&u).Error; err != nil {
+		return nil, err
+	}
+
+	return &u, nil
+}
+
 // GetUserByID retrieves a user by their ID.
 // It returns a pointer to models.User and an error if any.
 func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
@@ -61,7 +70,7 @@ func (r *Repository) AddAccessToken(ctx context.Context, token *models.AuthSessi
 func (r *Repository) GetRefreshTokenWithJTI(ctx context.Context, jti string) (*models.RefreshToken, error) {
 	var token models.RefreshToken
 
-	if err := r.db.WithContext(ctx).Select("id,jti,user_id,session_id,token_hash,issued_at,expires_at").Where("jti = ?", jti).First(&token).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("jti = ?", jti).First(&token).Error; err != nil {
 		return nil, err
 	}
 	return &token, nil
@@ -123,4 +132,21 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 
 		return nil
 	})
+}
+
+func (r *Repository) GetValidationRow(ctx context.Context, id string) (*models.VerificationRecord, error) {
+	var record models.VerificationRecord
+	err := r.db.WithContext(ctx).Table("wallet_verification_records").Select("verified_name, verified_dob").Where("id = ? AND status = ?", id, models.VerificationStatusVerified).First(&record).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {
+	if err := r.db.WithContext(ctx).Create(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
 }

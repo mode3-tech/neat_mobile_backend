@@ -25,7 +25,7 @@ func NewSigner(secret string) *Signer {
 // IssueAccessToken takes userID and sessionID and returns access token or error if any
 func (s *Signer) IssueAccessToken(userID, sid string) (string, error) {
 	now := time.Now().UTC()
-	expiresAt := now.Add(30 * 24 * time.Hour)
+	expiresAt := now.Add(15 * time.Minute)
 	claims := jwt.MapClaims{
 		"sub": userID,
 		"sid": sid,

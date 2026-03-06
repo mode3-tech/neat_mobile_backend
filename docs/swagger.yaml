@@ -4,8 +4,6 @@ info:
   version: 1.0.0
   description: |
     HTTP API for authentication, OTP workflows, and BVN/NIN validation.
-
-    Note: `POST /auth/refresh` is registered, but the current HTTP handler is still incomplete.
 servers:
   - url: /api/v1
 tags:
@@ -19,7 +17,20 @@ paths:
       tags:
         - Auth
       summary: Login a user
-      description: Authenticates a user and returns access and refresh tokens.
+      description: |
+        Authenticates a user by phone and password, then starts device verification flow.
+
+        Current implementation note:
+        when the response status is `new_device_detected`, login currently returns a `session_token`
+        but does not dispatch an OTP automatically. OTP administration for new devices must be
+        triggered by a follow-up integration step.
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
       requestBody:
         required: true
         content:
@@ -28,19 +39,42 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login successful
+          description: Login initialized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
+                $ref: '#/components/schemas/LoginInitResponse'
+              examples:
+                challenge_required:
+                  summary: Recognized trusted device
+                  value:
+                    status: challenge_required
+                    challenge: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
+                new_device_detected:
+                  summary: New or untrusted device
+                  value:
+                    status: new_device_detected
+                    session_token: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
         '400':
-          description: Invalid request body
+          description: Invalid request body, invalid phone number, or missing/invalid device id
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Invalid email or password
+          description: Invalid phone or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many login attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Login initialization failed
           content:
             application/json:
               schema:
@@ -89,7 +123,7 @@ paths:
       tags:
         - Auth
       summary: Refresh access token
-      description: The route is registered, but the current HTTP handler is incomplete and may return an empty `200 OK` response.
+      description: Validates a refresh token, rotates it, and returns new access and refresh tokens.
       requestBody:
         required: true
         content:
@@ -98,9 +132,25 @@ paths:
               $ref: '#/components/schemas/RefreshTokenRequest'
       responses:
         '200':
-          description: Route reached successfully. Response body is not finalized yet.
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
         '400':
           description: Refresh token missing or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Token refresh failed
           content:
             application/json:
               schema:
@@ -263,17 +313,35 @@ components:
     LoginRequest:
       type: object
       required:
-        - email
+        - phone
         - password
       properties:
-        email:
+        phone:
           type: string
-          format: email
-          example: user@example.com
+          example: "08012345678"
         password:
           type: string
           minLength: 8
           example: your-password
+    LoginInitResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - challenge_required
+            - new_device_detected
+          example: challenge_required
+        challenge:
+          type: string
+          description: Present when status is challenge_required.
+          example: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
+        session_token:
+          type: string
+          description: Present when status is new_device_detected. OTP dispatch for this path is not yet automatic.
+          example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
     LoginResponse:
       type: object
       properties:

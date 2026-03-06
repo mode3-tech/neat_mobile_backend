@@ -2,12 +2,16 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
+	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
 
@@ -15,11 +19,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"gorm.io/gorm"
 )
 
-type Service struct {
+type AuthService struct {
 	repo           *Repository
 	verification   *verification.VerificationRepo
+	tx             *tx.Transactor
+	deviceRepo     *device.DeviceRepository
 	jwtSigner      JWTSigner
 	tender         TendarValidation
 	prembly        PremblyValidation
@@ -41,11 +48,13 @@ type ninInfo struct {
 	verificationID string
 }
 
-func NewService(repo *Repository, verification *verification.VerificationRepo, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *Service {
-	return &Service{
+func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *AuthService {
+	return &AuthService{
 		repo:           repo,
 		verification:   verification,
+		tx:             tx,
 		jwtSigner:      signer,
+		deviceRepo:     deviceRepo,
 		tender:         tender,
 		prembly:        prembly,
 		nin:            nin,
@@ -53,7 +62,7 @@ func NewService(repo *Repository, verification *verification.VerificationRepo, s
 	}
 }
 
-func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error) {
+func (s *AuthService) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
 	}
@@ -78,6 +87,7 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 	record := &models.VerificationRecord{
 		ID:            verificationID,
 		Type:          models.VerificationTypeNIN,
+		Status:        models.VerificationStatusVerified,
 		Provider:      string(ProviderPrembly),
 		SubjectHash:   subjectHash,
 		SubjectMasked: &maskedNIN,
@@ -86,9 +96,15 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 		UpdatedAt:     now,
 	}
 
-	if fullName == "" || resp.Data.BirthDate == "" || resp.Data.TelephoneNo == "" {
+	if fullName == "" || strings.TrimSpace(resp.Data.BirthDate) == "" || strings.TrimSpace(resp.Data.TelephoneNo) == "" {
 		return nil, errors.New("invalid nin number")
 	}
+
+	record.VerifiedName = &fullName
+	dob := strings.TrimSpace(resp.Data.BirthDate)
+	record.VerifiedDOB = &dob
+	phone := strings.TrimSpace(resp.Data.TelephoneNo)
+	record.VerifiedPhone = &phone
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
 		return nil, err
@@ -96,13 +112,13 @@ func (s *Service) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error)
 
 	return &ninInfo{
 		name:           fullName,
-		dob:            resp.Data.BirthDate,
-		phone:          resp.Data.TelephoneNo,
+		dob:            dob,
+		phone:          phone,
 		verificationID: verificationID,
 	}, nil
 }
 
-func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
 		return nil, errors.New("something went wrong")
 	}
@@ -122,17 +138,172 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 	}
 }
 
-func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (*models.User, error) {
+func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest) (*models.User, error) {
+	var isEmailVerified bool
+	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
+	if err != nil {
+		return nil, errors.New("phone verification record not found")
+	}
 
-	return &models.User{}, nil
+	bvnRecord, err := repo.GetValidationRow(ctx, req.BVNVerificationID)
+	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil {
+		return nil, errors.New("bvn verification record not found")
+	}
+
+	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
+	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil {
+		return nil, errors.New("nin verification record not found")
+	}
+
+	if req.Email != "" {
+		emailRecord, err := repo.GetValidationRow(ctx, req.EmailVerificationID)
+		if err != nil || emailRecord.VerifiedName == nil || emailRecord.VerifiedDOB == nil {
+			return nil, errors.New("email verification record not found")
+		}
+
+		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
+			return nil, errors.New("unable to confirm email and phone number belong to the same person due to names or date of births mismatch")
+		}
+
+		isEmailVerified = true
+	}
+
+	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
+	ninName := strings.ToLower(strings.Join(strings.Fields(*ninRecord.VerifiedName), " "))
+
+	if bvnName != ninName || SerializeDOB(*bvnRecord.VerifiedDOB) != SerializeDOB(*ninRecord.VerifiedDOB) {
+		return nil, errors.New("unable to confirm bvn and nin belong to the same person due to names or date of births mismatch")
+	}
+
+	if req.Password != req.ConfirmPassword {
+		return nil, errors.New("passwords do not match")
+	}
+
+	if req.TransactionPin != req.ConfirmTransactionPin {
+		return nil, errors.New("transaction pins do not match")
+	}
+
+	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	hashedTransactionPin, err := HashPassword(req.TransactionPin)
+	if err != nil {
+		return nil, err
+	}
+
+	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	user := &models.User{
+		ID:              uuid.NewString(),
+		Phone:           normalizedPhone,
+		Email:           req.Email,
+		PasswordHash:    hashedPassword,
+		PinHash:         hashedTransactionPin,
+		IsEmailVerified: isEmailVerified,
+		IsPhoneVerified: true,
+		IsBvnVerified:   true,
+		IsNinVerified:   true,
+	}
+
+	createdUser, err := repo.CreateUser(ctx, user)
+
+	return createdUser, nil
 }
 
-func (s *Service) Login(ctx context.Context, deviceID, ip, userAgent, email, password string) (*AuthObject, error) {
-	user, err := s.repo.GetUserByEmail(ctx, email)
+func (s *AuthService) Register(ctx context.Context, req RegisterRequest) (*AuthObject, error) {
+	var createdUser *models.User
+	var err error
+
+	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		authRepo := NewRespository(txDB)
+		deviceRepo := device.NewDeviceRepository(txDB)
+
+		createdUser, err = s.createUser(ctx, authRepo, req)
+		if err != nil {
+			return err
+		}
+
+		deviceReq := device.DeviceBindingRequest{
+			DeviceID:    req.Device.DeviceID,
+			PublicKey:   req.Device.PublicKey,
+			DeviceName:  req.Device.DeviceName,
+			DeviceModel: req.Device.DeviceModel,
+			OS:          req.Device.OS,
+			OSVersion:   req.Device.OSVersion,
+			AppVersion:  req.Device.AppVersion,
+		}
+		deviceService := device.NewDeviceService(*deviceRepo)
+		return deviceService.BindDevice(ctx, createdUser.ID, &deviceReq)
+	})
 
 	if err != nil {
-		fmt.Println("no account exists with this email")
-		return nil, errors.New("no account exists with this email")
+		return nil, err
+	}
+
+	sid := uuid.NewString()
+
+	accessToken, err := s.jwtSigner.IssueAccessToken(createdUser.ID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	authSession := &models.AuthSession{
+		UserID:    createdUser.ID,
+		SID:       sid,
+		DeviceID:  &req.Device.DeviceID,
+		IP:        &req.Device.IP,
+		UserAgent: &req.Device.UserAgent,
+	}
+
+	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
+		return nil, err
+	}
+
+	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(createdUser.ID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
+	if hashedRefreshToken == [32]byte{} {
+		return nil, errors.New("error while hashing refresh token")
+	}
+
+	refreshTokenObj := &models.RefreshToken{
+		JTI:       jti,
+		SessionID: sid,
+		UserID:    createdUser.ID,
+		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
+		IssuedAt:  time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour * 24 * 30),
+	}
+
+	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
+		return nil, err
+	}
+
+	return &AuthObject{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *AuthService) Login(ctx context.Context, deviceID, ip, userAgent, phone, password string) (*LoginInitObject, error) {
+	normalizedPhone, err := NormalizeNigerianNumber(phone)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
+
+	if err != nil {
+		fmt.Println("no account exists with this phone")
+		return nil, errors.New("invalid credentials")
 	}
 
 	err = bcrypt.CompareHashAndPassword(
@@ -142,59 +313,100 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, userAgent, email, pas
 
 	if err != nil {
 		fmt.Println("incorrect password")
-		return nil, errors.New("incorrect password")
+		return nil, errors.New("invalid credentials")
 	}
 
-	sid := uuid.New().String()
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
 
-	accessToken, err := s.jwtSigner.IssueAccessToken(user.ID, sid)
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository not configured")
+	}
+
+	deviceRecord, err := s.deviceRepo.FindDevice(ctx, user.ID, deviceID)
 	if err != nil {
-		fmt.Println("error while issuing access token")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip, userAgent)
+			if sessionErr != nil {
+				return nil, sessionErr
+			}
+
+			return &LoginInitObject{
+				Status:       LoginStatusNewDeviceDetected,
+				SessionToken: sessionToken,
+			}, nil
+		}
+
 		return nil, err
 	}
 
-	authSession := &models.AuthSession{
-		UserID:    user.ID,
-		SID:       sid,
-		DeviceID:  &deviceID,
-		IP:        &ip,
-		UserAgent: &userAgent,
+	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
+		sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip, userAgent)
+		if sessionErr != nil {
+			return nil, sessionErr
+		}
+
+		return &LoginInitObject{
+			Status:       LoginStatusNewDeviceDetected,
+			SessionToken: sessionToken,
+		}, nil
 	}
-	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(user.ID, sid)
+
+	deviceService := device.NewDeviceService(*s.deviceRepo)
+	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID)
 	if err != nil {
-		fmt.Println("error while issuing refresh token")
 		return nil, err
 	}
 
-	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
-	if hashedRefreshToken == [32]byte{} {
-		fmt.Println("error while hashing refresh token")
-		return nil, errors.New("error while hashing refresh token")
-	}
-
-	refreshTokenObj := &models.RefreshToken{
-		JTI:       jti,
-		SessionID: sid,
-		UserID:    user.ID,
-		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
-		IssuedAt:  time.Now(),
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 30),
-	}
-
-	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
-		fmt.Println("error while adding access token")
-		return nil, err
-	}
-
-	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
-		fmt.Println("error while adding refresh token")
-		return nil, err
-	}
-
-	return &AuthObject{AccessToken: accessToken, RefreshToken: refreshToken}, nil
+	return &LoginInitObject{
+		Status:    LoginStatusChallengeRequired,
+		Challenge: challenge,
+	}, nil
 }
 
-func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) error {
+func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, deviceID, ip, userAgent string) (string, error) {
+	sessionToken, err := randomToken(32)
+	if err != nil {
+		return "", err
+	}
+
+	tokenHash := sha256.Sum256([]byte(sessionToken))
+	now := time.Now().UTC()
+
+	row := &models.PendingDeviceSession{
+		UserID:           userID,
+		DeviceID:         deviceID,
+		SessionTokenHash: hex.EncodeToString(tokenHash[:]),
+		ExpiresAt:        now.Add(10 * time.Minute),
+		IP:               ip,
+		UserAgent:        userAgent,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if err := s.deviceRepo.CreatePendingSession(ctx, row); err != nil {
+		return "", err
+	}
+
+	return sessionToken, nil
+}
+
+func randomToken(size int) (string, error) {
+	if size <= 0 {
+		return "", errors.New("invalid token size")
+	}
+
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, refreshToken, accessToken string) error {
 	isValidAccessToken := s.jwtSigner.ValidAccessToken(accessToken)
 	isValidRefreshToken := s.jwtSigner.ValidRefreshToken(refreshToken)
 	if !isValidAccessToken || !isValidRefreshToken {
@@ -230,17 +442,17 @@ func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) 
 	return nil
 }
 
-func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken string) (*AuthObject, error) {
+func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken string) (*AuthObject, error) {
 	sub, sid, oldJTI, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 
 	if err != nil {
-		return nil, errors.New("invalid access token")
+		return nil, errors.New("invalid refresh token")
 	}
 
 	refreshTokenObj, err := s.repo.GetRefreshTokenWithJTI(ctx, oldJTI)
 
 	if err != nil {
-		return nil, errors.New("invalid access token")
+		return nil, errors.New("invalid refresh token")
 	}
 
 	now := time.Now().UTC()
@@ -282,7 +494,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken string) (
 
 }
 
-func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
 		return nil, errors.New("tendar validator is not configured")
 	}
@@ -328,6 +540,8 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		SubjectMasked: &maskedBVN,
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
+		VerifiedName:  &fullName,
+		VerifiedDOB:   &bvnDetails.Data.Details.DateOfBirth,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
@@ -364,7 +578,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}, nil
 }
 
-func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
 		return nil, errors.New("couldn't resolve prembly provider")
 	}
@@ -410,6 +624,8 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		SubjectMasked: &maskedBVN,
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
+		VerifiedName:  &fullName,
+		VerifiedDOB:   &bvnDetails.Data.DateOfBirth,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.Verification.VerificationID); providerVerificationID != "" {

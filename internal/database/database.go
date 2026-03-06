@@ -3,6 +3,7 @@ package database
 import (
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/otp"
+	"neat_mobile_app_backend/modules/device"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -34,11 +35,23 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&models.User{},
 		&models.AuthSession{},
 		&models.RefreshToken{},
 		&models.VerificationRecord{},
+		&models.PendingDeviceSession{},
 		&otp.OTPModel{},
-	)
+		&device.UserDevice{},
+		&device.DeviceChallenge{},
+	); err != nil {
+		return err
+	}
+
+	// Enforce one active (unused) challenge per user/device even under concurrency.
+	return db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_device_challenges_active
+		ON device_challenges (user_id, device_id)
+		WHERE used_at IS NULL
+	`).Error
 }

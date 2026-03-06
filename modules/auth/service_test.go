@@ -61,9 +61,11 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		},
 	}
 	premblyValidator := &stubPremblyValidation{}
-	service := NewService(
+	service := NewAuthService(
 		nil,
 		&verification.VerificationRepo{},
+		nil,
+		nil,
 		nil,
 		tendarValidator,
 		premblyValidator,
@@ -97,7 +99,7 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 
 func TestService_ValidateBVN_ReturnsProviderSourceError(t *testing.T) {
 	wantErr := errors.New("cba unavailable")
-	service := NewService(nil, nil, nil, nil, nil, nil, stubProviderSource{err: wantErr})
+	service := NewAuthService(nil, nil, nil, nil, nil, nil, nil, nil, stubProviderSource{err: wantErr})
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
 	if !errors.Is(err, wantErr) {

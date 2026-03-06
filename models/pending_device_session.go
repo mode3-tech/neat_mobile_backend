@@ -11,7 +11,7 @@ type PendingDeviceSession struct {
 	SessionTokenHash string     `gorm:"type:char(64);not null;uniqueIndex" json:"-"`
 	OTPRef           string     `gorm:"type:varchar(128)" json:"otp_ref,omitempty"`
 	VerifiedAt       *time.Time `gorm:"type:timestamptz" json:"verified_at,omitempty"`
-	UsedAt           *time.Time `gorm:"type:timestamptz" json:"used_at,omitempty"`
+	UsedAt           *time.Time `gorm:"type:timestamptz;default:null" json:"used_at"`
 	ExpiresAt        time.Time  `gorm:"type:timestamptz;not null;index" json:"expires_at"`
 
 	// Helpful for security/auditing (optional)
@@ -19,7 +19,7 @@ type PendingDeviceSession struct {
 	UserAgent string `gorm:"type:text" json:"user_agent,omitempty"`
 
 	CreatedAt time.Time `gorm:"type:timestamptz;not null;default:now()" json:"created_at"`
-	UpdatedAt time.Time `gorm:"type:timestamptz;not null;default:now()" json:"updated_at"`
+	UpdatedAt time.Time `gorm:"type:timestamptz;not null;default:null" json:"updated_at"`
 }
 
 func (PendingDeviceSession) TableName() string { return "pending_device_sessions" }
