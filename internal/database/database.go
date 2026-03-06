@@ -35,7 +35,7 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	// Keep production data intact when migrating from old schema that used `pin`.
+	// Rename old pin column if it exists and new one does not.
 	if err := db.Exec(`
 		DO $$
 		BEGIN
@@ -59,6 +59,14 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Ensure pin_hash exists as nullable before AutoMigrate touches it.
+	if err := db.Exec(`
+		ALTER TABLE wallet_users
+		ADD COLUMN IF NOT EXISTS pin_hash text;
+	`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.AuthSession{},
@@ -72,7 +80,6 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
-	// Enforce one active (unused) challenge per user/device even under concurrency.
 	return db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS uq_device_challenges_active
 		ON device_challenges (user_id, device_id)
