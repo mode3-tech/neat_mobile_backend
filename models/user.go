@@ -7,7 +7,7 @@ type User struct {
 	Email           string    `gorm:"column:email;unique"`
 	Phone           string    `gorm:"column:phone;unique;not null"`
 	PasswordHash    string    `gorm:"column:password;not null"`
-	PinHash         string    `gorm:"column:pin;not null"`
+	PinHash         string    `gorm:"column:pin_hash;not null"`
 	IsEmailVerified bool      `gorm:"is_email_verified"`
 	IsPhoneVerified bool      `gorm:"is_phone_verified;not null"`
 	IsBvnVerified   bool      `gorm:"is_bvn_verified;not null"`
