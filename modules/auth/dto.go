@@ -42,6 +42,19 @@ type LoginInitResponse struct {
 	SessionToken string `json:"session_token,omitempty"`
 }
 
+type VerifyDeviceRequest struct {
+	Challenge string `json:"challenge" binding:"required"`
+	Signature string `json:"signature" binding:"required"`
+	DeviceID  string `json:"device_id" binding:"required"`
+}
+
+type VerifyDeviceResponse struct {
+	Status       string `json:"status"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ActionToken  string `json:"action_token,omitempty"`
+}
+
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }

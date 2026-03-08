@@ -78,6 +78,13 @@ func (r *DeviceRepository) MarkChallengeUsed(ctx context.Context, id string, now
 	return result.RowsAffected == 1, nil
 }
 
+func (r *DeviceRepository) UpdateLastUsed(ctx context.Context, userID, deviceID string, now time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&UserDevice{}).
+		Where("user_id = ? AND device_id = ?", userID, deviceID).
+		Update("last_used_at", now).Error
+}
+
 func (r *DeviceRepository) CreatePendingSession(ctx context.Context, session *models.PendingDeviceSession) error {
 	return r.db.WithContext(ctx).Create(session).Error
 }

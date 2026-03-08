@@ -17,7 +17,7 @@ type DeviceService struct {
 	repo DeviceRepository
 }
 
-const challengeTTL = 60 * time.Second
+const challengeTTL = 5 * time.Minute
 
 var ErrDeviceNotEligible = errors.New("device not eligible for challenge")
 

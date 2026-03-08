@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/config"
@@ -61,6 +63,12 @@ func run(ctx context.Context) error {
 }
 
 func main() {
+	challenge := os.Args[1]
+	privateKeyB64 := os.Args[2]
+
+	priv, _ := base64.StdEncoding.DecodeString(privateKeyB64)
+	sig := ed25519.Sign(ed25519.PrivateKey(priv), []byte(challenge))
+	fmt.Println(base64.RawURLEncoding.EncodeToString(sig))
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env file not found (using system environment)")
 	}

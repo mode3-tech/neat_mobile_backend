@@ -10,6 +10,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *AuthHandler, loginMiddlewares 
 		auth.POST("/register", handler.Register)
 		loginHandlers := append(loginMiddlewares, handler.Login)
 		auth.POST("/login", loginHandlers...)
+		auth.POST("/verify-device", handler.VerifyDevice)
 		auth.POST("/logout", handler.Logout)
 		auth.POST("/refresh", handler.RefreshAccessToken)
 		auth.POST("/validate-bvn", handler.VerifyBVN)

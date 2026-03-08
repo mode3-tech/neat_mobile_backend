@@ -11,6 +11,7 @@ Implemented:
 - Device-aware login initialization responses:
   - `challenge_required`
   - `new_device_detected`
+- Device challenge verification endpoint (`/auth/verify-device`) for recognized trusted devices
 - Logout endpoint (session/refresh invalidation)
 - Refresh token rotation (`/auth/refresh`)
 - OTP request and OTP verify endpoints (`/auth/otp/request`, `/auth/otp/verify`)
@@ -121,6 +122,11 @@ Base URL: `http://localhost:<PORT>/api/v1`
 Current limitation:
 
 - `new_device_detected` path does not automatically send/administer OTP yet.
+
+### `POST /auth/verify-device`
+
+- Request body: `challenge`, `signature`, `device_id`
+- Validates challenge existence/TTL/single-use, verifies signature against stored device public key, marks challenge used, updates `last_used_at`, then issues access + refresh tokens.
 
 ### `POST /auth/logout`
 

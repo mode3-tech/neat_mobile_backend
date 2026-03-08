@@ -107,6 +107,44 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *AuthHandler) VerifyDevice(c *gin.Context) {
+	var req VerifyDeviceRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	userAgent := c.GetHeader("User-Agent")
+	ip := c.ClientIP()
+
+	authObj, err := h.authService.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip, userAgent)
+	if err != nil {
+		if isBadRequestVerifyDeviceError(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if isUnauthorizedVerifyDeviceError(err) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		return
+	}
+
+	if authObj == nil || authObj.AccessToken == "" || authObj.RefreshToken == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		return
+	}
+
+	c.JSON(http.StatusOK, VerifyDeviceResponse{
+		Status:       "success",
+		AccessToken:  authObj.AccessToken,
+		RefreshToken: authObj.RefreshToken,
+	})
+}
+
 func isBadRequestLoginError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
@@ -121,6 +159,26 @@ func isUnauthorizedLoginError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
 	case "invalid credentials":
+		return true
+	}
+
+	return false
+}
+
+func isBadRequestVerifyDeviceError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "challenge is required", "signature is required", "device id is required":
+		return true
+	}
+
+	return false
+}
+
+func isUnauthorizedVerifyDeviceError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "invalid challenge", "device verification failed":
 		return true
 	}
 

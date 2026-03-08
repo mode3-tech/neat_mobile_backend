@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -391,6 +392,183 @@ func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, de
 	}
 
 	return sessionToken, nil
+}
+
+func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip, userAgent string) (*AuthObject, error) {
+	challenge = strings.TrimSpace(challenge)
+	if challenge == "" {
+		return nil, errors.New("challenge is required")
+	}
+
+	signature = strings.TrimSpace(signature)
+	if signature == "" {
+		return nil, errors.New("signature is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository not configured")
+	}
+
+	challengeHash := sha256.Sum256([]byte(challenge))
+	storedChallenge, err := s.deviceRepo.GetChallengeByHash(ctx, hex.EncodeToString(challengeHash[:]))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			fmt.Println("challenge not found")
+			return nil, errors.New("invalid challenge")
+		}
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	if storedChallenge.IsUsed() || storedChallenge.IsExpired(now) {
+		fmt.Println("challenge expired")
+		return nil, errors.New("invalid challenge")
+	}
+
+	if storedChallenge.DeviceID != deviceID {
+		fmt.Println("challenge device id don't match")
+		return nil, errors.New("invalid challenge")
+	}
+
+	deviceRecord, err := s.deviceRepo.FindDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
+	fmt.Printf("user id: %s\n", storedChallenge.UserID)
+	fmt.Printf("device id: %s\n", storedChallenge.DeviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			fmt.Println("device not found")
+			return nil, errors.New("device verification failed")
+		}
+		return nil, err
+	}
+
+	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
+		return nil, errors.New("device verification failed")
+	}
+
+	validSig, err := verifyDeviceSignature(deviceRecord.PublicKey, challenge, signature)
+	fmt.Printf("public key: %s\n", deviceRecord.PublicKey)
+	fmt.Printf("challenge: %s\n", challenge)
+	fmt.Printf("signature: %s\n", signature)
+	if err != nil || !validSig {
+		fmt.Println("sign failed")
+		return nil, errors.New("device verification failed")
+	}
+
+	marked, err := s.deviceRepo.MarkChallengeUsed(ctx, storedChallenge.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	if !marked {
+		return nil, errors.New("invalid challenge")
+	}
+
+	if err := s.deviceRepo.UpdateLastUsed(ctx, deviceRecord.UserID, deviceRecord.DeviceID, now); err != nil {
+		return nil, err
+	}
+
+	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip, userAgent)
+}
+
+func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip, userAgent string) (*AuthObject, error) {
+	sid := uuid.NewString()
+
+	accessToken, err := s.jwtSigner.IssueAccessToken(userID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	authSession := &models.AuthSession{
+		UserID: userID,
+		SID:    sid,
+	}
+	if trimmedDeviceID := strings.TrimSpace(deviceID); trimmedDeviceID != "" {
+		authSession.DeviceID = &trimmedDeviceID
+	}
+	if trimmedIP := strings.TrimSpace(ip); trimmedIP != "" {
+		authSession.IP = &trimmedIP
+	}
+	if trimmedUA := strings.TrimSpace(userAgent); trimmedUA != "" {
+		authSession.UserAgent = &trimmedUA
+	}
+
+	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
+		return nil, err
+	}
+
+	refreshToken, jti, refreshExpiresAt, err := s.jwtSigner.IssueRefreshToken(userID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
+	if hashedRefreshToken == [32]byte{} {
+		return nil, errors.New("error while hashing refresh token")
+	}
+
+	now := time.Now().UTC()
+	refreshTokenObj := &models.RefreshToken{
+		JTI:       jti,
+		SessionID: sid,
+		UserID:    userID,
+		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
+		IssuedAt:  now,
+		ExpiresAt: refreshExpiresAt,
+	}
+
+	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
+		return nil, err
+	}
+
+	return &AuthObject{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func verifyDeviceSignature(publicKeyEncoded, challenge, signatureEncoded string) (bool, error) {
+	publicKeyBytes, err := decodeEncodedBytes(publicKeyEncoded, ed25519.PublicKeySize)
+	if err != nil {
+		return false, err
+	}
+
+	signatureBytes, err := decodeEncodedBytes(signatureEncoded, ed25519.SignatureSize)
+	if err != nil {
+		return false, err
+	}
+
+	return ed25519.Verify(ed25519.PublicKey(publicKeyBytes), []byte(challenge), signatureBytes), nil
+}
+
+func decodeEncodedBytes(value string, expectedLen int) ([]byte, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, errors.New("empty value")
+	}
+
+	decoders := []func(string) ([]byte, error){
+		base64.StdEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString,
+		base64.URLEncoding.DecodeString,
+		base64.RawURLEncoding.DecodeString,
+		hex.DecodeString,
+	}
+
+	for _, decode := range decoders {
+		decoded, err := decode(trimmed)
+		if err != nil {
+			continue
+		}
+		if len(decoded) == expectedLen {
+			return decoded, nil
+		}
+	}
+
+	return nil, errors.New("invalid encoded value")
 }
 
 func randomToken(size int) (string, error) {

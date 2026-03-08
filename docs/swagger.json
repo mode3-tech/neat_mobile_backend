@@ -21,6 +21,67 @@
     }
   ],
   "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a user",
+        "description": "Creates a new account and binds the initial device in one transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registration successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or failed registration validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Account or device already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Registration failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/login": {
       "post": {
         "tags": [
@@ -108,6 +169,67 @@
           },
           "500": {
             "description": "Login initialization failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verify-device": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify device challenge",
+        "description": "Verifies a signed login challenge for a recognized trusted device and returns tokens.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device verification successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyDeviceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or missing challenge fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid challenge or signature verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Device verification failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -500,6 +622,146 @@
       }
     },
     "schemas": {
+      "DeviceRegistrationRequest": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "public_key",
+          "device_name",
+          "device_model",
+          "os",
+          "os_version",
+          "app_version",
+          "ip",
+          "user_agent"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "example": "app-installation-id"
+          },
+          "public_key": {
+            "type": "string",
+            "example": "yMK6+dd12JqQtw6Ts5nF7gxjMe6VQ7n1xNlwLWmk/yI="
+          },
+          "device_name": {
+            "type": "string",
+            "example": "John's iPhone"
+          },
+          "device_model": {
+            "type": "string",
+            "example": "iPhone 15"
+          },
+          "os": {
+            "type": "string",
+            "example": "iOS"
+          },
+          "os_version": {
+            "type": "string",
+            "example": "18.2"
+          },
+          "app_version": {
+            "type": "string",
+            "example": "1.0.0"
+          },
+          "ip": {
+            "type": "string",
+            "example": "127.0.0.1"
+          },
+          "user_agent": {
+            "type": "string",
+            "example": "NeatApp/1.0"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "phone_number",
+          "password",
+          "confirm_password",
+          "transaction_pin",
+          "confirm_transaction_pin",
+          "bvn_verification_id",
+          "nin_verification_id",
+          "phone_verification_id",
+          "device"
+        ],
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "example": "08012345678"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "example": "your-password"
+          },
+          "confirm_password": {
+            "type": "string",
+            "minLength": 8,
+            "example": "your-password"
+          },
+          "transaction_pin": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 6,
+            "example": "1234"
+          },
+          "confirm_transaction_pin": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 6,
+            "example": "1234"
+          },
+          "bvn_verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "nin_verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "phone_verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "email_verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceRegistrationRequest"
+          }
+        }
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "required": [
+          "message",
+          "access_token",
+          "refresh_token"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "registration successful"
+          },
+          "access_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
+          },
+          "refresh_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "required": [
@@ -554,6 +816,58 @@
           "refresh_token": {
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
+          }
+        }
+      },
+      "VerifyDeviceRequest": {
+        "type": "object",
+        "required": [
+          "challenge",
+          "signature",
+          "device_id"
+        ],
+        "properties": {
+          "challenge": {
+            "type": "string",
+            "description": "Raw challenge value returned by /auth/login.",
+            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
+          },
+          "signature": {
+            "type": "string",
+            "description": "Signature over challenge bytes from the device private key.",
+            "example": "ELSgo8lWnShQUe7J79hYUf-TQqfivhBpJeIhP_AfDDeL4mQQQZAoqfCD7YLI7hRQelFWDk1f6v4CyLt2vAUyDg"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Device identifier used during login initialization.",
+            "example": "app-installation-id"
+          }
+        }
+      },
+      "VerifyDeviceResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "access_token",
+          "refresh_token"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "access_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
+          },
+          "refresh_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
+          },
+          "action_token": {
+            "type": "string",
+            "description": "Reserved for short-lived sensitive actions.",
+            "example": ""
           }
         }
       },
