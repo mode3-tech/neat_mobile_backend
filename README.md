@@ -202,6 +202,36 @@ go mod download
 go run ./cmd/api
 ```
 
+## Dev Signer (Postman Testing)
+
+Use this helper service to generate `signature` values for `/auth/verify-device` without a mobile client.
+
+Set signer keys in `.env` (auto-loaded by `cmd/devsigner`):
+
+```env
+DEV_SIGNER_KEYS_JSON={"sim-device-1":"<private_key_b64>"}
+# optional:
+# DEV_SIGNER_ADDR=:9090
+```
+
+Run dev signer:
+
+```bash
+go run ./cmd/devsigner
+```
+
+Alternative config:
+
+- `DEV_SIGNER_KEYS_FILE`: path to a JSON file of `{ "<device_id>": "<private_key>" }`
+- `DEV_SIGNER_DEVICE_ID` + `DEV_SIGNER_PRIVATE_KEY`: single key pair
+- `DEV_SIGNER_ADDR`: listen address (default `:9090`)
+
+Request:
+
+- `POST http://localhost:9090/sign`
+- Body: `{"device_id":"sim-device-1","challenge":"<challenge-from-login>"}`
+- Response: `{"signature":"...","algorithm":"ed25519"}`
+
 Swagger:
 
 - UI: `http://localhost:<PORT>/swagger/index.html`

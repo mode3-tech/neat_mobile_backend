@@ -18,6 +18,10 @@
     {
       "name": "OTP",
       "description": "OTP request and verification endpoints"
+    },
+    {
+      "name": "Dev Signer",
+      "description": "Development-only signer helper endpoints for Postman/device simulation"
     }
   ],
   "paths": {
@@ -230,6 +234,98 @@
           },
           "500": {
             "description": "Device verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Dev Signer"
+        ],
+        "summary": "Dev signer health check",
+        "description": "Development-only endpoint served by `cmd/devsigner`.\n",
+        "servers": [
+          {
+            "url": "http://localhost:9090"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signer is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sign": {
+      "post": {
+        "tags": [
+          "Dev Signer"
+        ],
+        "summary": "Sign challenge (development only)",
+        "description": "Development-only endpoint served by `cmd/devsigner` to help Postman flows.\nIt signs challenge bytes using the configured Ed25519 private key for `device_id`.\n",
+        "servers": [
+          {
+            "url": "http://localhost:9090"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevSignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge signed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevSignResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device key not found in signer configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -622,6 +718,50 @@
       }
     },
     "schemas": {
+      "DevHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      },
+      "DevSignRequest": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "challenge"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "example": "sim-device-1"
+          },
+          "challenge": {
+            "type": "string",
+            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
+          }
+        }
+      },
+      "DevSignResponse": {
+        "type": "object",
+        "required": [
+          "signature",
+          "algorithm"
+        ],
+        "properties": {
+          "signature": {
+            "type": "string",
+            "description": "Base64url-encoded Ed25519 signature",
+            "example": "oNhX2iID6_IzXA0s-mSI7RTpf-ooGA5ScVHMqFUdd3xT1LQVnvvH5ugaU7U09KSZ37pqeuYoHSc1wZvKk2V6AA"
+          },
+          "algorithm": {
+            "type": "string",
+            "example": "ed25519"
+          }
+        }
+      },
       "DeviceRegistrationRequest": {
         "type": "object",
         "required": [
