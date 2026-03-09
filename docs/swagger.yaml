@@ -513,12 +513,6 @@ components:
         app_version:
           type: string
           example: 1.0.0
-        ip:
-          type: string
-          example: 127.0.0.1
-        user_agent:
-          type: string
-          example: NeatApp/1.0
     RegisterRequest:
       type: object
       required:
