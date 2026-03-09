@@ -9,15 +9,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
 func run(ctx context.Context) error {
-	errChan := make(chan error, 1)
-
 	cfg := config.Load()
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
@@ -29,6 +26,8 @@ func run(ctx context.Context) error {
 		return err
 	}
 
+	errChan := make(chan error, 1)
+
 	go func() {
 		log.Printf("Listening on port %s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -36,21 +35,18 @@ func run(ctx context.Context) error {
 		}
 	}()
 
-	var wg sync.WaitGroup
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+	}
 
-	wg.Go(func() {
-		<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		shutdownCtx, cancel := context.WithTimeout(ctx, time.Second*5)
-
-		defer cancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			errChan <- err
-		}
-	})
-
-	wg.Wait()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
 
 	select {
 	case err := <-errChan:

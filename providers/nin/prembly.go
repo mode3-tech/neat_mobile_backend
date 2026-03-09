@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -43,8 +44,6 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("x-api-key", strings.TrimSpace(n.apiKey))
 
-	fmt.Println(n.apiKey)
-
 	start := time.Now()
 	resp, err := n.httpClient.Do(req)
 	duration := time.Since(start)
@@ -56,14 +55,14 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var result interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			log.Printf("prembly nin validation failed and response body could not be decoded: %v", err)
-		} else {
-			log.Printf("prembly nin validation failed: %s", result)
-			log.Printf("prembly_nin non-2xx status=%d duration=%s", resp.StatusCode, duration)
-			return nil, fmt.Errorf("prembly nin validation failed with status %d", resp.StatusCode)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			log.Printf("prembly nin validation failed and response body could not be read: %v", readErr)
+		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
+			log.Printf("prembly nin validation failed body=%s", body)
 		}
+		log.Printf("prembly_nin non-2xx status=%d duration=%s", resp.StatusCode, duration)
+		return nil, fmt.Errorf("prembly nin validation failed with status %d", resp.StatusCode)
 	}
 
 	var result PremblyNINValidationSuccessResponse
@@ -71,8 +70,6 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 		log.Printf("prembly nin validation response body could not be decoded: %v", err)
 		return nil, err
 	}
-
-	fmt.Print(result)
 
 	return &result, nil
 }

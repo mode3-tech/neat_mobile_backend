@@ -21,7 +21,7 @@ func NewProviderClient(baseURL, apiKey string) *ProviderClient {
 	return &ProviderClient{
 		baseURL:    strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
+		httpClient: &http.Client{Timeout: 8 * time.Second},
 		cache:      newTTLCache(30 * time.Second),
 	}
 }

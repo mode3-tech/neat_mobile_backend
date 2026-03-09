@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -269,6 +272,10 @@ func (h *AuthHandler) VerifyBVN(c *gin.Context) {
 				return
 			}
 		}
+		if status, message, ok := classifyUpstreamError(err); ok {
+			c.JSON(status, gin.H{"error": message})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
 	}
@@ -293,14 +300,20 @@ func isBadRequestBVNError(err error) bool {
 		return true
 	}
 
-	const tendarStatusPrefix = "tendar bvn validation failed with status "
-	if strings.HasPrefix(msg, tendarStatusPrefix) {
-		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, tendarStatusPrefix))
-		statusCode, convErr := strconv.Atoi(statusCodeText)
-		if convErr == nil {
-			switch statusCode {
-			case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
-				return true
+	prefixes := []string{
+		"tendar bvn validation failed with status ",
+		"prembly bvn validation failed with status ",
+	}
+
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(msg, prefix) {
+			statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
+			statusCode, convErr := strconv.Atoi(statusCodeText)
+			if convErr == nil {
+				switch statusCode {
+				case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+					return true
+				}
 			}
 		}
 	}
@@ -327,6 +340,10 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
+		}
+		if status, message, ok := classifyUpstreamError(err); ok {
+			c.JSON(status, gin.H{"error": message})
+			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
@@ -365,4 +382,59 @@ func isBadRequestNINError(err error) bool {
 	}
 
 	return false
+}
+
+func classifyUpstreamError(err error) (int, string, bool) {
+	if err == nil {
+		return 0, "", false
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
+	}
+
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "timeout") {
+		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
+	}
+
+	statusCode, ok := extractUpstreamStatusCode(msg)
+	if !ok {
+		return 0, "", false
+	}
+
+	switch {
+	case statusCode >= http.StatusInternalServerError:
+		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
+	case statusCode == http.StatusTooManyRequests:
+		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
+	default:
+		return 0, "", false
+	}
+}
+
+func extractUpstreamStatusCode(msg string) (int, bool) {
+	prefixes := []string{
+		"tendar bvn validation failed with status ",
+		"prembly bvn validation failed with status ",
+		"prembly nin validation failed with status ",
+		"cba returned status ",
+	}
+
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(msg, prefix) {
+			statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
+			statusCode, err := strconv.Atoi(statusCodeText)
+			if err == nil {
+				return statusCode, true
+			}
+		}
+	}
+
+	return 0, false
 }

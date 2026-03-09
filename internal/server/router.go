@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
 	"neat_mobile_app_backend/internal/config"
@@ -23,10 +24,11 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"gorm.io/gorm"
 )
 
 func NewRouter(cfg config.Config) (*gin.Engine, error) {
-	db, err := database.NewPostgres(cfg.DBUrl)
+	db, err := connectPostgresWithRetry(cfg.DBUrl, 5, time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -88,4 +90,33 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	otp.RegisterRoutes(apiV1, otpHandler)
 
 	return r, nil
+}
+
+func connectPostgresWithRetry(dsn string, attempts int, baseDelay time.Duration) (*gorm.DB, error) {
+	if attempts <= 0 {
+		attempts = 1
+	}
+	if baseDelay <= 0 {
+		baseDelay = time.Second
+	}
+
+	var lastErr error
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		db, err := database.NewPostgres(dsn)
+		if err == nil {
+			return db, nil
+		}
+
+		lastErr = err
+		if attempt == attempts {
+			break
+		}
+
+		delay := baseDelay * time.Duration(attempt)
+		log.Printf("database connection attempt %d/%d failed: %v (retrying in %s)", attempt, attempts, err, delay)
+		time.Sleep(delay)
+	}
+
+	return nil, fmt.Errorf("database connection failed after %d attempts: %w", attempts, lastErr)
 }

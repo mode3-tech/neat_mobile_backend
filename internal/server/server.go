@@ -21,7 +21,7 @@ func New(cfg config.Config) (*http.Server, error) {
 		Addr:              ":" + cfg.Port,
 		Handler:           router,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

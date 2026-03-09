@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
@@ -29,6 +30,13 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := sqlDB.PingContext(pingCtx); err != nil {
+		return nil, err
+	}
 
 	return db, nil
 
@@ -61,8 +69,18 @@ func Migrate(db *gorm.DB) error {
 
 	// Ensure pin_hash exists as nullable before AutoMigrate touches it.
 	if err := db.Exec(`
-		ALTER TABLE wallet_users
-		ADD COLUMN IF NOT EXISTS pin_hash text;
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+			) THEN
+				ALTER TABLE wallet_users
+				ADD COLUMN IF NOT EXISTS pin_hash text;
+			END IF;
+		END $$;
 	`).Error; err != nil {
 		return err
 	}

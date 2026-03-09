@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
@@ -121,12 +122,14 @@ func (s *AuthService) ValidateNIN(ctx context.Context, nin string) (*ninInfo, er
 
 func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
-		return nil, errors.New("something went wrong")
+		log.Printf("bvn provider source not configured; falling back to default provider")
+		return s.validateBVNWithFallback(ctx, bvn)
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		log.Printf("failed to resolve bvn provider from source: %v", err)
+		return s.validateBVNWithFallback(ctx, bvn)
 	}
 
 	switch provider {
@@ -135,8 +138,21 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 	case ProviderPrembly:
 		return s.ValidateBVNWithPrembly(ctx, bvn)
 	default:
-		return nil, fmt.Errorf("unsupported bvn provider %q", provider)
+		log.Printf("unsupported bvn provider %q from source; falling back to default provider", provider)
+		return s.validateBVNWithFallback(ctx, bvn)
 	}
+}
+
+func (s *AuthService) validateBVNWithFallback(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.tender != nil {
+		return s.ValidateBVNWithTendar(ctx, bvn)
+	}
+
+	if s.prembly != nil {
+		return s.ValidateBVNWithPrembly(ctx, bvn)
+	}
+
+	return nil, errors.New("bvn providers are not configured")
 }
 
 func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest) (*models.User, error) {
@@ -674,14 +690,17 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 
 func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
+		log.Printf("tendar validator is not configured")
 		return nil, errors.New("tendar validator is not configured")
 	}
 
 	if bvn == "" {
+		log.Printf("bvn is required")
 		return nil, errors.New("bvn is required")
 	}
 
 	if len(bvn) < 11 || len(bvn) > 11 {
+		log.Printf("invalid bvn number")
 		return nil, errors.New("invalid bvn number")
 	}
 
@@ -691,6 +710,7 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 		return nil, err
 	}
 	if bvnDetails == nil {
+		log.Printf("invalid bvn number")
 		return nil, errors.New("invalid bvn number")
 	}
 
@@ -723,15 +743,16 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
+		log.Printf("tendar verification id: %s\n", providerVerificationID)
 		record.ProviderVerificationID = &providerVerificationID
 	}
 	if fullName != "" {
 		record.VerifiedName = &fullName
 	}
-	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
+	if phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber); phone != "" {
 		record.VerifiedPhone = &phone
 	}
-	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
+	if email := strings.TrimSpace(bvnDetails.Data.Details.Email); email != "" {
 		record.VerifiedEmail = &email
 	}
 	if dob := strings.TrimSpace(bvnDetails.Data.Details.DateOfBirth); dob != "" {
@@ -739,10 +760,12 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 	}
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
+		log.Printf("invalid bvn number")
 		return nil, errors.New("invalid bvn number")
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
+		log.Printf("failed to add verification record err=%v", err)
 		return nil, err
 	}
 

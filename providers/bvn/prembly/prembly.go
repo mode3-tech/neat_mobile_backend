@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"neat_mobile_app_backend/providers/bvn"
 	"net/http"
@@ -43,7 +44,6 @@ func (p *Prembly) ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(p.apiKey))
-	fmt.Println("Bearer " + p.apiKey)
 
 	start := time.Now()
 	resp, err := p.httpClient.Do(req)
@@ -57,14 +57,14 @@ func (p *Prembly) ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var result interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			log.Printf("prembly bvn validation failed and response body could not be decoded: %v", err)
-		} else {
-			log.Printf("prembly bvn validation failed: %s", result)
-			log.Printf("prembly_bvn non-2xx status=%d duration=%s", resp.StatusCode, duration)
-			return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			log.Printf("prembly bvn validation failed and response body could not be read: %v", readErr)
+		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
+			log.Printf("prembly bvn validation failed body=%s", body)
 		}
+		log.Printf("prembly_bvn non-2xx status=%d duration=%s", resp.StatusCode, duration)
+		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
 	}
 
 	var result bvn.PremblyBVNValidationSuccessResponse

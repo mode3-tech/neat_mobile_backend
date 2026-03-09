@@ -18,7 +18,7 @@ type Tendar struct {
 
 func NewTendar(apiKey string) *Tendar {
 	return &Tendar{apiKey: apiKey, httpClient: &http.Client{
-		Timeout: time.Second * 60,
+		Timeout: 10 * time.Second,
 	}}
 }
 
@@ -63,6 +63,7 @@ func (t *Tendar) validWithTendar(ctx context.Context, BVN string) (*bvn.TendarBV
 
 	var result bvn.TendarBVNValidationSuccessResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("tendar_bvn response decode failed duration=%s err=%v", duration, err)
 		return nil, err
 	}
 

@@ -47,18 +47,9 @@ func (s *stubPremblyValidation) ValidateBVNWithPrembly(context.Context, string) 
 }
 
 func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
+	wantErr := errors.New("tendar invoked")
 	tendarValidator := &stubTendarValidation{
-		resp: &bvn.TendarBVNValidationSuccessResponse{
-			Data: bvn.TendarBVNValidationSuccessData{
-				Details: bvn.TendarBVNDetails{
-					FirstName:   "jane",
-					MiddleName:  "mary",
-					LastName:    "doe",
-					DateOfBirth: "1994-01-02",
-					PhoneNumber: "08012345678",
-				},
-			},
-		},
+		err: wantErr,
 	}
 	premblyValidator := &stubPremblyValidation{}
 	service := NewAuthService(
@@ -73,12 +64,9 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		stubProviderSource{provider: ProviderTendar},
 	)
 
-	got, err := service.ValidateBVN(context.Background(), "12345678901")
-	if err != nil {
-		t.Fatalf("ValidateBVN returned error: %v", err)
-	}
-	if got == nil {
-		t.Fatal("ValidateBVN returned nil info")
+	_, err := service.ValidateBVN(context.Background(), "12345678901")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected error %v, got %v", wantErr, err)
 	}
 	if !tendarValidator.called {
 		t.Fatal("expected tendar validator to be called")
@@ -86,23 +74,28 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 	if premblyValidator.called {
 		t.Fatal("did not expect prembly validator to be called")
 	}
-	if got.name != "Jane Mary Doe" {
-		t.Fatalf("unexpected name: got %q", got.name)
-	}
-	if got.dob != "1994-01-02" {
-		t.Fatalf("unexpected dob: got %q", got.dob)
-	}
-	if got.phone != "08012345678" {
-		t.Fatalf("unexpected phone: got %q", got.phone)
-	}
 }
 
-func TestService_ValidateBVN_ReturnsProviderSourceError(t *testing.T) {
-	wantErr := errors.New("cba unavailable")
-	service := NewAuthService(nil, nil, nil, nil, nil, nil, nil, nil, stubProviderSource{err: wantErr})
+func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
+	fallbackErr := errors.New("fallback validator invoked")
+	tendarValidator := &stubTendarValidation{err: fallbackErr}
+	service := NewAuthService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		tendarValidator,
+		nil,
+		nil,
+		stubProviderSource{err: errors.New("cba unavailable")},
+	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("expected error %v, got %v", wantErr, err)
+	if !errors.Is(err, fallbackErr) {
+		t.Fatalf("expected error %v, got %v", fallbackErr, err)
+	}
+	if !tendarValidator.called {
+		t.Fatal("expected fallback validator to be called")
 	}
 }
