@@ -25,32 +25,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: "#/components/schemas/RegisterRequest"
       responses:
-        '201':
+        "201":
           description: Registration successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegisterResponse'
-        '400':
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
           description: Invalid request body or failed registration validation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
           description: Account or device already exists
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Registration failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/login:
     post:
       tags:
@@ -75,14 +75,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: "#/components/schemas/LoginRequest"
       responses:
-        '200':
+        "200":
           description: Login initialized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginInitResponse'
+                $ref: "#/components/schemas/LoginInitResponse"
               examples:
                 challenge_required:
                   summary: Recognized trusted device
@@ -94,30 +94,30 @@ paths:
                   value:
                     status: new_device_detected
                     session_token: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
-        '400':
+        "400":
           description: Invalid request body, invalid phone number, or missing/invalid device id
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Invalid phone or password
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
           description: Too many login attempts
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Login initialization failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/verify-device:
     post:
       tags:
@@ -129,32 +129,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyDeviceRequest'
+              $ref: "#/components/schemas/VerifyDeviceRequest"
       responses:
-        '200':
+        "200":
           description: Device verification successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerifyDeviceResponse'
-        '400':
+                $ref: "#/components/schemas/VerifyDeviceResponse"
+        "400":
           description: Invalid request body or missing challenge fields
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Invalid challenge or signature verification failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Device verification failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /health:
     get:
       tags:
@@ -165,12 +165,12 @@ paths:
       servers:
         - url: http://localhost:9090
       responses:
-        '200':
+        "200":
           description: Signer is healthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DevHealthResponse'
+                $ref: "#/components/schemas/DevHealthResponse"
   /sign:
     post:
       tags:
@@ -186,32 +186,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DevSignRequest'
+              $ref: "#/components/schemas/DevSignRequest"
       responses:
-        '200':
+        "200":
           description: Challenge signed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DevSignResponse'
-        '400':
+                $ref: "#/components/schemas/DevSignResponse"
+        "400":
           description: Invalid request body or missing fields
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
           description: Device key not found in signer configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '405':
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
           description: Method not allowed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/logout:
     post:
       tags:
@@ -225,69 +225,76 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LogoutRequest'
+              $ref: "#/components/schemas/LogoutRequest"
       responses:
-        '200':
+        "200":
           description: Logout successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
           description: Invalid request body or missing authorization header
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Invalid authorization header
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Logout failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/refresh:
     post:
       tags:
         - Auth
       summary: Refresh access token
       description: Validates a refresh token, rotates it, and returns new access and refresh tokens.
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+            example: app-installation-id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RefreshTokenRequest'
+              $ref: "#/components/schemas/RefreshTokenRequest"
       responses:
-        '200':
+        "200":
           description: Tokens refreshed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '400':
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
           description: Refresh token missing or invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Invalid refresh token
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Token refresh failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/validate-bvn:
     post:
       tags:
@@ -299,26 +306,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BVNValidationRequest'
+              $ref: "#/components/schemas/BVNValidationRequest"
       responses:
-        '200':
+        "200":
           description: BVN validated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BVNValidationResponse'
-        '400':
+                $ref: "#/components/schemas/BVNValidationResponse"
+        "400":
           description: Missing or invalid request body, invalid BVN, or provider validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: CBA lookup, provider, or internal error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/validate-nin:
     post:
       tags:
@@ -330,26 +337,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NINValidationRequest'
+              $ref: "#/components/schemas/NINValidationRequest"
       responses:
-        '200':
+        "200":
           description: NIN validated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NINValidationResponse'
-        '400':
+                $ref: "#/components/schemas/NINValidationResponse"
+        "400":
           description: Missing or invalid request body, invalid NIN, or provider validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Provider or internal error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/otp/request:
     post:
       tags:
@@ -361,44 +368,44 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RequestOTPRequest'
+              $ref: "#/components/schemas/RequestOTPRequest"
       responses:
-        '200':
+        "200":
           description: OTP sent
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
           description: Invalid request body, purpose, channel, email, or phone number
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
           description: Too many requests
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '502':
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
           description: SMS delivery failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '503':
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
           description: SMS service not configured
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/otp/verify:
     post:
       tags:
@@ -410,32 +417,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyOTPRequest'
+              $ref: "#/components/schemas/VerifyOTPRequest"
       responses:
-        '200':
+        "200":
           description: OTP verified
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerifyOTPResponse'
-        '400':
+                $ref: "#/components/schemas/VerifyOTPResponse"
+        "400":
           description: Invalid request body, purpose, or channel
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
           description: Invalid OTP
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -484,8 +491,6 @@ components:
         - os
         - os_version
         - app_version
-        - ip
-        - user_agent
       properties:
         device_id:
           type: string
@@ -565,7 +570,7 @@ components:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         device:
-          $ref: '#/components/schemas/DeviceRegistrationRequest'
+          $ref: "#/components/schemas/DeviceRegistrationRequest"
     RegisterResponse:
       type: object
       required:
@@ -707,12 +712,16 @@ components:
       type: object
       required:
         - nin
+        - bvn_verification_id
       properties:
         nin:
           type: string
           minLength: 11
           maxLength: 11
           example: "12345678901"
+        bvn_verification_id:
+          type: string
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
     NINValidationResponse:
       type: object
       properties:

@@ -35,6 +35,7 @@ func (s *DeviceService) BindDevice(ctx context.Context, userID string, req *Devi
 		DeviceModel: req.DeviceModel,
 		OS:          req.OS,
 		OSVersion:   req.OSVersion,
+		IP:          req.IP,
 		AppVersion:  req.AppVersion,
 		IsTrusted:   true,
 		IsActive:    true,

@@ -9,5 +9,4 @@ type DeviceBindingRequest struct {
 	OSVersion   string `json:"os_version" binding:"required"`
 	AppVersion  string `json:"app_version" binding:"required"`
 	IP          string `json:"ip" binding:"required"`
-	UserAgent   string `json:"user_agent" binding:"required"`
 }

@@ -29,7 +29,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	authObj, err := h.authService.Register(c.Request.Context(), req)
+	ip := c.ClientIP()
+
+	authObj, err := h.authService.Register(c.Request.Context(), req, ip)
 	if err != nil {
 		if isBadRequestRegisterError(err) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -57,6 +59,7 @@ func isBadRequestRegisterError(err error) bool {
 		"unable to confirm bvn and nin belong to the same person due to names or date of births mismatch",
 		"passwords do not match",
 		"transaction pins do not match",
+		"device not found",
 		"invalid Nigerian number":
 		return true
 	}
@@ -77,11 +80,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	userAgent := c.GetHeader("User-Agent")
 	ip := c.ClientIP()
 	deviceID := c.GetHeader("X-Device-ID")
 
-	loginObj, err := h.authService.Login(c.Request.Context(), deviceID, ip, userAgent, req.Phone, req.Password)
+	loginObj, err := h.authService.Login(c.Request.Context(), deviceID, ip, req.Phone, req.Password)
 
 	if err != nil {
 		if isBadRequestLoginError(err) {
@@ -118,10 +120,9 @@ func (h *AuthHandler) VerifyDevice(c *gin.Context) {
 		return
 	}
 
-	userAgent := c.GetHeader("User-Agent")
 	ip := c.ClientIP()
 
-	authObj, err := h.authService.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip, userAgent)
+	authObj, err := h.authService.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
 	if err != nil {
 		if isBadRequestVerifyDeviceError(err) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -223,7 +224,7 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	tokenObj, err := h.authService.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.RefreshToken))
+	tokenObj, err := h.authService.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.DeviceID), strings.TrimSpace(req.RefreshToken))
 	if err != nil {
 		if isUnauthorizedRefreshError(err) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
@@ -329,7 +330,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 		return
 	}
 
-	ninInfo, err := h.authService.ValidateNIN(c.Request.Context(), req.NIN)
+	ninInfo, err := h.authService.ValidateNIN(c.Request.Context(), req.BVNValidationID, req.NIN)
 	if err != nil {
 		if isBadRequestNINError(err) {
 			switch err.Error() {
@@ -365,7 +366,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 func isBadRequestNINError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "nin is required", "invalid nin", "invalid nin number":
+	case "nin is required", "invalid nin", "invalid nin number", "bvn and nin do not match":
 		return true
 	}
 

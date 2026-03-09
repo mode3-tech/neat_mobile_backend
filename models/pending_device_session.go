@@ -15,8 +15,7 @@ type PendingDeviceSession struct {
 	ExpiresAt        time.Time  `gorm:"type:timestamptz;not null;index" json:"expires_at"`
 
 	// Helpful for security/auditing (optional)
-	IP        string `gorm:"type:varchar(64)" json:"ip,omitempty"`
-	UserAgent string `gorm:"type:text" json:"user_agent,omitempty"`
+	IP string `gorm:"type:varchar(64)" json:"ip,omitempty"`
 
 	CreatedAt time.Time `gorm:"type:timestamptz;not null;default:now()" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:timestamptz;not null;default:null" json:"updated_at"`

@@ -64,7 +64,84 @@ func NewAuthService(repo *Repository, verification *verification.VerificationRep
 	}
 }
 
-func (s *AuthService) ValidateNIN(ctx context.Context, nin string) (*ninInfo, error) {
+func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
+	var createdUser *models.User
+	var err error
+
+	now := time.Now().UTC()
+
+	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		authRepo := NewRespository(txDB)
+		deviceRepo := device.NewDeviceRepository(txDB)
+
+		createdUser, err = s.createUser(ctx, authRepo, req)
+		if err != nil {
+			return err
+		}
+
+		deviceReq := device.DeviceBindingRequest{
+			DeviceID:    req.Device.DeviceID,
+			PublicKey:   req.Device.PublicKey,
+			DeviceName:  req.Device.DeviceName,
+			DeviceModel: req.Device.DeviceModel,
+			OS:          req.Device.OS,
+			OSVersion:   req.Device.OSVersion,
+			AppVersion:  req.Device.AppVersion,
+			IP:          ip,
+		}
+		deviceService := device.NewDeviceService(*deviceRepo)
+		return deviceService.BindDevice(ctx, createdUser.ID, &deviceReq)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	sid := uuid.NewString()
+
+	accessToken, err := s.jwtSigner.IssueAccessToken(createdUser.ID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	authSession := &models.AuthSession{
+		UserID:   createdUser.ID,
+		SID:      sid,
+		DeviceID: &req.Device.DeviceID,
+		IP:       &ip,
+	}
+
+	if err = s.repo.AddAccessToken(ctx, authSession); err != nil {
+		return nil, err
+	}
+
+	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(createdUser.ID, sid)
+	if err != nil {
+		return nil, err
+	}
+
+	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
+
+	refreshTokenObj := &models.RefreshToken{
+		JTI:       jti,
+		SessionID: sid,
+		UserID:    createdUser.ID,
+		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
+		IssuedAt:  now,
+		ExpiresAt: now.Add(time.Hour * 24 * 30),
+	}
+
+	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
+		return nil, err
+	}
+
+	return &AuthObject{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
 	}
@@ -78,6 +155,20 @@ func (s *AuthService) ValidateNIN(ctx context.Context, nin string) (*ninInfo, er
 	middleName := TitleCase(resp.Data.MiddleName)
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
+
+	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errors.New("bvn verification not found")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !compareBVNAndNinDetails(*row.VerifiedName, *row.VerifiedDOB, fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate))) {
+		return nil, errors.New("bvn and nin do not match")
+	}
 
 	verificationID := uuid.NewString()
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
@@ -232,85 +323,7 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 	return createdUser, nil
 }
 
-func (s *AuthService) Register(ctx context.Context, req RegisterRequest) (*AuthObject, error) {
-	var createdUser *models.User
-	var err error
-
-	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
-		deviceRepo := device.NewDeviceRepository(txDB)
-
-		createdUser, err = s.createUser(ctx, authRepo, req)
-		if err != nil {
-			return err
-		}
-
-		deviceReq := device.DeviceBindingRequest{
-			DeviceID:    req.Device.DeviceID,
-			PublicKey:   req.Device.PublicKey,
-			DeviceName:  req.Device.DeviceName,
-			DeviceModel: req.Device.DeviceModel,
-			OS:          req.Device.OS,
-			OSVersion:   req.Device.OSVersion,
-			AppVersion:  req.Device.AppVersion,
-		}
-		deviceService := device.NewDeviceService(*deviceRepo)
-		return deviceService.BindDevice(ctx, createdUser.ID, &deviceReq)
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	sid := uuid.NewString()
-
-	accessToken, err := s.jwtSigner.IssueAccessToken(createdUser.ID, sid)
-	if err != nil {
-		return nil, err
-	}
-
-	authSession := &models.AuthSession{
-		UserID:    createdUser.ID,
-		SID:       sid,
-		DeviceID:  &req.Device.DeviceID,
-		IP:        &req.Device.IP,
-		UserAgent: &req.Device.UserAgent,
-	}
-
-	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
-		return nil, err
-	}
-
-	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(createdUser.ID, sid)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
-	if hashedRefreshToken == [32]byte{} {
-		return nil, errors.New("error while hashing refresh token")
-	}
-
-	refreshTokenObj := &models.RefreshToken{
-		JTI:       jti,
-		SessionID: sid,
-		UserID:    createdUser.ID,
-		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
-		IssuedAt:  time.Now(),
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 30),
-	}
-
-	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
-		return nil, err
-	}
-
-	return &AuthObject{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
-}
-
-func (s *AuthService) Login(ctx context.Context, deviceID, ip, userAgent, phone, password string) (*LoginInitObject, error) {
+func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password string) (*LoginInitObject, error) {
 	normalizedPhone, err := NormalizeNigerianNumber(phone)
 	if err != nil {
 		return nil, err
@@ -345,7 +358,7 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, userAgent, phone,
 	deviceRecord, err := s.deviceRepo.FindDevice(ctx, user.ID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip, userAgent)
+			sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip)
 			if sessionErr != nil {
 				return nil, sessionErr
 			}
@@ -360,7 +373,7 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, userAgent, phone,
 	}
 
 	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
-		sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip, userAgent)
+		sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip)
 		if sessionErr != nil {
 			return nil, sessionErr
 		}
@@ -383,7 +396,7 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, userAgent, phone,
 	}, nil
 }
 
-func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, deviceID, ip, userAgent string) (string, error) {
+func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, deviceID, ip string) (string, error) {
 	sessionToken, err := randomToken(32)
 	if err != nil {
 		return "", err
@@ -398,7 +411,6 @@ func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, de
 		SessionTokenHash: hex.EncodeToString(tokenHash[:]),
 		ExpiresAt:        now.Add(10 * time.Minute),
 		IP:               ip,
-		UserAgent:        userAgent,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -410,7 +422,7 @@ func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, de
 	return sessionToken, nil
 }
 
-func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip, userAgent string) (*AuthObject, error) {
+func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip string) (*AuthObject, error) {
 	challenge = strings.TrimSpace(challenge)
 	if challenge == "" {
 		return nil, errors.New("challenge is required")
@@ -487,10 +499,10 @@ func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, sign
 		return nil, err
 	}
 
-	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip, userAgent)
+	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip)
 }
 
-func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip, userAgent string) (*AuthObject, error) {
+func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
 	sid := uuid.NewString()
 
 	accessToken, err := s.jwtSigner.IssueAccessToken(userID, sid)
@@ -507,9 +519,6 @@ func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, 
 	}
 	if trimmedIP := strings.TrimSpace(ip); trimmedIP != "" {
 		authSession.IP = &trimmedIP
-	}
-	if trimmedUA := strings.TrimSpace(userAgent); trimmedUA != "" {
-		authSession.UserAgent = &trimmedUA
 	}
 
 	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
@@ -636,7 +645,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken, accessToken stri
 	return nil
 }
 
-func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken string) (*AuthObject, error) {
+func (s *AuthService) RefreshAccessToken(ctx context.Context, deviceID, refreshToken string) (*AuthObject, error) {
 	sub, sid, oldJTI, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 
 	if err != nil {
@@ -647,6 +656,23 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 
 	if err != nil {
 		return nil, errors.New("invalid refresh token")
+	}
+
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository is not configured")
+	}
+
+	deviceRecord, err := s.deviceRepo.FindDevice(ctx, refreshTokenObj.UserID, deviceID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errors.New("device not found")
+	}
+
+	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
+		return nil, errors.New("device not allowed")
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -671,13 +697,12 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 	}
 
 	newRefreshTokenRow := &models.RefreshToken{
-		JTI:           newJTI,
-		SessionID:     sid,
-		UserID:        sub,
-		TokenHash:     hex.EncodeToString(hashedRefreshToken[:]),
-		ReplacedByJTI: &newJTI,
-		IssuedAt:      now,
-		ExpiresAt:     newExpiresAt,
+		JTI:       newJTI,
+		SessionID: sid,
+		UserID:    sub,
+		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
+		IssuedAt:  now,
+		ExpiresAt: newExpiresAt,
 	}
 
 	if err := s.repo.RotateRefreshToken(ctx, oldJTI, newRefreshTokenRow); err != nil {

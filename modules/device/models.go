@@ -11,6 +11,7 @@ type UserDevice struct {
 	DeviceModel string    `gorm:"column:device_model"`
 	OS          string    `gorm:"column:os"`
 	OSVersion   string    `gorm:"column:os_version"`
+	IP          string    `gorm:"column:ip"`
 	AppVersion  string    `gorm:"column:app_version"`
 	IsTrusted   bool      `gorm:"column:is_trusted"`
 	IsActive    bool      `gorm:"column:is_active"`

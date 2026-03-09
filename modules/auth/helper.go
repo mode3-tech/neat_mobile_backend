@@ -39,8 +39,8 @@ func CheckPassword(storedHash, plainPassword string) bool {
 	return err == nil
 }
 
-func SerializeDOB(nin string) string {
-	return dobRegex.ReplaceAllString(strings.TrimSpace(nin), "")
+func SerializeDOB(dob string) string {
+	return dobRegex.ReplaceAllString(strings.TrimSpace(dob), "")
 }
 
 func SerializeEmail(email string) string {
@@ -67,4 +67,8 @@ func NormalizeNigerianNumber(input string) (string, error) {
 
 	return "", errors.New("invalid Nigerian number")
 
+}
+
+func compareBVNAndNinDetails(bvnName, bvnDOB, ninName, ninDOB string) bool {
+	return bvnName == ninName && SerializeDOB(bvnDOB) == SerializeDOB(ninDOB)
 }

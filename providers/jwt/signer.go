@@ -14,6 +14,11 @@ const (
 	TokenTypeRefresh auth.TokenType = "refresh_token"
 )
 
+// type RefreshTokenClaims struct {
+// 	SessionID string `json:"sid"`
+// 	JTI       string `json:"typ"`
+// }
+
 type Signer struct {
 	secret string
 }

@@ -8,8 +8,6 @@ type DeviceRegisteration struct {
 	OS          string `json:"os" binding:"required"`
 	OSVersion   string `json:"os_version" binding:"required"`
 	AppVersion  string `json:"app_version" binding:"required"`
-	IP          string `json:"ip" binding:"required"`
-	UserAgent   string `json:"user_agent" binding:"required"`
 }
 
 type RegisterRequest struct {
@@ -60,6 +58,7 @@ type LogoutRequest struct {
 }
 
 type RefreshTokenRequest struct {
+	DeviceID     string `json:"device_id" binding:"required"`
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
@@ -83,7 +82,8 @@ type BVNValidationResponse struct {
 }
 
 type NINValidationRequest struct {
-	NIN string `json:"nin" binding:"required"`
+	BVNValidationID string `json:"bvn_validation_id" binding:"required"`
+	NIN             string `json:"nin" binding:"required"`
 }
 
 type NINValidationResponse struct {
