@@ -19,7 +19,7 @@ paths:
       tags:
         - Auth
       summary: Register a user
-      description: Creates a new account and binds the initial device in one transaction.
+      description: Creates a new account and binds the initial device in one transaction. The server captures the client IP from the request metadata and stores it with the created auth session.
       requestBody:
         required: true
         content:
@@ -256,14 +256,7 @@ paths:
       tags:
         - Auth
       summary: Refresh access token
-      description: Validates a refresh token, rotates it, and returns new access and refresh tokens.
-      parameters:
-        - in: header
-          name: X-Device-ID
-          required: true
-          schema:
-            type: string
-            example: app-installation-id
+      description: Validates a refresh token and device binding from request body, rotates the refresh token, and returns new access and refresh tokens.
       requestBody:
         required: true
         content:
@@ -278,7 +271,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
         "400":
-          description: Refresh token missing or invalid request body
+          description: Missing refresh token/device id or invalid request body
           content:
             application/json:
               schema:
@@ -672,8 +665,12 @@ components:
     RefreshTokenRequest:
       type: object
       required:
+        - device_id
         - refresh_token
       properties:
+        device_id:
+          type: string
+          example: app-installation-id
         refresh_token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
