@@ -12,6 +12,14 @@ import (
 
 var dobRegex = regexp.MustCompile(`[/-]`)
 
+func TestPasswordStrength(password string) bool {
+	const minLength = 8
+	if len(password) < minLength {
+		return false
+	}
+	return true
+}
+
 func TitleCase(str string) string {
 	caser := cases.Title(language.English)
 	return caser.String(str)

@@ -38,8 +38,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	}
 
 	r := gin.New()
+	r.Use(middleware.RequestContextLogger())
 	r.Use(gin.Recovery())
-	r.Use(gin.Logger())
 	r.StaticFile("/openapi/doc.json", "./docs/swagger.json")
 	r.StaticFile("/openapi/doc.yaml", "./docs/swagger.yaml")
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/openapi/doc.json")))

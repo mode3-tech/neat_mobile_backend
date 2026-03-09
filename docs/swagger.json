@@ -1197,6 +1197,11 @@
           "error": {
             "type": "string",
             "example": "invalid request body"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Correlation identifier included in responses for request tracing.",
+            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
           }
         }
       }

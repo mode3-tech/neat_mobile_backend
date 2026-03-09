@@ -4,7 +4,7 @@ import "errors"
 
 func ValidatePassword(pw string) error {
 	if len(pw) < 8 {
-		return errors.New("password length should be at least characters long")
+		return errors.New("password length should be at least 8 characters long")
 	}
 
 	var hasUpper, hasLower, hasNumber, hasSpecial bool

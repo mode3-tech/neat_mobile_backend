@@ -3,7 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
+	"neat_mobile_app_backend/internal/middleware"
 	"net"
 	"net/http"
 	"strconv"
@@ -20,12 +21,75 @@ func NewAuthHandler(authService *AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
+func requestIDFromContext(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+
+	if value, ok := c.Get(middleware.RequestIDContextKey); ok {
+		if requestID, ok := value.(string); ok {
+			requestID = strings.TrimSpace(requestID)
+			if requestID != "" {
+				return requestID
+			}
+		}
+	}
+
+	return strings.TrimSpace(c.GetHeader(middleware.RequestIDHeader))
+}
+
+func (h *AuthHandler) respondError(c *gin.Context, status int, clientMessage string, err error) {
+	if c == nil {
+		return
+	}
+
+	requestID := requestIDFromContext(c)
+	route := c.FullPath()
+	if strings.TrimSpace(route) == "" {
+		route = c.Request.URL.Path
+	}
+
+	level := "WARN"
+	if status >= http.StatusInternalServerError {
+		level = "ERROR"
+	}
+
+	if err != nil {
+		_ = c.Error(err)
+		log.Printf(
+			"level=%s request_id=%s method=%s path=%s status=%d client_ip=%s error=%q",
+			level,
+			requestID,
+			c.Request.Method,
+			route,
+			status,
+			c.ClientIP(),
+			err.Error(),
+		)
+	} else {
+		log.Printf(
+			"level=%s request_id=%s method=%s path=%s status=%d client_ip=%s error=%q",
+			level,
+			requestID,
+			c.Request.Method,
+			route,
+			status,
+			c.ClientIP(),
+			clientMessage,
+		)
+	}
+
+	c.AbortWithStatusJSON(status, gin.H{
+		"error":      clientMessage,
+		"request_id": requestID,
+	})
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		fmt.Println(err.Error())
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
@@ -34,14 +98,19 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	authObj, err := h.authService.Register(c.Request.Context(), req, ip)
 	if err != nil {
 		if isBadRequestRegisterError(err) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
 		if isConflictRegisterError(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "account or device already exists"})
+			h.respondError(c, http.StatusConflict, "account or device already exists", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		if isBadPasswordError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
@@ -69,14 +138,27 @@ func isBadRequestRegisterError(err error) bool {
 
 func isConflictRegisterError(err error) bool {
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	return strings.Contains(msg, "duplicate key value violates unique constraint")
+	switch msg {
+	case "user already exists",
+		"device already exists":
+		return true
+	default:
+		return strings.Contains(msg, "duplicate key value violates unique constraint")
+
+	}
+}
+
+func isBadPasswordError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	return msg == "password length should be at least 8 characters long" ||
+		msg == "password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
@@ -87,20 +169,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err != nil {
 		if isBadRequestLoginError(err) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
 		if isUnauthorizedLoginError(err) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
 	if loginObj == nil || loginObj.Status == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty login init response"))
 		return
 	}
 
@@ -116,7 +198,7 @@ func (h *AuthHandler) VerifyDevice(c *gin.Context) {
 	var req VerifyDeviceRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
@@ -125,20 +207,20 @@ func (h *AuthHandler) VerifyDevice(c *gin.Context) {
 	authObj, err := h.authService.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
 	if err != nil {
 		if isBadRequestVerifyDeviceError(err) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
 		if isUnauthorizedVerifyDeviceError(err) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
 	if authObj == nil || authObj.AccessToken == "" || authObj.RefreshToken == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty verify-device response"))
 		return
 	}
 
@@ -193,24 +275,24 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	var req LogoutRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing authorization header"})
+		h.respondError(c, http.StatusBadRequest, "missing authorization header", nil)
 		return
 	}
 	splittedAuthHeader := strings.Fields(authHeader)
 	if len(splittedAuthHeader) != 2 || splittedAuthHeader[0] != "Bearer" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+		h.respondError(c, http.StatusUnauthorized, "invalid authorization header", nil)
 		return
 	}
 	accessToken := splittedAuthHeader[1]
 
 	if err := h.authService.Logout(c.Request.Context(), req.RefreshToken, accessToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
@@ -220,33 +302,47 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 	var req RefreshTokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh token missing"})
+		h.respondError(c, http.StatusBadRequest, "refresh token or device id missing", err)
 		return
 	}
 
 	tokenObj, err := h.authService.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.DeviceID), strings.TrimSpace(req.RefreshToken))
 	if err != nil {
+		if isBadRequestRefreshError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
 		if isUnauthorizedRefreshError(err) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+			h.respondError(c, http.StatusUnauthorized, "invalid refresh token", err)
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
 	if tokenObj == nil || tokenObj.AccessToken == "" || tokenObj.RefreshToken == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty token response"))
 		return
 	}
 
 	c.JSON(http.StatusOK, LoginResponse{AccessToken: tokenObj.AccessToken, RefreshToken: tokenObj.RefreshToken})
 }
 
+func isBadRequestRefreshError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required":
+		return true
+	}
+
+	return false
+}
+
 func isUnauthorizedRefreshError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "invalid refresh token", "refresh token not found", "refresh token already revoked", "refresh token expired":
+	case "invalid refresh token", "refresh token not found", "refresh token already revoked", "refresh token expired", "device not found", "device not allowed", "invalid session":
 		return true
 	}
 
@@ -257,7 +353,7 @@ func (h *AuthHandler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bvn is missing"})
+		h.respondError(c, http.StatusBadRequest, "bvn is missing", err)
 		return
 	}
 
@@ -266,23 +362,23 @@ func (h *AuthHandler) VerifyBVN(c *gin.Context) {
 		if isBadRequestBVNError(err) {
 			switch err.Error() {
 			case "tendar bvn validation failed with status 404":
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bvn"})
+				h.respondError(c, http.StatusBadRequest, "invalid bvn", err)
 				return
 			default:
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				h.respondError(c, http.StatusBadRequest, err.Error(), err)
 				return
 			}
 		}
 		if status, message, ok := classifyUpstreamError(err); ok {
-			c.JSON(status, gin.H{"error": message})
+			h.respondError(c, status, message, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
 	if bvnInfo == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty bvn response"))
 		return
 	}
 
@@ -326,7 +422,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 	var req NINValidationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "nin is missing"})
+		h.respondError(c, http.StatusBadRequest, "nin is missing", err)
 		return
 	}
 
@@ -335,23 +431,29 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 		if isBadRequestNINError(err) {
 			switch err.Error() {
 			case "prembly nin validation failed with status 404":
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid nin"})
+				h.respondError(c, http.StatusBadRequest, "invalid nin", err)
 				return
 			default:
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				h.respondError(c, http.StatusBadRequest, err.Error(), err)
 				return
 			}
 		}
-		if status, message, ok := classifyUpstreamError(err); ok {
-			c.JSON(status, gin.H{"error": message})
+
+		if isBVNAndNINNotAMatch(err) {
+			h.respondError(c, http.StatusBadRequest, "bvn and nin do not match", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+
+		if status, message, ok := classifyUpstreamError(err); ok {
+			h.respondError(c, status, message, err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 
 	if ninInfo == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty nin response"))
 		return
 	}
 
@@ -363,10 +465,20 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 	})
 }
 
+func isBVNAndNINNotAMatch(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "bvn and nin do not match":
+		return true
+	default:
+		return false
+	}
+}
+
 func isBadRequestNINError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "nin is required", "invalid nin", "invalid nin number", "bvn and nin do not match":
+	case "nin is required", "invalid nin", "invalid nin number":
 		return true
 	}
 

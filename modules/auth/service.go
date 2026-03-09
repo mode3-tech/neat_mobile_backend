@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/database/tx"
+	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
@@ -253,6 +254,15 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, errors.New("phone verification record not found")
 	}
 
+	if *phoneRecord.VerifiedPhone != req.PhoneNumber {
+		return nil, errors.New("phone number does not match")
+	}
+
+	_, err = repo.GetUserByPhone(ctx, req.PhoneNumber)
+	if err != nil {
+		return nil, errors.New("user already exists")
+	}
+
 	bvnRecord, err := repo.GetValidationRow(ctx, req.BVNVerificationID)
 	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil {
 		return nil, errors.New("bvn verification record not found")
@@ -287,6 +297,10 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, errors.New("passwords do not match")
 	}
 
+	if err = validators.ValidatePassword(req.Password); err != nil {
+		return nil, errors.New(err.Error())
+	}
+
 	if req.TransactionPin != req.ConfirmTransactionPin {
 		return nil, errors.New("transaction pins do not match")
 	}
@@ -319,6 +333,9 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 	}
 
 	createdUser, err := repo.CreateUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
 
 	return createdUser, nil
 }
@@ -646,6 +663,16 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken, accessToken stri
 }
 
 func (s *AuthService) RefreshAccessToken(ctx context.Context, deviceID, refreshToken string) (*AuthObject, error) {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, errors.New("invalid refresh token")
+	}
+
 	sub, sid, oldJTI, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 
 	if err != nil {
@@ -658,27 +685,45 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, deviceID, refreshT
 		return nil, errors.New("invalid refresh token")
 	}
 
+	if refreshTokenObj.TokenHash != "" {
+		receivedHash := sha256.Sum256([]byte(refreshToken))
+		if refreshTokenObj.TokenHash != hex.EncodeToString(receivedHash[:]) {
+			return nil, errors.New("invalid refresh token")
+		}
+	}
+
 	if s.deviceRepo == nil {
-		return nil, errors.New("device repository is not configured")
+		return nil, errors.New("device repository not configured")
 	}
 
 	deviceRecord, err := s.deviceRepo.FindDevice(ctx, refreshTokenObj.UserID, deviceID)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("device not found")
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("device not found")
+		}
+		return nil, err
 	}
 
 	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
 		return nil, errors.New("device not allowed")
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	now := time.Now().UTC()
 
 	if refreshTokenObj.RevokedAt != nil || refreshTokenObj.SessionID != sid || refreshTokenObj.UserID != sub || refreshTokenObj.ExpiresAt.Before(now) {
 		return nil, errors.New("invalid refresh token")
+	}
+
+	accessSession, err := s.repo.GetAccessTokenWithSID(ctx, sid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("invalid session")
+		}
+		return nil, err
+	}
+
+	if accessSession.RevokedAt != nil || accessSession.UserID != sub || accessSession.DeviceID == nil || strings.TrimSpace(*accessSession.DeviceID) != deviceID {
+		return nil, errors.New("device not allowed")
 	}
 
 	accessToken, err := s.jwtSigner.IssueAccessToken(sub, sid)
