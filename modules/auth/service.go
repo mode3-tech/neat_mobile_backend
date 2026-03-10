@@ -21,6 +21,8 @@ import (
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -244,7 +246,7 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 
 	switch provider {
 	case ProviderTendar:
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		return s.validateBVNWithTendarDefault(ctx, bvn)
 	case ProviderPrembly:
 		bvnInfo, err := s.ValidateBVNWithPrembly(ctx, bvn)
 		if err == nil {
@@ -259,11 +261,25 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 }
 
 func (s *AuthService) validateBVNWithTendarDefault(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.tender != nil {
-		return s.ValidateBVNWithTendar(ctx, bvn)
+	if s.tender == nil {
+		return s.validateBVNWithFallback(ctx, bvn)
 	}
 
-	return s.validateBVNWithFallback(ctx, bvn)
+	tendarInfo, err := s.ValidateBVNWithTendar(ctx, bvn)
+	if err == nil {
+		return tendarInfo, nil
+	}
+
+	if !isTendarUpstreamError(err) {
+		return nil, err
+	}
+
+	if s.prembly == nil {
+		return nil, err
+	}
+
+	log.Printf("tendar upstream validation failed; falling back to prembly: %v", err)
+	return s.ValidateBVNWithPrembly(ctx, bvn)
 }
 
 func (s *AuthService) validateBVNWithFallback(ctx context.Context, bvn string) (*bvnInfo, error) {
@@ -276,6 +292,37 @@ func (s *AuthService) validateBVNWithFallback(ctx context.Context, bvn string) (
 	}
 
 	return nil, errors.New("bvn providers are not configured")
+}
+
+func isTendarUpstreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "timeout") {
+		return true
+	}
+
+	const prefix = "tendar bvn validation failed with status "
+	if strings.HasPrefix(msg, prefix) {
+		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
+		statusCode, convErr := strconv.Atoi(statusCodeText)
+		if convErr == nil {
+			return statusCode >= 500 || statusCode == 429
+		}
+	}
+
+	return false
 }
 
 func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest) (*models.User, error) {
@@ -294,11 +341,10 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, errors.New("phone number does not match")
 	}
 
-	existingUser, err := repo.GetUserByPhone(ctx, req.PhoneNumber)
-	if err != nil {
+	existingUser, err := repo.GetUserByPhone(ctx, normalizedNumber)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
-
 	if existingUser != nil {
 		return nil, errors.New("user already exists")
 	}
@@ -374,6 +420,7 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 
 	createdUser, err := repo.CreateUser(ctx, user)
 	if err != nil {
+		fmt.Println("created user" + " " + err.Error())
 		return nil, err
 	}
 
