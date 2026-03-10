@@ -564,6 +564,163 @@ func extractUpstreamStatusCode(msg string) (int, bool) {
 func (h *AuthHandler) VerifyNewDevice(c *gin.Context) {
 	var req NewDeviceResquest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
 	}
+
+	ip := c.ClientIP()
+
+	authObj, err := h.authService.VerifyNewDevice(c.Request.Context(), ip, req)
+	if err != nil {
+		if isBadRequestVerifyNewDeviceError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+
+		if isUnauthorizedVerifyNewDeviceError(err) {
+			h.respondError(c, http.StatusUnauthorized, "expired session", err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		return
+	}
+
+	if authObj == nil || authObj.AccessToken == "" || authObj.RefreshToken == "" {
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty verify-device response"))
+		return
+	}
+
+	c.JSON(http.StatusOK, VerifyDeviceResponse{
+		Status:       "success",
+		AccessToken:  authObj.AccessToken,
+		RefreshToken: authObj.RefreshToken,
+	})
+}
+
+func isBadRequestVerifyNewDeviceError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "otp is required", "session token is required", "device id is required", "public key is required":
+		return true
+	}
+	return false
+}
+
+func isUnauthorizedVerifyNewDeviceError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "invalid session token", "invalid otp":
+		return true
+	}
+
+	return false
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+	}
+
+	deviceID := c.Request.Header.Get("X-Device-ID")
+
+	if err := h.authService.ForgotPassword(c.Request.Context(), req, deviceID); err != nil {
+		if isNoUserForgotPasswordError(err) {
+			switch err.Error() {
+			case "no account exists under this phone number":
+				h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+				return
+			default:
+				h.respondError(c, http.StatusUnauthorized, "no account exists under this phone number", err)
+				return
+			}
+		}
+		if isOTPForgotPasswordError(err) {
+			switch err.Error() {
+			case "error occured while saving otp":
+				h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+				return
+			}
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Otp has been sent your phone as sms"})
+
+}
+
+func isNoUserForgotPasswordError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no account exists under this phone number":
+		return true
+	case "no record of device found":
+		return true
+	}
+	return false
+}
+
+func isOTPForgotPasswordError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "error occured while saving otp":
+		return true
+	}
+	return false
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	deviceID := c.Request.Header.Get("X-Device-ID")
+
+	if err := h.authService.ResetPassword(c.Request.Context(), req, deviceID); err != nil {
+		if isBadRequestResetPasswordError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isUnauthorizedResetPasswordError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password reset successfully"})
+
+}
+
+func isBadRequestResetPasswordError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required",
+		"reset code is required",
+		"password length should be at least 8 characters long",
+		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character":
+		return true
+	}
+
+	return false
+}
+
+func isUnauthorizedResetPasswordError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "invalid device id", "invalid reset code", "no account exists under this phone number":
+		return true
+	}
+
+	return false
 }

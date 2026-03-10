@@ -92,7 +92,7 @@
           "Auth"
         ],
         "summary": "Login a user",
-        "description": "Authenticates a user by phone and password, then starts device verification flow.\n\nCurrent implementation note:\nwhen the response status is `new_device_detected`, login currently returns a `session_token`\nbut does not dispatch an OTP automatically. OTP administration for new devices must be\ntriggered by a follow-up integration step.",
+        "description": "Authenticates a user by phone and password, then starts device verification flow.\nFor recognized trusted devices, returns `challenge_required`.\nFor new or untrusted devices, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.",
         "parameters": [
           {
             "in": "header",
@@ -245,6 +245,67 @@
         }
       }
     },
+    "/auth/verify-new-device": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify new device with OTP",
+        "description": "Completes login for a new/untrusted device using the `session_token` returned by `/auth/login`\nand the OTP sent during `new_device_detected` flow.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New device verified and tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyDeviceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired session token or invalid OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "New-device verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -344,6 +405,17 @@
         ],
         "summary": "Logout a user",
         "description": "Revokes the current auth session and refresh token record.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          }
+        ],
         "security": [
           {
             "bearerAuth": []
@@ -470,7 +542,7 @@
           "Auth"
         ],
         "summary": "Validate BVN",
-        "description": "Validates a BVN using the provider currently configured by CBA.",
+        "description": "Validates a BVN using CBA provider preference when available, with Tendar-first fallback on provider source or upstream failures.",
         "requestBody": {
           "required": true,
           "content": {
@@ -494,6 +566,26 @@
           },
           "400": {
             "description": "Missing or invalid request body, invalid BVN, or provider validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream service timed out",
             "content": {
               "application/json": {
                 "schema": {
@@ -553,8 +645,172 @@
               }
             }
           },
+          "503": {
+            "description": "Upstream service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream service timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Provider or internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request password reset OTP",
+        "description": "Sends a password reset OTP to the account phone number for a recognized device.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset OTP sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Account not found for phone number or device not recognized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to create or send password reset OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Reset password with OTP",
+        "description": "Verifies a password reset OTP, marks it as used, and updates the user's password hash.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body, missing reset code, or invalid password format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid device id, reset code, or user context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Password reset failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -931,7 +1187,7 @@
           },
           "session_token": {
             "type": "string",
-            "description": "Present when status is new_device_detected. OTP dispatch for this path is not yet automatic.",
+            "description": "Present when status is new_device_detected; use this with OTP at /auth/verify-new-device.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
           }
         }
@@ -1001,6 +1257,30 @@
           }
         }
       },
+      "NewDeviceRequest": {
+        "type": "object",
+        "required": [
+          "session_token",
+          "otp",
+          "device"
+        ],
+        "properties": {
+          "session_token": {
+            "type": "string",
+            "description": "Session token returned from /auth/login when status is new_device_detected.",
+            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
+          },
+          "otp": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "example": "123456"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceRegistrationRequest"
+          }
+        }
+      },
       "LogoutRequest": {
         "type": "object",
         "required": [
@@ -1027,6 +1307,38 @@
           "refresh_token": {
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "example": "08012345678"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "reset_code",
+          "password"
+        ],
+        "properties": {
+          "reset_code": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "example": "123456"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "example": "NewStrongP@ss1"
           }
         }
       },
@@ -1068,7 +1380,8 @@
       "NINValidationRequest": {
         "type": "object",
         "required": [
-          "nin"
+          "nin",
+          "bvn_verification_id"
         ],
         "properties": {
           "nin": {
@@ -1076,6 +1389,10 @@
             "minLength": 11,
             "maxLength": 11,
             "example": "12345678901"
+          },
+          "bvn_verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           }
         }
       },

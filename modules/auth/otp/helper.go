@@ -52,7 +52,6 @@ func NormalizeDestination(destination string, channel Channel) (string, error) {
 
 func Generate6DigitOTP() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
-
 	if err != nil {
 		return "", errors.New("error generating OTP")
 	}

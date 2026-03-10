@@ -94,7 +94,16 @@ type NINValidationResponse struct {
 }
 
 type NewDeviceResquest struct {
-	SessionToken string              `json:"session_token"`
-	OTP          string              `json:"otp"`
-	Device       DeviceRegisteration `json:"device"`
+	SessionToken string              `json:"session_token" binding:"required"`
+	OTP          string              `json:"otp" binding:"required"`
+	Device       DeviceRegisteration `json:"device" binding:"required"`
+}
+
+type ForgotPasswordRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+type ResetPasswordRequest struct {
+	ResetCode string `json:"reset_code" binding:"required"`
+	Password  string `json:"password" binding:"password"`
 }

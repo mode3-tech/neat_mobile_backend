@@ -37,6 +37,23 @@ func (o *OTPRepository) GetActiveOTP(ctx context.Context, destination string, pu
 	return &otp, nil
 }
 
+func (o *OTPRepository) GetActiveOTPByID(ctx context.Context, id string, purpose Purpose) (*OTPModel, error) {
+	var otp OTPModel
+	result := o.db.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?", id, purpose, time.Now().UTC()).
+		Limit(1).
+		Find(&otp)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	return &otp, nil
+}
+
 func (o *OTPRepository) UpdateForResend(ctx context.Context, id string, newHash string, newExp time.Time, nextSendAt time.Time) error {
 	return o.db.WithContext(ctx).
 		Model(&OTPModel{}).

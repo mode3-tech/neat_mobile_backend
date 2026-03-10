@@ -36,9 +36,6 @@ func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.
 	var u models.User
 	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password,created_at").Where("phone = ?", phone).First(&u).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return &u, nil

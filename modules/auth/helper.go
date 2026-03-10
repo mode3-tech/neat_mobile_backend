@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"math/big"
 	"regexp"
 	"strings"
 
@@ -79,4 +82,14 @@ func NormalizeNigerianNumber(input string) (string, error) {
 
 func compareBVNAndNinDetails(bvnName, bvnDOB, ninName, ninDOB string) bool {
 	return bvnName == ninName && SerializeDOB(bvnDOB) == SerializeDOB(ninDOB)
+}
+
+func Generate6DigitOTP() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+
+	if err != nil {
+		return "", errors.New("error generating OTP")
+	}
+
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }

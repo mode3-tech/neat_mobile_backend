@@ -58,7 +58,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
 		providerSource = cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
 	} else {
-		log.Print("CBA provider source is not fully configured; BVN validation will fail until CBA_INTERNAL_URL and CBA_INTERNAL_KEY are set")
+		log.Print("CBA provider source is not fully configured; defaulting BVN validation to Tendar-first fallback")
 	}
 	transactor := tx.NewTransactor(db)
 	deviceRepo := device.NewDeviceRepository(db)
@@ -86,7 +86,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	otpRepo := otp.NewOTPRepository(db)
 
-	otpService := otp.NewOTPService(*otpRepo, verificationRepo, transactor, smsSender, emailSender, tokenSigner, cfg.Pepper)
+	otpService := otp.NewOTPService(*otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
 	otpHandler := otp.NewOTPHandler(otpService)
 	otp.RegisterRoutes(apiV1, otpHandler)
 

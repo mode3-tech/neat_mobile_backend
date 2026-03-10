@@ -10,7 +10,6 @@ import (
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
-	"neat_mobile_app_backend/providers/jwt"
 	"strings"
 	"time"
 
@@ -24,12 +23,11 @@ type OTPService struct {
 	tx           *tx.Transactor
 	sms          notify.SMSSender
 	email        notify.EmailSender
-	jwt          *jwt.Signer
 	pepper       string
 }
 
-func NewOTPService(repo OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, JWTSigner *jwt.Signer, pepper string) *OTPService {
-	return &OTPService{repo: repo, verification: verification, tx: tx, sms: sms, email: email, jwt: JWTSigner, pepper: pepper}
+func NewOTPService(repo OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) *OTPService {
+	return &OTPService{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper}
 }
 
 func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination string, channel Channel) error {

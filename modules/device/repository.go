@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"neat_mobile_app_backend/models"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -152,4 +153,29 @@ func (r *DeviceRepository) UpsertDevicePublicKey(ctx context.Context, device *Us
 			}),
 		}).
 		Create(&safeInsert).Error
+}
+
+func (r *DeviceRepository) ActivateAndTrustDevice(ctx context.Context, userID, deviceID string, now time.Time, ip string) error {
+	updates := map[string]any{
+		"is_trusted":   true,
+		"is_active":    true,
+		"last_used_at": now,
+	}
+
+	if trimmedIP := strings.TrimSpace(ip); trimmedIP != "" {
+		updates["ip"] = trimmedIP
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&UserDevice{}).
+		Where("user_id = ? AND device_id = ?", userID, deviceID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }

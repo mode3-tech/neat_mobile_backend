@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
@@ -19,6 +18,7 @@ import (
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
+	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"strings"
@@ -29,7 +29,6 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type AuthService struct {
@@ -61,30 +60,9 @@ type ninInfo struct {
 }
 
 const (
-	loginOTPPurpose = "login"
-	loginOTPChannel = "sms"
+	loginOTPPurpose = authotp.PurposeLogin
+	loginOTPChannel = authotp.ChannelSMS
 )
-
-type authOTPModel struct {
-	ID           string     `gorm:"column:id;type:text;primaryKey"`
-	UserID       string     `gorm:"column:user_id;type:text;index"`
-	Purpose      string     `gorm:"column:purpose;type:text;index"`
-	Channel      string     `gorm:"column:channel;type:text"`
-	Destination  string     `gorm:"column:destination;type:text;not null;index"`
-	OTPHash      string     `gorm:"column:otp_hash;type:text;not null"`
-	ExpiresAt    time.Time  `gorm:"column:expires_at;index"`
-	ConsumedAt   *time.Time `gorm:"column:consumed_at;index"`
-	AttemptCount int        `gorm:"column:attempt_count"`
-	MaxAttempts  int        `gorm:"column:max_attempts"`
-	ResendCount  int        `gorm:"column:resend_count"`
-	MaxResends   int        `gorm:"column:max_resends"`
-	NextSendAt   *time.Time `gorm:"column:next_send_at"`
-	IssuedAt     time.Time  `gorm:"column:issued_at;not null;autoCreateTime"`
-}
-
-func (authOTPModel) TableName() string {
-	return "wallet_otps"
-}
 
 func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *AuthService {
 	return &AuthService{
@@ -254,25 +232,38 @@ func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin st
 
 func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
-		log.Printf("bvn provider source not configured; falling back to default provider")
-		return s.validateBVNWithFallback(ctx, bvn)
+		log.Printf("bvn provider source not configured; falling back to tendar-first default provider")
+		return s.validateBVNWithTendarDefault(ctx, bvn)
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
 		log.Printf("failed to resolve bvn provider from source: %v", err)
-		return s.validateBVNWithFallback(ctx, bvn)
+		return s.validateBVNWithTendarDefault(ctx, bvn)
 	}
 
 	switch provider {
 	case ProviderTendar:
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	case ProviderPrembly:
-		return s.ValidateBVNWithPrembly(ctx, bvn)
+		bvnInfo, err := s.ValidateBVNWithPrembly(ctx, bvn)
+		if err == nil {
+			return bvnInfo, nil
+		}
+		log.Printf("prembly validation failed for cba-selected provider; falling back to tendar-first default provider: %v", err)
+		return s.validateBVNWithTendarDefault(ctx, bvn)
 	default:
-		log.Printf("unsupported bvn provider %q from source; falling back to default provider", provider)
-		return s.validateBVNWithFallback(ctx, bvn)
+		log.Printf("unsupported bvn provider %q from source; falling back to tendar-first default provider", provider)
+		return s.validateBVNWithTendarDefault(ctx, bvn)
 	}
+}
+
+func (s *AuthService) validateBVNWithTendarDefault(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.tender != nil {
+		return s.ValidateBVNWithTendar(ctx, bvn)
+	}
+
+	return s.validateBVNWithFallback(ctx, bvn)
 }
 
 func (s *AuthService) validateBVNWithFallback(ctx context.Context, bvn string) (*bvnInfo, error) {
@@ -445,39 +436,130 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password s
 	}, nil
 }
 
-func (s *AuthService) NewDevice(ctx context.Context, ip string, req NewDeviceResquest) (interface{}, error) {
+func (s *AuthService) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceResquest) (*AuthObject, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
 	}
-
-	if strings.TrimSpace(req.SessionToken) == "" {
-		return nil, errors.New("session token is required")
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository not configured")
+	}
+	if strings.TrimSpace(s.otpPepper) == "" {
+		return nil, errors.New("otp pepper not configured")
 	}
 
-	var pendingDeviceSession *models.PendingDeviceSession
+	sessionToken := strings.TrimSpace(req.SessionToken)
+	if sessionToken == "" {
+		return nil, errors.New("session token is required")
+	}
+	if strings.TrimSpace(req.OTP) == "" {
+		return nil, errors.New("otp is required")
+	}
+
+	deviceID := strings.TrimSpace(req.Device.DeviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+	if strings.TrimSpace(req.Device.PublicKey) == "" {
+		return nil, errors.New("public key is required")
+	}
+
+	var authObj *AuthObject
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewDeviceRepository(txDB)
+		otpRepo := authotp.NewOTPRepository(txDB)
+		authRepo := NewRespository(txDB)
 
-		sessionToken := sha256.Sum256([]byte(strings.TrimSpace(req.SessionToken)))
-		hashedSessionToken := hex.EncodeToString(sessionToken[:])
+		sessionTokenHash := sha256.Sum256([]byte(sessionToken))
+		hashedSessionToken := hex.EncodeToString(sessionTokenHash[:])
 
-		result, err := deviceRepo.GetPendingSessionByHash(ctx, hashedSessionToken)
+		pendingSession, err := deviceRepo.GetPendingSessionByHash(ctx, hashedSessionToken)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("missing device session")
+				return errors.New("invalid session token")
 			}
 			return err
 		}
 
-		pendingDeviceSession = result
+		now := time.Now().UTC()
+		if pendingSession.IsUsed() || pendingSession.IsExpired(now) {
+			return errors.New("invalid session token")
+		}
+		if strings.TrimSpace(pendingSession.DeviceID) != deviceID {
+			return errors.New("invalid session token")
+		}
+		if strings.TrimSpace(pendingSession.OTPRef) == "" {
+			return errors.New("invalid session token")
+		}
+
+		activeOTP, err := otpRepo.GetActiveOTPByID(ctx, strings.TrimSpace(pendingSession.OTPRef), loginOTPPurpose)
+		if err != nil {
+			return err
+		}
+		if activeOTP == nil {
+			return errors.New("invalid otp")
+		}
+
+		maxAttempts := activeOTP.MaxAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 5
+		}
+		if activeOTP.AttemptCount >= maxAttempts {
+			return errors.New("invalid otp")
+		}
+
+		hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, activeOTP.Destination, strings.TrimSpace(req.OTP))
+		if err != nil || !authotp.HashEqualHex(hashedOTP, activeOTP.OTPHash) {
+			if updateErr := otpRepo.IncrementAttempt(ctx, activeOTP.ID); updateErr != nil {
+				return updateErr
+			}
+			return errors.New("invalid otp")
+		}
+
+		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
+			return err
+		}
+
+		deviceRow := &device.UserDevice{
+			ID:          deviceID,
+			UserID:      pendingSession.UserID,
+			DeviceID:    deviceID,
+			PublicKey:   strings.TrimSpace(req.Device.PublicKey),
+			DeviceName:  strings.TrimSpace(req.Device.DeviceName),
+			DeviceModel: strings.TrimSpace(req.Device.DeviceModel),
+			OS:          strings.TrimSpace(req.Device.OS),
+			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
+			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
+			IP:          ip,
+			LastUsedAt:  now,
+		}
+		if err := deviceRepo.UpsertDevicePublicKey(ctx, deviceRow); err != nil {
+			return err
+		}
+		if err := deviceRepo.ActivateAndTrustDevice(ctx, pendingSession.UserID, deviceID, now, ip); err != nil {
+			return err
+		}
+
+		marked, err := deviceRepo.MarkPendingSessionUsed(ctx, pendingSession.ID, now)
+		if err != nil {
+			return err
+		}
+		if !marked {
+			return errors.New("invalid session token")
+		}
+
+		authObj, err = s.issueSessionTokensWithRepo(ctx, authRepo, pendingSession.UserID, deviceID, ip)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return pendingDeviceSession, nil
+	return authObj, nil
 }
 
 func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, deviceID, ip string) (*LoginInitObject, error) {
@@ -540,18 +622,13 @@ func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB
 	const ttl = 10 * time.Minute
 	const cooldown = 30 * time.Second
 
-	var activeOTP authOTPModel
-	result := txDB.WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("destination = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?", normalizedPhone, loginOTPPurpose, now).
-		Limit(1).
-		Find(&activeOTP)
-	if result.Error != nil {
-		return "", "", result.Error
+	otpRepo := authotp.NewOTPRepository(txDB)
+	activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, loginOTPPurpose)
+	if err != nil {
+		return "", "", err
 	}
 
-	activeExists := result.RowsAffected > 0
-	if activeExists {
+	if activeOTP != nil {
 		maxResends := activeOTP.MaxResends
 		if maxResends <= 0 {
 			maxResends = 3
@@ -565,12 +642,12 @@ func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB
 		}
 	}
 
-	generatedOTP, err := generate6DigitOTP()
+	generatedOTP, err := authotp.Generate6DigitOTP()
 	if err != nil {
 		return "", "", errors.New("unable to generate OTP")
 	}
 
-	hashedOTP, err := hashOTP(s.otpPepper, loginOTPPurpose, normalizedPhone, generatedOTP)
+	hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, normalizedPhone, generatedOTP)
 	if err != nil {
 		return "", "", errors.New("unable to hash OTP")
 	}
@@ -578,8 +655,8 @@ func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB
 	expiresAt := now.Add(ttl)
 	nextSendAt := now.Add(cooldown)
 
-	if !activeExists {
-		otpRow := &authOTPModel{
+	if activeOTP == nil {
+		otpRow := &authotp.OTPModel{
 			ID:           uuid.NewString(),
 			UserID:       userID,
 			Purpose:      loginOTPPurpose,
@@ -594,22 +671,13 @@ func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB
 			MaxAttempts:  5,
 			IssuedAt:     now,
 		}
-		if err := txDB.WithContext(ctx).Create(otpRow).Error; err != nil {
+		if err := otpRepo.CreateOTP(ctx, otpRow); err != nil {
 			return "", "", err
 		}
 		return otpRow.ID, generatedOTP, nil
 	}
 
-	if err := txDB.WithContext(ctx).
-		Model(&authOTPModel{}).
-		Where("id = ? AND consumed_at IS NULL", activeOTP.ID).
-		Updates(map[string]any{
-			"otp_hash":      hashedOTP,
-			"expires_at":    expiresAt,
-			"next_send_at":  nextSendAt,
-			"attempt_count": 0,
-			"resend_count":  gorm.Expr("resend_count + 1"),
-		}).Error; err != nil {
+	if err := otpRepo.UpdateForResend(ctx, activeOTP.ID, hashedOTP, expiresAt, nextSendAt); err != nil {
 		return "", "", err
 	}
 
@@ -731,6 +799,14 @@ func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, sign
 }
 
 func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
+	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
+}
+
+func (s *AuthService) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*AuthObject, error) {
+	if repo == nil {
+		return nil, errors.New("auth repository not configured")
+	}
+
 	sid := uuid.NewString()
 
 	accessToken, err := s.jwtSigner.IssueAccessToken(userID, sid)
@@ -749,7 +825,7 @@ func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, 
 		authSession.IP = &trimmedIP
 	}
 
-	if err := s.repo.AddAccessToken(ctx, authSession); err != nil {
+	if err := repo.AddAccessToken(ctx, authSession); err != nil {
 		return nil, err
 	}
 
@@ -773,7 +849,7 @@ func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, 
 		ExpiresAt: refreshExpiresAt,
 	}
 
-	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
+	if err := repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
 		return nil, err
 	}
 
@@ -871,21 +947,6 @@ func generate6DigitOTP() (string, error) {
 	}
 
 	return fmt.Sprintf("%06d", n.Int64()), nil
-}
-
-func hashOTP(pepper, purpose, destination, code string) (string, error) {
-	normalizedDestination, err := NormalizeNigerianNumber(destination)
-	if err != nil {
-		return "", err
-	}
-
-	message := purpose + "|" + normalizedDestination + "|" + code
-	mac := hmac.New(sha256.New, []byte(pepper))
-	if _, err := mac.Write([]byte(message)); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
 func randomToken(size int) (string, error) {
@@ -1209,4 +1270,169 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 		phone:          bvnDetails.Data.PhoneNumber,
 		verificationID: verificationID,
 	}, nil
+}
+
+func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) error {
+
+	if strings.TrimSpace(deviceID) == "" {
+		return errors.New("device id is required")
+	}
+
+	phone, err := NormalizeNigerianNumber(strings.TrimSpace(req.Phone))
+
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	user, err := s.repo.GetUserByPhone(ctx, phone)
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || user == nil {
+			return errors.New("no account exists under this phone number")
+		}
+		return err
+	}
+
+	_, err = s.deviceRepo.FindDevice(ctx, user.ID, deviceID)
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("no record of device found")
+		}
+		return err
+	}
+
+	generatedOTP, err := generate6DigitOTP()
+
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	otpByte := sha256.Sum256([]byte(generatedOTP))
+	otpHash := hex.EncodeToString(otpByte[:])
+
+	otpRepo := authotp.NewOTPRepository(s.repo.db)
+
+	now := time.Now().UTC()
+
+	otp := &authotp.OTPModel{
+		ID:          uuid.NewString(),
+		UserID:      user.ID,
+		Purpose:     authotp.PurposePasswordReset,
+		Channel:     authotp.ChannelSMS,
+		Destination: phone,
+		OTPHash:     otpHash,
+		ExpiresAt:   now.Add(10 * time.Minute),
+	}
+
+	if err := otpRepo.CreateOTP(ctx, otp); err != nil {
+		return errors.New("error occured while saving otp")
+	}
+
+	s.smsSender.Send(ctx, phone, string(fmt.Sprintf("Your password reset code is %s. It expires in 10 minutes. Do not share this code with anyone.", generatedOTP)))
+
+	return nil
+}
+
+func (s *AuthService) ResetPassword(ctx context.Context, req ResetPasswordRequest, deviceID string) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return errors.New("device id is required")
+	}
+
+	resetCode := strings.TrimSpace(req.ResetCode)
+	if resetCode == "" {
+		return errors.New("reset code is required")
+	}
+	if len(resetCode) != 6 {
+		return errors.New("invalid reset code")
+	}
+
+	password := strings.TrimSpace(req.Password)
+	if err := validators.ValidatePassword(password); err != nil {
+		return errors.New(err.Error())
+	}
+
+	hashedPassword, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	if s.tx == nil {
+		return errors.New("transaction manager not configured")
+	}
+
+	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		otpRepo := authotp.NewOTPRepository(txDB)
+
+		var boundDevice device.UserDevice
+		if err := txDB.WithContext(ctx).
+			Where("device_id = ?", deviceID).
+			Order("last_used_at DESC").
+			First(&boundDevice).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("invalid device id")
+			}
+			return err
+		}
+
+		var user models.User
+		if err := txDB.WithContext(ctx).
+			Table("wallet_users").
+			Select("id, phone").
+			Where("id = ?", boundDevice.UserID).
+			First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("invalid device id")
+			}
+			return err
+		}
+
+		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
+		if err != nil {
+			return errors.New("invalid device id")
+		}
+
+		activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, authotp.PurposePasswordReset)
+		if err != nil {
+			return err
+		}
+		if activeOTP == nil {
+			return errors.New("invalid reset code")
+		}
+
+		maxAttempts := activeOTP.MaxAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 5
+		}
+		if activeOTP.AttemptCount >= maxAttempts {
+			return errors.New("invalid reset code")
+		}
+
+		providedResetCodeHash := sha256.Sum256([]byte(resetCode))
+		if !authotp.HashEqualHex(hex.EncodeToString(providedResetCodeHash[:]), activeOTP.OTPHash) {
+			if err := otpRepo.IncrementAttempt(ctx, activeOTP.ID); err != nil {
+				return err
+			}
+			return errors.New("invalid reset code")
+		}
+
+		now := time.Now().UTC()
+		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
+			return err
+		}
+
+		result := txDB.WithContext(ctx).
+			Model(&models.User{}).
+			Where("id = ?", user.ID).
+			Update("password_hash", hashedPassword)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("no account exists under this phone number")
+		}
+
+		return nil
+	})
 }
