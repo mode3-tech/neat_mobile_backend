@@ -34,10 +34,13 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.
 
 func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.User, error) {
 	var u models.User
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password,created_at").Where("phone = ?", phone).First(&u).Error; err != nil {
+	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password,created_at").Where("phone = ?", phone).First(&u).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
-
 	return &u, nil
 }
 
@@ -136,7 +139,7 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 
 func (r *Repository) GetValidationRow(ctx context.Context, id string) (*models.VerificationRecord, error) {
 	var record models.VerificationRecord
-	err := r.db.WithContext(ctx).Table("wallet_verification_records").Select("verified_name, verified_dob").Where("id = ? AND status = ?", id, models.VerificationStatusVerified).First(&record).Error
+	err := r.db.WithContext(ctx).Table("wallet_verification_records").Select("verified_name, verified_dob, verified_phone").Where("id = ? AND status = ?", id, models.VerificationStatusVerified).First(&record).Error
 
 	if err != nil {
 		return nil, err

@@ -172,6 +172,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
+		if isRateLimitedLoginError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
 		if isUnauthorizedLoginError(err) {
 			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
 			return
@@ -249,6 +253,11 @@ func isUnauthorizedLoginError(err error) bool {
 	}
 
 	return false
+}
+
+func isRateLimitedLoginError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	return msg == "too many requests"
 }
 
 func isBadRequestVerifyDeviceError(err error) bool {
@@ -550,4 +559,11 @@ func extractUpstreamStatusCode(msg string) (int, bool) {
 	}
 
 	return 0, false
+}
+
+func (h *AuthHandler) VerifyNewDevice(c *gin.Context) {
+	var req NewDeviceResquest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+	}
 }

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -10,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"neat_mobile_app_backend/internal/database/tx"
+	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
@@ -23,6 +26,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AuthService struct {
@@ -30,6 +34,8 @@ type AuthService struct {
 	verification   *verification.VerificationRepo
 	tx             *tx.Transactor
 	deviceRepo     *device.DeviceRepository
+	smsSender      notify.SMSSender
+	otpPepper      string
 	jwtSigner      JWTSigner
 	tender         TendarValidation
 	prembly        PremblyValidation
@@ -51,6 +57,32 @@ type ninInfo struct {
 	verificationID string
 }
 
+const (
+	loginOTPPurpose = "login"
+	loginOTPChannel = "sms"
+)
+
+type authOTPModel struct {
+	ID           string     `gorm:"column:id;type:text;primaryKey"`
+	UserID       string     `gorm:"column:user_id;type:text;index"`
+	Purpose      string     `gorm:"column:purpose;type:text;index"`
+	Channel      string     `gorm:"column:channel;type:text"`
+	Destination  string     `gorm:"column:destination;type:text;not null;index"`
+	OTPHash      string     `gorm:"column:otp_hash;type:text;not null"`
+	ExpiresAt    time.Time  `gorm:"column:expires_at;index"`
+	ConsumedAt   *time.Time `gorm:"column:consumed_at;index"`
+	AttemptCount int        `gorm:"column:attempt_count"`
+	MaxAttempts  int        `gorm:"column:max_attempts"`
+	ResendCount  int        `gorm:"column:resend_count"`
+	MaxResends   int        `gorm:"column:max_resends"`
+	NextSendAt   *time.Time `gorm:"column:next_send_at"`
+	IssuedAt     time.Time  `gorm:"column:issued_at;not null;autoCreateTime"`
+}
+
+func (authOTPModel) TableName() string {
+	return "wallet_otps"
+}
+
 func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *AuthService {
 	return &AuthService{
 		repo:           repo,
@@ -63,6 +95,11 @@ func NewAuthService(repo *Repository, verification *verification.VerificationRep
 		nin:            nin,
 		providerSource: providerSource,
 	}
+}
+
+func (s *AuthService) ConfigureLoginOTP(smsSender notify.SMSSender, pepper string) {
+	s.smsSender = smsSender
+	s.otpPepper = strings.TrimSpace(pepper)
 }
 
 func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
@@ -254,12 +291,21 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, errors.New("phone verification record not found")
 	}
 
-	if *phoneRecord.VerifiedPhone != req.PhoneNumber {
+	normalizedNumber, err := NormalizeNigerianNumber(req.PhoneNumber)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	if *phoneRecord.VerifiedPhone != normalizedNumber {
 		return nil, errors.New("phone number does not match")
 	}
 
-	_, err = repo.GetUserByPhone(ctx, req.PhoneNumber)
+	existingUser, err := repo.GetUserByPhone(ctx, req.PhoneNumber)
 	if err != nil {
+		return nil, err
+	}
+
+	if existingUser != nil {
 		return nil, errors.New("user already exists")
 	}
 
@@ -375,30 +421,13 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password s
 	deviceRecord, err := s.deviceRepo.FindDevice(ctx, user.ID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip)
-			if sessionErr != nil {
-				return nil, sessionErr
-			}
-
-			return &LoginInitObject{
-				Status:       LoginStatusNewDeviceDetected,
-				SessionToken: sessionToken,
-			}, nil
+			return s.startNewDeviceFlow(ctx, user.ID, user.Phone, deviceID, ip)
 		}
-
 		return nil, err
 	}
 
 	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
-		sessionToken, sessionErr := s.createPendingDeviceSession(ctx, user.ID, deviceID, ip)
-		if sessionErr != nil {
-			return nil, sessionErr
-		}
-
-		return &LoginInitObject{
-			Status:       LoginStatusNewDeviceDetected,
-			SessionToken: sessionToken,
-		}, nil
+		return s.startNewDeviceFlow(ctx, user.ID, user.Phone, deviceID, ip)
 	}
 
 	deviceService := device.NewDeviceService(*s.deviceRepo)
@@ -413,7 +442,150 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password s
 	}, nil
 }
 
-func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, deviceID, ip string) (string, error) {
+func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, deviceID, ip string) (*LoginInitObject, error) {
+	if s.tx == nil {
+		return nil, errors.New("transaction manager not configured")
+	}
+	if s.smsSender == nil {
+		return nil, errors.New("sms sender not configured")
+	}
+	if strings.TrimSpace(s.otpPepper) == "" {
+		return nil, errors.New("otp pepper not configured")
+	}
+
+	normalizedPhone, err := NormalizeNigerianNumber(phone)
+	if err != nil {
+		return nil, err
+	}
+
+	var sessionToken string
+	var generatedOTP string
+
+	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		deviceRepo := device.NewDeviceRepository(txDB)
+
+		otpRef, code, err := s.upsertNewDeviceLoginOTP(ctx, txDB, userID, normalizedPhone)
+		if err != nil {
+			return err
+		}
+		generatedOTP = code
+
+		token, err := s.createPendingDeviceSession(ctx, deviceRepo, userID, deviceID, ip, otpRef)
+		if err != nil {
+			return err
+		}
+		sessionToken = token
+
+		otpMessage := fmt.Sprintf("Your login OTP is %s. It expires in 10 minutes. Do not share this code with anyone.", generatedOTP)
+		if err := s.smsSender.Send(ctx, normalizedPhone, otpMessage); err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginInitObject{
+		Status:       LoginStatusNewDeviceDetected,
+		SessionToken: sessionToken,
+	}, nil
+}
+
+func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB, userID, normalizedPhone string) (string, string, error) {
+	if txDB == nil {
+		return "", "", errors.New("transaction db not configured")
+	}
+
+	now := time.Now().UTC()
+	const ttl = 10 * time.Minute
+	const cooldown = 30 * time.Second
+
+	var activeOTP authOTPModel
+	result := txDB.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("destination = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?", normalizedPhone, loginOTPPurpose, now).
+		Limit(1).
+		Find(&activeOTP)
+	if result.Error != nil {
+		return "", "", result.Error
+	}
+
+	activeExists := result.RowsAffected > 0
+	if activeExists {
+		maxResends := activeOTP.MaxResends
+		if maxResends <= 0 {
+			maxResends = 3
+		}
+
+		if activeOTP.NextSendAt != nil && now.Before(*activeOTP.NextSendAt) {
+			return "", "", errors.New("too many requests")
+		}
+		if activeOTP.ResendCount >= maxResends {
+			return "", "", errors.New("too many requests")
+		}
+	}
+
+	generatedOTP, err := generate6DigitOTP()
+	if err != nil {
+		return "", "", errors.New("unable to generate OTP")
+	}
+
+	hashedOTP, err := hashOTP(s.otpPepper, loginOTPPurpose, normalizedPhone, generatedOTP)
+	if err != nil {
+		return "", "", errors.New("unable to hash OTP")
+	}
+
+	expiresAt := now.Add(ttl)
+	nextSendAt := now.Add(cooldown)
+
+	if !activeExists {
+		otpRow := &authOTPModel{
+			ID:           uuid.NewString(),
+			UserID:       userID,
+			Purpose:      loginOTPPurpose,
+			Channel:      loginOTPChannel,
+			Destination:  normalizedPhone,
+			OTPHash:      hashedOTP,
+			ExpiresAt:    expiresAt,
+			NextSendAt:   &nextSendAt,
+			ResendCount:  0,
+			MaxResends:   3,
+			AttemptCount: 0,
+			MaxAttempts:  5,
+			IssuedAt:     now,
+		}
+		if err := txDB.WithContext(ctx).Create(otpRow).Error; err != nil {
+			return "", "", err
+		}
+		return otpRow.ID, generatedOTP, nil
+	}
+
+	if err := txDB.WithContext(ctx).
+		Model(&authOTPModel{}).
+		Where("id = ? AND consumed_at IS NULL", activeOTP.ID).
+		Updates(map[string]any{
+			"otp_hash":      hashedOTP,
+			"expires_at":    expiresAt,
+			"next_send_at":  nextSendAt,
+			"attempt_count": 0,
+			"resend_count":  gorm.Expr("resend_count + 1"),
+		}).Error; err != nil {
+		return "", "", err
+	}
+
+	return activeOTP.ID, generatedOTP, nil
+}
+
+func (s *AuthService) createPendingDeviceSession(ctx context.Context, deviceRepo *device.DeviceRepository, userID, deviceID, ip, otpRef string) (string, error) {
+	repo := deviceRepo
+	if repo == nil {
+		repo = s.deviceRepo
+	}
+	if repo == nil {
+		return "", errors.New("device repository not configured")
+	}
 	sessionToken, err := randomToken(32)
 	if err != nil {
 		return "", err
@@ -426,13 +598,14 @@ func (s *AuthService) createPendingDeviceSession(ctx context.Context, userID, de
 		UserID:           userID,
 		DeviceID:         deviceID,
 		SessionTokenHash: hex.EncodeToString(tokenHash[:]),
+		OTPRef:           strings.TrimSpace(otpRef),
 		ExpiresAt:        now.Add(10 * time.Minute),
 		IP:               ip,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
 
-	if err := s.deviceRepo.CreatePendingSession(ctx, row); err != nil {
+	if err := repo.CreatePendingSession(ctx, row); err != nil {
 		return "", err
 	}
 
@@ -611,6 +784,30 @@ func decodeEncodedBytes(value string, expectedLen int) ([]byte, error) {
 	}
 
 	return nil, errors.New("invalid encoded value")
+}
+
+func generate6DigitOTP() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", errors.New("error generating OTP")
+	}
+
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+func hashOTP(pepper, purpose, destination, code string) (string, error) {
+	normalizedDestination, err := NormalizeNigerianNumber(destination)
+	if err != nil {
+		return "", err
+	}
+
+	message := purpose + "|" + normalizedDestination + "|" + code
+	mac := hmac.New(sha256.New, []byte(pepper))
+	if _, err := mac.Write([]byte(message)); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
 func randomToken(size int) (string, error) {

@@ -82,6 +82,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
 	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
+	authService.ConfigureLoginOTP(smsSender, cfg.Pepper)
 
 	otpRepo := otp.NewOTPRepository(db)
 

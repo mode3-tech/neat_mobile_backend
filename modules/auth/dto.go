@@ -92,3 +92,9 @@ type NINValidationResponse struct {
 	PhoneNumber    string `json:"phone_number"`
 	VerificationID string `json:"verification_id"`
 }
+
+type NewDeviceResquest struct {
+	SessionToken string              `json:"session_token"`
+	OTP          string              `json:"otp"`
+	Device       DeviceRegisteration `json:"device"`
+}
