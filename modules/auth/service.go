@@ -2,12 +2,15 @@ package auth
 
 import (
 	"context"
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
@@ -442,6 +445,41 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password s
 	}, nil
 }
 
+func (s *AuthService) NewDevice(ctx context.Context, ip string, req NewDeviceResquest) (interface{}, error) {
+	if s.tx == nil {
+		return nil, errors.New("transaction manager not configured")
+	}
+
+	if strings.TrimSpace(req.SessionToken) == "" {
+		return nil, errors.New("session token is required")
+	}
+
+	var pendingDeviceSession *models.PendingDeviceSession
+
+	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		deviceRepo := device.NewDeviceRepository(txDB)
+
+		sessionToken := sha256.Sum256([]byte(strings.TrimSpace(req.SessionToken)))
+		hashedSessionToken := hex.EncodeToString(sessionToken[:])
+
+		result, err := deviceRepo.GetPendingSessionByHash(ctx, hashedSessionToken)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("missing device session")
+			}
+			return err
+		}
+
+		pendingDeviceSession = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return pendingDeviceSession, nil
+}
+
 func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, deviceID, ip string) (*LoginInitObject, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
@@ -746,20 +784,64 @@ func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, 
 }
 
 func verifyDeviceSignature(publicKeyEncoded, challenge, signatureEncoded string) (bool, error) {
-	publicKeyBytes, err := decodeEncodedBytes(publicKeyEncoded, ed25519.PublicKeySize)
+	publicKeyBytes, err := decodeEncodedBytesAny(publicKeyEncoded)
+	if err != nil {
+		return false, errors.New("invalid public key encoding")
+	}
+
+	signatureBytes, err := decodeEncodedBytesAny(signatureEncoded)
+	if err != nil {
+		return false, errors.New("invalid signature enconding")
+	}
+
+	pub, err := parseP256PublicKey(publicKeyBytes)
 	if err != nil {
 		return false, err
 	}
 
-	signatureBytes, err := decodeEncodedBytes(signatureEncoded, ed25519.SignatureSize)
-	if err != nil {
-		return false, err
+	digest := sha256.Sum256([]byte(challenge))
+
+	// preferred: ASN.1 DER signature
+	if ecdsa.VerifyASN1(pub, digest[:], signatureBytes) {
+		return true, nil
 	}
 
-	return ed25519.Verify(ed25519.PublicKey(publicKeyBytes), []byte(challenge), signatureBytes), nil
+	// optional fallback: raw R||S (64 bytes)
+	if len(signatureBytes) == 64 {
+		r := new(big.Int).SetBytes(signatureBytes[:32])
+		s := new(big.Int).SetBytes(signatureBytes[32:])
+		return ecdsa.Verify(pub, digest[:], r, s), nil
+	}
+
+	return false, nil
 }
 
-func decodeEncodedBytes(value string, expectedLen int) ([]byte, error) {
+func parseP256PublicKey(b []byte) (*ecdsa.PublicKey, error) {
+	if block, _ := pem.Decode(b); block != nil {
+		b = block.Bytes
+	}
+
+	if anyKey, err := x509.ParsePKIXPublicKey(b); err == nil {
+		pub, ok := anyKey.(*ecdsa.PublicKey)
+		if !ok || pub.Curve != elliptic.P256() {
+			return nil, errors.New("public key is not ECDSA P-256")
+		}
+		return pub, nil
+	}
+
+	// uncompressed EC point: 65 bytes, starts with 0x04
+	if len(b) == 65 && b[0] == 0x04 {
+		x, y := elliptic.Unmarshal(elliptic.P256(), b)
+		if x == nil {
+			return nil, errors.New("invalid P-256 public key point")
+		}
+		return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, nil
+	}
+
+	return nil, errors.New("unsupported public key format")
+}
+
+func decodeEncodedBytesAny(value string) ([]byte, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return nil, errors.New("empty value")
@@ -774,12 +856,8 @@ func decodeEncodedBytes(value string, expectedLen int) ([]byte, error) {
 	}
 
 	for _, decode := range decoders {
-		decoded, err := decode(trimmed)
-		if err != nil {
-			continue
-		}
-		if len(decoded) == expectedLen {
-			return decoded, nil
+		if b, err := decode(trimmed); err == nil && len(b) > 0 {
+			return b, nil
 		}
 	}
 
