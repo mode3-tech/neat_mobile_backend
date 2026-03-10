@@ -337,7 +337,7 @@ paths:
       tags:
         - Auth
       summary: Validate BVN
-      description: Validates a BVN using CBA provider preference when available, with Tendar-first fallback on provider source or upstream failures.
+      description: Validates a BVN using Tendar only. Provider preference from CBA is ignored for this endpoint.
       requestBody:
         required: true
         content:

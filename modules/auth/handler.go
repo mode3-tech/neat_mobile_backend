@@ -535,6 +535,8 @@ func classifyUpstreamError(err error) (int, string, bool) {
 		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
 	case statusCode == http.StatusTooManyRequests:
 		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
+	case statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden:
+		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
 	default:
 		return 0, "", false
 	}

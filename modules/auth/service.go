@@ -21,8 +21,6 @@ import (
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -234,95 +232,19 @@ func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin st
 
 func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
-		log.Printf("bvn provider source not configured; falling back to tendar-first default provider")
-		return s.validateBVNWithTendarDefault(ctx, bvn)
+		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
-		log.Printf("failed to resolve bvn provider from source: %v", err)
-		return s.validateBVNWithTendarDefault(ctx, bvn)
-	}
-
-	switch provider {
-	case ProviderTendar:
-		return s.validateBVNWithTendarDefault(ctx, bvn)
-	case ProviderPrembly:
-		bvnInfo, err := s.ValidateBVNWithPrembly(ctx, bvn)
-		if err == nil {
-			return bvnInfo, nil
-		}
-		log.Printf("prembly validation failed for cba-selected provider; falling back to tendar-first default provider: %v", err)
-		return s.validateBVNWithTendarDefault(ctx, bvn)
-	default:
-		log.Printf("unsupported bvn provider %q from source; falling back to tendar-first default provider", provider)
-		return s.validateBVNWithTendarDefault(ctx, bvn)
-	}
-}
-
-func (s *AuthService) validateBVNWithTendarDefault(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.tender == nil {
-		return s.validateBVNWithFallback(ctx, bvn)
-	}
-
-	tendarInfo, err := s.ValidateBVNWithTendar(ctx, bvn)
-	if err == nil {
-		return tendarInfo, nil
-	}
-
-	if !isTendarUpstreamError(err) {
-		return nil, err
-	}
-
-	if s.prembly == nil {
-		return nil, err
-	}
-
-	log.Printf("tendar upstream validation failed; falling back to prembly: %v", err)
-	return s.ValidateBVNWithPrembly(ctx, bvn)
-}
-
-func (s *AuthService) validateBVNWithFallback(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.tender != nil {
+		log.Printf("failed to resolve bvn provider from source; forcing tendar: %v", err)
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
 
-	if s.prembly != nil {
-		return s.ValidateBVNWithPrembly(ctx, bvn)
+	if provider != ProviderTendar {
+		log.Printf("provider source selected %q; forcing tendar-only validation", provider)
 	}
-
-	return nil, errors.New("bvn providers are not configured")
-}
-
-func isTendarUpstreamError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return true
-	}
-
-	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	if strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "timeout") {
-		return true
-	}
-
-	const prefix = "tendar bvn validation failed with status "
-	if strings.HasPrefix(msg, prefix) {
-		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
-		statusCode, convErr := strconv.Atoi(statusCodeText)
-		if convErr == nil {
-			return statusCode >= 500 || statusCode == 429
-		}
-	}
-
-	return false
+	return s.ValidateBVNWithTendar(ctx, bvn)
 }
 
 func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest) (*models.User, error) {
