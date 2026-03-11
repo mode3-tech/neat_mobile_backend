@@ -329,15 +329,16 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 	}
 
 	user := &models.User{
-		ID:              uuid.NewString(),
-		Phone:           normalizedPhone,
-		Email:           req.Email,
-		PasswordHash:    hashedPassword,
-		PinHash:         hashedTransactionPin,
-		IsEmailVerified: isEmailVerified,
-		IsPhoneVerified: true,
-		IsBvnVerified:   true,
-		IsNinVerified:   true,
+		ID:                  uuid.NewString(),
+		Phone:               normalizedPhone,
+		Email:               req.Email,
+		PasswordHash:        hashedPassword,
+		PinHash:             hashedTransactionPin,
+		IsEmailVerified:     isEmailVerified,
+		IsPhoneVerified:     true,
+		IsBvnVerified:       true,
+		IsNinVerified:       true,
+		IsBiometricsEnabled: req.IsBiometricsEnabled,
 	}
 
 	createdUser, err := repo.CreateUser(ctx, user)
