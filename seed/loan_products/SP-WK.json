@@ -1,0 +1,14 @@
+{
+  "code": "SPECIAL-WK",
+  "name": "Special Loan",
+  "description": "Short tenor salary-backed product",
+  "min_loan_amount": 200000,
+  "max_loan_amount": 50000000,
+  "interest_rate_bps": 24,
+  "repayment_frequency": "weekly",
+  "loan_term_value": 24,
+  "grace_period_days": 3,
+  "late_penalty_bps": 250,
+  "allows_concurrent_loans": false,
+  "is_active": true
+}

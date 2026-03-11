@@ -209,7 +209,7 @@ Use this helper service to generate `signature` values for `/auth/verify-device`
 Set signer keys in `.env` (auto-loaded by `cmd/devsigner`):
 
 ```env
-DEV_SIGNER_KEYS_JSON={"sim-device-1":"<private_key_b64>"}
+DEV_SIGNER_KEYS_JSON={"sim-device-1":"<p256_private_key_b64_or_hex>"}
 # optional:
 # DEV_SIGNER_ADDR=:9090
 ```
@@ -225,12 +225,13 @@ Alternative config:
 - `DEV_SIGNER_KEYS_FILE`: path to a JSON file of `{ "<device_id>": "<private_key>" }`
 - `DEV_SIGNER_DEVICE_ID` + `DEV_SIGNER_PRIVATE_KEY`: single key pair
 - `DEV_SIGNER_ADDR`: listen address (default `:9090`)
+- Private key format: ECDSA P-256 private key (PEM/DER EC or PKCS8), or raw 32-byte scalar encoded as base64/base64url/hex
 
 Request:
 
 - `POST http://localhost:9090/sign`
 - Body: `{"device_id":"sim-device-1","challenge":"<challenge-from-login>"}`
-- Response: `{"signature":"...","algorithm":"ed25519"}`
+- Response: `{"signature":"...","algorithm":"ecdsa-p256-sha256"}`
 
 Swagger:
 

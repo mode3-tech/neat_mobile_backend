@@ -625,11 +625,11 @@ components:
       properties:
         signature:
           type: string
-          description: Base64url-encoded Ed25519 signature
-          example: oNhX2iID6_IzXA0s-mSI7RTpf-ooGA5ScVHMqFUdd3xT1LQVnvvH5ugaU7U09KSZ37pqeuYoHSc1wZvKk2V6AA
+          description: Base64url-encoded ECDSA P-256 signature (ASN.1 DER) over SHA-256(challenge)
+          example: MEUCIG4lQ0A5Wc1zN8hP8o2N2iU9V3gT0E2q9r2m1kYzv1U-AiEAz8r8Jt2s2l7cQwZ9k0IY3l8Gx6b4u5m8N9p0Q1r2s3A
         algorithm:
           type: string
-          example: ed25519
+          example: ecdsa-p256-sha256
     DeviceRegistrationRequest:
       type: object
       required:

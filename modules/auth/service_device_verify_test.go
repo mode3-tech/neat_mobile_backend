@@ -1,20 +1,32 @@
 package auth
 
 import (
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"testing"
 )
 
 func TestVerifyDeviceSignature_Valid(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey returned error: %v", err)
 	}
 
+	publicKey, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey returned error: %v", err)
+	}
+
 	challenge := "challenge-token"
-	signature := ed25519.Sign(privateKey, []byte(challenge))
+	digest := sha256.Sum256([]byte(challenge))
+	signature, err := ecdsa.SignASN1(rand.Reader, privateKey, digest[:])
+	if err != nil {
+		t.Fatalf("SignASN1 returned error: %v", err)
+	}
 
 	valid, err := verifyDeviceSignature(
 		base64.StdEncoding.EncodeToString(publicKey),
@@ -30,13 +42,22 @@ func TestVerifyDeviceSignature_Valid(t *testing.T) {
 }
 
 func TestVerifyDeviceSignature_InvalidSignature(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey returned error: %v", err)
 	}
 
+	publicKey, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey returned error: %v", err)
+	}
+
 	challenge := "challenge-token"
-	signature := ed25519.Sign(privateKey, []byte("different-challenge"))
+	digest := sha256.Sum256([]byte("different-challenge"))
+	signature, err := ecdsa.SignASN1(rand.Reader, privateKey, digest[:])
+	if err != nil {
+		t.Fatalf("SignASN1 returned error: %v", err)
+	}
 
 	valid, err := verifyDeviceSignature(
 		base64.StdEncoding.EncodeToString(publicKey),
@@ -52,11 +73,6 @@ func TestVerifyDeviceSignature_InvalidSignature(t *testing.T) {
 }
 
 func TestVerifyDeviceSignature_RejectsBadEncoding(t *testing.T) {
-	_, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey returned error: %v", err)
-	}
-
 	_, verifyErr := verifyDeviceSignature("not-a-key", "challenge-token", "not-a-signature")
 	if verifyErr == nil {
 		t.Fatal("expected error for invalid encoded inputs")

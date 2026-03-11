@@ -12,7 +12,7 @@ type User struct {
 	IsPhoneVerified     bool      `gorm:"is_phone_verified;not null"`
 	IsBvnVerified       bool      `gorm:"is_bvn_verified;not null"`
 	IsNinVerified       bool      `gorm:"is_nin_verified;not null"`
-	IsBiometricsEnabled bool      `gorm:"is_biometrics_enabled"`
+	IsBiometricsEnabled *bool     `gorm:"is_biometrics_enabled"`
 	CreatedAt           time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 

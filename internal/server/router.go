@@ -13,6 +13,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
+	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	"neat_mobile_app_backend/providers/email"
@@ -75,7 +76,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource)
 	authHandler := auth.NewAuthHandler(authService)
-	auth.RegisterRoutes(apiV1, authHandler, loginRateLimiter.Middleware())
+	authGuard := middleware.AuthGuard(tokenSigner, nil)
+	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
 
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
@@ -85,10 +87,14 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	authService.ConfigureLoginOTP(smsSender, cfg.Pepper)
 
 	otpRepo := otp.NewOTPRepository(db)
-
 	otpService := otp.NewOTPService(*otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
 	otpHandler := otp.NewOTPHandler(otpService)
 	otp.RegisterRoutes(apiV1, otpHandler)
+
+	loanRepo := loanproduct.NewRepository(db)
+	loanService := loanproduct.NewService(loanRepo)
+	loanHandler := loanproduct.NewHandler(loanService)
+	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
 
 	return r, nil
 }
