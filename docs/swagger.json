@@ -372,13 +372,47 @@
         },
         "type": "object"
       },
-      "LoginInitResponse": {
+      "LoginChallengeRequiredResponse": {
         "properties": {
           "challenge": {
             "description": "Present when status is challenge_required.",
             "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
             "type": "string"
           },
+          "status": {
+            "enum": [
+              "challenge_required"
+            ],
+            "example": "challenge_required",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "challenge"
+        ],
+        "title": "Trusted device challenge response",
+        "type": "object"
+      },
+      "LoginInitResponse": {
+        "discriminator": {
+          "mapping": {
+            "challenge_required": "#/components/schemas/LoginChallengeRequiredResponse",
+            "new_device_detected": "#/components/schemas/LoginNewDeviceDetectedResponse"
+          },
+          "propertyName": "status"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LoginChallengeRequiredResponse"
+          },
+          {
+            "$ref": "#/components/schemas/LoginNewDeviceDetectedResponse"
+          }
+        ]
+      },
+      "LoginNewDeviceDetectedResponse": {
+        "properties": {
           "session_token": {
             "description": "Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
@@ -386,16 +420,17 @@
           },
           "status": {
             "enum": [
-              "challenge_required",
               "new_device_detected"
             ],
-            "example": "challenge_required",
+            "example": "new_device_detected",
             "type": "string"
           }
         },
         "required": [
-          "status"
+          "status",
+          "session_token"
         ],
+        "title": "New device OTP response",
         "type": "object"
       },
       "LoginRequest": {
@@ -918,7 +953,7 @@
                 }
               }
             },
-            "description": "Login initialized"
+            "description": "Login initialized; response shape depends on device trust state"
           },
           "400": {
             "content": {

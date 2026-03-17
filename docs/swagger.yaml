@@ -80,7 +80,7 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Login initialized
+          description: Login initialized; response shape depends on device trust state
           content:
             application/json:
               schema:
@@ -853,25 +853,47 @@ components:
           type: string
           minLength: 8
           example: your-password
-    LoginInitResponse:
+    LoginChallengeRequiredResponse:
       type: object
+      title: Trusted device challenge response
       required:
         - status
+        - challenge
       properties:
         status:
           type: string
           enum:
             - challenge_required
-            - new_device_detected
           example: challenge_required
         challenge:
           type: string
           description: Present when status is challenge_required.
           example: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
+    LoginNewDeviceDetectedResponse:
+      type: object
+      title: New device OTP response
+      required:
+        - status
+        - session_token
+      properties:
+        status:
+          type: string
+          enum:
+            - new_device_detected
+          example: new_device_detected
         session_token:
           type: string
           description: Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
+    LoginInitResponse:
+      discriminator:
+        propertyName: status
+        mapping:
+          challenge_required: "#/components/schemas/LoginChallengeRequiredResponse"
+          new_device_detected: "#/components/schemas/LoginNewDeviceDetectedResponse"
+      oneOf:
+        - $ref: "#/components/schemas/LoginChallengeRequiredResponse"
+        - $ref: "#/components/schemas/LoginNewDeviceDetectedResponse"
     LoginResponse:
       type: object
       properties:
