@@ -61,8 +61,9 @@ paths:
       summary: Login a user
       description: |
         Authenticates a user by phone and password, then starts device verification flow.
-        For recognized trusted devices, returns `challenge_required`.
-        For new or untrusted devices, returns `new_device_detected`, sends a login OTP to the user's
+        The server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.
+        If that device exists and is both active and trusted, returns `challenge_required`.
+        If the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's
         phone number, and returns a `session_token` for `/auth/verify-new-device`.
       parameters:
         - in: header
@@ -70,7 +71,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Stable device installation identifier from the mobile app.
+          description: Stable device installation identifier from the mobile app, used to look up device trust for the account.
       requestBody:
         required: true
         content:
@@ -91,7 +92,7 @@ paths:
                     status: challenge_required
                     challenge: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
                 new_device_detected:
-                  summary: New or untrusted device
+                  summary: Device missing, inactive, or untrusted
                   value:
                     status: new_device_detected
                     session_token: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
@@ -162,8 +163,9 @@ paths:
         - Auth
       summary: Verify new device with OTP
       description: |
-        Completes login for a new/untrusted device using the `session_token` returned by `/auth/login`
-        and the OTP sent during `new_device_detected` flow.
+        Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an
+        active trusted device, using the `session_token` returned by `/auth/login` and the OTP sent
+        during `new_device_detected` flow.
       requestBody:
         required: true
         content:
@@ -868,7 +870,7 @@ components:
           example: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
         session_token:
           type: string
-          description: Present when status is new_device_detected; use this with OTP at /auth/verify-new-device.
+          description: Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
     LoginResponse:
       type: object

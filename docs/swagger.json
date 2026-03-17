@@ -380,7 +380,7 @@
             "type": "string"
           },
           "session_token": {
-            "description": "Present when status is new_device_detected; use this with OTP at /auth/verify-new-device.",
+            "description": "Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
             "type": "string"
           },
@@ -871,10 +871,10 @@
     },
     "/auth/login": {
       "post": {
-        "description": "Authenticates a user by phone and password, then starts device verification flow.\nFor recognized trusted devices, returns `challenge_required`.\nFor new or untrusted devices, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.\n",
+        "description": "Authenticates a user by phone and password, then starts device verification flow.\nThe server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.\nIf that device exists and is both active and trusted, returns `challenge_required`.\nIf the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.\n",
         "parameters": [
           {
-            "description": "Stable device installation identifier from the mobile app.",
+            "description": "Stable device installation identifier from the mobile app, used to look up device trust for the account.",
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
@@ -906,7 +906,7 @@
                     }
                   },
                   "new_device_detected": {
-                    "summary": "New or untrusted device",
+                    "summary": "Device missing, inactive, or untrusted",
                     "value": {
                       "session_token": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
                       "status": "new_device_detected"
@@ -1585,7 +1585,7 @@
     },
     "/auth/verify-new-device": {
       "post": {
-        "description": "Completes login for a new/untrusted device using the `session_token` returned by `/auth/login`\nand the OTP sent during `new_device_detected` flow.\n",
+        "description": "Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an\nactive trusted device, using the `session_token` returned by `/auth/login` and the OTP sent\nduring `new_device_detected` flow.\n",
         "requestBody": {
           "content": {
             "application/json": {
