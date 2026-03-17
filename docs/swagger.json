@@ -414,7 +414,7 @@
       "LoginNewDeviceDetectedResponse": {
         "properties": {
           "session_token": {
-            "description": "Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device.",
+            "description": "Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device or to request another code at /auth/resend-new-device-otp.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
             "type": "string"
           },
@@ -537,7 +537,7 @@
             "type": "string"
           },
           "session_token": {
-            "description": "Session token returned from /auth/login when status is new_device_detected.",
+            "description": "Session token returned from /auth/login when status is new_device_detected. The same token is also used with /auth/resend-new-device-otp.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
             "type": "string"
           }
@@ -690,6 +690,25 @@
           "purpose",
           "channel",
           "destination"
+        ],
+        "type": "object"
+      },
+      "ResendNewDeviceOTPRequest": {
+        "properties": {
+          "device_id": {
+            "description": "Same device identifier submitted in the original /auth/login request.",
+            "example": "app-installation-id",
+            "type": "string"
+          },
+          "session_token": {
+            "description": "Session token returned from /auth/login when status is new_device_detected.",
+            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_token",
+          "device_id"
         ],
         "type": "object"
       },
@@ -906,7 +925,7 @@
     },
     "/auth/login": {
       "post": {
-        "description": "Authenticates a user by phone and password, then starts device verification flow.\nThe server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.\nIf that device exists and is both active and trusted, returns `challenge_required`.\nIf the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.\n",
+        "description": "Authenticates a user by phone and password, then starts device verification flow.\nThe server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.\nIf that device exists and is both active and trusted, returns `challenge_required`.\nIf the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device` and `/auth/resend-new-device-otp`.\n",
         "parameters": [
           {
             "description": "Stable device installation identifier from the mobile app, used to look up device trust for the account.",
@@ -1343,6 +1362,84 @@
         ]
       }
     },
+    "/auth/resend-new-device-otp": {
+      "post": {
+        "description": "Resends the login OTP for an active `new_device_detected` session created by `/auth/login`.\nThe same `session_token` remains valid and the pending session expiry is extended.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendNewDeviceOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "success": {
+                    "value": {
+                      "message": "otp resent successfully"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "OTP resent successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or missing session token/device id"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or expired session token"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OTP resend cooldown or resend limit reached"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed to resend OTP"
+          }
+        },
+        "summary": "Resend OTP for new device login",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/auth/reset-password": {
       "post": {
         "description": "Verifies a password reset OTP, marks it as used, and updates the user's password hash.",
@@ -1620,7 +1717,7 @@
     },
     "/auth/verify-new-device": {
       "post": {
-        "description": "Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an\nactive trusted device, using the `session_token` returned by `/auth/login` and the OTP sent\nduring `new_device_detected` flow.\n",
+        "description": "Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an\nactive trusted device, using the `session_token` returned by `/auth/login` and the OTP sent\nduring `new_device_detected` flow. If the OTP expires or is not received, request another code\nwith `/auth/resend-new-device-otp` using the same `session_token` and `device_id`.\n",
         "requestBody": {
           "content": {
             "application/json": {
