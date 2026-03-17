@@ -46,7 +46,7 @@ func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.
 func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
 	var u models.User
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id", "email").Where("id = ?", userID).First(&u).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id", "email", "phone").Where("id = ?", userID).First(&u).Error; err != nil {
 		return nil, err
 	}
 

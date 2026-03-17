@@ -19,7 +19,7 @@ type LoanProduct struct {
 	AllowsConcurrentLoans bool          `gorm:"column:allows_concurrent_loans;not null;default:false" json:"allows_concurrent_loans"`
 	IsActive              bool          `gorm:"column:is_active;not null;default:true" json:"is_active"`
 	CreatedAt             time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime" json:"created_at"`
-	UpdatedAt             time.Time     `gorm:"column:updated_at;type:timestamptz;not null;autoUpdateTime" json:"updated_at"`
+	UpdatedAt             *time.Time    `gorm:"column:updated_at;type:timestamptz;not null;autoUpdateTime" json:"updated_at"`
 }
 
 func (LoanProduct) TableName() string {
@@ -69,7 +69,7 @@ type LoanApplication struct {
 	MobileUserID    string        `gorm:"column:mobile_user_id;type:text;not null;index"`
 	CoreCustomerID  *string       `gorm:"column:core_customer_id"`
 	PhoneNumber     string        `gorm:"column:phone_number;not null"`
-	ApplicationRef  string        `gorm:"column:application_ref;not null;index"`
+	ApplicationRef  string        `gorm:"column:application_ref;not null;uniqueIndex"`
 	CoreLoanID      *string       `gorm:"column:core_loan_id"`
 	LoanProductType LoanType      `gorm:"column:loan_product_type;not null"`
 	BusinessAddress string        `gorm:"column:business_address;not null"`
@@ -85,4 +85,18 @@ type LoanApplication struct {
 
 func (LoanApplication) TableName() string {
 	return "wallet_loan_applications"
+}
+
+type LoanApplicationStatusEvent struct {
+	ID             string     `gorm:"column:id;type:text;primaryKey"`
+	EventID        string     `gorm:"column:event_id;type:text;not null;uniqueIndex"`
+	ApplicationRef string     `gorm:"column:application_ref;type:text;not null;index"`
+	Status         LoanStatus `gorm:"column:status;type:text;not null"`
+	CoreLoanID     *string    `gorm:"column:core_loan_id;type:text"`
+	RawPayload     string     `gorm:"column:raw_payload;type:jsonb;not null"`
+	ProcessedAt    time.Time  `gorm:"column:processed_at;type:timestamptz;not null"`
+}
+
+func (LoanApplicationStatusEvent) TableName() string {
+	return "wallet_loan_application_status_events"
 }

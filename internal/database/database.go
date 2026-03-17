@@ -98,6 +98,7 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.LoanProduct{},
 		&loanproduct.LoanProductRule{},
 		&loanproduct.LoanApplication{},
+		&loanproduct.LoanApplicationStatusEvent{},
 	); err != nil {
 		return err
 	}

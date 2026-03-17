@@ -108,3 +108,8 @@ type ResetPasswordRequest struct {
 	ResetCode string `json:"reset_code" binding:"required"`
 	Password  string `json:"password" binding:"password"`
 }
+
+type ResendNewDeviceOTPRequest struct {
+	SessionToken string `json:"session_token" binding:"required"`
+	DeviceID     string `json:"device_id" binding:"required"`
+}

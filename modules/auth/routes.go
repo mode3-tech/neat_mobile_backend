@@ -14,6 +14,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *AuthHandler, authGuard gin.Han
 
 		auth.POST("/verify-device", handler.VerifyDevice)
 		auth.POST("/verify-new-device", handler.VerifyNewDevice)
+		auth.POST("/resend-new-device-otp", handler.ResendNewDeviceOTP)
 		auth.POST("/refresh", handler.RefreshAccessToken)
 		auth.POST("/validate-bvn", handler.VerifyBVN)
 		auth.POST("/validate-nin", handler.VerifyNIN)

@@ -20,6 +20,7 @@ import (
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/sms"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -47,7 +48,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")
-	// intervalV1 := api.Group("/v1")
+	internalV1 := r.Group("/internal/v1")
 
 	if cfg.JWTSecret == "" {
 		return nil, errors.New("jwt secret can't be empty")
@@ -98,6 +99,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
+
+	internalLoanRepo := loanproduct.NewInternalRepository(db)
+	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
+	internalLoanHandler := loanproduct.NewInternalHandler(internalLoanService)
+	internalAuth := middleware.InternalHMACAuth(cfg.CBAWebhookSecret)
+	if strings.TrimSpace(cfg.CBAWebhookSecret) == "" {
+		log.Print("CBA webhook secret is not configured; internal callback endpoints will reject requests")
+	}
+	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
 
 	return r, nil
 }

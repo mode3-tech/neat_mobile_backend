@@ -10,3 +10,12 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		loanProduct.POST("/apply", authGuard, handler.ApplyForLoan)
 	}
 }
+
+func RegisterInternalRoutes(rg *gin.RouterGroup, handler *InternalHandler, internalAuth gin.HandlerFunc) {
+	cba := rg.Group("/cba")
+	cba.Use(internalAuth)
+
+	{
+		cba.PATCH("/loan-applications/:application_ref/status", handler.UpdateApplicationStatusFromCBA)
+	}
+}

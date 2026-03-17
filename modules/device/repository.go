@@ -93,7 +93,7 @@ func (r *DeviceRepository) CreatePendingSession(ctx context.Context, session *mo
 func (r *DeviceRepository) GetPendingSessionByHash(ctx context.Context, tokenHash string) (*models.PendingDeviceSession, error) {
 	var session models.PendingDeviceSession
 	if err := r.db.WithContext(ctx).
-		Table("pending_device_sessions").
+		Model(&models.PendingDeviceSession{}).
 		Select("*").
 		Where("session_token_hash = ?", tokenHash).
 		First(&session).Error; err != nil {
@@ -178,4 +178,15 @@ func (r *DeviceRepository) ActivateAndTrustDevice(ctx context.Context, userID, d
 	}
 
 	return nil
+}
+
+func (r *DeviceRepository) RefreshPendingSession(ctx context.Context, id, otpRef string, expiresAt, now time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.PendingDeviceSession{}).
+		Where("id = ? AND used_at IS NULL", id).
+		Updates(map[string]any{
+			"otp_ref":    otpRef,
+			"expires_at": expiresAt,
+			"updated_at": now,
+		}).Error
 }

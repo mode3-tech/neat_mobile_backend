@@ -783,6 +783,65 @@ func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, sign
 	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip)
 }
 
+func (s *AuthService) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTPRequest) error {
+	if s.tx == nil {
+		return errors.New("transaction manager not configured")
+	}
+	if s.smsSender == nil {
+		return errors.New("sms sender not configured")
+	}
+	if strings.TrimSpace(s.otpPepper) == "" {
+		return errors.New("otp pepper not configured")
+	}
+
+	req.SessionToken = strings.TrimSpace(req.SessionToken)
+	if req.SessionToken == "" {
+		return errors.New("session token is required")
+	}
+
+	req.DeviceID = strings.TrimSpace(req.DeviceID)
+	if req.DeviceID == "" {
+		return errors.New("device id is required")
+	}
+
+	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		deviceRepo := device.NewDeviceRepository(txDB)
+		authRepo := NewRespository(txDB)
+
+		sum := sha256.Sum256([]byte(req.SessionToken))
+		session, err := deviceRepo.GetPendingSessionByHash(ctx, hex.EncodeToString(sum[:]))
+		if err != nil {
+			return errors.New("invalid session token")
+		}
+
+		now := time.Now().UTC()
+		if session.IsUsed() || session.IsExpired(now) || strings.TrimSpace(session.DeviceID) != req.DeviceID {
+			return errors.New("invalid session token")
+		}
+
+		user, err := authRepo.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			return err
+		}
+
+		phone, err := NormalizeNigerianNumber(user.Phone)
+		if err != nil {
+			return err
+		}
+
+		otpRef, code, err := s.upsertNewDeviceLoginOTP(ctx, txDB, session.UserID, phone)
+		if err != nil {
+			return err
+		}
+
+		if err := deviceRepo.RefreshPendingSession(ctx, session.ID, otpRef, now.Add(10*time.Minute), now); err != nil {
+			return err
+		}
+
+		return s.smsSender.Send(ctx, phone, fmt.Sprintf("Your login OTP is %s. It expires in 10 minutes. Do not share this code with anyone.", code))
+	})
+}
+
 func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
 	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
 }

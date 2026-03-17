@@ -620,6 +620,51 @@ func isUnauthorizedVerifyNewDeviceError(err error) bool {
 	return false
 }
 
+func (h *AuthHandler) ResendNewDeviceOTP(c *gin.Context) {
+	var req ResendNewDeviceOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if err := h.authService.ResendNewDeviceOTP(c.Request.Context(), req); err != nil {
+		if isBadRequestResendNewDeviceOTPError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isRateLimitedResendNewDeviceOTPError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
+		if isUnauthorizedResendNewDeviceOTPError(err) {
+			h.respondError(c, http.StatusUnauthorized, "expired session", err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "otp resent successfully"})
+}
+
+func isBadRequestResendNewDeviceOTPError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "session token is required", "device id is required":
+		return true
+	}
+	return false
+}
+
+func isRateLimitedResendNewDeviceOTPError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "too many requests"
+}
+
+func isUnauthorizedResendNewDeviceOTPError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "invalid session token"
+}
+
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 
