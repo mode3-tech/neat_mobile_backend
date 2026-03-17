@@ -8,6 +8,9 @@ type User struct {
 	Phone               string    `gorm:"column:phone;unique;index;not null"`
 	PasswordHash        string    `gorm:"column:password;not null"`
 	PinHash             string    `gorm:"column:pin_hash;not null"`
+	DOB                 time.Time `gorm:"column:dob;not null"`
+	BVN                 string    `gorm:"column:bvn;not null"`
+	NIN                 string    `gorm:"column:nin;not null"`
 	IsEmailVerified     bool      `gorm:"is_email_verified"`
 	IsPhoneVerified     bool      `gorm:"is_phone_verified;not null"`
 	IsBvnVerified       bool      `gorm:"is_bvn_verified;not null"`

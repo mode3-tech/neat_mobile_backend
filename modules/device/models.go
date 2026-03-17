@@ -20,7 +20,7 @@ type UserDevice struct {
 }
 
 func (UserDevice) TableName() string {
-	return "user_devices"
+	return "wallet_user_devices"
 }
 
 type DeviceChallenge struct {
@@ -40,7 +40,7 @@ type DeviceChallenge struct {
 }
 
 func (DeviceChallenge) TableName() string {
-	return "device_challenges"
+	return "wallet_device_challenges"
 }
 
 // Helpers

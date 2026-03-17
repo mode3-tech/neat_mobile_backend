@@ -12,4 +12,6 @@ type AuthSession struct {
 	IP         *string    `gorm:"column:ip;type:text"`
 }
 
-func (AuthSession) TableName() string { return "wallet_auth_sessions" }
+func (AuthSession) TableName() string {
+	return "wallet_auth_sessions"
+}

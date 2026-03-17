@@ -1,7 +1,7 @@
 {
   "code": "INDIVIDUAL-WK",
   "name": "Individual Loan",
-  "description": "Short tenor salary-backed product",
+  "description": "Personal Loan",
   "min_loan_amount": 100000,
   "max_loan_amount": 1000000,
   "interest_rate_bps": 24,

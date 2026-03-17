@@ -1,1025 +1,116 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "Neat Mobile App Backend API",
-    "version": "1.0.0",
-    "description": "HTTP API for authentication, OTP workflows, and BVN/NIN validation."
-  },
-  "servers": [
-    {
-      "url": "/api/v1"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Auth",
-      "description": "Authentication and identity endpoints"
-    },
-    {
-      "name": "OTP",
-      "description": "OTP request and verification endpoints"
-    },
-    {
-      "name": "Dev Signer",
-      "description": "Development-only signer helper endpoints for Postman/device simulation"
-    }
-  ],
-  "paths": {
-    "/auth/register": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Register a user",
-        "description": "Creates a new account and binds the initial device in one transaction. The server captures the client IP from the request metadata and stores it with the created auth session.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Registration successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegisterResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body or failed registration validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Account or device already exists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Registration failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/login": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Login a user",
-        "description": "Authenticates a user by phone and password, then starts device verification flow.\nFor recognized trusted devices, returns `challenge_required`.\nFor new or untrusted devices, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Login initialized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginInitResponse"
-                },
-                "examples": {
-                  "challenge_required": {
-                    "summary": "Recognized trusted device",
-                    "value": {
-                      "status": "challenge_required",
-                      "challenge": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-                    }
-                  },
-                  "new_device_detected": {
-                    "summary": "New or untrusted device",
-                    "value": {
-                      "status": "new_device_detected",
-                      "session_token": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, invalid phone number, or missing/invalid device id",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid phone or password",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too many login attempts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Login initialization failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/verify-device": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Verify device challenge",
-        "description": "Verifies a signed login challenge for a recognized trusted device and returns tokens.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyDeviceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Device verification successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyDeviceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body or missing challenge fields",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid challenge or signature verification failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Device verification failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/verify-new-device": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Verify new device with OTP",
-        "description": "Completes login for a new/untrusted device using the `session_token` returned by `/auth/login`\nand the OTP sent during `new_device_detected` flow.\n",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewDeviceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "New device verified and tokens issued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyDeviceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body or missing required fields",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid/expired session token or invalid OTP",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "New-device verification failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health": {
-      "get": {
-        "tags": [
-          "Dev Signer"
-        ],
-        "summary": "Dev signer health check",
-        "description": "Development-only endpoint served by `cmd/devsigner`.\n",
-        "servers": [
-          {
-            "url": "http://localhost:9090"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Signer is healthy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DevHealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/sign": {
-      "post": {
-        "tags": [
-          "Dev Signer"
-        ],
-        "summary": "Sign challenge (development only)",
-        "description": "Development-only endpoint served by `cmd/devsigner` to help Postman flows.\nIt signs challenge bytes using the configured Ed25519 private key for `device_id`.\n",
-        "servers": [
-          {
-            "url": "http://localhost:9090"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DevSignRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Challenge signed successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DevSignResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body or missing fields",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Device key not found in signer configuration",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Method not allowed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/logout": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Logout a user",
-        "description": "Revokes the current auth session and refresh token record.",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Authorization",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Bearer access token. Example: `Bearer <access_token>`."
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Logout successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body or missing authorization header",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid authorization header",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Logout failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/refresh": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Refresh access token",
-        "description": "Validates a refresh token and device binding from request body, rotates the refresh token, and returns new access and refresh tokens.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshTokenRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Tokens refreshed successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing refresh token/device id or invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid refresh token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Token refresh failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/validate-bvn": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Validate BVN",
-        "description": "Validates a BVN using Tendar only. Provider preference from CBA is ignored for this endpoint.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BVNValidationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "BVN validated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BVNValidationResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid request body, invalid BVN, or provider validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Upstream service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "504": {
-            "description": "Upstream service timed out",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "CBA lookup, provider, or internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/validate-nin": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Validate NIN",
-        "description": "Validates a NIN using the configured NIN provider.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NINValidationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "NIN validated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NINValidationResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid request body, invalid NIN, or provider validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Upstream service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "504": {
-            "description": "Upstream service timed out",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Provider or internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/forgot-password": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Request password reset OTP",
-        "description": "Sends a password reset OTP to the account phone number for a recognized device.",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Registered device identifier for the account."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Password reset OTP sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Account not found for phone number or device not recognized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to create or send password reset OTP",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/reset-password": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Reset password with OTP",
-        "description": "Verifies a password reset OTP, marks it as used, and updates the user's password hash.",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Registered device identifier for the account."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Password reset successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, missing reset code, or invalid password format",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid device id, reset code, or user context",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Password reset failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/otp/request": {
-      "post": {
-        "tags": [
-          "OTP"
-        ],
-        "summary": "Request OTP",
-        "description": "Sends an OTP for login, signup, or password reset via SMS or email.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequestOTPRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OTP sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, purpose, channel, email, or phone number",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too many requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "SMS delivery failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SMS service not configured",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/otp/verify": {
-      "post": {
-        "tags": [
-          "OTP"
-        ],
-        "summary": "Verify OTP",
-        "description": "Verifies a previously issued OTP.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyOTPRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OTP verified",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyOTPResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, purpose, or channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid OTP",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
   "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    },
     "schemas": {
+      "BVNValidationRequest": {
+        "properties": {
+          "bvn": {
+            "example": "12345678901",
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          }
+        },
+        "required": [
+          "bvn"
+        ],
+        "type": "object"
+      },
+      "BVNValidationResponse": {
+        "properties": {
+          "dob": {
+            "example": "1994-01-02",
+            "type": "string"
+          },
+          "name": {
+            "example": "Jane Doe",
+            "type": "string"
+          },
+          "phone_number": {
+            "example": "08012345678",
+            "type": "string"
+          },
+          "verification_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "DevHealthResponse": {
-        "type": "object",
         "properties": {
           "status": {
-            "type": "string",
-            "example": "ok"
+            "example": "ok",
+            "type": "string"
           }
-        }
+        },
+        "type": "object"
       },
       "DevSignRequest": {
-        "type": "object",
+        "properties": {
+          "challenge": {
+            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
+            "type": "string"
+          },
+          "device_id": {
+            "example": "sim-device-1",
+            "type": "string"
+          }
+        },
         "required": [
           "device_id",
           "challenge"
         ],
-        "properties": {
-          "device_id": {
-            "type": "string",
-            "example": "sim-device-1"
-          },
-          "challenge": {
-            "type": "string",
-            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-          }
-        }
+        "type": "object"
       },
       "DevSignResponse": {
-        "type": "object",
+        "properties": {
+          "algorithm": {
+            "example": "ecdsa-p256-sha256",
+            "type": "string"
+          },
+          "signature": {
+            "description": "Base64url-encoded ECDSA P-256 signature (ASN.1 DER) over SHA-256(challenge)",
+            "example": "MEUCIG4lQ0A5Wc1zN8hP8o2N2iU9V3gT0E2q9r2m1kYzv1U-AiEAz8r8Jt2s2l7cQwZ9k0IY3l8Gx6b4u5m8N9p0Q1r2s3A",
+            "type": "string"
+          }
+        },
         "required": [
           "signature",
           "algorithm"
         ],
-        "properties": {
-          "signature": {
-            "type": "string",
-            "description": "Base64url-encoded ECDSA P-256 signature (ASN.1 DER) over SHA-256(challenge)",
-            "example": "MEUCIG4lQ0A5Wc1zN8hP8o2N2iU9V3gT0E2q9r2m1kYzv1U-AiEAz8r8Jt2s2l7cQwZ9k0IY3l8Gx6b4u5m8N9p0Q1r2s3A"
-          },
-          "algorithm": {
-            "type": "string",
-            "example": "ecdsa-p256-sha256"
-          }
-        }
+        "type": "object"
       },
       "DeviceRegistrationRequest": {
-        "type": "object",
+        "properties": {
+          "app_version": {
+            "example": "1.0.0",
+            "type": "string"
+          },
+          "device_id": {
+            "example": "app-installation-id",
+            "type": "string"
+          },
+          "device_model": {
+            "example": "iPhone 15",
+            "type": "string"
+          },
+          "device_name": {
+            "example": "John's iPhone",
+            "type": "string"
+          },
+          "os": {
+            "example": "iOS",
+            "type": "string"
+          },
+          "os_version": {
+            "example": "18.2",
+            "type": "string"
+          },
+          "public_key": {
+            "example": "yMK6+dd12JqQtw6Ts5nF7gxjMe6VQ7n1xNlwLWmk/yI=",
+            "type": "string"
+          }
+        },
         "required": [
           "device_id",
           "public_key",
@@ -1029,39 +120,477 @@
           "os_version",
           "app_version"
         ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "example": "invalid request body",
+            "type": "string"
+          },
+          "request_id": {
+            "description": "Correlation identifier included in responses for request tracing.",
+            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ForgotPasswordRequest": {
+        "properties": {
+          "phone": {
+            "example": "08012345678",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "type": "object"
+      },
+      "LoanApplicationRequest": {
+        "properties": {
+          "business_address": {
+            "example": "12 Market Road, Lagos",
+            "type": "string"
+          },
+          "business_start_date": {
+            "description": "Business start month in `YYYY-MM` format.",
+            "example": "2022-01",
+            "type": "string"
+          },
+          "business_type": {
+            "example": "retail",
+            "type": "string"
+          },
+          "business_value": {
+            "description": "Digits-only business value string.",
+            "example": "5000000",
+            "type": "string"
+          },
+          "loan_amount": {
+            "description": "Digits-only loan amount string.",
+            "example": "250000",
+            "type": "string"
+          },
+          "loan_product_type": {
+            "$ref": "#/components/schemas/LoanProductCode"
+          }
+        },
+        "required": [
+          "loan_product_type",
+          "business_address",
+          "business_start_date",
+          "business_value",
+          "business_type",
+          "loan_amount"
+        ],
+        "type": "object"
+      },
+      "LoanApplicationResponse": {
+        "properties": {
+          "application_ref": {
+            "example": "0ae0d8ef-5a60-4e18-9527-b96abd2d4731",
+            "type": "string"
+          },
+          "loan_status": {
+            "$ref": "#/components/schemas/LoanStatus"
+          },
+          "message": {
+            "example": "loan application was successful",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/LoanSummaryResponse"
+          }
+        },
+        "required": [
+          "message",
+          "application_ref",
+          "loan_status",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "LoanFrequency": {
+        "enum": [
+          "weekly",
+          "monthly"
+        ],
+        "example": "weekly",
+        "type": "string"
+      },
+      "LoanProduct": {
+        "properties": {
+          "allows_concurrent_loans": {
+            "example": false,
+            "nullable": true,
+            "type": "boolean"
+          },
+          "code": {
+            "$ref": "#/components/schemas/LoanProductCode"
+          },
+          "description": {
+            "example": "Loan product for small,medium enterprise",
+            "type": "string"
+          },
+          "grace_period_days": {
+            "example": 3,
+            "type": "integer"
+          },
+          "id": {
+            "example": "8a732d01-63fb-4e68-bfc8-7d69c7c4157e",
+            "type": "string"
+          },
+          "interest_rate_bps": {
+            "description": "The current loan summary calculation treats this value as a percentage, so `24` means `24%`.",
+            "example": 24,
+            "type": "integer"
+          },
+          "is_active": {
+            "example": true,
+            "nullable": true,
+            "type": "boolean"
+          },
+          "late_penalty_bps": {
+            "example": 250,
+            "type": "integer"
+          },
+          "loan_term_value": {
+            "example": 24,
+            "type": "integer"
+          },
+          "max_loan_amount": {
+            "example": 5000000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "min_loan_amount": {
+            "example": 200000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "example": "SME Loan",
+            "type": "string"
+          },
+          "repayment_frequency": {
+            "$ref": "#/components/schemas/LoanFrequency"
+          }
+        },
+        "type": "object"
+      },
+      "LoanProductCode": {
+        "enum": [
+          "BUSINESS-WK",
+          "SPECIAL-WK",
+          "SME-WK",
+          "SALARY-MTH",
+          "INDIVIDUAL-WK",
+          "GROUP-WK"
+        ],
+        "example": "SME-WK",
+        "type": "string"
+      },
+      "LoanProductsResponse": {
+        "properties": {
+          "message": {
+            "example": "loan products fetch was successful",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/LoanProduct"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "message",
+          "products"
+        ],
+        "type": "object"
+      },
+      "LoanStatus": {
+        "enum": [
+          "pending",
+          "reviewed",
+          "approved",
+          "rejected",
+          "converted_to_loan"
+        ],
+        "example": "pending",
+        "type": "string"
+      },
+      "LoanSummaryResponse": {
+        "properties": {
+          "business_age_years": {
+            "example": 3,
+            "type": "integer"
+          },
+          "business_value": {
+            "example": 5000000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "interest_amount": {
+            "example": 60000,
+            "format": "double",
+            "type": "number"
+          },
+          "interest_rate_percent": {
+            "example": 24,
+            "format": "double",
+            "type": "number"
+          },
+          "is_estimate": {
+            "example": true,
+            "type": "boolean"
+          },
+          "loan_amount": {
+            "example": 250000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "loan_term_value": {
+            "example": 24,
+            "type": "integer"
+          },
+          "periodic_repayment": {
+            "example": 12916.67,
+            "format": "double",
+            "type": "number"
+          },
+          "repayment_frequency": {
+            "$ref": "#/components/schemas/LoanFrequency"
+          },
+          "total_repayment": {
+            "example": 310000,
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "LoginInitResponse": {
+        "properties": {
+          "challenge": {
+            "description": "Present when status is challenge_required.",
+            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
+            "type": "string"
+          },
+          "session_token": {
+            "description": "Present when status is new_device_detected; use this with OTP at /auth/verify-new-device.",
+            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "challenge_required",
+              "new_device_detected"
+            ],
+            "example": "challenge_required",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "example": "your-password",
+            "minLength": 8,
+            "type": "string"
+          },
+          "phone": {
+            "example": "08012345678",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "properties": {
+          "access_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+            "type": "string"
+          },
+          "refresh_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "refresh_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "type": "object"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "example": "otp sent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NINValidationRequest": {
+        "properties": {
+          "bvn_validation_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          },
+          "nin": {
+            "example": "12345678901",
+            "maxLength": 11,
+            "minLength": 11,
+            "type": "string"
+          }
+        },
+        "required": [
+          "nin",
+          "bvn_validation_id"
+        ],
+        "type": "object"
+      },
+      "NINValidationResponse": {
+        "properties": {
+          "dob": {
+            "example": "1994-01-02",
+            "type": "string"
+          },
+          "name": {
+            "example": "Jane Doe",
+            "type": "string"
+          },
+          "phone_number": {
+            "example": "08012345678",
+            "type": "string"
+          },
+          "verification_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NewDeviceRequest": {
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/DeviceRegistrationRequest"
+          },
+          "otp": {
+            "example": "123456",
+            "maxLength": 6,
+            "minLength": 6,
+            "type": "string"
+          },
+          "session_token": {
+            "description": "Session token returned from /auth/login when status is new_device_detected.",
+            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_token",
+          "otp",
+          "device"
+        ],
+        "type": "object"
+      },
+      "RefreshTokenRequest": {
         "properties": {
           "device_id": {
-            "type": "string",
-            "example": "app-installation-id"
+            "example": "app-installation-id",
+            "type": "string"
           },
-          "public_key": {
-            "type": "string",
-            "example": "yMK6+dd12JqQtw6Ts5nF7gxjMe6VQ7n1xNlwLWmk/yI="
-          },
-          "device_name": {
-            "type": "string",
-            "example": "John's iPhone"
-          },
-          "device_model": {
-            "type": "string",
-            "example": "iPhone 15"
-          },
-          "os": {
-            "type": "string",
-            "example": "iOS"
-          },
-          "os_version": {
-            "type": "string",
-            "example": "18.2"
-          },
-          "app_version": {
-            "type": "string",
-            "example": "1.0.0"
+          "refresh_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+            "type": "string"
           }
-        }
+        },
+        "required": [
+          "device_id",
+          "refresh_token"
+        ],
+        "type": "object"
       },
       "RegisterRequest": {
-        "type": "object",
+        "properties": {
+          "bvn_verification_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          },
+          "confirm_password": {
+            "example": "your-password",
+            "minLength": 8,
+            "type": "string"
+          },
+          "confirm_transaction_pin": {
+            "example": "1234",
+            "maxLength": 6,
+            "minLength": 4,
+            "type": "string"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceRegistrationRequest"
+          },
+          "email": {
+            "description": "Optional email address. When supplied, pair it with `email_verification_id`.",
+            "example": "user@example.com",
+            "format": "email",
+            "type": "string"
+          },
+          "email_verification_id": {
+            "description": "Verification ID returned by `/auth/otp/verify` for the optional email step.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          },
+          "is_biometrics_enabled": {
+            "example": true,
+            "type": "boolean"
+          },
+          "nin_verification_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          },
+          "password": {
+            "example": "your-password",
+            "minLength": 8,
+            "type": "string"
+          },
+          "phone_number": {
+            "description": "Nigerian phone number. Accepted local or international forms are normalized server-side.",
+            "example": "08012345678",
+            "type": "string"
+          },
+          "phone_verification_id": {
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
+          },
+          "transaction_pin": {
+            "example": "1234",
+            "maxLength": 6,
+            "minLength": 4,
+            "type": "string"
+          }
+        },
         "required": [
           "phone_number",
           "password",
@@ -1071,457 +600,1326 @@
           "bvn_verification_id",
           "nin_verification_id",
           "phone_verification_id",
+          "is_biometrics_enabled",
           "device"
         ],
-        "properties": {
-          "phone_number": {
-            "type": "string",
-            "example": "08012345678"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "user@example.com"
-          },
-          "password": {
-            "type": "string",
-            "minLength": 8,
-            "example": "your-password"
-          },
-          "confirm_password": {
-            "type": "string",
-            "minLength": 8,
-            "example": "your-password"
-          },
-          "transaction_pin": {
-            "type": "string",
-            "minLength": 4,
-            "maxLength": 6,
-            "example": "1234"
-          },
-          "confirm_transaction_pin": {
-            "type": "string",
-            "minLength": 4,
-            "maxLength": 6,
-            "example": "1234"
-          },
-          "bvn_verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          },
-          "nin_verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          },
-          "phone_verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          },
-          "email_verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          },
-          "device": {
-            "$ref": "#/components/schemas/DeviceRegistrationRequest"
-          }
-        }
+        "type": "object"
       },
       "RegisterResponse": {
-        "type": "object",
+        "properties": {
+          "access_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+            "type": "string"
+          },
+          "message": {
+            "example": "registration successful",
+            "type": "string"
+          },
+          "refresh_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+            "type": "string"
+          }
+        },
         "required": [
           "message",
           "access_token",
           "refresh_token"
         ],
-        "properties": {
-          "message": {
-            "type": "string",
-            "example": "registration successful"
-          },
-          "access_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
-          },
-          "refresh_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
-          }
-        }
-      },
-      "LoginRequest": {
-        "type": "object",
-        "required": [
-          "phone",
-          "password"
-        ],
-        "properties": {
-          "phone": {
-            "type": "string",
-            "example": "08012345678"
-          },
-          "password": {
-            "type": "string",
-            "minLength": 8,
-            "example": "your-password"
-          }
-        }
-      },
-      "LoginInitResponse": {
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "challenge_required",
-              "new_device_detected"
-            ],
-            "example": "challenge_required"
-          },
-          "challenge": {
-            "type": "string",
-            "description": "Present when status is challenge_required.",
-            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-          },
-          "session_token": {
-            "type": "string",
-            "description": "Present when status is new_device_detected; use this with OTP at /auth/verify-new-device.",
-            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
-          }
-        }
-      },
-      "LoginResponse": {
-        "type": "object",
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
-          },
-          "refresh_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
-          }
-        }
-      },
-      "VerifyDeviceRequest": {
-        "type": "object",
-        "required": [
-          "challenge",
-          "signature",
-          "device_id"
-        ],
-        "properties": {
-          "challenge": {
-            "type": "string",
-            "description": "Raw challenge value returned by /auth/login.",
-            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-          },
-          "signature": {
-            "type": "string",
-            "description": "Signature over challenge bytes from the device private key.",
-            "example": "ELSgo8lWnShQUe7J79hYUf-TQqfivhBpJeIhP_AfDDeL4mQQQZAoqfCD7YLI7hRQelFWDk1f6v4CyLt2vAUyDg"
-          },
-          "device_id": {
-            "type": "string",
-            "description": "Device identifier used during login initialization.",
-            "example": "app-installation-id"
-          }
-        }
-      },
-      "VerifyDeviceResponse": {
-        "type": "object",
-        "required": [
-          "status",
-          "access_token",
-          "refresh_token"
-        ],
-        "properties": {
-          "status": {
-            "type": "string",
-            "example": "success"
-          },
-          "access_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
-          },
-          "refresh_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
-          },
-          "action_token": {
-            "type": "string",
-            "description": "Reserved for short-lived sensitive actions.",
-            "example": ""
-          }
-        }
-      },
-      "NewDeviceRequest": {
-        "type": "object",
-        "required": [
-          "session_token",
-          "otp",
-          "device"
-        ],
-        "properties": {
-          "session_token": {
-            "type": "string",
-            "description": "Session token returned from /auth/login when status is new_device_detected.",
-            "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
-          },
-          "otp": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "example": "123456"
-          },
-          "device": {
-            "$ref": "#/components/schemas/DeviceRegistrationRequest"
-          }
-        }
-      },
-      "LogoutRequest": {
-        "type": "object",
-        "required": [
-          "refresh_token"
-        ],
-        "properties": {
-          "refresh_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
-          }
-        }
-      },
-      "RefreshTokenRequest": {
-        "type": "object",
-        "required": [
-          "device_id",
-          "refresh_token"
-        ],
-        "properties": {
-          "device_id": {
-            "type": "string",
-            "example": "app-installation-id"
-          },
-          "refresh_token": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
-          }
-        }
-      },
-      "ForgotPasswordRequest": {
-        "type": "object",
-        "required": [
-          "phone"
-        ],
-        "properties": {
-          "phone": {
-            "type": "string",
-            "example": "08012345678"
-          }
-        }
-      },
-      "ResetPasswordRequest": {
-        "type": "object",
-        "required": [
-          "reset_code",
-          "password"
-        ],
-        "properties": {
-          "reset_code": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "example": "123456"
-          },
-          "password": {
-            "type": "string",
-            "minLength": 8,
-            "example": "NewStrongP@ss1"
-          }
-        }
-      },
-      "BVNValidationRequest": {
-        "type": "object",
-        "required": [
-          "bvn"
-        ],
-        "properties": {
-          "bvn": {
-            "type": "string",
-            "minLength": 11,
-            "maxLength": 11,
-            "example": "12345678901"
-          }
-        }
-      },
-      "BVNValidationResponse": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "example": "Jane Doe"
-          },
-          "dob": {
-            "type": "string",
-            "example": "1994-01-02"
-          },
-          "phone_number": {
-            "type": "string",
-            "example": "08012345678"
-          },
-          "verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          }
-        }
-      },
-      "NINValidationRequest": {
-        "type": "object",
-        "required": [
-          "nin",
-          "bvn_verification_id"
-        ],
-        "properties": {
-          "nin": {
-            "type": "string",
-            "minLength": 11,
-            "maxLength": 11,
-            "example": "12345678901"
-          },
-          "bvn_verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          }
-        }
-      },
-      "NINValidationResponse": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "example": "Jane Doe"
-          },
-          "dob": {
-            "type": "string",
-            "example": "1994-01-02"
-          },
-          "phone_number": {
-            "type": "string",
-            "example": "08012345678"
-          },
-          "verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
-          }
-        }
+        "type": "object"
       },
       "RequestOTPRequest": {
-        "type": "object",
-        "required": [
-          "purpose",
-          "channel",
-          "destination"
-        ],
         "properties": {
+          "channel": {
+            "enum": [
+              "sms",
+              "email"
+            ],
+            "example": "email",
+            "type": "string"
+          },
+          "destination": {
+            "example": "user@example.com",
+            "type": "string"
+          },
           "purpose": {
-            "type": "string",
             "enum": [
               "login",
               "signup",
               "password_reset"
             ],
-            "example": "login"
+            "example": "login",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "channel",
+          "destination"
+        ],
+        "type": "object"
+      },
+      "ResetPasswordRequest": {
+        "properties": {
+          "password": {
+            "example": "NewStrongP@ss1",
+            "minLength": 8,
+            "type": "string"
           },
+          "reset_code": {
+            "example": "123456",
+            "maxLength": 6,
+            "minLength": 6,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reset_code",
+          "password"
+        ],
+        "type": "object"
+      },
+      "VerifyDeviceRequest": {
+        "properties": {
+          "challenge": {
+            "description": "Raw challenge value returned by /auth/login.",
+            "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
+            "type": "string"
+          },
+          "device_id": {
+            "description": "Device identifier used during login initialization.",
+            "example": "app-installation-id",
+            "type": "string"
+          },
+          "signature": {
+            "description": "Signature over challenge bytes from the device private key.",
+            "example": "ELSgo8lWnShQUe7J79hYUf-TQqfivhBpJeIhP_AfDDeL4mQQQZAoqfCD7YLI7hRQelFWDk1f6v4CyLt2vAUyDg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge",
+          "signature",
+          "device_id"
+        ],
+        "type": "object"
+      },
+      "VerifyDeviceResponse": {
+        "properties": {
+          "access_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+            "type": "string"
+          },
+          "action_token": {
+            "description": "Reserved for short-lived sensitive actions.",
+            "example": "",
+            "type": "string"
+          },
+          "refresh_token": {
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+            "type": "string"
+          },
+          "status": {
+            "example": "success",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "access_token",
+          "refresh_token"
+        ],
+        "type": "object"
+      },
+      "VerifyOTPRequest": {
+        "properties": {
           "channel": {
-            "type": "string",
             "enum": [
               "sms",
               "email"
             ],
-            "example": "email"
+            "example": "email",
+            "type": "string"
           },
           "destination": {
-            "type": "string",
-            "example": "user@example.com"
+            "example": "user@example.com",
+            "type": "string"
+          },
+          "otp": {
+            "example": "123456",
+            "maxLength": 6,
+            "minLength": 6,
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "login",
+              "signup",
+              "password_reset"
+            ],
+            "example": "login",
+            "type": "string"
           }
-        }
-      },
-      "VerifyOTPRequest": {
-        "type": "object",
+        },
         "required": [
           "purpose",
           "channel",
           "destination",
           "otp"
         ],
-        "properties": {
-          "purpose": {
-            "type": "string",
-            "enum": [
-              "login",
-              "signup",
-              "password_reset"
-            ],
-            "example": "login"
-          },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "sms",
-              "email"
-            ],
-            "example": "email"
-          },
-          "destination": {
-            "type": "string",
-            "example": "user@example.com"
-          },
-          "otp": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "example": "123456"
-          }
-        }
+        "type": "object"
       },
       "VerifyOTPResponse": {
-        "type": "object",
         "properties": {
           "message": {
-            "type": "string",
-            "example": "OTP verification was successful"
+            "example": "OTP verification was successful",
+            "type": "string"
           },
           "verification_id": {
-            "type": "string",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+            "type": "string"
           }
-        }
-      },
-      "MessageResponse": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "example": "otp sent"
-          }
-        }
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string",
-            "example": "invalid request body"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "Correlation identifier included in responses for request tracing.",
-            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
-          }
-        }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
-  }
+  },
+  "info": {
+    "description": "HTTP API for authentication, OTP verification, device trust, identity validation,\npassword reset, and loan product workflows.\n",
+    "title": "Neat Mobile App Backend API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/auth/forgot-password": {
+      "post": {
+        "description": "Sends a password reset OTP to the account phone number for a recognized device.",
+        "parameters": [
+          {
+            "description": "Registered device identifier for the account.",
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Password reset OTP sent"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Account not found for phone number or device not recognized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed to create or send password reset OTP"
+          }
+        },
+        "summary": "Request password reset OTP",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Authenticates a user by phone and password, then starts device verification flow.\nFor recognized trusted devices, returns `challenge_required`.\nFor new or untrusted devices, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/verify-new-device`.\n",
+        "parameters": [
+          {
+            "description": "Stable device installation identifier from the mobile app.",
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "challenge_required": {
+                    "summary": "Recognized trusted device",
+                    "value": {
+                      "challenge": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
+                      "status": "challenge_required"
+                    }
+                  },
+                  "new_device_detected": {
+                    "summary": "New or untrusted device",
+                    "value": {
+                      "session_token": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A",
+                      "status": "new_device_detected"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/LoginInitResponse"
+                }
+              }
+            },
+            "description": "Login initialized"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body, invalid phone number, or missing/invalid device id"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid phone or password"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many login attempts"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Login initialization failed"
+          }
+        },
+        "summary": "Login a user",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "Revokes the current auth session and refresh token record.",
+        "parameters": [
+          {
+            "description": "Bearer access token. Example: `Bearer \u003caccess_token\u003e`.",
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Logout successful"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or missing authorization header"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid authorization header"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Logout failed"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Logout a user",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/otp/request": {
+      "post": {
+        "description": "Sends an OTP for login, signup, or password reset via SMS or email.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "OTP sent"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body, purpose, channel, email, or phone number"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "SMS delivery failed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "SMS service not configured"
+          }
+        },
+        "summary": "Request OTP",
+        "tags": [
+          "OTP"
+        ]
+      }
+    },
+    "/auth/otp/verify": {
+      "post": {
+        "description": "Verifies a previously issued OTP.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyOTPResponse"
+                }
+              }
+            },
+            "description": "OTP verified"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body, purpose, or channel"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid OTP"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Verify OTP",
+        "tags": [
+          "OTP"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "description": "Validates a refresh token and device binding from request body, rotates the refresh token, and returns new access and refresh tokens.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Tokens refreshed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing refresh token/device id or invalid request body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid refresh token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Token refresh failed"
+          }
+        },
+        "summary": "Refresh access token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "description": "Creates a new account and binds the initial device in one transaction. The server captures the client IP from the request metadata and stores it with the created auth session.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description": "Registration successful"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or failed registration validation"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Account or device already exists"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Registration failed"
+          }
+        },
+        "summary": "Register a user",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "description": "Verifies a password reset OTP, marks it as used, and updates the user's password hash.",
+        "parameters": [
+          {
+            "description": "Registered device identifier for the account.",
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Password reset successful"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body, missing reset code, or invalid password format"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid device id, reset code, or user context"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Password reset failed"
+          }
+        },
+        "summary": "Reset password with OTP",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/validate-bvn": {
+      "post": {
+        "description": "Validates a BVN using Tendar only. Provider preference from CBA is ignored for this endpoint.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BVNValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BVNValidationResponse"
+                }
+              }
+            },
+            "description": "BVN validated successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid request body, invalid BVN, or provider validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "CBA lookup, provider, or internal error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service timed out"
+          }
+        },
+        "summary": "Validate BVN",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/validate-nin": {
+      "post": {
+        "description": "Validates a NIN using the configured NIN provider and compares it with a previously verified BVN using `bvn_validation_id`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NINValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NINValidationResponse"
+                }
+              }
+            },
+            "description": "NIN validated successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid request body, invalid NIN, or provider validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Provider or internal error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service timed out"
+          }
+        },
+        "summary": "Validate NIN",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/verify-device": {
+      "post": {
+        "description": "Verifies a signed login challenge for a recognized trusted device and returns tokens.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyDeviceResponse"
+                }
+              }
+            },
+            "description": "Device verification successful"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or missing challenge fields"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid challenge or signature verification failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Device verification failed"
+          }
+        },
+        "summary": "Verify device challenge",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/verify-new-device": {
+      "post": {
+        "description": "Completes login for a new/untrusted device using the `session_token` returned by `/auth/login`\nand the OTP sent during `new_device_detected` flow.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyDeviceResponse"
+                }
+              }
+            },
+            "description": "New device verified and tokens issued"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or missing required fields"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid/expired session token or invalid OTP"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "New-device verification failed"
+          }
+        },
+        "summary": "Verify new device with OTP",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "\nDevelopment-only endpoint served by `cmd/devsigner`.\r\n",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevHealthResponse"
+                }
+              }
+            },
+            "description": "Signer is healthy"
+          }
+        },
+        "servers": [
+          {
+            "url": "http://localhost:9090"
+          }
+        ],
+        "summary": "Dev signer health check",
+        "tags": [
+          "Dev Signer"
+        ]
+      }
+    },
+    "/loan/": {
+      "get": {
+        "description": "Returns the currently available loan products from storage.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanProductsResponse"
+                }
+              }
+            },
+            "description": "Loan products fetched successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid access token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed to fetch loan products"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List loan products",
+        "tags": [
+          "Loan"
+        ]
+      }
+    },
+    "/loan/apply": {
+      "post": {
+        "description": "Creates a pending loan application for the authenticated user after validating\nthe selected product, business data, user verification state, and core-banking loan checks.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoanApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanApplicationResponse"
+                }
+              }
+            },
+            "description": "Loan application created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or malformed input fields"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Current user or loan rule not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Multiple core-banking customers matched the supplied BVN"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "User or application data failed business-rule validation"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Loan application failed"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Core-banking lookup failed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Core-banking integration is unavailable or not configured"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Apply for a loan",
+        "tags": [
+          "Loan"
+        ]
+      }
+    },
+    "/sign": {
+      "post": {
+        "description": "Development-only endpoint served by `cmd/devsigner` to help Postman flows.\nIt signs `SHA-256(challenge)` using the configured ECDSA P-256 private key for `device_id`.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevSignResponse"
+                }
+              }
+            },
+            "description": "Challenge signed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request body or missing fields"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Device key not found in signer configuration"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          }
+        },
+        "servers": [
+          {
+            "url": "http://localhost:9090"
+          }
+        ],
+        "summary": "Sign challenge (development only)",
+        "tags": [
+          "Dev Signer"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Authentication and identity endpoints",
+      "name": "Auth"
+    },
+    {
+      "description": "OTP request and verification endpoints",
+      "name": "OTP"
+    },
+    {
+      "description": "Protected loan product discovery and application endpoints",
+      "name": "Loan"
+    },
+    {
+      "description": "Development-only signer helper endpoints for Postman/device simulation",
+      "name": "Dev Signer"
+    }
+  ]
 }

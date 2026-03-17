@@ -1,0 +1,14 @@
+{
+    "product_id": "a985ec55-1b00-4608-88bd-330a31529e9b",
+    "product_code": "INDIVIDUAL-WK",
+    "min_savings_balance": 0,
+    "min_account_age_days": 0,
+    "max_active_loans": 0,
+    "require_kyc": true,
+    "require_bvn": true,
+    "require_nin": true,
+    "require_phone_verified": true,
+    "require_no_outstanding_default": true,
+    "high_value_threshold": 0,
+    "branch_manager_approval_limit": 1000000
+}

@@ -55,9 +55,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
 	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
 
+	var cbaClient *cba.ProviderClient
 	var providerSource auth.BVNProviderSource
 	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
-		providerSource = cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
+		cbaClient = cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
+		providerSource = cbaClient
 	} else {
 		log.Print("CBA provider source is not fully configured; defaulting BVN validation to Tendar-first fallback")
 	}
@@ -92,7 +94,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	otp.RegisterRoutes(apiV1, otpHandler)
 
 	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
 

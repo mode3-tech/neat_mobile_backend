@@ -1,7 +1,7 @@
 {
   "code": "SME-WK",
   "name": "SME Loan",
-  "description": "Short tenor salary-backed product",
+  "description": "Loan product for small,medium enterprise",
   "min_loan_amount": 200000,
   "max_loan_amount": 5000000,
   "interest_rate_bps": 24,

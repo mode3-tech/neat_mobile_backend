@@ -1,0 +1,14 @@
+{
+    "product_id": "b7d2d827-8b5a-4082-98b5-05a3fd027663",
+    "product_code": "SALARY-MTH",
+    "min_savings_balance": 0,
+    "min_account_age_days": 0,
+    "max_active_loans": 0,
+    "require_kyc": true,
+    "require_bvn": true,
+    "require_nin": true,
+    "require_phone_verified": true,
+    "require_no_outstanding_default": true,
+    "high_value_threshold": 0,
+    "branch_manager_approval_limit": 1000000
+}

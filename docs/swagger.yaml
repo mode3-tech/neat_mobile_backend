@@ -3,7 +3,8 @@ info:
   title: Neat Mobile App Backend API
   version: 1.0.0
   description: |
-    HTTP API for authentication, OTP workflows, and BVN/NIN validation.
+    HTTP API for authentication, OTP verification, device trust, identity validation,
+    password reset, and loan product workflows.
 servers:
   - url: /api/v1
 tags:
@@ -11,6 +12,8 @@ tags:
     description: Authentication and identity endpoints
   - name: OTP
     description: OTP request and verification endpoints
+  - name: Loan
+    description: Protected loan product discovery and application endpoints
   - name: Dev Signer
     description: Development-only signer helper endpoints for Postman/device simulation
 paths:
@@ -215,7 +218,7 @@ paths:
       summary: Sign challenge (development only)
       description: |
         Development-only endpoint served by `cmd/devsigner` to help Postman flows.
-        It signs challenge bytes using the configured Ed25519 private key for `device_id`.
+        It signs `SHA-256(challenge)` using the configured ECDSA P-256 private key for `device_id`.
       servers:
         - url: http://localhost:9090
       requestBody:
@@ -380,7 +383,7 @@ paths:
       tags:
         - Auth
       summary: Validate NIN
-      description: Validates a NIN using the configured NIN provider.
+      description: Validates a NIN using the configured NIN provider and compares it with a previously verified BVN using `bvn_validation_id`.
       requestBody:
         required: true
         content:
@@ -592,6 +595,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /loan/:
+    get:
+      tags:
+        - Loan
+      summary: List loan products
+      description: Returns the currently available loan products from storage.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Loan products fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanProductsResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch loan products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /loan/apply:
+    post:
+      tags:
+        - Loan
+      summary: Apply for a loan
+      description: |
+        Creates a pending loan application for the authenticated user after validating
+        the selected product, business data, user verification state, and core-banking loan checks.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanApplicationRequest"
+      responses:
+        "200":
+          description: Loan application created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanApplicationResponse"
+        "400":
+          description: Invalid request body or malformed input fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Current user or loan rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Multiple core-banking customers matched the supplied BVN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: User or application data failed business-rule validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Core-banking lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Core-banking integration is unavailable or not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Loan application failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -673,14 +774,17 @@ components:
         - bvn_verification_id
         - nin_verification_id
         - phone_verification_id
+        - is_biometrics_enabled
         - device
       properties:
         phone_number:
           type: string
+          description: Nigerian phone number. Accepted local or international forms are normalized server-side.
           example: "08012345678"
         email:
           type: string
           format: email
+          description: Optional email address. When supplied, pair it with `email_verification_id`.
           example: user@example.com
         password:
           type: string
@@ -711,7 +815,11 @@ components:
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         email_verification_id:
           type: string
+          description: Verification ID returned by `/auth/otp/verify` for the optional email step.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        is_biometrics_enabled:
+          type: boolean
+          example: true
         device:
           $ref: "#/components/schemas/DeviceRegistrationRequest"
     RegisterResponse:
@@ -900,16 +1008,185 @@ components:
       type: object
       required:
         - nin
-        - bvn_verification_id
+        - bvn_validation_id
       properties:
         nin:
           type: string
           minLength: 11
           maxLength: 11
           example: "12345678901"
-        bvn_verification_id:
+        bvn_validation_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    LoanProductCode:
+      type: string
+      enum:
+        - BUSINESS-WK
+        - SPECIAL-WK
+        - SME-WK
+        - SALARY-MTH
+        - INDIVIDUAL-WK
+        - GROUP-WK
+      example: SME-WK
+    LoanFrequency:
+      type: string
+      enum:
+        - weekly
+        - monthly
+      example: weekly
+    LoanStatus:
+      type: string
+      enum:
+        - pending
+        - reviewed
+        - approved
+        - rejected
+        - converted_to_loan
+      example: pending
+    LoanProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 8a732d01-63fb-4e68-bfc8-7d69c7c4157e
+        code:
+          $ref: "#/components/schemas/LoanProductCode"
+        name:
+          type: string
+          example: SME Loan
+        description:
+          type: string
+          example: Loan product for small,medium enterprise
+        min_loan_amount:
+          type: integer
+          format: int64
+          example: 200000
+        max_loan_amount:
+          type: integer
+          format: int64
+          example: 5000000
+        interest_rate_bps:
+          type: integer
+          description: The current loan summary calculation treats this value as a percentage, so `24` means `24%`.
+          example: 24
+        repayment_frequency:
+          $ref: "#/components/schemas/LoanFrequency"
+        grace_period_days:
+          type: integer
+          example: 3
+        loan_term_value:
+          type: integer
+          example: 24
+        late_penalty_bps:
+          type: integer
+          example: 250
+        allows_concurrent_loans:
+          type: boolean
+          nullable: true
+          example: false
+        is_active:
+          type: boolean
+          nullable: true
+          example: true
+    LoanProductsResponse:
+      type: object
+      required:
+        - message
+        - products
+      properties:
+        message:
+          type: string
+          example: loan products fetch was successful
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanProduct"
+    LoanApplicationRequest:
+      type: object
+      required:
+        - loan_product_type
+        - business_address
+        - business_start_date
+        - business_value
+        - business_type
+        - loan_amount
+      properties:
+        loan_product_type:
+          $ref: "#/components/schemas/LoanProductCode"
+        business_address:
+          type: string
+          example: 12 Market Road, Lagos
+        business_start_date:
+          type: string
+          description: Business start month in `YYYY-MM` format.
+          example: "2022-01"
+        business_value:
+          type: string
+          description: Digits-only business value string.
+          example: "5000000"
+        business_type:
+          type: string
+          example: retail
+        loan_amount:
+          type: string
+          description: Digits-only loan amount string.
+          example: "250000"
+    LoanSummaryResponse:
+      type: object
+      properties:
+        business_value:
+          type: integer
+          format: int64
+          example: 5000000
+        business_age_years:
+          type: integer
+          example: 3
+        loan_amount:
+          type: integer
+          format: int64
+          example: 250000
+        interest_rate_percent:
+          type: number
+          format: double
+          example: 24
+        interest_amount:
+          type: number
+          format: double
+          example: 60000
+        total_repayment:
+          type: number
+          format: double
+          example: 310000
+        periodic_repayment:
+          type: number
+          format: double
+          example: 12916.67
+        loan_term_value:
+          type: integer
+          example: 24
+        repayment_frequency:
+          $ref: "#/components/schemas/LoanFrequency"
+        is_estimate:
+          type: boolean
+          example: true
+    LoanApplicationResponse:
+      type: object
+      required:
+        - message
+        - application_ref
+        - loan_status
+        - summary
+      properties:
+        message:
+          type: string
+          example: loan application was successful
+        application_ref:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+        loan_status:
+          $ref: "#/components/schemas/LoanStatus"
+        summary:
+          $ref: "#/components/schemas/LoanSummaryResponse"
     NINValidationResponse:
       type: object
       properties:

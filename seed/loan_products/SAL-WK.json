@@ -1,7 +1,7 @@
 {
-  "code": "SALARY-WK",
+  "code": "SALARY-MTH",
   "name": "Product Loan Salary",
-  "description": "Short tenor salary-backed product",
+  "description": "Monthly Salary",
   "min_loan_amount": 50000,
   "max_loan_amount": 5000000,
   "interest_rate_bps": 24,

@@ -24,7 +24,7 @@ func (r *DeviceRepository) Save(ctx context.Context, device *UserDevice) error {
 
 func (r *DeviceRepository) FindDevice(ctx context.Context, userID, deviceID string) (*UserDevice, error) {
 	var device UserDevice
-	if err := r.db.WithContext(ctx).Table("user_devices").Select("*").Where("user_id = ? AND device_id = ?", userID, deviceID).First(&device).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&UserDevice{}).Select("*").Where("user_id = ? AND device_id = ?", userID, deviceID).First(&device).Error; err != nil {
 		return nil, err
 	}
 	return &device, nil

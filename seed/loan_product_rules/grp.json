@@ -1,0 +1,14 @@
+{
+    "product_id": "6eba6eb4-2634-4b93-97df-f603e63ef8f6",
+    "product_code": "GROUP-WK",
+    "min_savings_balance": 0,
+    "min_account_age_days": 0,
+    "max_active_loans": 0,
+    "require_kyc": true,
+    "require_bvn": true,
+    "require_nin": true,
+    "require_phone_verified": true,
+    "require_no_outstanding_default": true,
+    "high_value_threshold": 0,
+    "branch_manager_approval_limit": 1000000
+}

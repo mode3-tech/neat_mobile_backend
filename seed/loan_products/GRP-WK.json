@@ -1,7 +1,7 @@
 {
   "code": "GROUP-WK",
   "name": "Group Loan",
-  "description": "Short tenor salary-backed product",
+  "description": "Group of people loan",
   "min_loan_amount": 20000,
   "max_loan_amount": 2000000,
   "interest_rate_bps": 24,

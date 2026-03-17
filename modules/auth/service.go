@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/notify"
+	"neat_mobile_app_backend/internal/timeutil"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
@@ -160,7 +161,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 	}, nil
 }
 
-func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
+func (s *AuthService) ValidateNIN(ctx context.Context, ninVerificationID, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
 	}
@@ -175,10 +176,10 @@ func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin st
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
 
-	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
+	row, err := s.repo.GetValidationRow(ctx, ninVerificationID)
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("bvn verification not found")
+		return nil, errors.New("nin verification not found")
 	}
 
 	if err != nil {
@@ -206,6 +207,11 @@ func (s *AuthService) ValidateNIN(ctx context.Context, bvnVerificationID, nin st
 		ExpiresAt:     &expiresAt,
 		CreatedAt:     now,
 		UpdatedAt:     now,
+		VerifiedID:    &nin,
+		VerifiedName:  &fullName,
+		VerifiedPhone: &resp.Data.TelephoneNo,
+		VerifiedDOB:   &resp.Data.BirthDate,
+		VerifiedEmail: &resp.Data.Email,
 	}
 
 	if fullName == "" || strings.TrimSpace(resp.Data.BirthDate) == "" || strings.TrimSpace(resp.Data.TelephoneNo) == "" {
@@ -328,6 +334,12 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, err
 	}
 
+	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
+
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
 	user := &models.User{
 		ID:                  uuid.NewString(),
 		Phone:               normalizedPhone,
@@ -335,6 +347,9 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		PasswordHash:        hashedPassword,
 		PinHash:             hashedTransactionPin,
 		IsEmailVerified:     isEmailVerified,
+		BVN:                 *bvnRecord.VerifiedID,
+		NIN:                 *ninRecord.VerifiedID,
+		DOB:                 dob,
 		IsPhoneVerified:     true,
 		IsBvnVerified:       true,
 		IsNinVerified:       true,
@@ -1075,7 +1090,7 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 		return nil, errors.New("bvn is required")
 	}
 
-	if len(bvn) < 11 || len(bvn) > 11 {
+	if len(bvn) != 11 {
 		log.Printf("invalid bvn number")
 		return nil, errors.New("invalid bvn number")
 	}
@@ -1116,6 +1131,7 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 		ExpiresAt:     &expiresAt,
 		VerifiedName:  &fullName,
 		VerifiedDOB:   &bvnDetails.Data.Details.DateOfBirth,
+		VerifiedID:    &bvn,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.VerificationID); providerVerificationID != "" {
@@ -1164,7 +1180,7 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 		return nil, errors.New("bvn is required")
 	}
 
-	if len(bvn) < 11 || len(bvn) > 11 {
+	if len(bvn) != 11 {
 		return nil, errors.New("invalid bvn number")
 	}
 
@@ -1203,6 +1219,7 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 		ExpiresAt:     &expiresAt,
 		VerifiedName:  &fullName,
 		VerifiedDOB:   &bvnDetails.Data.DateOfBirth,
+		VerifiedID:    &bvn,
 	}
 
 	if providerVerificationID := strings.TrimSpace(bvnDetails.Verification.VerificationID); providerVerificationID != "" {

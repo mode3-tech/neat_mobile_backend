@@ -1,7 +1,7 @@
 {
   "code": "SPECIAL-WK",
   "name": "Special Loan",
-  "description": "Short tenor salary-backed product",
+  "description": "A special loan",
   "min_loan_amount": 200000,
   "max_loan_amount": 50000000,
   "interest_rate_bps": 24,

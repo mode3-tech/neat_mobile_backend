@@ -96,13 +96,15 @@ func Migrate(db *gorm.DB) error {
 		&device.UserDevice{},
 		&device.DeviceChallenge{},
 		&loanproduct.LoanProduct{},
+		&loanproduct.LoanProductRule{},
+		&loanproduct.LoanApplication{},
 	); err != nil {
 		return err
 	}
 
 	return db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_device_challenges_active
-		ON device_challenges (user_id, device_id)
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_device_challenges_active
+		ON wallet_device_challenges (user_id, device_id)
 		WHERE used_at IS NULL
 	`).Error
 }

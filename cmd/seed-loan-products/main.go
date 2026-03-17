@@ -31,6 +31,7 @@ type seedProduct struct {
 	MaxLoanAmount         int64  `json:"max_loan_amount"`
 	InterestRateBPS       int    `json:"interest_rate_bps"`
 	RepaymentFrequency    string `json:"repayment_frequency"` // weekly|monthly
+	LoanTermValue         int    `json:"loan_term_value"`
 	GracePeriodDays       int    `json:"grace_period_days"`
 	LatePenaltyBPS        int    `json:"late_penalty_bps"`
 	AllowsConcurrentLoans bool   `json:"allows_concurrent_loans"`
@@ -90,20 +91,8 @@ func main() {
 		}
 
 		err = db.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "code"}},
-			DoUpdates: clause.Assignments(map[string]any{
-				"name":                    row.Name,
-				"description":             row.Description,
-				"min_loan_amount":         row.MinLoanAmount,
-				"max_loan_amount":         row.MaxLoanAmount,
-				"interest_rate_bps":       row.InterestRateBPS,
-				"repayment_frequency":     row.RepaymentFrequency,
-				"grace_period_days":       row.GracePeriodDays,
-				"late_penalty_bps":        row.LatePenaltyBPS,
-				"allows_concurrent_loans": row.AllowsConcurrentLoans,
-				"is_active":               row.IsActive,
-				"updated_at":              time.Now().UTC(),
-			}),
+			Columns:   []clause.Column{{Name: "code"}},
+			DoUpdates: clause.Assignments(productUpsertAssignments(row)),
 		}).Create(&row).Error
 		if err != nil {
 			failed++
@@ -149,6 +138,9 @@ func loadAndValidate(path string) (loanproduct.LoanProduct, error) {
 	if in.InterestRateBPS < 0 {
 		return loanproduct.LoanProduct{}, errors.New("interest_rate_bps must be >= 0")
 	}
+	if in.LoanTermValue <= 0 {
+		return loanproduct.LoanProduct{}, errors.New("loan_term_value must be > 0")
+	}
 	if in.LatePenaltyBPS < 0 {
 		return loanproduct.LoanProduct{}, errors.New("late_penalty_bps must be >= 0")
 	}
@@ -176,6 +168,7 @@ func loadAndValidate(path string) (loanproduct.LoanProduct, error) {
 		MaxLoanAmount:         in.MaxLoanAmount,
 		InterestRateBPS:       in.InterestRateBPS,
 		RepaymentFrequency:    loanproduct.LoanFrequency(freq),
+		LoanTermValue:         in.LoanTermValue,
 		GracePeriodDays:       in.GracePeriodDays,
 		LatePenaltyBPS:        in.LatePenaltyBPS,
 		AllowsConcurrentLoans: in.AllowsConcurrentLoans,
@@ -198,4 +191,21 @@ func existsByCode(db *gorm.DB, code string) (bool, error) {
 		Where("code = ?", code).
 		Count(&count).Error
 	return count > 0, err
+}
+
+func productUpsertAssignments(row loanproduct.LoanProduct) map[string]any {
+	return map[string]any{
+		"name":                    row.Name,
+		"description":             row.Description,
+		"min_loan_amount":         row.MinLoanAmount,
+		"max_loan_amount":         row.MaxLoanAmount,
+		"interest_rate_bps":       row.InterestRateBPS,
+		"repayment_frequency":     row.RepaymentFrequency,
+		"loan_term_value":         row.LoanTermValue,
+		"grace_period_days":       row.GracePeriodDays,
+		"late_penalty_bps":        row.LatePenaltyBPS,
+		"allows_concurrent_loans": row.AllowsConcurrentLoans,
+		"is_active":               row.IsActive,
+		"updated_at":              time.Now().UTC(),
+	}
 }

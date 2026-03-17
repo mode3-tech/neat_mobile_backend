@@ -21,7 +21,9 @@ type PendingDeviceSession struct {
 	UpdatedAt time.Time `gorm:"type:timestamptz;not null;default:null" json:"updated_at"`
 }
 
-func (PendingDeviceSession) TableName() string { return "pending_device_sessions" }
+func (PendingDeviceSession) TableName() string {
+	return "wallet_pending_device_sessions"
+}
 
 // Helpers
 func (p *PendingDeviceSession) IsExpired(now time.Time) bool {
