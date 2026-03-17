@@ -47,7 +47,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")
-	intervalV1 := api.Group("/v1")
+	// intervalV1 := api.Group("/v1")
 
 	if cfg.JWTSecret == "" {
 		return nil, errors.New("jwt secret can't be empty")
