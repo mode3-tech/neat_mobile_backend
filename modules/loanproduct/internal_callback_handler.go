@@ -17,6 +17,21 @@ func NewInternalHandler(service *InternalService) *InternalHandler {
 	return &InternalHandler{service: service}
 }
 
+func (h *InternalHandler) GetLoanApplicationsForCBA(c *gin.Context) {
+	if h.service == nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal loan callback service not configured"})
+		return
+	}
+
+	resp, err := h.service.GetLoanApplicationsForCBA(c.Request.Context())
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *InternalHandler) UpdateApplicationStatusFromCBA(c *gin.Context) {
 	applicationRef := strings.TrimSpace(c.Param("application_ref"))
 

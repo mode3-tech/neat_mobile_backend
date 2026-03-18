@@ -140,7 +140,8 @@ func isConflictRegisterError(err error) bool {
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch msg {
 	case "user already exists",
-		"device already exists":
+		"device already exists",
+		"bvn already linked to another user":
 		return true
 	default:
 		return strings.Contains(msg, "duplicate key value violates unique constraint")

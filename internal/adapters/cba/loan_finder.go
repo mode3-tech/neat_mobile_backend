@@ -23,6 +23,12 @@ type internalLoanDetailResponse struct {
 	Data    loanproduct.CoreLoanDetail `json:"data"`
 }
 
+type internalLoanRepaymentResponse struct {
+	Status  string                      `json:"status"`
+	Message string                      `json:"message"`
+	Data    []loanproduct.LoanRepayment `json:"data"`
+}
+
 func (c *ProviderClient) GetCustomerLoans(ctx context.Context, customerID string) ([]loanproduct.CoreCustomerLoanItem, error) {
 	if c.baseURL == "" {
 		return nil, fmt.Errorf("cba base url is not configured")
@@ -109,4 +115,54 @@ func (c *ProviderClient) GetLoanDetail(ctx context.Context, loanID string) (*loa
 	}
 
 	return &out.Data, nil
+}
+
+func (c *ProviderClient) GetLoanRepayments(ctx context.Context, loanID string) (*[]loanproduct.LoanRepayment, error) {
+	if c.baseURL == "" {
+		return nil, fmt.Errorf("cba base url is not configured")
+	}
+
+	if strings.TrimSpace(c.apiKey) == "" {
+		return nil, fmt.Errorf("cba internal key is not configured")
+	}
+
+	loanID = strings.TrimSpace(loanID)
+
+	if loanID == "" {
+		return nil, fmt.Errorf("loan id is required")
+	}
+
+	endpoint := c.baseURL + "/internal/loans/" + url.PathEscape(loanID) + "/repayments"
+
+	fmt.Println(endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Internal-API-Key", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var out internalErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&out); err == nil && strings.TrimSpace(out.Message) != "" {
+			return nil, fmt.Errorf("cba get loan detail failed with status %d: %s", resp.StatusCode, strings.TrimSpace(out.Message))
+		}
+		return nil, fmt.Errorf("cba get loan detail failed with status %d", resp.StatusCode)
+	}
+
+	var result internalLoanRepaymentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
 }

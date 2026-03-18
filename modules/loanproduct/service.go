@@ -111,32 +111,41 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		return nil, errors.New("business must be at least a year old")
 	}
 
-	match, err := s.MatchCoreCustomerByBVN(ctx, user.BVN)
-
-	if err != nil {
-		return nil, errors.New(err.Error())
-	}
-
-	if match == nil {
-		return nil, errors.New("core app returned empty customer match response")
-	}
-
-	switch match.MatchStatus {
-	case CoreCustomerNoMatch:
-		return nil, errors.New("customer does not exist on core app")
-	case CoreCustomerMultipleMatches:
-		return nil, errors.New("multiple core customers matched this bvn")
-	case CoreCustomerSingleMatch:
-		if match.Customer == nil || strings.TrimSpace(match.Customer.CustomerID) == "" {
-			return nil, errors.New("core app returned empty matched customer")
-		}
-		id := strings.TrimSpace(match.Customer.CustomerID)
+	if user.CoreCustomerID != nil && strings.TrimSpace(*user.CoreCustomerID) != "" {
+		id := strings.TrimSpace(*user.CoreCustomerID)
 		coreCustomerID = &id
-	default:
-		return nil, errors.New("an error occured while looking up customer on the core app")
+	} else {
+		match, err := s.MatchCoreCustomerByBVN(ctx, user.BVN)
+		if err != nil {
+			return nil, errors.New(err.Error())
+		}
+		if match == nil {
+			return nil, errors.New("core app returned empty customer match response")
+		}
+
+		switch match.MatchStatus {
+		case CoreCustomerNoMatch:
+			return nil, errors.New("customer does not exist on core app")
+		case CoreCustomerMultipleMatches:
+			return nil, errors.New("multiple core customers matched this bvn")
+		case CoreCustomerSingleMatch:
+			if match.Customer == nil || strings.TrimSpace(match.Customer.CustomerID) == "" {
+				return nil, errors.New("core app returned empty matched customer")
+			}
+			id := strings.TrimSpace(match.Customer.CustomerID)
+			if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, id); err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, errors.New("current user does not exist")
+				}
+				return nil, err
+			}
+			coreCustomerID = &id
+		default:
+			return nil, errors.New("an error occured while looking up customer on the core app")
+		}
 	}
 
-	customerLoans, err := s.GetCoreCustomerLoans(ctx, *coreCustomerID)
+	customerLoans, err := s.getCoreCustomerLoans(ctx, *coreCustomerID)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +265,52 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	return s.coreCustomerFinder.MatchCustomerByBVN(ctx, bvn)
 }
 
-func (s *Service) GetCoreCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error) {
+func (s *Service) GetAllLoans(ctx context.Context, userID string) ([]CoreCustomerLoanItem, error) {
+	userID = strings.TrimSpace(userID)
+
+	if userID == "" {
+		return nil, errors.New("invalid user id")
+	}
+
+	user, err := s.repo.GetUser(ctx, userID)
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("no user found")
+		}
+
+		return nil, err
+	}
+
+	if user == nil || user.CoreCustomerID == nil {
+		return nil, errors.New("user has not existing loan")
+	}
+
+	loans, err := s.getCoreCustomerLoans(ctx, *user.CoreCustomerID)
+
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	return loans, nil
+
+}
+
+func (s *Service) GetLoanRepayments(ctx context.Context, loanID string) (*[]LoanRepayment, error) {
+	loanID = strings.TrimSpace(loanID)
+
+	if loanID == "" {
+		return nil, errors.New("invalid loan id")
+	}
+
+	if s.coreLoanFinder == nil {
+		return nil, errors.New("core loan finder is  not configured")
+	}
+
+	return s.coreLoanFinder.GetLoanRepayments(ctx, loanID)
+}
+
+func (s *Service) getCoreCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error) {
 	customerID = strings.TrimSpace(customerID)
 	if customerID == "" {
 		return nil, errors.New("customer id is required")

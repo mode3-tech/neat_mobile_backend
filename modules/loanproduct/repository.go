@@ -34,6 +34,7 @@ func (r *Repository) GetLoanProductWithCode(ctx context.Context, code LoanType) 
 }
 
 type row struct {
+	CoreCustomerID  *string    `gorm:"column:core_customer_id"`
 	Phone           string     `gorm:"column:phone"`
 	DOB             *time.Time `gorm:"column:dob"`
 	BVN             string     `gorm:"column:bvn"`
@@ -46,11 +47,26 @@ type row struct {
 func (r *Repository) GetUser(ctx context.Context, userID string) (*row, error) {
 	var row row
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("phone, dob, bvn, nin, is_phone_verified, is_bvn_verified, is_nin_verified").Where("id = ? ", userID).First(&row).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("core_customer_id, phone, dob, bvn, nin, is_phone_verified, is_bvn_verified, is_nin_verified").Where("id = ? ", userID).Take(&row).Error; err != nil {
 		return nil, err
 	}
 
 	return &row, nil
+}
+
+func (r *Repository) UpdateUserCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {
+	tx := r.db.WithContext(ctx).
+		Table("wallet_users").
+		Where("id = ?", userID).
+		Update("core_customer_id", coreCustomerID)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }
 
 func (r *Repository) CreateEOI(ctx context.Context, eoi *LoanApplication) error {
@@ -67,4 +83,14 @@ func (r *Repository) GetRuleByProductID(ctx context.Context, productID string) (
 		return nil, err
 	}
 	return &productRule, nil
+}
+
+func (r *Repository) GetLoanApplicationsWithUserID(ctx context.Context, userID string) (*LoanApplication, error) {
+	var loanApplication LoanApplication
+
+	if err := r.db.WithContext(ctx).Model(&LoanApplication{}).Where("mobile_user_id = ?", userID).First(&loanApplication).Error; err != nil {
+		return nil, err
+	}
+
+	return &loanApplication, nil
 }

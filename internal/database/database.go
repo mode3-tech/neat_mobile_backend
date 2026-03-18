@@ -88,6 +88,7 @@ func Migrate(db *gorm.DB) error {
 
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.BVNRecord{},
 		&models.AuthSession{},
 		&models.RefreshToken{},
 		&models.VerificationRecord{},

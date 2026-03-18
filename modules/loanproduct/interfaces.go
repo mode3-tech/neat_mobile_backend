@@ -9,4 +9,5 @@ type CoreCustomerFinder interface {
 type CoreLoanFinder interface {
 	GetCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error)
 	GetLoanDetail(ctx context.Context, loanID string) (*CoreLoanDetail, error)
+	GetLoanRepayments(ctx context.Context, loanID string) (*[]LoanRepayment, error)
 }

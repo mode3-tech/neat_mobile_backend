@@ -1,5 +1,7 @@
 package loanproduct
 
+import "time"
+
 type LoanFrequency string
 
 const (
@@ -107,4 +109,17 @@ type LoanSummary struct {
 	InterestAmount    float64
 	TotalRepayment    float64
 	PeriodicRepayment float64
+}
+
+type LoanRepayment struct {
+	RepaymentID          string     `json:"repayment_id"`
+	LoanID               string     `json:"loan_id"`
+	ExpectedDateToBePaid string     `json:"expected_date_to_be_paid"`
+	Amount               int64      `json:"amount"`
+	Principal            int64      `json:"principal"`
+	Profit               int64      `json:"profit"`
+	Paid                 *bool      `json:"paid"`
+	DatePaid             *time.Time `json:"date_paid"`
+	DefaultedDate        *time.Time `json:"defaulted_date"`
+	Status               string     `json:"status"`
 }

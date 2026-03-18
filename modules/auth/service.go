@@ -362,6 +362,10 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, err
 	}
 
+	if err := repo.LinkBVNRecordToUser(ctx, user.BVN, createdUser.ID); err != nil {
+		return nil, err
+	}
+
 	return createdUser, nil
 }
 
@@ -1182,7 +1186,7 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 	record := &models.VerificationRecord{
 		ID:            verificationID,
 		Type:          models.VerificationTypeBVN,
-		Provider:      string(ProviderPrembly),
+		Provider:      string(ProviderTendar),
 		Status:        models.VerificationStatusVerified,
 		SubjectHash:   subjectHash,
 		SubjectMasked: &maskedBVN,
@@ -1215,7 +1219,32 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 		return nil, errors.New("invalid bvn number")
 	}
 
-	if err := s.verification.AddVerification(ctx, record); err != nil {
+	bvnRecord := &models.BVNRecord{
+		ID:              uuid.NewString(),
+		UserID:          "",
+		FirstName:       strings.TrimSpace(caser.String(bvnDetails.Data.Details.FirstName)),
+		MiddleName:      strings.TrimSpace(caser.String(bvnDetails.Data.Details.MiddleName)),
+		LastName:        strings.TrimSpace(caser.String(bvnDetails.Data.Details.LastName)),
+		Gender:          strings.TrimSpace(bvnDetails.Data.Details.Gender),
+		Nationality:     strings.TrimSpace(bvnDetails.Data.Details.Nationality),
+		StateOfOrigin:   strings.TrimSpace(bvnDetails.Data.Details.StateOfOrigin),
+		DateOfBirth:     parseBVNRecordDOB(bvnDetails.Data.Details.DateOfBirth),
+		PlaceOfBirth:    "",
+		Occupation:      "",
+		MaritalStatus:   strings.TrimSpace(bvnDetails.Data.Details.MaritalStatus),
+		Education:       "",
+		Religion:        "",
+		EmailAddress:    firstNonEmptyString(bvnDetails.Data.Details.Email, bvnDetails.Data.Email),
+		PassportOnBVN:   strings.TrimSpace(bvnDetails.Data.Details.Image),
+		FullHomeAddress: strings.TrimSpace(bvnDetails.Data.Details.ResidentialAddress),
+		MobilePhone:     firstNonEmptyString(bvnDetails.Data.Details.PhoneNumber, bvnDetails.Data.PhoneNumber),
+		BankName:        strings.TrimSpace(bvnDetails.Data.Details.EnrollmentBank),
+		BVN:             strings.TrimSpace(bvn),
+	}
+	bvnRecord.AlternativeMobilePhone = trimmedStringPtr(bvnDetails.Data.Details.PhoneNumber2)
+	bvnRecord.City = trimmedStringPtr(bvnDetails.Data.Details.LGAOfResidence)
+
+	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		log.Printf("failed to add verification record err=%v", err)
 		return nil, err
 	}
@@ -1304,7 +1333,30 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 		return nil, errors.New("invalid bvn number")
 	}
 
-	if err := s.verification.AddVerification(ctx, record); err != nil {
+	bvnRecord := &models.BVNRecord{
+		ID:              uuid.NewString(),
+		UserID:          "",
+		FirstName:       firstName,
+		MiddleName:      middleName,
+		LastName:        lastName,
+		Gender:          strings.TrimSpace(bvnDetails.Data.Gender),
+		Nationality:     strings.TrimSpace(bvnDetails.Data.Nationality),
+		StateOfOrigin:   strings.TrimSpace(bvnDetails.Data.StateOfOrigin),
+		DateOfBirth:     parseBVNRecordDOB(bvnDetails.Data.DateOfBirth),
+		PlaceOfBirth:    "",
+		Occupation:      "",
+		MaritalStatus:   strings.TrimSpace(bvnDetails.Data.MaritalStatus),
+		Education:       "",
+		Religion:        "",
+		EmailAddress:    strings.TrimSpace(bvnDetails.Data.Email),
+		PassportOnBVN:   trimmedStringValue(bvnDetails.Data.Image),
+		FullHomeAddress: "",
+		MobilePhone:     strings.TrimSpace(bvnDetails.Data.PhoneNumber),
+		BankName:        strings.TrimSpace(bvnDetails.Data.EnrollmentBank),
+		BVN:             strings.TrimSpace(firstNonEmptyString(bvnDetails.Data.BVN, bvn)),
+	}
+
+	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		return nil, err
 	}
 
@@ -1316,6 +1368,88 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 		phone:          bvnDetails.Data.PhoneNumber,
 		verificationID: verificationID,
 	}, nil
+}
+
+func (s *AuthService) saveVerifiedBVN(ctx context.Context, verificationRecord *models.VerificationRecord, bvnRecord *models.BVNRecord) error {
+	if s.verification == nil {
+		return errors.New("verification repository not configured")
+	}
+	if s.repo == nil {
+		return errors.New("auth repository not configured")
+	}
+	if s.tx == nil {
+		if err := s.verification.AddVerification(ctx, verificationRecord); err != nil {
+			return err
+		}
+		return s.repo.CreateBVNRecord(ctx, bvnRecord)
+	}
+
+	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		authRepo := NewRespository(txDB)
+		verificationRepo := verification.NewVerification(txDB)
+
+		if err := verificationRepo.AddVerification(ctx, verificationRecord); err != nil {
+			return err
+		}
+
+		return authRepo.CreateBVNRecord(ctx, bvnRecord)
+	})
+}
+
+func parseBVNRecordDOB(value string) time.Time {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return time.Time{}
+	}
+
+	layouts := []string{
+		"02-01-2006",
+		"02/01/2006",
+		"2006-01-02",
+		"2006/01/02",
+		"2006-01",
+		"2006/01",
+	}
+
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, clean); err == nil {
+			return parsed
+		}
+	}
+
+	if parsed, err := timeutil.ParseDOB(clean); err == nil {
+		return parsed
+	}
+
+	return time.Time{}
+}
+
+func trimmedStringPtr(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func trimmedStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(*value)
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
 }
 
 func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) error {

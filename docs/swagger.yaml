@@ -14,6 +14,8 @@ tags:
     description: OTP request and verification endpoints
   - name: Loan
     description: Protected loan product discovery and application endpoints
+  - name: Internal
+    description: Internal CBA integration endpoints protected by HMAC headers
   - name: Dev Signer
     description: Development-only signer helper endpoints for Postman/device simulation
 paths:
@@ -745,6 +747,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /loan/repayment-schedule:
+    get:
+      tags:
+        - Loan
+      summary: Get repayment schedule
+      description: Returns the repayment schedule for a specific core-banking loan id.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: loan_id
+          required: true
+          schema:
+            type: string
+          description: Core-banking loan identifier.
+      responses:
+        "200":
+          description: Loan repayment schedule fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanRepaymentsResponse"
+        "400":
+          description: Missing or invalid loan id query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Core-banking integration is unavailable or repayment lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/loan-applications:
+    get:
+      tags:
+        - Internal
+      summary: List loan applications for CBA
+      description: |
+        Returns all loan applications with linked BVN records for internal CBA consumption.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      responses:
+        "200":
+          description: Loan applications fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalLoanApplicationsResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/loan-applications/{application_ref}/status:
+    patch:
+      tags:
+        - Internal
+      summary: Update loan application status from CBA
+      description: |
+        Callback endpoint used by CBA to update the local status of a loan application after review or booking.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: path
+          name: application_ref
+          required: true
+          schema:
+            type: string
+          description: Local loan application reference.
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLoanApplicationStatusRequest"
+      responses:
+        "200":
+          description: Loan application updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request body, missing path value, or invalid status payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Loan application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the callback failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -1275,6 +1433,225 @@ components:
           $ref: "#/components/schemas/LoanStatus"
         summary:
           $ref: "#/components/schemas/LoanSummaryResponse"
+    LoanRepayment:
+      type: object
+      properties:
+        repayment_id:
+          type: string
+          example: RP-001
+        loan_id:
+          type: string
+          example: LN-1001
+        expected_date_to_be_paid:
+          type: string
+          example: "2026-04-01"
+        amount:
+          type: integer
+          format: int64
+          example: 25000
+        principal:
+          type: integer
+          format: int64
+          example: 20000
+        profit:
+          type: integer
+          format: int64
+          example: 5000
+        paid:
+          type: boolean
+          nullable: true
+          example: false
+        date_paid:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-04-01T10:00:00Z"
+        defaulted_date:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-04-10T10:00:00Z"
+        status:
+          type: string
+          example: pending
+    LoanRepaymentsResponse:
+      type: object
+      required:
+        - message
+        - repayments
+      properties:
+        message:
+          type: string
+          example: loan repayments fetched
+        repayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanRepayment"
+    InternalLoanApplicationsResponse:
+      type: object
+      required:
+        - count
+        - applications
+      properties:
+        count:
+          type: integer
+          example: 2
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalLoanApplicationItem"
+    InternalLoanApplicationItem:
+      type: object
+      required:
+        - application_ref
+        - loan
+      properties:
+        application_ref:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+        loan:
+          $ref: "#/components/schemas/InternalLoanApplicationLoan"
+        bvn_record:
+          $ref: "#/components/schemas/InternalBVNRecord"
+    InternalLoanApplicationLoan:
+      type: object
+      required:
+        - application_ref
+        - mobile_user_id
+        - phone_number
+        - loan_product_type
+        - business_address
+        - business_value
+        - business_type
+        - requested_amount
+        - loan_status
+        - tenure
+        - tenure_value
+      properties:
+        application_ref:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+        mobile_user_id:
+          type: string
+          example: 8a732d01-63fb-4e68-bfc8-7d69c7c4157e
+        core_customer_id:
+          type: string
+          nullable: true
+          example: "2048"
+        phone_number:
+          type: string
+          example: "2348012345678"
+        loan_product_type:
+          $ref: "#/components/schemas/LoanProductCode"
+        business_address:
+          type: string
+          example: 12 Market Road, Lagos
+        business_value:
+          type: integer
+          format: int64
+          example: 5000000
+        business_type:
+          type: string
+          example: retail
+        requested_amount:
+          type: integer
+          format: int64
+          example: 250000
+        loan_status:
+          $ref: "#/components/schemas/LoanStatus"
+        tenure:
+          $ref: "#/components/schemas/LoanFrequency"
+        tenure_value:
+          type: integer
+          example: 24
+    InternalBVNRecord:
+      type: object
+      required:
+        - bvn
+        - first_name
+        - middle_name
+        - last_name
+        - gender
+        - nationality
+        - state_of_origin
+        - date_of_birth
+        - email_address
+        - mobile_phone
+        - bank_name
+        - full_home_address
+        - passport_on_bvn
+      properties:
+        bvn:
+          type: string
+          example: "12345678901"
+        first_name:
+          type: string
+          example: Jane
+        middle_name:
+          type: string
+          example: Ada
+        last_name:
+          type: string
+          example: Doe
+        gender:
+          type: string
+          example: female
+        nationality:
+          type: string
+          example: Nigerian
+        state_of_origin:
+          type: string
+          example: Lagos
+        date_of_birth:
+          type: string
+          example: "1994-01-02"
+        email_address:
+          type: string
+          example: jane@example.com
+        mobile_phone:
+          type: string
+          example: "2348012345678"
+        alternative_mobile_phone:
+          type: string
+          nullable: true
+          example: "2348099999999"
+        bank_name:
+          type: string
+          example: Example Bank
+        full_home_address:
+          type: string
+          example: 12 Market Road, Lagos
+        passport_on_bvn:
+          type: string
+          example: https://cdn.example.com/passport.jpg
+        city:
+          type: string
+          nullable: true
+          example: Ikeja
+        landmark:
+          type: string
+          nullable: true
+          example: Opposite central market
+    UpdateLoanApplicationStatusRequest:
+      type: object
+      required:
+        - event_id
+        - status
+      properties:
+        event_id:
+          type: string
+          example: evt-001
+        status:
+          type: string
+          enum:
+            - reviewed
+            - approved
+            - rejected
+            - converted_to_loan
+          example: approved
+        core_loan_id:
+          type: string
+          example: LN-1001
     NINValidationResponse:
       type: object
       properties:

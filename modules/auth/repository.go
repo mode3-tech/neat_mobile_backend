@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"neat_mobile_app_backend/models"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -142,6 +143,92 @@ func (r *Repository) GetValidationRow(ctx context.Context, id string) (*models.V
 		return nil, err
 	}
 	return &record, nil
+}
+
+func (r *Repository) CreateBVNRecord(ctx context.Context, record *models.BVNRecord) error {
+	if record == nil {
+		return errors.New("bvn record is required")
+	}
+
+	return r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "bvn"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"first_name",
+				"middle_name",
+				"last_name",
+				"gender",
+				"nationality",
+				"state_of_origin",
+				"date_of_birth",
+				"place_of_birth",
+				"occupation",
+				"marital_status",
+				"education",
+				"religion",
+				"email_address",
+				"passport_on_bvn",
+				"passport",
+				"full_home_address",
+				"type_of_house",
+				"city",
+				"landmark",
+				"living_since",
+				"mobile_phone",
+				"alternative_mobile_phone",
+				"id_type",
+				"id_number",
+				"bank_name",
+				"account_number",
+				"next_of_kin_first_name",
+				"next_of_kin_middle_name",
+				"next_of_kin_last_name",
+				"next_of_kin_landmark",
+				"next_of_kin_phone_number",
+				"next_of_kin_address",
+				"next_of_kin_relationship",
+				"next_of_kin_passport",
+				"contact_person",
+				"contact_person_phone_number",
+				"customer_signature",
+			}),
+		}).
+		Create(record).Error
+}
+
+func (r *Repository) LinkBVNRecordToUser(ctx context.Context, bvn, userID string) error {
+	bvn = strings.TrimSpace(bvn)
+	userID = strings.TrimSpace(userID)
+	if bvn == "" || userID == "" {
+		return nil
+	}
+
+	var row struct {
+		ID     string `gorm:"column:id"`
+		UserID string `gorm:"column:user_id"`
+	}
+
+	err := r.db.WithContext(ctx).
+		Table("wallet_bvn_records").
+		Select("id, user_id").
+		Where("bvn = ?", bvn).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	existingUserID := strings.TrimSpace(row.UserID)
+	if existingUserID != "" && existingUserID != userID {
+		return errors.New("bvn already linked to another user")
+	}
+
+	return r.db.WithContext(ctx).
+		Table("wallet_bvn_records").
+		Where("id = ?", row.ID).
+		Update("user_id", userID).Error
 }
 
 func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {

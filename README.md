@@ -5,6 +5,7 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 ## Base URLs
 
 - API: `http://localhost:<PORT>/api/v1`
+- Internal CBA: `http://localhost:<PORT>/internal/v1`
 - Swagger UI: `http://localhost:<PORT>/swagger/index.html`
 - OpenAPI JSON: `http://localhost:<PORT>/openapi/doc.json`
 - OpenAPI YAML: `http://localhost:<PORT>/openapi/doc.yaml`
@@ -30,6 +31,12 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 
 - `GET /loan/`
 - `POST /loan/apply`
+- `GET /loan/repayment-schedule?loan_id=<loan_id>`
+
+### Internal CBA
+
+- `GET /internal/v1/cba/loan-applications`
+- `PATCH /internal/v1/cba/loan-applications/:application_ref/status`
 
 ## Auth Flow
 
@@ -58,14 +65,27 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 - Loan endpoints require `Authorization: Bearer <access_token>`.
 - `GET /loan/` returns the current loan products from `wallet_loan_products`.
 - `POST /loan/apply` validates the authenticated user, the selected product, business input, and core-banking loan checks before creating a pending application.
+- `GET /loan/repayment-schedule?loan_id=<loan_id>` returns the repayment schedule for a specific core-banking loan id.
 - Supported product codes in the current service are `BUSINESS-WK`, `SPECIAL-WK`, `SME-WK`, `SALARY-MTH`, `INDIVIDUAL-WK`, and `GROUP-WK`.
 - `business_start_date` must be in `YYYY-MM` format.
-- Listing products works without core-banking connectivity, but `/loan/apply` depends on `CBA_INTERNAL_URL` and `CBA_INTERNAL_KEY`. If those are not configured, applications fail with service-unavailable errors.
+- Listing products works without core-banking connectivity, but `/loan/apply` and `/loan/repayment-schedule` depend on `CBA_INTERNAL_URL` and `CBA_INTERNAL_KEY`. If those are not configured, requests fail with service-unavailable errors.
+
+## Internal CBA Flow
+
+- Internal CBA endpoints are mounted under `/internal/v1/cba`.
+- `GET /internal/v1/cba/loan-applications` returns all loan applications plus linked BVN records for CBA consumption.
+- `PATCH /internal/v1/cba/loan-applications/:application_ref/status` is the callback endpoint CBA uses to update application status after review.
+- Internal requests must include `X-Timestamp` and `X-Signature`.
+- `X-Timestamp` must be a fresh RFC3339 timestamp within five minutes of server time.
+- `X-Signature` must be a lowercase hex HMAC-SHA256 of:
+  `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY`
+- The HMAC key is `CBA_WEBHOOK_SECRET`.
+- For `GET` requests, the request body is empty, so the body hash is the SHA-256 of empty bytes.
 
 ## Runtime Notes
 
 - Startup loads configuration, connects to Postgres with retry, runs migrations, and mounts the API plus Swagger assets.
-- Auto-migrations cover users, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, and loan applications.
+- Auto-migrations cover users, BVN records, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, and loan applications.
 - Login is rate-limited with the `LOGIN_RATE_LIMIT_*` configuration.
 - OTP flows use resend throttling and attempt limits.
 - Auth error responses include `request_id` values from the request middleware.
@@ -94,6 +114,7 @@ Identity and core adapters:
 - `PREMBLY_APIKEY`
 - `CBA_INTERNAL_URL`
 - `CBA_INTERNAL_KEY`
+- `CBA_WEBHOOK_SECRET`
 
 Login rate limiter:
 

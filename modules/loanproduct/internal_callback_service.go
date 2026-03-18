@@ -25,6 +25,68 @@ var (
 	ErrApplicationNotFound = errors.New("loan application not found")
 )
 
+func (s *InternalService) GetLoanApplicationsForCBA(ctx context.Context) (*GetLoanApplicationsForCBAResponse, error) {
+	rows, err := s.repo.ListLoanApplicationsForCBA(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &GetLoanApplicationsForCBAResponse{
+		Count:        len(rows),
+		Applications: make([]CBAListLoanApplicationItem, 0, len(rows)),
+	}
+
+	for _, row := range rows {
+		coreCustomerID := row.ApplicationCoreCustomerID
+		if coreCustomerID == nil {
+			coreCustomerID = row.UserCoreCustomerID
+		}
+
+		item := CBAListLoanApplicationItem{
+			ApplicationRef: row.ApplicationRef,
+			Loan: CBALoanApplicationReadDTO{
+				ApplicationRef:  row.ApplicationRef,
+				MobileUserID:    row.MobileUserID,
+				CoreCustomerID:  coreCustomerID,
+				PhoneNumber:     row.PhoneNumber,
+				LoanProductType: row.LoanProductType,
+				BusinessAddress: row.BusinessAddress,
+				BusinessValue:   row.BusinessValue,
+				BusinessType:    row.BusinessType,
+				RequestedAmount: row.RequestedAmount,
+				LoanStatus:      row.LoanStatus,
+				Tenure:          row.Tenure,
+				TenureValue:     row.TenureValue,
+			},
+		}
+
+		if row.BVNRecordID != nil {
+			item.BVNRecord = &CBABVNRecordReadDTO{
+				BVN:                    valueOrEmpty(row.BVN),
+				FirstName:              valueOrEmpty(row.FirstName),
+				MiddleName:             valueOrEmpty(row.MiddleName),
+				LastName:               valueOrEmpty(row.LastName),
+				Gender:                 valueOrEmpty(row.Gender),
+				Nationality:            valueOrEmpty(row.Nationality),
+				StateOfOrigin:          valueOrEmpty(row.StateOfOrigin),
+				DateOfBirth:            formatDatePtr(row.DateOfBirth),
+				EmailAddress:           valueOrEmpty(row.EmailAddress),
+				MobilePhone:            valueOrEmpty(row.MobilePhone),
+				AlternativeMobilePhone: row.AlternativeMobilePhone,
+				BankName:               valueOrEmpty(row.BankName),
+				FullHomeAddress:        valueOrEmpty(row.FullHomeAddress),
+				PassportOnBVN:          valueOrEmpty(row.PassportOnBVN),
+				City:                   row.City,
+				Landmark:               row.Landmark,
+			}
+		}
+
+		resp.Applications = append(resp.Applications, item)
+	}
+
+	return resp, nil
+}
+
 func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationRef string, req UpdateLoanApplicationStatusRequest, rawPayload []byte) error {
 	applicationRef = strings.TrimSpace(applicationRef)
 	if applicationRef == "" || strings.TrimSpace(req.EventID) == "" {
@@ -117,4 +179,18 @@ func sameStringPtr(a, b *string) bool {
 		return false
 	}
 	return strings.TrimSpace(*a) == strings.TrimSpace(*b)
+}
+
+func valueOrEmpty(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
+func formatDatePtr(v *time.Time) string {
+	if v == nil || v.IsZero() {
+		return ""
+	}
+	return v.Format("2006-01-02")
 }

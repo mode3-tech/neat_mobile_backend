@@ -249,3 +249,131 @@ func isServiceUnavailableApplyForLoanError(err error) bool {
 
 	return false
 }
+
+func (h *Handler) GetAllLoans(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "user id missing"})
+		return
+	}
+
+	loans, err := h.service.GetAllLoans(c.Request.Context(), userID)
+
+	if err != nil {
+		if isBadRequestGetAllLoansError(err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+			return
+		}
+
+		if isNotFoundGetAllLoansError(err) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "user or user's loan not found"})
+			return
+		}
+
+		if isServiceUnavailableGetAllLoansError(err) {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "all loans fetched successfully", "loans": loans})
+}
+
+func isBadRequestGetAllLoansError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "invalid user id":
+		return true
+	default:
+		return false
+	}
+}
+
+func isServiceUnavailableGetAllLoansError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "core customer loans finder not configured":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNotFoundGetAllLoansError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "no user found":
+		return true
+	case "user has not existing loan":
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Handler) GetLoanWithID(c *gin.Context) {
+	loanID := strings.TrimSpace(c.Query("loan_id"))
+
+	if loanID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query parameter"})
+		return
+	}
+}
+
+func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
+
+	loanID := strings.TrimSpace(c.Query("loan_id"))
+
+	if loanID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "loan id is missing in the query"})
+		return
+	}
+
+	repayments, err := h.service.GetLoanRepayments(c.Request.Context(), loanID)
+
+	if err != nil {
+		if isBadRequestGetRepaymentScheduleError(err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if isServiceUnavailableErrorLoanRepaymentError(err) {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured"})
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "loan repayments fetched", "repayments": repayments})
+
+}
+
+func isBadRequestGetRepaymentScheduleError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "invalid loan id":
+		return true
+	default:
+		return false
+	}
+}
+
+func isServiceUnavailableErrorLoanRepaymentError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+
+	switch msg {
+	case "core loan finder is  not configured":
+		return true
+	default:
+		return false
+	}
+}

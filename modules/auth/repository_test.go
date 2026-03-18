@@ -41,6 +41,14 @@ func getUserByEmailQueryPattern() string {
 	return regexp.QuoteMeta(`SELECT id,email,password,created_at FROM "wallet_users" WHERE email = $1 ORDER BY "wallet_users"."id" LIMIT $2`)
 }
 
+func getBVNRecordByBVNQueryPattern() string {
+	return regexp.QuoteMeta(`SELECT id, user_id FROM "wallet_bvn_records" WHERE bvn = $1 LIMIT $2`)
+}
+
+func updateBVNRecordUserIDQueryPattern() string {
+	return regexp.QuoteMeta(`UPDATE "wallet_bvn_records" SET "user_id"=$1 WHERE id = $2`)
+}
+
 func TestRepository_GetUserByEmail_Success(t *testing.T) {
 	repo, mock, cleanup := newMockRepository(t)
 	defer cleanup()
@@ -93,6 +101,70 @@ func TestRepository_GetUserByEmail_NotFound(t *testing.T) {
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestRepository_LinkBVNRecordToUser_Success(t *testing.T) {
+	repo, mock, cleanup := newMockRepository(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"id", "user_id"}).AddRow("bvn-row-1", "")
+
+	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
+		WithArgs("12345678901", 1).
+		WillReturnRows(rows)
+	mock.ExpectBegin()
+	mock.ExpectExec(updateBVNRecordUserIDQueryPattern()).
+		WithArgs("user-1", "bvn-row-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.LinkBVNRecordToUser(context.Background(), "12345678901", "user-1"); err != nil {
+		t.Fatalf("LinkBVNRecordToUser returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestRepository_LinkBVNRecordToUser_MissingRecordIsIgnored(t *testing.T) {
+	repo, mock, cleanup := newMockRepository(t)
+	defer cleanup()
+
+	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
+		WithArgs("12345678901", 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	if err := repo.LinkBVNRecordToUser(context.Background(), "12345678901", "user-1"); err != nil {
+		t.Fatalf("LinkBVNRecordToUser returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestRepository_LinkBVNRecordToUser_RejectsDifferentUser(t *testing.T) {
+	repo, mock, cleanup := newMockRepository(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"id", "user_id"}).AddRow("bvn-row-1", "other-user")
+
+	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
+		WithArgs("12345678901", 1).
+		WillReturnRows(rows)
+
+	err := repo.LinkBVNRecordToUser(context.Background(), "12345678901", "user-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err.Error() != "bvn already linked to another user" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
