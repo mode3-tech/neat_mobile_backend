@@ -99,7 +99,7 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 	}
 
 	coreLoanID := trimmedPtr(req.CoreLoanID)
-	if status == LoanConvertedToLoan && coreLoanID == nil {
+	if status == LoanStatusActive && coreLoanID == nil {
 		return errors.New("core_loan_id is required when status is converted_to_loan")
 	}
 
@@ -141,7 +141,7 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 
 func isAllowedCallbackStatus(s LoanStatus) bool {
 	switch s {
-	case LoanStatusReviewed, LoanStatusApproved, LoanStatusRejected, LoanConvertedToLoan:
+	case LoanStatusApproved, LoanStatusDeclined, LoanStatusActive:
 		return true
 	default:
 		return false
@@ -151,12 +151,10 @@ func isAllowedCallbackStatus(s LoanStatus) bool {
 func canTransition(from, to LoanStatus) bool {
 	switch from {
 	case LoanStatusPending:
-		return to == LoanStatusReviewed || to == LoanStatusApproved || to == LoanStatusRejected
-	case LoanStatusReviewed:
-		return to == LoanStatusApproved || to == LoanStatusRejected
+		return to == LoanStatusApproved || to == LoanStatusDeclined
 	case LoanStatusApproved:
-		return to == LoanConvertedToLoan
-	case LoanStatusRejected, LoanConvertedToLoan:
+		return to == LoanStatusActive
+	case LoanStatusDeclined, LoanStatusActive:
 		return false
 	default:
 		return false

@@ -6,7 +6,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	loanProduct := rg.Group("/loan")
 
 	{
-		loanProduct.GET("/", authGuard, handler.GetLoanProducts)
+		loanProduct.GET("", handler.GetLoanProducts)
 		loanProduct.POST("/apply", authGuard, handler.ApplyForLoan)
 		loanProduct.GET("/loans", authGuard, handler.GetAllLoans)
 		loanProduct.GET("/repayment-schedule", authGuard, handler.GetRepaymentSchedule)

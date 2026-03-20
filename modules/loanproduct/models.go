@@ -76,7 +76,7 @@ type LoanApplication struct {
 	BusinessValue   int64         `gorm:"column:business_value;not null;default:0"`
 	BusinessType    string        `gorm:"column:business_type;not null"`
 	RequestedAmount int64         `gorm:"column:requested_amount;not null;default:0"`
-	LoanStatus      LoanStatus    `gorm:"column:loan_status;not null;default:pending"`
+	LoanStatus      LoanStatus    `gorm:"column:loan_status;not null;default:embryo"`
 	Tenure          LoanFrequency `gorm:"column:tenure;not null"`
 	TenureValue     int           `gorm:"column:tenure_value"`
 	CreatedAt       time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
