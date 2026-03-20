@@ -1,6 +1,7 @@
 package loanproduct
 
 import (
+	"errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"net/http"
 	"strings"
@@ -77,6 +78,11 @@ func abortApplyForLoanError(c *gin.Context, err error) {
 
 	if isNotFoundApplyForLoanError(err) {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isTooManyRequestsApplyForLoanError(err) {
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -198,6 +204,10 @@ func isNotFoundApplyForLoanError(err error) bool {
 }
 
 func isUnauthorizedApplyForLoanError(err error) bool {
+	if errors.Is(err, ErrIncorrectTransactionPin) {
+		return true
+	}
+
 	msg := strings.TrimSpace(err.Error())
 
 	switch msg {
@@ -206,6 +216,10 @@ func isUnauthorizedApplyForLoanError(err error) bool {
 	}
 
 	return false
+}
+
+func isTooManyRequestsApplyForLoanError(err error) bool {
+	return errors.Is(err, ErrTooManyTransactionPinAttempts) || errors.Is(err, ErrTransactionPinTemporarilyLocked)
 }
 
 func isBadGatewayApplyForLoanError(err error) bool {

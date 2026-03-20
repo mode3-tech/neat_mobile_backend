@@ -9,6 +9,7 @@ type LoanRequest struct {
 	BusinessValue     string   `json:"business_value" binding:"required"`
 	BusinessType      string   `json:"business_type" binding:"required"`
 	LoanAmount        string   `json:"loan_amount" binding:"required"`
+	TransactionPin    string   `json:"transaction_pin" binding:"required"`
 }
 
 type LoanSummaryResponse struct {

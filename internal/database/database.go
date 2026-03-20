@@ -86,6 +86,24 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+			) THEN
+				ALTER TABLE wallet_users
+				ADD COLUMN IF NOT EXISTS failed_transaction_pin_attempts integer NOT NULL DEFAULT 0,
+				ADD COLUMN IF NOT EXISTS transaction_pin_locked_until timestamptz;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},

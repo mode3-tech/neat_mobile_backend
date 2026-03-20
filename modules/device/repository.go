@@ -57,7 +57,7 @@ func (r *DeviceRepository) CreateChallenge(ctx context.Context, ch *DeviceChalle
 
 func (r *DeviceRepository) GetChallengeByHash(ctx context.Context, challengeHash string) (*DeviceChallenge, error) {
 	var challenge DeviceChallenge
-	if err := r.db.WithContext(ctx).Table("device_challenges").Select("*").Where("challenge_hash = ?", challengeHash).First(&challenge).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&UserDevice{}).Select("*").Where("challenge_hash = ?", challengeHash).First(&challenge).Error; err != nil {
 		return nil, err
 	}
 

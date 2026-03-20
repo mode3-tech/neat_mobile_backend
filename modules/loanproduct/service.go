@@ -21,6 +21,17 @@ type Service struct {
 	coreLoanFinder     CoreLoanFinder
 }
 
+const (
+	maxTransactionPinAttempts  = 5
+	transactionPinLockDuration = 15 * time.Minute
+)
+
+var (
+	ErrIncorrectTransactionPin         = errors.New("incorrect transaction pin")
+	ErrTooManyTransactionPinAttempts   = errors.New("too many incorrect transaction pin attempts")
+	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
+)
+
 func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder) *Service {
 	return &Service{
 		repo:               repo,
@@ -38,12 +49,59 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 	var coreCustomerID *string
 
 	user, err := s.repo.GetUser(ctx, userID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("current user does not exist")
 		}
 		return nil, err
+	}
+
+	if user.TransactionPinLockedUntil != nil {
+		if user.TransactionPinLockedUntil.After(now) {
+			return nil, newTransactionPinLockedError(now, *user.TransactionPinLockedUntil)
+		}
+
+		if user.FailedTransactionAttempts > 0 {
+			if err := s.repo.ResetTransactionPinAttempts(ctx, userID); err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, errors.New("current user does not exist")
+				}
+				return nil, err
+			}
+			user.FailedTransactionAttempts = 0
+			user.TransactionPinLockedUntil = nil
+		}
+	}
+
+	if !CheckPassword(user.PinHash, req.TransactionPin) {
+		failedAttempts := user.FailedTransactionAttempts + 1
+		var lockedUntil *time.Time
+		if failedAttempts >= maxTransactionPinAttempts {
+			until := now.Add(transactionPinLockDuration)
+			lockedUntil = &until
+		}
+
+		if err := s.repo.UpdateTransactionPinAttempts(ctx, userID, failedAttempts, lockedUntil); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errors.New("current user does not exist")
+			}
+			return nil, err
+		}
+
+		if lockedUntil != nil {
+			return nil, newTooManyTransactionPinAttemptsError(*lockedUntil, now)
+		}
+
+		return nil, ErrIncorrectTransactionPin
+	}
+
+	if user.FailedTransactionAttempts > 0 || user.TransactionPinLockedUntil != nil {
+		if err := s.repo.ResetTransactionPinAttempts(ctx, userID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errors.New("current user does not exist")
+			}
+			return nil, err
+		}
 	}
 
 	if user.DOB == nil {
@@ -338,4 +396,26 @@ func (s *Service) GetCoreLoanDetail(ctx context.Context, loanID string) (*CoreLo
 	}
 
 	return s.coreLoanFinder.GetLoanDetail(ctx, loanID)
+}
+
+func newTooManyTransactionPinAttemptsError(lockedUntil, now time.Time) error {
+	return fmt.Errorf("%w, try again in %s", ErrTooManyTransactionPinAttempts, remainingLockDuration(now, lockedUntil))
+}
+
+func newTransactionPinLockedError(now, lockedUntil time.Time) error {
+	return fmt.Errorf("%w, try again in %s", ErrTransactionPinTemporarilyLocked, remainingLockDuration(now, lockedUntil))
+}
+
+func remainingLockDuration(now, lockedUntil time.Time) string {
+	remaining := lockedUntil.Sub(now)
+	if remaining <= 0 {
+		return "1 minute"
+	}
+
+	minutes := int(math.Ceil(remaining.Minutes()))
+	if minutes <= 1 {
+		return "1 minute"
+	}
+
+	return fmt.Sprintf("%d minutes", minutes)
 }

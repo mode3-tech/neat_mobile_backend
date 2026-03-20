@@ -34,20 +34,27 @@ func (r *Repository) GetLoanProductWithCode(ctx context.Context, code LoanType) 
 }
 
 type row struct {
-	CoreCustomerID  *string    `gorm:"column:core_customer_id"`
-	Phone           string     `gorm:"column:phone"`
-	DOB             *time.Time `gorm:"column:dob"`
-	BVN             string     `gorm:"column:bvn"`
-	NIN             string     `gorm:"column:nin"`
-	IsPhoneVerified bool       `gorm:"column:is_phone_verified"`
-	IsBVNVerified   bool       `gorm:"column:is_bvn_verified"`
-	IsNINVerified   bool       `gorm:"column:is_nin_verified"`
+	CoreCustomerID            *string    `gorm:"column:core_customer_id"`
+	Phone                     string     `gorm:"column:phone"`
+	DOB                       *time.Time `gorm:"column:dob"`
+	BVN                       string     `gorm:"column:bvn"`
+	NIN                       string     `gorm:"column:nin"`
+	IsPhoneVerified           bool       `gorm:"column:is_phone_verified"`
+	IsBVNVerified             bool       `gorm:"column:is_bvn_verified"`
+	IsNINVerified             bool       `gorm:"column:is_nin_verified"`
+	PinHash                   string     `gorm:"column:pin_hash"`
+	FailedTransactionAttempts int        `gorm:"column:failed_transaction_pin_attempts"`
+	TransactionPinLockedUntil *time.Time `gorm:"column:transaction_pin_locked_until"`
 }
 
 func (r *Repository) GetUser(ctx context.Context, userID string) (*row, error) {
 	var row row
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("core_customer_id, phone, dob, bvn, nin, is_phone_verified, is_bvn_verified, is_nin_verified").Where("id = ? ", userID).Take(&row).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Table("wallet_users").
+		Select("core_customer_id, phone, dob, bvn, nin, is_phone_verified, is_bvn_verified, is_nin_verified, pin_hash, failed_transaction_pin_attempts, transaction_pin_locked_until").
+		Where("id = ? ", userID).
+		Take(&row).Error; err != nil {
 		return nil, err
 	}
 
@@ -67,6 +74,34 @@ func (r *Repository) UpdateUserCoreCustomerID(ctx context.Context, userID, coreC
 	}
 
 	return nil
+}
+
+type transactionPinStateUpdate struct {
+	FailedTransactionPinAttempts int        `gorm:"column:failed_transaction_pin_attempts"`
+	TransactionPinLockedUntil    *time.Time `gorm:"column:transaction_pin_locked_until"`
+}
+
+func (r *Repository) UpdateTransactionPinAttempts(ctx context.Context, userID string, attempts int, lockedUntil *time.Time) error {
+	tx := r.db.WithContext(ctx).
+		Table("wallet_users").
+		Where("id = ?", userID).
+		Select("failed_transaction_pin_attempts", "transaction_pin_locked_until").
+		Updates(transactionPinStateUpdate{
+			FailedTransactionPinAttempts: attempts,
+			TransactionPinLockedUntil:    lockedUntil,
+		})
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (r *Repository) ResetTransactionPinAttempts(ctx context.Context, userID string) error {
+	return r.UpdateTransactionPinAttempts(ctx, userID, 0, nil)
 }
 
 func (r *Repository) CreateEOI(ctx context.Context, eoi *LoanApplication) error {
