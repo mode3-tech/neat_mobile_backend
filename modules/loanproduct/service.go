@@ -240,7 +240,6 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		LoanStatus:      LoanStatusPending,
 		BusinessAddress: req.BusinessAddress,
 		BusinessValue:   parsedBV,
-		BusinessType:    req.BusinessType,
 		RequestedAmount: parsedAmount,
 		Tenure:          loanProduct.RepaymentFrequency,
 		TenureValue:     loanProduct.LoanTermValue,

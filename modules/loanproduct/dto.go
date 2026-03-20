@@ -7,7 +7,6 @@ type LoanRequest struct {
 	BusinessAddress   string   `json:"business_address" binding:"required"`
 	BusinessStartDate string   `json:"business_start_date" binding:"required,datetime=2006-01"`
 	BusinessValue     string   `json:"business_value" binding:"required"`
-	BusinessType      string   `json:"business_type" binding:"required"`
 	LoanAmount        string   `json:"loan_amount" binding:"required"`
 	TransactionPin    string   `json:"transaction_pin" binding:"required"`
 }
