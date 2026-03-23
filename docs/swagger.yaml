@@ -14,6 +14,8 @@ tags:
     description: OTP request and verification endpoints
   - name: Loan
     description: Protected loan product discovery and application endpoints
+  - name: Notification
+    description: Push-token registration and in-app notification history endpoints
   - name: Internal
     description: Internal CBA integration endpoints protected by HMAC headers
   - name: Dev Signer
@@ -783,6 +785,285 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Core-banking integration is unavailable or repayment lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications:
+    get:
+      tags:
+        - Notification
+      summary: List notifications
+      description: Returns the authenticated user's in-app notification history in newest-first order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for paginated history retrieval.
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of notifications to return per page.
+      responses:
+        "200":
+          description: Notification history fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsListResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or retrieval failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications/unread-count:
+    get:
+      tags:
+        - Notification
+      summary: Get unread notification count
+      description: Returns the current unread notification count for the authenticated user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread count fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCountResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or retrieval failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications/read-all:
+    patch:
+      tags:
+        - Notification
+      summary: Mark all notifications as read
+      description: Marks all unread notifications for the authenticated user as read.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notifications updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsReadAllResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications/{id}/read:
+    patch:
+      tags:
+        - Notification
+      summary: Mark one notification as read
+      description: Marks a single notification owned by the authenticated user as read.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Notification identifier.
+      responses:
+        "200":
+          description: Notification updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadResponse"
+        "400":
+          description: Missing notification id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications/token:
+    post:
+      tags:
+        - Notification
+      summary: Register push token
+      description: Upserts the Expo push token for the authenticated user and device.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenRequest"
+      responses:
+        "200":
+          description: Push token registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request body, platform, or Expo push token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or token registration failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Notification
+      summary: Delete push token
+      description: Deletes the push token associated with the authenticated user and the supplied `X-Device-ID`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Device identifier used during token registration.
+      responses:
+        "200":
+          description: Push token deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Missing device id header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Notification service is not configured or token deletion failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notifications/send:
+    post:
+      tags:
+        - Internal
+      summary: Send notification internally
+      description: |
+        Internal endpoint used by trusted backend callers to create notification history, send Expo push messages,
+        and persist accepted Expo ticket ids for later receipt polling. This endpoint is served under `/internal/v1`
+        and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `NOTIFICATION_INTERNAL_SECRET`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNotificationRequest"
+      responses:
+        "200":
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request body or missing required notification fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream push delivery call failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Push sender is not configured
           content:
             application/json:
               schema:
@@ -1728,6 +2009,170 @@ components:
         verification_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    NotificationType:
+      type: string
+      enum:
+        - loan
+        - transaction
+        - security
+        - promo
+      example: loan
+    RegisterPushTokenRequest:
+      type: object
+      required:
+        - expo_push_token
+        - device_id
+        - platform
+      properties:
+        expo_push_token:
+          type: string
+          example: ExpoPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+        device_id:
+          type: string
+          example: app-installation-id
+        platform:
+          type: string
+          enum:
+            - ios
+            - android
+          example: android
+    SendNotificationRequest:
+      type: object
+      required:
+        - user_id
+        - title
+        - body
+        - type
+      properties:
+        user_id:
+          type: string
+          example: 8a732d01-63fb-4e68-bfc8-7d69c7c4157e
+        title:
+          type: string
+          example: Loan Approved
+        body:
+          type: string
+          example: Your loan has been approved.
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        data:
+          type: object
+          additionalProperties: true
+          example:
+            screen: /(loan)/repayment-schedule
+            params:
+              loanId: LN-1001
+        sound:
+          type: string
+          example: default
+        channel_id:
+          type: string
+          description: Optional explicit Expo channel override. When omitted, the backend derives the channel from `type`.
+          example: transactions
+    NotificationHistoryItem:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - body
+        - type
+        - data
+        - is_read
+        - created_at
+      properties:
+        id:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+        user_id:
+          type: string
+          example: 8a732d01-63fb-4e68-bfc8-7d69c7c4157e
+        title:
+          type: string
+          example: Loan Approved
+        body:
+          type: string
+          example: Your loan has been approved.
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        data:
+          type: object
+          additionalProperties: true
+          example:
+            screen: /(loan)/repayment-schedule
+            params:
+              loanId: LN-1001
+        is_read:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-03-23T10:00:00Z"
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-03-23T10:05:00Z"
+    NotificationsListResponse:
+      type: object
+      required:
+        - notifications
+        - page
+        - page_size
+        - total
+        - has_next
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationHistoryItem"
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 37
+        has_next:
+          type: boolean
+          example: true
+    UnreadCountResponse:
+      type: object
+      required:
+        - count
+      properties:
+        count:
+          type: integer
+          example: 5
+    NotificationReadResponse:
+      type: object
+      required:
+        - message
+        - updated
+      properties:
+        message:
+          type: string
+          example: notification updated
+        updated:
+          type: boolean
+          example: true
+    NotificationsReadAllResponse:
+      type: object
+      required:
+        - message
+        - updated
+      properties:
+        message:
+          type: string
+          example: notifications updated
+        updated:
+          type: integer
+          format: int64
+          example: 12
     MessageResponse:
       type: object
       properties:

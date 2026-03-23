@@ -186,8 +186,10 @@ func (s *AuthService) ValidateNIN(ctx context.Context, ninVerificationID, nin st
 		return nil, err
 	}
 
-	if !compareBVNAndNinDetails(*row.VerifiedName, *row.VerifiedDOB, fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate))) {
-		return nil, errors.New("bvn and nin do not match")
+	_, err = compareBVNAndNinDetails(*row.VerifiedName, *row.VerifiedDOB, fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
+
+	if err != nil {
+		return nil, errors.New(err.Error())
 	}
 
 	verificationID := uuid.NewString()

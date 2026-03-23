@@ -450,7 +450,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 		}
 
 		if isBVNAndNINNotAMatch(err) {
-			h.respondError(c, http.StatusBadRequest, "bvn and nin do not match", err)
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
 
@@ -478,7 +478,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 func isBVNAndNINNotAMatch(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "bvn and nin do not match":
+	case "bvn name does not match nin name", "bvn dob does not match nin dob":
 		return true
 	default:
 		return false

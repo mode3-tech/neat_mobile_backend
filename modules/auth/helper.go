@@ -80,8 +80,14 @@ func NormalizeNigerianNumber(input string) (string, error) {
 
 }
 
-func compareBVNAndNinDetails(bvnName, bvnDOB, ninName, ninDOB string) bool {
-	return bvnName == ninName && SerializeDOB(bvnDOB) == SerializeDOB(ninDOB)
+func compareBVNAndNinDetails(bvnName, bvnDOB, ninName, ninDOB string) (bool, error) {
+	if bvnName != ninName {
+		return false, errors.New("bvn name does not match nin name")
+	}
+	if bvnDOB != ninDOB {
+		return false, errors.New("bvn dob does not match nin dob")
+	}
+	return true, nil
 }
 
 func Generate6DigitOTP() (string, error) {

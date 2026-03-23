@@ -107,6 +107,9 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},
+		&models.PushToken{},
+		&models.Notification{},
+		&models.NotificationTicket{},
 		&models.AuthSession{},
 		&models.RefreshToken{},
 		&models.VerificationRecord{},
@@ -119,6 +122,95 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.LoanApplication{},
 		&loanproduct.LoanApplicationStatusEvent{},
 	); err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_push_tokens'
+			) AND NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'fk_wallet_push_tokens_user'
+			) THEN
+				ALTER TABLE wallet_push_tokens
+				ADD CONSTRAINT fk_wallet_push_tokens_user
+				FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_notifications'
+			) AND NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'fk_wallet_notifications_user'
+			) THEN
+				ALTER TABLE wallet_notifications
+				ADD CONSTRAINT fk_wallet_notifications_user
+				FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_notifications_user_unread
+		ON wallet_notifications (user_id, is_read)
+		WHERE is_read = FALSE
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_notifications_user_created_at_desc
+		ON wallet_notifications (user_id, created_at DESC)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_notification_tickets'
+			) AND NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'fk_wallet_notification_tickets_notification'
+			) THEN
+				ALTER TABLE wallet_notification_tickets
+				ADD CONSTRAINT fk_wallet_notification_tickets_notification
+				FOREIGN KEY (notification_id) REFERENCES wallet_notifications(id) ON DELETE CASCADE;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_notification_tickets_pending
+		ON wallet_notification_tickets (created_at, expo_ticket_id)
+		WHERE receipt_checked_at IS NULL
+	`).Error; err != nil {
 		return err
 	}
 

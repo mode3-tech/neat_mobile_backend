@@ -6,21 +6,26 @@ import (
 )
 
 type Config struct {
-	Port             string
-	DBUrl            string
-	JWTSecret        string
-	Pepper           string
-	TermiiApiKey     string
-	TermiiSenderID   string
-	SMTPHost         string
-	SMTPPort         string
-	SMTPUser         string
-	SMTPPass         string
-	TendarAPIKey     string
-	PremblyAPIKey    string
-	CBAInternalURL   string
-	CBAInternalKey   string
-	CBAWebhookSecret string
+	Port                       string
+	NotificationPort           string
+	DBUrl                      string
+	JWTSecret                  string
+	Pepper                     string
+	TermiiApiKey               string
+	TermiiSenderID             string
+	SMTPHost                   string
+	SMTPPort                   string
+	SMTPUser                   string
+	SMTPPass                   string
+	TendarAPIKey               string
+	PremblyAPIKey              string
+	CBAInternalURL             string
+	CBAInternalKey             string
+	CBAWebhookSecret           string
+	ExpoPushBaseURL            string
+	ExpoAccessToken            string
+	ExpoPushChannelID          string
+	NotificationInternalSecret string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -29,22 +34,29 @@ type Config struct {
 }
 
 func Load() Config {
+	notificationPort := getEnv("NOTIFICATION_PORT", "8081")
+
 	return Config{
-		Port:             getEnv("PORT", "8080"),
-		DBUrl:            getEnv("DB_URL", ""),
-		JWTSecret:        getEnv("JWT_SECRET", ""),
-		Pepper:           getEnv("PEPPER", ""),
-		TermiiApiKey:     getEnv("TERMII_APIKEY", ""),
-		TermiiSenderID:   getEnv("TERMII_SENDERID", ""),
-		SMTPHost:         getEnv("SMTP_HOST", ""),
-		SMTPPort:         getEnv("SMTP_PORT", ""),
-		SMTPUser:         getEnv("SMTP_USER", ""),
-		SMTPPass:         getEnv("SMTP_PASS", ""),
-		TendarAPIKey:     getEnv("TENDAR_APIKEY", ""),
-		PremblyAPIKey:    getEnv("PREMBLY_APIKEY", ""),
-		CBAInternalURL:   getEnv("CBA_INTERNAL_URL", ""),
-		CBAInternalKey:   getEnv("CBA_INTERNAL_KEY", ""),
-		CBAWebhookSecret: getEnv("CBA_WEBHOOK_SECRET", ""),
+		Port:                       getEnv("PORT", "8080"),
+		NotificationPort:           notificationPort,
+		DBUrl:                      getEnv("DB_URL", ""),
+		JWTSecret:                  getEnv("JWT_SECRET", ""),
+		Pepper:                     getEnv("PEPPER", ""),
+		TermiiApiKey:               getEnv("TERMII_APIKEY", ""),
+		TermiiSenderID:             getEnv("TERMII_SENDERID", ""),
+		SMTPHost:                   getEnv("SMTP_HOST", ""),
+		SMTPPort:                   getEnv("SMTP_PORT", ""),
+		SMTPUser:                   getEnv("SMTP_USER", ""),
+		SMTPPass:                   getEnv("SMTP_PASS", ""),
+		TendarAPIKey:               getEnv("TENDAR_APIKEY", ""),
+		PremblyAPIKey:              getEnv("PREMBLY_APIKEY", ""),
+		CBAInternalURL:             getEnv("CBA_INTERNAL_URL", ""),
+		CBAInternalKey:             getEnv("CBA_INTERNAL_KEY", ""),
+		CBAWebhookSecret:           getEnv("CBA_WEBHOOK_SECRET", ""),
+		ExpoPushBaseURL:            getEnv("EXPO_PUSH_BASE_URL", "https://exp.host"),
+		ExpoAccessToken:            getEnv("EXPO_ACCESS_TOKEN", ""),
+		ExpoPushChannelID:          getEnv("EXPO_PUSH_CHANNEL_ID", "default"),
+		NotificationInternalSecret: getEnv("NOTIFICATION_INTERNAL_SECRET", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

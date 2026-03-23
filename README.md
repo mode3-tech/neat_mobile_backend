@@ -6,6 +6,8 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 
 - API: `http://localhost:<PORT>/api/v1`
 - Internal CBA: `http://localhost:<PORT>/internal/v1`
+- Notification API: `http://localhost:<NOTIFICATION_PORT>/api/v1`
+- Notification Internal: `http://localhost:<NOTIFICATION_PORT>/internal/v1`
 - Swagger UI: `http://localhost:<PORT>/swagger/index.html`
 - OpenAPI JSON: `http://localhost:<PORT>/openapi/doc.json`
 - OpenAPI YAML: `http://localhost:<PORT>/openapi/doc.yaml`
@@ -32,6 +34,16 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 - `GET /loan/`
 - `POST /loan/apply`
 - `GET /loan/repayment-schedule?loan_id=<loan_id>`
+
+### Notification Service
+
+- `GET /api/v1/notifications?page=<page>&page_size=<page_size>`
+- `GET /api/v1/notifications/unread-count`
+- `PATCH /api/v1/notifications/:id/read`
+- `PATCH /api/v1/notifications/read-all`
+- `POST /api/v1/notifications/token`
+- `DELETE /api/v1/notifications/token`
+- `POST /internal/v1/notifications/send`
 
 ### Internal CBA
 
@@ -82,10 +94,29 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 - The HMAC key is `CBA_WEBHOOK_SECRET`.
 - For `GET` requests, the request body is empty, so the body hash is the SHA-256 of empty bytes.
 
+## Notification Service Flow
+
+- The standalone notification binary lives at `cmd/notification-api`.
+- Startup loads environment variables, connects to the same Postgres instance, runs the shared migrations, then mounts only notification routes.
+- `GET /api/v1/notifications` is JWT-protected and returns paginated in-app notification history ordered newest first.
+- `GET /api/v1/notifications/unread-count` is JWT-protected and returns the unread badge count for the authenticated user.
+- `PATCH /api/v1/notifications/:id/read` is JWT-protected and marks one notification as read for the authenticated user.
+- `PATCH /api/v1/notifications/read-all` is JWT-protected and marks all unread notifications as read for the authenticated user.
+- `POST /api/v1/notifications/token` is JWT-protected and upserts one `wallet_push_tokens` row per `user_id + device_id`.
+- `DELETE /api/v1/notifications/token` is JWT-protected and removes the token for the authenticated user and `X-Device-ID`.
+- `POST /internal/v1/notifications/send` is HMAC-protected and is intended for trusted internal callers, not mobile clients.
+- The send flow creates a `wallet_notifications` history row first, then loads all push tokens for the target user, builds Expo push messages, sends them in batches of up to 100, persists accepted Expo ticket ids in `wallet_notification_tickets`, and removes tokens when Expo reports `DeviceNotRegistered`.
+- The notification service uses `NOTIFICATION_INTERNAL_SECRET` for its internal HMAC route, separate from `CBA_WEBHOOK_SECRET`.
+- End-to-end flow details are documented in [docs/notification-service-flow.md](docs/notification-service-flow.md).
+
 ## Runtime Notes
 
-- Startup loads configuration, connects to Postgres with retry, runs migrations, and mounts the API plus Swagger assets.
-- Auto-migrations cover users, BVN records, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, and loan applications.
+- `cmd/api` starts the main auth and loan backend.
+- `cmd/notification-api` starts the standalone notification backend.
+- Both services load configuration, connect to Postgres with retry, and run the shared migrations before serving traffic.
+- Auto-migrations cover users, BVN records, push tokens, notifications, notification tickets, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, and loan applications.
+- `wallet_push_tokens.user_id` is constrained to `wallet_users(id)` with `ON DELETE CASCADE`.
+- `wallet_notifications.user_id` is constrained to `wallet_users(id)` with `ON DELETE CASCADE`.
 - Login is rate-limited with the `LOGIN_RATE_LIMIT_*` configuration.
 - OTP flows use resend throttling and attempt limits.
 - Auth error responses include `request_id` values from the request middleware.
@@ -95,6 +126,7 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 Core:
 
 - `PORT`
+- `NOTIFICATION_PORT`
 - `DB_URL`
 - `JWT_SECRET`
 
@@ -116,6 +148,13 @@ Identity and core adapters:
 - `CBA_INTERNAL_KEY`
 - `CBA_WEBHOOK_SECRET`
 
+Push notifications:
+
+- `EXPO_PUSH_BASE_URL`
+- `EXPO_ACCESS_TOKEN`
+- `EXPO_PUSH_CHANNEL_ID`
+- `NOTIFICATION_INTERNAL_SECRET`
+
 Login rate limiter:
 
 - `LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS`
@@ -136,6 +175,12 @@ Dev signer:
 ```bash
 go mod download
 go run ./cmd/api
+```
+
+Run the standalone notification service:
+
+```bash
+go run ./cmd/notification-api
 ```
 
 ## Seed Loan Data
@@ -188,16 +233,20 @@ neat_mobile_app_backend/
 |-- cmd/
 |   |-- api/
 |   |-- devsigner/
+|   |-- notification-api/
 |   |-- seed-loan-products/
 |   `-- seed-loan-products-rules/
 |-- docs/
 |-- internal/
+|   `-- notificationserver/
 |-- models/
 |-- modules/
 |   |-- auth/
 |   |-- device/
-|   `-- loanproduct/
+|   |-- loanproduct/
+|   `-- notification/
 |-- providers/
+|   `-- push/
 |-- seed/
 `-- templates/
 ```
