@@ -11,7 +11,11 @@ type GetEmbryoLoanApplicationsForCBAResponse struct {
 }
 
 type CBAEmbryoLoanApplicationItem struct {
+	ApplicationRef string `json:"application_ref"`
+	MobileUserID   string `json:"mobile_user_id"`
 	Name           string `json:"name"`
+	Gender         string `json:"gender"`
+	PhoneNumber    string `json:"phone_number"`
 	LoanStatus     string `json:"loan_status"`
 	CustomerStatus string `json:"customer_status"`
 }
@@ -51,6 +55,7 @@ type CBALoanApplicationReadDTO struct {
 }
 
 type CBABVNRecordReadDTO struct {
+	ApplicationRef         string  `json:"application_ref"`
 	BVN                    string  `json:"bvn"`
 	FirstName              string  `json:"first_name"`
 	MiddleName             string  `json:"middle_name"`

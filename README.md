@@ -92,10 +92,10 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 ## Internal CBA Flow
 
 - Internal CBA endpoints are mounted under `/internal/v1/cba`.
-- `GET /internal/v1/cba/loan-applications?user_id=<mobile_user_id>` returns the most recent loan application for that user that is still in `embryo` status. The response envelope keeps `count` and `applications`, but returns at most one application.
-- `GET /internal/v1/cba/loan-applications/embryo` returns embryo-only applicant summaries with `name`, `loan_status`, and `customer_status`.
+- `GET /internal/v1/cba/loan-applications?user_id=<mobile_user_id>` returns the most recent loan application for that user where either the loan status is `embryo` or the customer status is `embryo`. The response envelope keeps `count` and `applications`, but returns at most one application.
+- `GET /internal/v1/cba/loan-applications/embryo` returns applicant summaries for rows where either the loan status is `embryo` or the customer status is `embryo`.
 - `GET /internal/v1/cba/loan-applications/:application_ref` returns one loan application by local application reference.
-- `GET /internal/v1/cba/customers/bvn-record?user_id=<mobile_user_id>` returns the linked BVN record for that wallet user.
+- `GET /internal/v1/cba/customers/bvn-record?user_id=<mobile_user_id>` returns the linked BVN record for that wallet user together with the matched `application_ref`.
 - `POST /internal/v1/cba/customers/link-by-bvn` links local wallet users to a supplied core customer id by BVN.
 - `PATCH /internal/v1/cba/customers/:customer_id/status` updates wallet customer status for the supplied core customer id. Allowed values are `embryo`, `pending`, and `approved`.
 - `PATCH /internal/v1/cba/loan-applications/:application_ref/status` updates local loan application status. Allowed values are `approved`, `decline`, and `active`; `active` requires `core_loan_id`.

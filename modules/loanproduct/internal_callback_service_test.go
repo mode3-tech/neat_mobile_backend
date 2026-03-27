@@ -3,6 +3,7 @@ package loanproduct
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/models"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsEmptyWhenNoEmbryoAppli
 	defer cleanup()
 
 	mock.ExpectQuery(getMostRecentEmbryoLoanApplicationForCBAQueryPattern()).
-		WithArgs("user-1", LoanStatusEmbryo, 1).
+		WithArgs("user-1", LoanStatusEmbryo, models.CustomerStatusEmbryo, 1).
 		WillReturnError(gorm.ErrRecordNotFound)
 
 	service := NewInternalService(NewInternalRepository(repo.db))
@@ -71,7 +72,7 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsEmptyWhenNoEmbryoAppli
 	}
 }
 
-func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEmbryoApplication(t *testing.T) {
+func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEligibleApplication(t *testing.T) {
 	repo, mock, cleanup := newMockRepository(t)
 	defer cleanup()
 
@@ -80,14 +81,14 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEmbryoApplicatio
 		"user-1",
 		nil,
 		"2048",
-		"pending",
+		"embryo",
 		"08012345678",
 		"BUSINESS-WK",
 		"12 Allen Avenue",
 		int64(500000),
 		"Retail",
 		int64(150000),
-		"embryo",
+		"active",
 		"weekly",
 		4,
 		"bvn-record-1",
@@ -110,7 +111,7 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEmbryoApplicatio
 	)
 
 	mock.ExpectQuery(getMostRecentEmbryoLoanApplicationForCBAQueryPattern()).
-		WithArgs("user-1", LoanStatusEmbryo, 1).
+		WithArgs("user-1", LoanStatusEmbryo, models.CustomerStatusEmbryo, 1).
 		WillReturnRows(rows)
 
 	service := NewInternalService(NewInternalRepository(repo.db))
@@ -127,6 +128,9 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEmbryoApplicatio
 	}
 	if len(resp.Applications) != 1 {
 		t.Fatalf("applications len = %d, want 1", len(resp.Applications))
+	}
+	if resp.Applications[0].Loan.LoanStatus != "active" {
+		t.Fatalf("loan status = %q, want active", resp.Applications[0].Loan.LoanStatus)
 	}
 	if resp.Applications[0].Loan.Name != "Jane Doe" {
 		t.Fatalf("name = %q, want Jane Doe", resp.Applications[0].Loan.Name)
@@ -145,16 +149,20 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 	defer cleanup()
 
 	rows := sqlmock.NewRows([]string{
+		"application_ref",
+		"mobile_user_id",
+		"phone_number",
 		"first_name",
 		"middle_name",
 		"last_name",
+		"gender",
 		"loan_status",
 		"customer_status",
-	}).AddRow("Jane", "", "Doe", "embryo", "embryo").
-		AddRow("John", "M", "Smith", "embryo", nil)
+	}).AddRow("app-ref-1", "user-1", "08012345678", "Jane", "", "Doe", "female", "embryo", "embryo").
+		AddRow("app-ref-2", "user-2", "08087654321", "John", "M", "Smith", nil, "active", "embryo")
 
 	mock.ExpectQuery(listEmbryoLoanApplicationSummariesForCBAQueryPattern()).
-		WithArgs(LoanStatusEmbryo).
+		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo).
 		WillReturnRows(rows)
 
 	service := NewInternalService(NewInternalRepository(repo.db))
@@ -172,6 +180,21 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 	if resp.Applications[0].Name != "Jane Doe" {
 		t.Fatalf("first name = %q, want Jane Doe", resp.Applications[0].Name)
 	}
+	if resp.Applications[0].ApplicationRef != "app-ref-1" {
+		t.Fatalf("first application ref = %q, want app-ref-1", resp.Applications[0].ApplicationRef)
+	}
+	if resp.Applications[1].MobileUserID != "user-2" {
+		t.Fatalf("second mobile user id = %q, want user-2", resp.Applications[1].MobileUserID)
+	}
+	if resp.Applications[0].Gender != "female" {
+		t.Fatalf("first gender = %q, want female", resp.Applications[0].Gender)
+	}
+	if resp.Applications[1].PhoneNumber != "08087654321" {
+		t.Fatalf("second phone number = %q, want 08087654321", resp.Applications[1].PhoneNumber)
+	}
+	if resp.Applications[1].LoanStatus != "active" {
+		t.Fatalf("second loan status = %q, want active", resp.Applications[1].LoanStatus)
+	}
 	if resp.Applications[1].CustomerStatus != "embryo" {
 		t.Fatalf("second customer status = %q, want embryo", resp.Applications[1].CustomerStatus)
 	}
@@ -187,6 +210,7 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_Success(t *testing.T)
 
 	dob := time.Date(1995, 7, 10, 0, 0, 0, 0, time.UTC)
 	rows := sqlmock.NewRows([]string{
+		"application_ref",
 		"bvn",
 		"first_name",
 		"middle_name",
@@ -204,6 +228,7 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_Success(t *testing.T)
 		"city",
 		"landmark",
 	}).AddRow(
+		"app-ref-123",
 		"12345678901",
 		"Jane",
 		"",
@@ -234,6 +259,9 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_Success(t *testing.T)
 	}
 	if resp == nil {
 		t.Fatal("GetLoanApplicationBVNRecordForCBA returned nil response")
+	}
+	if resp.Record.ApplicationRef != "app-ref-123" {
+		t.Fatalf("unexpected application ref: %q", resp.Record.ApplicationRef)
 	}
 	if resp.Record.BVN != "12345678901" {
 		t.Fatalf("unexpected bvn: %q", resp.Record.BVN)

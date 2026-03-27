@@ -89,7 +89,11 @@ func (s *InternalService) GetEmbryoLoanApplicationsForCBA(ctx context.Context) (
 
 	for _, row := range rows {
 		resp.Applications = append(resp.Applications, CBAEmbryoLoanApplicationItem{
+			ApplicationRef: strings.TrimSpace(row.ApplicationRef),
+			MobileUserID:   strings.TrimSpace(row.MobileUserID),
 			Name:           buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
+			Gender:         valueOrEmpty(row.Gender),
+			PhoneNumber:    strings.TrimSpace(row.PhoneNumber),
 			LoanStatus:     strings.TrimSpace(row.LoanStatus),
 			CustomerStatus: normalizeCustomerStatusString(row.CustomerStatus),
 		})
@@ -115,6 +119,7 @@ func (s *InternalService) GetLoanApplicationBVNRecordForCBA(ctx context.Context,
 
 	return &GetLoanApplicationBVNRecordForCBAResponse{
 		Record: CBABVNRecordReadDTO{
+			ApplicationRef:         strings.TrimSpace(row.ApplicationRef),
 			BVN:                    valueOrEmpty(row.BVN),
 			FirstName:              valueOrEmpty(row.FirstName),
 			MiddleName:             valueOrEmpty(row.MiddleName),

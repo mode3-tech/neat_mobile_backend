@@ -1112,7 +1112,8 @@ paths:
       summary: Get latest embryo loan application for a user
       description: |
         Returns the most recent loan application for the supplied wallet user id
-        that is still in `embryo` status.
+        where either the loan status is `embryo` or the customer status is
+        `embryo`.
         This endpoint is served under `/internal/v1` and is protected by HMAC headers.
       servers:
         - url: /internal/v1
@@ -1167,8 +1168,8 @@ paths:
         - Internal
       summary: List embryo loan application summaries
       description: |
-        Returns embryo-only applicant summaries with `name`, `loan_status`,
-        and `customer_status` for internal CBA consumption.
+        Returns applicant summaries for rows where either the loan status is
+        `embryo` or the customer status is `embryo`, for internal CBA consumption.
         This endpoint is served under `/internal/v1` and is protected by HMAC headers.
       servers:
         - url: /internal/v1
@@ -1345,7 +1346,8 @@ paths:
         - Internal
       summary: Get loan applicant BVN record for CBA
       description: |
-        Returns the linked BVN record for the supplied wallet user id.
+        Returns the linked BVN record for the supplied wallet user id together
+        with the matched application reference.
         This endpoint is served under `/internal/v1` and is protected by HMAC headers.
       servers:
         - url: /internal/v1
@@ -2206,13 +2208,29 @@ components:
     InternalEmbryoLoanApplicationItem:
       type: object
       required:
+        - application_ref
+        - mobile_user_id
         - name
+        - gender
+        - phone_number
         - loan_status
         - customer_status
       properties:
+        application_ref:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+        mobile_user_id:
+          type: string
+          example: 8a732d01-63fb-4e68-bfc8-7d69c7c4157e
         name:
           type: string
           example: Jane Ada Doe
+        gender:
+          type: string
+          example: female
+        phone_number:
+          type: string
+          example: "08012345678"
         loan_status:
           $ref: "#/components/schemas/LoanStatus"
         customer_status:
@@ -2286,6 +2304,7 @@ components:
     InternalBVNRecord:
       type: object
       required:
+        - application_ref
         - bvn
         - first_name
         - middle_name
@@ -2300,6 +2319,9 @@ components:
         - full_home_address
         - passport_on_bvn
       properties:
+        application_ref:
+          type: string
+          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
         bvn:
           type: string
           example: "12345678901"

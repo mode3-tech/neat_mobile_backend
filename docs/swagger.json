@@ -1804,7 +1804,7 @@
           "Internal"
         ],
         "summary": "Get latest embryo loan application for a user",
-        "description": "Returns the most recent loan application for the supplied wallet user id\nthat is still in `embryo` status.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
+        "description": "Returns the most recent loan application for the supplied wallet user id\nwhere either the loan status is `embryo` or the customer status is\n`embryo`.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
           {
             "url": "/internal/v1"
@@ -1890,7 +1890,7 @@
           "Internal"
         ],
         "summary": "List embryo loan application summaries",
-        "description": "Returns embryo-only applicant summaries with `name`, `loan_status`,\nand `customer_status` for internal CBA consumption.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
+        "description": "Returns applicant summaries for rows where either the loan status is\n`embryo` or the customer status is `embryo`, for internal CBA consumption.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
           {
             "url": "/internal/v1"
@@ -2169,7 +2169,7 @@
           "Internal"
         ],
         "summary": "Get loan applicant BVN record for CBA",
-        "description": "Returns the linked BVN record for the supplied wallet user id.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
+        "description": "Returns the linked BVN record for the supplied wallet user id together\nwith the matched application reference.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
           {
             "url": "/internal/v1"
@@ -3380,14 +3380,34 @@
       "InternalEmbryoLoanApplicationItem": {
         "type": "object",
         "required": [
+          "application_ref",
+          "mobile_user_id",
           "name",
+          "gender",
+          "phone_number",
           "loan_status",
           "customer_status"
         ],
         "properties": {
+          "application_ref": {
+            "type": "string",
+            "example": "0ae0d8ef-5a60-4e18-9527-b96abd2d4731"
+          },
+          "mobile_user_id": {
+            "type": "string",
+            "example": "8a732d01-63fb-4e68-bfc8-7d69c7c4157e"
+          },
           "name": {
             "type": "string",
             "example": "Jane Ada Doe"
+          },
+          "gender": {
+            "type": "string",
+            "example": "female"
+          },
+          "phone_number": {
+            "type": "string",
+            "example": "08012345678"
           },
           "loan_status": {
             "$ref": "#/components/schemas/LoanStatus"
@@ -3487,6 +3507,7 @@
       "InternalBVNRecord": {
         "type": "object",
         "required": [
+          "application_ref",
           "bvn",
           "first_name",
           "middle_name",
@@ -3502,6 +3523,10 @@
           "passport_on_bvn"
         ],
         "properties": {
+          "application_ref": {
+            "type": "string",
+            "example": "0ae0d8ef-5a60-4e18-9527-b96abd2d4731"
+          },
           "bvn": {
             "type": "string",
             "example": "12345678901"

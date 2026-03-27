@@ -18,11 +18,11 @@ func getLoanApplicationBVNRecordForCBAQueryPattern() string {
 }
 
 func getMostRecentEmbryoLoanApplicationForCBAQueryPattern() string {
-	return `(?s)SELECT .*wallet_loan_applications\.application_ref.*wallet_users\.customer_status AS user_customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE wallet_loan_applications\.mobile_user_id = \$1 AND wallet_loan_applications\.loan_status = \$2 ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$3`
+	return `(?s)SELECT .*wallet_loan_applications\.application_ref.*wallet_users\.customer_status AS user_customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE wallet_loan_applications\.mobile_user_id = \$1 AND \(\(?wallet_loan_applications\.loan_status = \$2 OR wallet_users\.customer_status = \$3\)?\) ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$4`
 }
 
 func listEmbryoLoanApplicationSummariesForCBAQueryPattern() string {
-	return `(?s)SELECT .*wallet_bvn_records\.first_name.*wallet_users\.customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE wallet_loan_applications\.loan_status = \$1 ORDER BY wallet_loan_applications\.created_at DESC`
+	return `(?s)SELECT .*wallet_bvn_records\.first_name.*wallet_users\.customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE \(\(?wallet_loan_applications\.loan_status = \$1 OR wallet_users\.customer_status = \$2\)?\) ORDER BY wallet_loan_applications\.created_at DESC`
 }
 
 func cbaApplicationReadColumns() []string {
@@ -92,6 +92,7 @@ func TestInternalRepository_GetLoanApplicationBVNRecordForCBA_Success(t *testing
 
 	dob := time.Date(1995, 7, 10, 0, 0, 0, 0, time.UTC)
 	rows := sqlmock.NewRows([]string{
+		"application_ref",
 		"bvn",
 		"first_name",
 		"middle_name",
@@ -109,6 +110,7 @@ func TestInternalRepository_GetLoanApplicationBVNRecordForCBA_Success(t *testing
 		"city",
 		"landmark",
 	}).AddRow(
+		"app-ref-123",
 		"12345678901",
 		"Jane",
 		"Mary",
@@ -139,6 +141,9 @@ func TestInternalRepository_GetLoanApplicationBVNRecordForCBA_Success(t *testing
 	}
 	if record == nil {
 		t.Fatal("GetLoanApplicationBVNRecordForCBA returned nil record")
+	}
+	if record.ApplicationRef != "app-ref-123" {
+		t.Fatalf("unexpected application ref: %q", record.ApplicationRef)
 	}
 	if record.BVN == nil || *record.BVN != "12345678901" {
 		t.Fatalf("unexpected bvn: %#v", record.BVN)
