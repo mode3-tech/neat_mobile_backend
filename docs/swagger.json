@@ -1733,7 +1733,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100,
-              "default": 20
+              "default": 10
             },
             "description": "Number of embryo loan application summaries to return per page."
           },
@@ -3411,7 +3411,7 @@
           },
           "limit": {
             "type": "integer",
-            "example": 20
+            "example": 10
           },
           "total": {
             "type": "integer",

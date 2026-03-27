@@ -49,7 +49,7 @@ type InternalRepository struct {
 
 const (
 	defaultEmbryoLoanApplicationsPage  = 1
-	defaultEmbryoLoanApplicationsLimit = 20
+	defaultEmbryoLoanApplicationsLimit = 10
 	maxEmbryoLoanApplicationsLimit     = 100
 )
 
