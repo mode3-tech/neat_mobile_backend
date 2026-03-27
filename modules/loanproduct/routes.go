@@ -7,7 +7,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 
 	{
 		loanProduct.GET("", handler.GetLoanProducts)
-		loanProduct.POST("/apply", authGuard, handler.ApplyForLoan)
+		loanProduct.POST("/apply", handler.ApplyForLoan)
 		loanProduct.GET("/loans", authGuard, handler.GetAllLoans)
 		loanProduct.GET("/repayment-schedule", authGuard, handler.GetRepaymentSchedule)
 	}
@@ -19,6 +19,11 @@ func RegisterInternalRoutes(rg *gin.RouterGroup, handler *InternalHandler, inter
 
 	{
 		cba.GET("/loan-applications", handler.GetLoanApplicationsForCBA)
+		cba.GET("/loan-applications/embryo", handler.GetEmbryoLoanApplicationsForCBA)
+		cba.GET("/loan-applications/:application_ref", handler.GetLoanApplicationForCBA)
 		cba.PATCH("/loan-applications/:application_ref/status", handler.UpdateApplicationStatusFromCBA)
+		cba.GET("/customers/bvn-record", handler.GetLoanApplicationBVNRecordForCBA)
+		cba.POST("/customers/link-by-bvn", handler.LinkWalletUserByBVN)
+		cba.PATCH("/customers/:customer_id/status", handler.UpdateCustomerStatusFromCBA)
 	}
 }

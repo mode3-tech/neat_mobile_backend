@@ -31,8 +31,9 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 
 ### Loan
 
-- `GET /loan/`
+- `GET /loan`
 - `POST /loan/apply`
+- `GET /loan/loans`
 - `GET /loan/repayment-schedule?loan_id=<loan_id>`
 
 ### Notification Service
@@ -47,8 +48,13 @@ Go HTTP API backend for authentication, OTP verification, device trust, identity
 
 ### Internal CBA
 
-- `GET /internal/v1/cba/loan-applications`
+- `GET /internal/v1/cba/loan-applications?user_id=<mobile_user_id>`
+- `GET /internal/v1/cba/loan-applications/embryo`
+- `GET /internal/v1/cba/loan-applications/:application_ref`
 - `PATCH /internal/v1/cba/loan-applications/:application_ref/status`
+- `GET /internal/v1/cba/customers/bvn-record?user_id=<mobile_user_id>`
+- `POST /internal/v1/cba/customers/link-by-bvn`
+- `PATCH /internal/v1/cba/customers/:customer_id/status`
 
 ## Auth Flow
 
@@ -74,19 +80,26 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 
 ## Loan Flow
 
-- Loan endpoints require `Authorization: Bearer <access_token>`.
-- `GET /loan/` returns the current loan products from `wallet_loan_products`.
-- `POST /loan/apply` validates the authenticated user, the selected product, business input, and core-banking loan checks before creating a pending application.
+- `GET /loan` returns the current loan products from `wallet_loan_products`.
+- `POST /loan/apply` validates the selected product, business input, `transaction_pin`, user verification state, and core-banking loan checks before creating an `embryo` application. The response includes `application_ref`, `loan_status`, and the estimated repayment `summary`.
+- `GET /loan/loans` returns the authenticated user's core-banking loan list.
 - `GET /loan/repayment-schedule?loan_id=<loan_id>` returns the repayment schedule for a specific core-banking loan id.
 - Supported product codes in the current service are `BUSINESS-WK`, `SPECIAL-WK`, `SME-WK`, `SALARY-MTH`, `INDIVIDUAL-WK`, and `GROUP-WK`.
 - `business_start_date` must be in `YYYY-MM` format.
-- Listing products works without core-banking connectivity, but `/loan/apply` and `/loan/repayment-schedule` depend on `CBA_INTERNAL_URL` and `CBA_INTERNAL_KEY`. If those are not configured, requests fail with service-unavailable errors.
+- In the current router, `GET /loan/loans` and `GET /loan/repayment-schedule` are mounted with `authGuard`.
+- Listing products works without core-banking connectivity, but `/loan/apply`, `/loan/loans`, and `/loan/repayment-schedule` depend on `CBA_INTERNAL_URL` and `CBA_INTERNAL_KEY`. If those are not configured, requests fail with service-unavailable errors.
 
 ## Internal CBA Flow
 
 - Internal CBA endpoints are mounted under `/internal/v1/cba`.
-- `GET /internal/v1/cba/loan-applications` returns all loan applications plus linked BVN records for CBA consumption.
-- `PATCH /internal/v1/cba/loan-applications/:application_ref/status` is the callback endpoint CBA uses to update application status after review.
+- `GET /internal/v1/cba/loan-applications?user_id=<mobile_user_id>` returns the most recent loan application for that user that is still in `embryo` status. The response envelope keeps `count` and `applications`, but returns at most one application.
+- `GET /internal/v1/cba/loan-applications/embryo` returns embryo-only applicant summaries with `name`, `loan_status`, and `customer_status`.
+- `GET /internal/v1/cba/loan-applications/:application_ref` returns one loan application by local application reference.
+- `GET /internal/v1/cba/customers/bvn-record?user_id=<mobile_user_id>` returns the linked BVN record for that wallet user.
+- `POST /internal/v1/cba/customers/link-by-bvn` links local wallet users to a supplied core customer id by BVN.
+- `PATCH /internal/v1/cba/customers/:customer_id/status` updates wallet customer status for the supplied core customer id. Allowed values are `embryo`, `pending`, and `approved`.
+- `PATCH /internal/v1/cba/loan-applications/:application_ref/status` updates local loan application status. Allowed values are `approved`, `decline`, and `active`; `active` requires `core_loan_id`.
+- Customer-status and loan-status callbacks are idempotent by `event_id`. Replayed callbacks are ignored after the first successful insert into the event log.
 - Internal requests must include `X-Timestamp` and `X-Signature`.
 - `X-Timestamp` must be a fresh RFC3339 timestamp within five minutes of server time.
 - `X-Signature` must be a lowercase hex HMAC-SHA256 of:
@@ -114,7 +127,7 @@ Device challenge signatures use `ecdsa-p256-sha256` over `SHA-256(challenge)`.
 - `cmd/api` starts the main auth and loan backend.
 - `cmd/notification-api` starts the standalone notification backend.
 - Both services load configuration, connect to Postgres with retry, and run the shared migrations before serving traffic.
-- Auto-migrations cover users, BVN records, push tokens, notifications, notification tickets, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, and loan applications.
+- Auto-migrations cover users, BVN records, push tokens, notifications, notification tickets, auth sessions, refresh tokens, verification records, pending device sessions, OTP rows, user devices, device challenges, loan products, loan product rules, loan applications, loan application status events, and customer status events.
 - `wallet_push_tokens.user_id` is constrained to `wallet_users(id)` with `ON DELETE CASCADE`.
 - `wallet_notifications.user_id` is constrained to `wallet_users(id)` with `ON DELETE CASCADE`.
 - Login is rate-limited with the `LOGIN_RATE_LIMIT_*` configuration.

@@ -7,13 +7,14 @@ info:
     password reset, and loan product workflows.
 servers:
   - url: /api/v1
+security: []
 tags:
   - name: Auth
     description: Authentication and identity endpoints
   - name: OTP
     description: OTP request and verification endpoints
   - name: Loan
-    description: Protected loan product discovery and application endpoints
+    description: Loan product discovery and application endpoints
   - name: Notification
     description: Push-token registration and in-app notification history endpoints
   - name: Internal
@@ -651,14 +652,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /loan/:
+  /loan:
     get:
       tags:
         - Loan
       summary: List loan products
       description: Returns the currently available loan products from storage.
-      security:
-        - bearerAuth: []
       responses:
         "200":
           description: Loan products fetched successfully
@@ -666,12 +665,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoanProductsResponse"
-        "401":
-          description: Missing or invalid access token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Failed to fetch loan products
           content:
@@ -684,10 +677,9 @@ paths:
         - Loan
       summary: Apply for a loan
       description: |
-        Creates a pending loan application for the authenticated user after validating
-        the selected product, business data, user verification state, and core-banking loan checks.
-      security:
-        - bearerAuth: []
+        Creates an embryo loan application after validating
+        the selected product, business data, transaction pin,
+        user verification state, and core-banking loan checks.
       requestBody:
         required: true
         content:
@@ -708,7 +700,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Missing or invalid access token
+          description: Incorrect transaction pin or other unauthorized validation failure
           content:
             application/json:
               schema:
@@ -731,6 +723,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many incorrect transaction pin attempts or temporary lockout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Core-banking lookup failed
           content:
@@ -745,6 +743,45 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Loan application failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /loan/loans:
+    get:
+      tags:
+        - Loan
+      summary: List customer loans
+      description: Returns the authenticated user's loan list from core banking.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer loans fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanListResponse"
+        "400":
+          description: Invalid user context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User or user loan record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Core-banking lookup failed or integration is unavailable
           content:
             application/json:
               schema:
@@ -1072,9 +1109,66 @@ paths:
     get:
       tags:
         - Internal
-      summary: List loan applications for CBA
+      summary: Get latest embryo loan application for a user
       description: |
-        Returns all loan applications with linked BVN records for internal CBA consumption.
+        Returns the most recent loan application for the supplied wallet user id
+        that is still in `embryo` status.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: string
+          description: Wallet mobile user id to look up.
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      responses:
+        "200":
+          description: Latest embryo loan application fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalLoanApplicationsResponse"
+        "400":
+          description: Missing or invalid user id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/loan-applications/embryo:
+    get:
+      tags:
+        - Internal
+      summary: List embryo loan application summaries
+      description: |
+        Returns embryo-only applicant summaries with `name`, `loan_status`,
+        and `customer_status` for internal CBA consumption.
         This endpoint is served under `/internal/v1` and is protected by HMAC headers.
       servers:
         - url: /internal/v1
@@ -1094,13 +1188,74 @@ paths:
           description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
       responses:
         "200":
-          description: Loan applications fetched successfully
+          description: Embryo loan application summaries fetched successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InternalLoanApplicationsResponse"
+                $ref: "#/components/schemas/InternalEmbryoLoanApplicationsResponse"
         "401":
           description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/loan-applications/{application_ref}:
+    get:
+      tags:
+        - Internal
+      summary: Get loan application by reference for CBA
+      description: |
+        Returns one locally stored loan application by `application_ref`.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: path
+          name: application_ref
+          required: true
+          schema:
+            type: string
+          description: Local loan application reference.
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      responses:
+        "200":
+          description: Loan application fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalLoanApplicationResponse"
+        "400":
+          description: Missing or invalid application reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Loan application not found
           content:
             application/json:
               schema:
@@ -1174,6 +1329,196 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the callback failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/customers/bvn-record:
+    get:
+      tags:
+        - Internal
+      summary: Get loan applicant BVN record for CBA
+      description: |
+        Returns the linked BVN record for the supplied wallet user id.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: string
+          description: Wallet mobile user id to look up.
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      responses:
+        "200":
+          description: Customer BVN record fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalBVNRecordResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Customer record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Invalid mobile user id or bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/customers/link-by-bvn:
+    post:
+      tags:
+        - Internal
+      summary: Link wallet users to a core customer by BVN
+      description: |
+        Updates local wallet users that share the supplied BVN so they point to the supplied core customer id.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkWalletUserByBVNRequest"
+      responses:
+        "200":
+          description: Wallet user linkage processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkWalletUserByBVNEnvelope"
+        "400":
+          description: Invalid request body or invalid customer/BVN values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal auth is not configured or the update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cba/customers/{customer_id}/status:
+    patch:
+      tags:
+        - Internal
+      summary: Update customer status from CBA
+      description: |
+        Callback endpoint used by CBA to update the local customer status for a core customer id.
+        Allowed values are `embryo`, `pending`, and `approved`.
+        This endpoint is served under `/internal/v1` and is protected by HMAC headers.
+      servers:
+        - url: /internal/v1
+      parameters:
+        - in: path
+          name: customer_id
+          required: true
+          schema:
+            type: string
+          description: Core customer id from CBA.
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp used in the HMAC signing string. Must be within five minutes of server time.
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: Lowercase hex HMAC-SHA256 signature of `METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerStatusRequest"
+      responses:
+        "200":
+          description: Customer status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request body, customer id, or status payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid internal HMAC headers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Invalid customer status transition
           content:
             application/json:
               schema:
@@ -1564,12 +1909,19 @@ components:
     LoanStatus:
       type: string
       enum:
+        - embryo
         - pending
-        - reviewed
         - approved
-        - rejected
-        - converted_to_loan
-      example: pending
+        - decline
+        - active
+      example: embryo
+    CustomerStatus:
+      type: string
+      enum:
+        - embryo
+        - pending
+        - approved
+      example: embryo
     LoanProduct:
       type: object
       properties:
@@ -1637,6 +1989,7 @@ components:
         - business_value
         - business_type
         - loan_amount
+        - transaction_pin
       properties:
         loan_product_type:
           $ref: "#/components/schemas/LoanProductCode"
@@ -1658,6 +2011,11 @@ components:
           type: string
           description: Digits-only loan amount string.
           example: "250000"
+        transaction_pin:
+          type: string
+          minLength: 4
+          maxLength: 6
+          example: "1234"
     LoanSummaryResponse:
       type: object
       properties:
@@ -1714,6 +2072,50 @@ components:
           $ref: "#/components/schemas/LoanStatus"
         summary:
           $ref: "#/components/schemas/LoanSummaryResponse"
+    LoanListItem:
+      type: object
+      properties:
+        loan_id:
+          type: string
+          example: "1001"
+        loan_number:
+          type: string
+          example: LN-1001
+        principal_amount:
+          type: number
+          format: double
+          example: 250000
+        disbursed_amount:
+          type: number
+          format: double
+          example: 250000
+        outstanding_balance:
+          type: number
+          format: double
+          example: 180000
+        status:
+          type: string
+          example: active
+        next_due_date:
+          type: string
+          example: "2026-04-01"
+        next_due_amount:
+          type: number
+          format: double
+          example: 12500
+    LoanListResponse:
+      type: object
+      required:
+        - message
+        - loans
+      properties:
+        message:
+          type: string
+          example: all loans fetched successfully
+        loans:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanListItem"
     LoanRepayment:
       type: object
       properties:
@@ -1776,11 +2178,45 @@ components:
       properties:
         count:
           type: integer
-          example: 2
+          example: 1
         applications:
           type: array
           items:
             $ref: "#/components/schemas/InternalLoanApplicationItem"
+    InternalLoanApplicationResponse:
+      type: object
+      required:
+        - application
+      properties:
+        application:
+          $ref: "#/components/schemas/InternalLoanApplicationItem"
+    InternalEmbryoLoanApplicationsResponse:
+      type: object
+      required:
+        - count
+        - applications
+      properties:
+        count:
+          type: integer
+          example: 2
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalEmbryoLoanApplicationItem"
+    InternalEmbryoLoanApplicationItem:
+      type: object
+      required:
+        - name
+        - loan_status
+        - customer_status
+      properties:
+        name:
+          type: string
+          example: Jane Ada Doe
+        loan_status:
+          $ref: "#/components/schemas/LoanStatus"
+        customer_status:
+          $ref: "#/components/schemas/CustomerStatus"
     InternalLoanApplicationItem:
       type: object
       required:
@@ -1792,13 +2228,12 @@ components:
           example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
         loan:
           $ref: "#/components/schemas/InternalLoanApplicationLoan"
-        bvn_record:
-          $ref: "#/components/schemas/InternalBVNRecord"
     InternalLoanApplicationLoan:
       type: object
       required:
         - application_ref
         - mobile_user_id
+        - name
         - phone_number
         - loan_product_type
         - business_address
@@ -1819,6 +2254,9 @@ components:
           type: string
           nullable: true
           example: "2048"
+        name:
+          type: string
+          example: Jane Ada Doe
         phone_number:
           type: string
           example: "2348012345678"
@@ -1913,6 +2351,13 @@ components:
           type: string
           nullable: true
           example: Opposite central market
+    InternalBVNRecordResponse:
+      type: object
+      required:
+        - customer_record
+      properties:
+        customer_record:
+          $ref: "#/components/schemas/InternalBVNRecord"
     UpdateLoanApplicationStatusRequest:
       type: object
       required:
@@ -1925,14 +2370,60 @@ components:
         status:
           type: string
           enum:
-            - reviewed
             - approved
-            - rejected
-            - converted_to_loan
+            - decline
+            - active
           example: approved
         core_loan_id:
           type: string
+          description: Required when `status` is `active`.
           example: LN-1001
+    UpdateCustomerStatusRequest:
+      type: object
+      required:
+        - event_id
+        - status
+      properties:
+        event_id:
+          type: string
+          example: evt-001
+        status:
+          $ref: "#/components/schemas/CustomerStatus"
+    LinkWalletUserByBVNRequest:
+      type: object
+      required:
+        - customer_id
+        - bvn
+      properties:
+        customer_id:
+          type: string
+          example: "2048"
+        account_user_id:
+          type: string
+          example: staff-user-1
+        bvn:
+          type: string
+          example: "12345678901"
+    LinkWalletUserByBVNResponse:
+      type: object
+      required:
+        - linked_users
+      properties:
+        linked_users:
+          type: integer
+          format: int64
+          example: 1
+    LinkWalletUserByBVNEnvelope:
+      type: object
+      required:
+        - message
+        - data
+      properties:
+        message:
+          type: string
+          example: wallet user linkage processed
+        data:
+          $ref: "#/components/schemas/LinkWalletUserByBVNResponse"
     NINValidationResponse:
       type: object
       properties:

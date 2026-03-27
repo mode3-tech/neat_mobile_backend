@@ -3,9 +3,11 @@ package loanproduct
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
 
+	"git.sr.ht/~shulhan/pakakeh.go/lib/ascii"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -19,72 +21,167 @@ func NewInternalService(repo *InternalRepository) *InternalService {
 }
 
 var (
-	ErrBadRequest          = errors.New("bad request")
-	ErrInvalidStatus       = errors.New("invalid status")
-	ErrInvalidTransition   = errors.New("invalid loan status transition")
-	ErrApplicationNotFound = errors.New("loan application not found")
+	ErrBadRequest                = errors.New("bad request")
+	ErrInvalidStatus             = errors.New("invalid status")
+	ErrInvalidTransition         = errors.New("invalid loan status transition")
+	ErrApplicationNotFound       = errors.New("loan application not found")
+	ErrInvalidMobileUserID       = errors.New("invalid mobile user id")
+	ErrCustomerRecordNotFound    = errors.New("customer record not found")
+	ErrInvalidCustomerID         = errors.New("invalid customer id")
+	ErrCustomerNotFound          = errors.New("customer not found")
+	ErrInvalidCustomerTransition = errors.New("invalid customer status transition")
 )
 
-func (s *InternalService) GetLoanApplicationsForCBA(ctx context.Context) (*GetLoanApplicationsForCBAResponse, error) {
-	rows, err := s.repo.ListLoanApplicationsForCBA(ctx)
+func (s *InternalService) GetLoanApplicationsForCBA(ctx context.Context, mobileUserID string) (*GetLoanApplicationsForCBAResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, ErrInvalidMobileUserID
+	}
+
+	row, err := s.repo.GetMostRecentEmbryoLoanApplicationForCBA(ctx, mobileUserID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return &GetLoanApplicationsForCBAResponse{
+			Count:        0,
+			Applications: []CBAListLoanApplicationItem{},
+		}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &GetLoanApplicationsForCBAResponse{
-		Count:        len(rows),
-		Applications: make([]CBAListLoanApplicationItem, 0, len(rows)),
-	}
-
-	for _, row := range rows {
-		coreCustomerID := row.ApplicationCoreCustomerID
-		if coreCustomerID == nil {
-			coreCustomerID = row.UserCoreCustomerID
-		}
-
-		item := CBAListLoanApplicationItem{
-			ApplicationRef: row.ApplicationRef,
-			Loan: CBALoanApplicationReadDTO{
-				ApplicationRef:  row.ApplicationRef,
-				MobileUserID:    row.MobileUserID,
-				CoreCustomerID:  coreCustomerID,
-				PhoneNumber:     row.PhoneNumber,
-				LoanProductType: row.LoanProductType,
-				BusinessAddress: row.BusinessAddress,
-				BusinessValue:   row.BusinessValue,
-				BusinessType:    row.BusinessType,
-				RequestedAmount: row.RequestedAmount,
-				LoanStatus:      row.LoanStatus,
-				Tenure:          row.Tenure,
-				TenureValue:     row.TenureValue,
-			},
-		}
-
-		if row.BVNRecordID != nil {
-			item.BVNRecord = &CBABVNRecordReadDTO{
-				BVN:                    valueOrEmpty(row.BVN),
-				FirstName:              valueOrEmpty(row.FirstName),
-				MiddleName:             valueOrEmpty(row.MiddleName),
-				LastName:               valueOrEmpty(row.LastName),
-				Gender:                 valueOrEmpty(row.Gender),
-				Nationality:            valueOrEmpty(row.Nationality),
-				StateOfOrigin:          valueOrEmpty(row.StateOfOrigin),
-				DateOfBirth:            formatDatePtr(row.DateOfBirth),
-				EmailAddress:           valueOrEmpty(row.EmailAddress),
-				MobilePhone:            valueOrEmpty(row.MobilePhone),
-				AlternativeMobilePhone: row.AlternativeMobilePhone,
-				BankName:               valueOrEmpty(row.BankName),
-				FullHomeAddress:        valueOrEmpty(row.FullHomeAddress),
-				PassportOnBVN:          valueOrEmpty(row.PassportOnBVN),
-				City:                   row.City,
-				Landmark:               row.Landmark,
-			}
-		}
-
-		resp.Applications = append(resp.Applications, item)
+		Count:        1,
+		Applications: []CBAListLoanApplicationItem{mapCBAApplicationItem(row)},
 	}
 
 	return resp, nil
+}
+
+func (s *InternalService) GetLoanApplicationForCBA(ctx context.Context, applicationRef string) (*GetLoanApplicationForCBAResponse, error) {
+	applicationRef = strings.TrimSpace(applicationRef)
+	if applicationRef == "" {
+		return nil, ErrBadRequest
+	}
+
+	row, err := s.repo.GetLoanApplicationForCBAByRef(ctx, applicationRef)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrApplicationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetLoanApplicationForCBAResponse{
+		Application: mapCBAApplicationItem(row),
+	}, nil
+}
+
+func (s *InternalService) GetEmbryoLoanApplicationsForCBA(ctx context.Context) (*GetEmbryoLoanApplicationsForCBAResponse, error) {
+	rows, err := s.repo.ListEmbryoLoanApplicationSummariesForCBA(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &GetEmbryoLoanApplicationsForCBAResponse{
+		Count:        len(rows),
+		Applications: make([]CBAEmbryoLoanApplicationItem, 0, len(rows)),
+	}
+
+	for _, row := range rows {
+		resp.Applications = append(resp.Applications, CBAEmbryoLoanApplicationItem{
+			Name:           buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
+			LoanStatus:     strings.TrimSpace(row.LoanStatus),
+			CustomerStatus: normalizeCustomerStatusString(row.CustomerStatus),
+		})
+	}
+
+	return resp, nil
+}
+
+func (s *InternalService) GetLoanApplicationBVNRecordForCBA(ctx context.Context, mobileUserID string) (*GetLoanApplicationBVNRecordForCBAResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+
+	if mobileUserID == "" {
+		return nil, ErrInvalidMobileUserID
+	}
+
+	row, err := s.repo.GetLoanApplicationBVNRecordForCBA(ctx, mobileUserID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrCustomerRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetLoanApplicationBVNRecordForCBAResponse{
+		Record: CBABVNRecordReadDTO{
+			BVN:                    valueOrEmpty(row.BVN),
+			FirstName:              valueOrEmpty(row.FirstName),
+			MiddleName:             valueOrEmpty(row.MiddleName),
+			LastName:               valueOrEmpty(row.LastName),
+			Gender:                 valueOrEmpty(row.Gender),
+			Nationality:            valueOrEmpty(row.Nationality),
+			StateOfOrigin:          valueOrEmpty(row.StateOfOrigin),
+			DateOfBirth:            formatDatePtr(row.DateOfBirth),
+			EmailAddress:           valueOrEmpty(row.EmailAddress),
+			MobilePhone:            valueOrEmpty(row.MobilePhone),
+			AlternativeMobilePhone: trimmedPtr(valueOrEmpty(row.AlternativeMobilePhone)),
+			BankName:               valueOrEmpty(row.BankName),
+			FullHomeAddress:        valueOrEmpty(row.FullHomeAddress),
+			PassportOnBVN:          valueOrEmpty(row.PassportOnBVN),
+			City:                   trimmedPtr(valueOrEmpty(row.City)),
+			Landmark:               trimmedPtr(valueOrEmpty(row.Landmark)),
+		},
+	}, nil
+}
+
+func (s *InternalService) ApplyCBACustomerStatusUpdate(ctx context.Context, customerID string, req UpdateCustomerStatusRequest, rawPayload []byte) error {
+	customerID = strings.TrimSpace(customerID)
+	if customerID == "" || strings.TrimSpace(req.EventID) == "" {
+		return ErrBadRequest
+	}
+	if !ascii.IsDigits([]byte(customerID)) {
+		return ErrInvalidCustomerID
+	}
+
+	status, ok := parseCustomerStatusValue(req.Status)
+	if !ok {
+		return ErrInvalidStatus
+	}
+
+	now := time.Now().UTC()
+
+	return s.repo.WithTx(ctx, func(repo *InternalRepository) error {
+		user, err := repo.GetUserByCoreCustomerIDForUpdate(ctx, customerID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCustomerNotFound
+		}
+		if err != nil {
+			return err
+		}
+
+		if normalizedCustomerStatus(user.CustomerStatus) != status && !canTransitionCustomerStatus(user.CustomerStatus, status) {
+			return ErrInvalidCustomerTransition
+		}
+
+		created, err := repo.InsertCustomerStatusEvent(ctx, &CustomerStatusEvent{
+			ID:             uuid.NewString(),
+			EventID:        strings.TrimSpace(req.EventID),
+			CoreCustomerID: customerID,
+			Status:         status,
+			RawPayload:     string(rawPayload),
+			ProcessedAt:    now,
+		})
+		if err != nil || !created {
+			return err
+		}
+
+		if sameCustomerStatusPtr(user.CustomerStatus, status) {
+			return nil
+		}
+
+		return repo.UpdateUserCustomerStatus(ctx, customerID, status)
+	})
 }
 
 func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationRef string, req UpdateLoanApplicationStatusRequest, rawPayload []byte) error {
@@ -139,6 +236,27 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 	})
 }
 
+func (s *InternalService) LinkWalletUserByBVN(ctx context.Context, req LinkWalletUserByBVNRequest) (*LinkWalletUserByBVNResponse, error) {
+	customerID := strings.TrimSpace(req.CustomerID)
+	bvn := strings.TrimSpace(req.BVN)
+
+	if customerID == "" || bvn == "" {
+		return nil, ErrBadRequest
+	}
+	if !ascii.IsDigits([]byte(customerID)) || !ascii.IsDigits([]byte(bvn)) || len(bvn) != 11 {
+		return nil, ErrBadRequest
+	}
+
+	linkedUsers, err := s.repo.LinkWalletUserCoreCustomerIDByBVN(ctx, bvn, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LinkWalletUserByBVNResponse{
+		LinkedUsers: linkedUsers,
+	}, nil
+}
+
 func isAllowedCallbackStatus(s LoanStatus) bool {
 	switch s {
 	case LoanStatusApproved, LoanStatusDeclined, LoanStatusActive:
@@ -179,6 +297,79 @@ func sameStringPtr(a, b *string) bool {
 	return strings.TrimSpace(*a) == strings.TrimSpace(*b)
 }
 
+func sameCustomerStatusPtr(current *models.CustomerStatus, next models.CustomerStatus) bool {
+	return normalizedCustomerStatus(current) == next
+}
+
+func mapCBAApplicationItem(row *cbaApplicationReadRow) CBAListLoanApplicationItem {
+	coreCustomerID := row.ApplicationCoreCustomerID
+	if coreCustomerID == nil {
+		coreCustomerID = row.UserCoreCustomerID
+	}
+
+	return CBAListLoanApplicationItem{
+		ApplicationRef: row.ApplicationRef,
+		Loan: CBALoanApplicationReadDTO{
+			ApplicationRef:  row.ApplicationRef,
+			MobileUserID:    row.MobileUserID,
+			CoreCustomerID:  coreCustomerID,
+			PhoneNumber:     row.PhoneNumber,
+			Name:            buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
+			LoanProductType: row.LoanProductType,
+			BusinessAddress: row.BusinessAddress,
+			BusinessValue:   row.BusinessValue,
+			BusinessType:    row.BusinessType,
+			RequestedAmount: row.RequestedAmount,
+			LoanStatus:      row.LoanStatus,
+			Tenure:          row.Tenure,
+			TenureValue:     row.TenureValue,
+		},
+	}
+}
+
+func buildDisplayName(parts ...*string) string {
+	trimmedParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := valueOrEmpty(part); value != "" {
+			trimmedParts = append(trimmedParts, value)
+		}
+	}
+	return strings.Join(trimmedParts, " ")
+}
+
+func parseCustomerStatusValue(value string) (models.CustomerStatus, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(models.CustomerStatusPending):
+		return models.CustomerStatusPending, true
+	case string(models.CustomerStatusApproved):
+		return models.CustomerStatusApproved, true
+	case string(models.CustomerStatusEmbryo):
+		return models.CustomerStatusEmbryo, true
+	default:
+		return "", false
+	}
+}
+
+func normalizeCustomerStatusValue(value string) models.CustomerStatus {
+	status, ok := parseCustomerStatusValue(value)
+	if ok {
+		return status
+	}
+	return models.CustomerStatusEmbryo
+}
+
+func normalizeCustomerStatusString(value *string) string {
+	normalized := normalizeCustomerStatusValue(valueOrEmpty(value))
+	return string(normalized)
+}
+
+func normalizedCustomerStatus(value *models.CustomerStatus) models.CustomerStatus {
+	if value == nil {
+		return models.CustomerStatusEmbryo
+	}
+	return normalizeCustomerStatusValue(string(*value))
+}
+
 func valueOrEmpty(v *string) string {
 	if v == nil {
 		return ""
@@ -191,4 +382,26 @@ func formatDatePtr(v *time.Time) string {
 		return ""
 	}
 	return v.Format("2006-01-02")
+}
+
+func isAllowedCustomerCallbackStatus(status models.CustomerStatus) bool {
+	switch status {
+	case models.CustomerStatusEmbryo, models.CustomerStatusPending, models.CustomerStatusApproved:
+		return true
+	default:
+		return false
+	}
+}
+
+func canTransitionCustomerStatus(from *models.CustomerStatus, to models.CustomerStatus) bool {
+	switch normalizedCustomerStatus(from) {
+	case models.CustomerStatusEmbryo:
+		return to == models.CustomerStatusPending
+	case models.CustomerStatusPending:
+		return to == models.CustomerStatusEmbryo || to == models.CustomerStatusApproved
+	case models.CustomerStatusApproved:
+		return false
+	default:
+		return false
+	}
 }

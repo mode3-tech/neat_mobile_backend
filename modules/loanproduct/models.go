@@ -1,6 +1,7 @@
 package loanproduct
 
 import (
+	"neat_mobile_app_backend/models"
 	"time"
 )
 
@@ -99,4 +100,17 @@ type LoanApplicationStatusEvent struct {
 
 func (LoanApplicationStatusEvent) TableName() string {
 	return "wallet_loan_application_status_events"
+}
+
+type CustomerStatusEvent struct {
+	ID             string                `gorm:"column:id;type:text;primaryKey"`
+	EventID        string                `gorm:"column:event_id;type:text;not null;uniqueIndex"`
+	CoreCustomerID string                `gorm:"column:core_customer_id;type:text;not null;index"`
+	Status         models.CustomerStatus `gorm:"column:status;type:text;not null"`
+	RawPayload     string                `gorm:"column:raw_payload;type:jsonb;not null"`
+	ProcessedAt    time.Time             `gorm:"column:processed_at;type:timestamptz;not null"`
+}
+
+func (CustomerStatusEvent) TableName() string {
+	return "wallet_customer_status_events"
 }

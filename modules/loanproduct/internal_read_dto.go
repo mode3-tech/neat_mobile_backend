@@ -5,16 +5,40 @@ type GetLoanApplicationsForCBAResponse struct {
 	Applications []CBAListLoanApplicationItem `json:"applications"`
 }
 
+type GetEmbryoLoanApplicationsForCBAResponse struct {
+	Count        int                            `json:"count"`
+	Applications []CBAEmbryoLoanApplicationItem `json:"applications"`
+}
+
+type CBAEmbryoLoanApplicationItem struct {
+	Name           string `json:"name"`
+	LoanStatus     string `json:"loan_status"`
+	CustomerStatus string `json:"customer_status"`
+}
+
+type CBABVNRecordItem struct {
+	ApplicationRef string              `json:"application_ref"`
+	BVNRecord      CBABVNRecordReadDTO `json:"bvn_record"`
+}
+
+type GetLoanApplicationBVNRecordForCBAResponse struct {
+	Record CBABVNRecordReadDTO `json:"customer_record"`
+}
+
 type CBAListLoanApplicationItem struct {
 	ApplicationRef string                    `json:"application_ref"`
 	Loan           CBALoanApplicationReadDTO `json:"loan"`
-	BVNRecord      *CBABVNRecordReadDTO      `json:"bvn_record,omitempty"`
+}
+
+type GetLoanApplicationForCBAResponse struct {
+	Application CBAListLoanApplicationItem `json:"application"`
 }
 
 type CBALoanApplicationReadDTO struct {
 	ApplicationRef  string  `json:"application_ref"`
 	MobileUserID    string  `json:"mobile_user_id"`
 	CoreCustomerID  *string `json:"core_customer_id,omitempty"`
+	Name            string  `json:"name"`
 	PhoneNumber     string  `json:"phone_number"`
 	LoanProductType string  `json:"loan_product_type"`
 	BusinessAddress string  `json:"business_address"`
@@ -43,4 +67,12 @@ type CBABVNRecordReadDTO struct {
 	PassportOnBVN          string  `json:"passport_on_bvn"`
 	City                   *string `json:"city,omitempty"`
 	Landmark               *string `json:"landmark,omitempty"`
+}
+
+type LoanApplicationBVNRecordQuery struct {
+	UserID string `form:"user_id"`
+}
+
+type LoanApplicationsForCBAQuery struct {
+	UserID string `form:"user_id" binding:"required"`
 }

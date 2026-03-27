@@ -169,63 +169,37 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		return nil, errors.New("business must be at least a year old")
 	}
 
-	if user.CoreCustomerID != nil && strings.TrimSpace(*user.CoreCustomerID) != "" {
-		id := strings.TrimSpace(*user.CoreCustomerID)
-		coreCustomerID = &id
-	} else {
-		match, err := s.MatchCoreCustomerByBVN(ctx, user.BVN)
-		if err != nil {
-			return nil, errors.New(err.Error())
-		}
-		if match == nil {
-			return nil, errors.New("core app returned empty customer match response")
-		}
-
-		switch match.MatchStatus {
-		case CoreCustomerNoMatch:
-			return nil, errors.New("customer does not exist on core app")
-		case CoreCustomerMultipleMatches:
-			return nil, errors.New("multiple core customers matched this bvn")
-		case CoreCustomerSingleMatch:
-			if match.Customer == nil || strings.TrimSpace(match.Customer.CustomerID) == "" {
-				return nil, errors.New("core app returned empty matched customer")
-			}
-			id := strings.TrimSpace(match.Customer.CustomerID)
-			if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, id); err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, errors.New("current user does not exist")
-				}
-				return nil, err
-			}
-			coreCustomerID = &id
-		default:
-			return nil, errors.New("an error occured while looking up customer on the core app")
-		}
-	}
-
-	customerLoans, err := s.getCoreCustomerLoans(ctx, *coreCustomerID)
+	// Core matching is best-effort. A locally registered user may not exist in CBA yet.
+	coreCustomerID, err = s.resolveCoreCustomerIDIfAvailable(ctx, userID, user)
 	if err != nil {
 		return nil, err
 	}
 
-	activeLoanCount := countActiveCoreLoans(customerLoans)
-	if exceedsMaxActiveLoans(activeLoanCount, loanRule.MaxActiveLoans) {
-		return nil, errors.New("customer has reached the maximum number of active loans")
-	}
+	if coreCustomerID != nil {
+		customerLoans, err := s.getCoreCustomerLoans(ctx, *coreCustomerID)
+		if err != nil {
+			return nil, err
+		}
 
-	if loanRule.RequireNoOutstandingDefault != nil && *loanRule.RequireNoOutstandingDefault {
-		for _, loan := range customerLoans {
-			if !shouldInspectLoanForOutstandingDefault(loan) {
-				continue
-			}
+		activeLoanCount := countActiveCoreLoans(customerLoans)
+		if exceedsMaxActiveLoans(activeLoanCount, loanRule.MaxActiveLoans) {
+			return nil, errors.New("customer has reached the maximum number of active loans")
+		}
 
-			loanDetail, err := s.GetCoreLoanDetail(ctx, loan.LoanID)
-			if err != nil {
-				return nil, err
-			}
+		if loanRule.RequireNoOutstandingDefault != nil && *loanRule.RequireNoOutstandingDefault {
+			for _, loan := range customerLoans {
+				if !shouldInspectLoanForOutstandingDefault(loan) {
+					continue
+				}
 
-			if hasOutstandingDefaultLoan(loanDetail) {
-				return nil, errors.New("customer has an outstanding defaulted loan")
+				loanDetail, err := s.GetCoreLoanDetail(ctx, loan.LoanID)
+				if err != nil {
+					return nil, err
+				}
+
+				if hasOutstandingDefaultLoan(loanDetail) {
+					return nil, errors.New("customer has an outstanding defaulted loan")
+				}
 			}
 		}
 	}
@@ -237,7 +211,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		PhoneNumber:     user.Phone,
 		MobileUserID:    userID,
 		LoanProductType: req.LoanProductType,
-		LoanStatus:      LoanStatusPending,
+		LoanStatus:      LoanStatusEmbryo,
 		BusinessAddress: req.BusinessAddress,
 		BusinessValue:   parsedBV,
 		RequestedAmount: parsedAmount,
@@ -255,6 +229,50 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		LoanStatus:     eoi.LoanStatus,
 		Summary:        *summary,
 	}, nil
+}
+
+func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID string, user *row) (*string, error) {
+	if user == nil {
+		return nil, nil
+	}
+
+	if user.CoreCustomerID != nil && strings.TrimSpace(*user.CoreCustomerID) != "" {
+		id := strings.TrimSpace(*user.CoreCustomerID)
+		return &id, nil
+	}
+
+	if !user.IsBVNVerified || strings.TrimSpace(user.BVN) == "" || s.coreCustomerFinder == nil {
+		return nil, nil
+	}
+
+	match, err := s.MatchCoreCustomerByBVN(ctx, user.BVN)
+	if err != nil {
+		return nil, err
+	}
+	if match == nil {
+		return nil, errors.New("core app returned empty customer match response")
+	}
+
+	switch match.MatchStatus {
+	case CoreCustomerNoMatch, CoreCustomerMultipleMatches:
+		return nil, nil
+	case CoreCustomerSingleMatch:
+		if match.Customer == nil || strings.TrimSpace(match.Customer.CustomerID) == "" {
+			return nil, errors.New("core app returned empty matched customer")
+		}
+
+		id := strings.TrimSpace(match.Customer.CustomerID)
+		if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, id); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errors.New("current user does not exist")
+			}
+			return nil, err
+		}
+
+		return &id, nil
+	default:
+		return nil, errors.New("an error occured while looking up customer on the core app")
+	}
 }
 
 func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now time.Time) (*LoanSummaryResponse, int64, int64, int, error) {
