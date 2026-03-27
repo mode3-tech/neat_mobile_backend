@@ -76,14 +76,19 @@ func (s *InternalService) GetLoanApplicationForCBA(ctx context.Context, applicat
 	}, nil
 }
 
-func (s *InternalService) GetEmbryoLoanApplicationsForCBA(ctx context.Context) (*GetEmbryoLoanApplicationsForCBAResponse, error) {
-	rows, err := s.repo.ListEmbryoLoanApplicationSummariesForCBA(ctx)
+func (s *InternalService) GetEmbryoLoanApplicationsForCBA(ctx context.Context, page, limit int) (*GetEmbryoLoanApplicationsForCBAResponse, error) {
+	page, limit, offset := normalizeEmbryoLoanApplicationsPagination(page, limit)
+
+	rows, total, err := s.repo.ListEmbryoLoanApplicationSummariesForCBA(ctx, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &GetEmbryoLoanApplicationsForCBAResponse{
 		Count:        len(rows),
+		Page:         page,
+		Limit:        limit,
+		Total:        total,
 		Applications: make([]CBAEmbryoLoanApplicationItem, 0, len(rows)),
 	}
 
@@ -380,6 +385,19 @@ func valueOrEmpty(v *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*v)
+}
+
+func normalizeEmbryoLoanApplicationsPagination(page, limit int) (int, int, int) {
+	if page < 1 {
+		page = defaultEmbryoLoanApplicationsPage
+	}
+	if limit < 1 {
+		limit = defaultEmbryoLoanApplicationsLimit
+	}
+	if limit > maxEmbryoLoanApplicationsLimit {
+		limit = maxEmbryoLoanApplicationsLimit
+	}
+	return page, limit, (page - 1) * limit
 }
 
 func formatDatePtr(v *time.Time) string {

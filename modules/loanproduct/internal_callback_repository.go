@@ -47,6 +47,12 @@ type InternalRepository struct {
 	db *gorm.DB
 }
 
+const (
+	defaultEmbryoLoanApplicationsPage  = 1
+	defaultEmbryoLoanApplicationsLimit = 20
+	maxEmbryoLoanApplicationsLimit     = 100
+)
+
 type cbaApplicationReadRow struct {
 	ApplicationRef            string     `gorm:"column:application_ref"`
 	MobileUserID              string     `gorm:"column:mobile_user_id"`
@@ -228,11 +234,18 @@ func (r *InternalRepository) GetLoanApplicationForCBAByRef(ctx context.Context, 
 	return &row, nil
 }
 
-func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx context.Context) ([]cbaEmbryoApplicationSummaryRow, error) {
+func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx context.Context, limit, offset int) ([]cbaEmbryoApplicationSummaryRow, int64, error) {
 	var rows []cbaEmbryoApplicationSummaryRow
+	var total int64
 
-	err := r.db.WithContext(ctx).
-		Table("wallet_loan_applications").
+	if err := r.embryoLoanApplicationSummariesBaseQuery(ctx).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []cbaEmbryoApplicationSummaryRow{}, 0, nil
+	}
+
+	err := r.embryoLoanApplicationSummariesBaseQuery(ctx).
 		Select(`
 			wallet_loan_applications.application_ref,
 			wallet_loan_applications.mobile_user_id,
@@ -244,20 +257,27 @@ func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx contex
 			wallet_loan_applications.loan_status,
 			wallet_users.customer_status
 		`).
+		Limit(limit).
+		Offset(offset).
+		Order("wallet_loan_applications.created_at DESC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return rows, total, nil
+}
+
+func (r *InternalRepository) embryoLoanApplicationSummariesBaseQuery(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx).
+		Table("wallet_loan_applications").
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
 		Where(
 			"(wallet_loan_applications.loan_status = ? OR wallet_users.customer_status = ?)",
 			LoanStatusEmbryo,
 			models.CustomerStatusEmbryo,
-		).
-		Order("wallet_loan_applications.created_at DESC").
-		Find(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return rows, nil
+		)
 }
 
 func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Context, mobileUserID string) (*cbaBVNRecordReadRow, error) {

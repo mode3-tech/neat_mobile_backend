@@ -7,6 +7,9 @@ type GetLoanApplicationsForCBAResponse struct {
 
 type GetEmbryoLoanApplicationsForCBAResponse struct {
 	Count        int                            `json:"count"`
+	Page         int                            `json:"page"`
+	Limit        int                            `json:"limit"`
+	Total        int64                          `json:"total"`
 	Applications []CBAEmbryoLoanApplicationItem `json:"applications"`
 }
 
@@ -80,4 +83,9 @@ type LoanApplicationBVNRecordQuery struct {
 
 type LoanApplicationsForCBAQuery struct {
 	UserID string `form:"user_id" binding:"required"`
+}
+
+type EmbryoLoanApplicationsForCBAQuery struct {
+	Page  int `form:"page"`
+	Limit int `form:"limit"`
 }

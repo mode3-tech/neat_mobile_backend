@@ -1715,6 +1715,29 @@
         ],
         "parameters": [
           {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number for the embryo loan application summary list."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Number of embryo loan application summaries to return per page."
+          },
+          {
             "in": "header",
             "name": "X-Timestamp",
             "required": true,
@@ -1924,6 +1947,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InternalEmbryoLoanApplicationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pagination query params",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3362,12 +3395,27 @@
         "type": "object",
         "required": [
           "count",
+          "page",
+          "limit",
+          "total",
           "applications"
         ],
         "properties": {
           "count": {
             "type": "integer",
             "example": 2
+          },
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "example": 57
           },
           "applications": {
             "type": "array",

@@ -148,6 +148,10 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 	repo, mock, cleanup := newMockRepository(t)
 	defer cleanup()
 
+	mock.ExpectQuery(countEmbryoLoanApplicationSummariesForCBAQueryPattern()).
+		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
 	rows := sqlmock.NewRows([]string{
 		"application_ref",
 		"mobile_user_id",
@@ -162,17 +166,26 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 		AddRow("app-ref-2", "user-2", "08087654321", "John", "M", "Smith", nil, "active", "embryo")
 
 	mock.ExpectQuery(listEmbryoLoanApplicationSummariesForCBAQueryPattern()).
-		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo).
+		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo, 2, 2).
 		WillReturnRows(rows)
 
 	service := NewInternalService(NewInternalRepository(repo.db))
 
-	resp, err := service.GetEmbryoLoanApplicationsForCBA(context.Background())
+	resp, err := service.GetEmbryoLoanApplicationsForCBA(context.Background(), 2, 2)
 	if err != nil {
 		t.Fatalf("GetEmbryoLoanApplicationsForCBA returned error: %v", err)
 	}
 	if resp == nil {
 		t.Fatal("GetEmbryoLoanApplicationsForCBA returned nil response")
+	}
+	if resp.Page != 2 {
+		t.Fatalf("page = %d, want 2", resp.Page)
+	}
+	if resp.Limit != 2 {
+		t.Fatalf("limit = %d, want 2", resp.Limit)
+	}
+	if resp.Total != 5 {
+		t.Fatalf("total = %d, want 5", resp.Total)
 	}
 	if resp.Count != 2 {
 		t.Fatalf("count = %d, want 2", resp.Count)
@@ -197,6 +210,44 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 	}
 	if resp.Applications[1].CustomerStatus != "embryo" {
 		t.Fatalf("second customer status = %q, want embryo", resp.Applications[1].CustomerStatus)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestInternalService_GetEmbryoLoanApplicationsForCBA_DefaultPagination(t *testing.T) {
+	repo, mock, cleanup := newMockRepository(t)
+	defer cleanup()
+
+	mock.ExpectQuery(countEmbryoLoanApplicationSummariesForCBAQueryPattern()).
+		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	service := NewInternalService(NewInternalRepository(repo.db))
+
+	resp, err := service.GetEmbryoLoanApplicationsForCBA(context.Background(), 0, 0)
+	if err != nil {
+		t.Fatalf("GetEmbryoLoanApplicationsForCBA returned error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("GetEmbryoLoanApplicationsForCBA returned nil response")
+	}
+	if resp.Page != defaultEmbryoLoanApplicationsPage {
+		t.Fatalf("page = %d, want %d", resp.Page, defaultEmbryoLoanApplicationsPage)
+	}
+	if resp.Limit != defaultEmbryoLoanApplicationsLimit {
+		t.Fatalf("limit = %d, want %d", resp.Limit, defaultEmbryoLoanApplicationsLimit)
+	}
+	if resp.Total != 0 {
+		t.Fatalf("total = %d, want 0", resp.Total)
+	}
+	if resp.Count != 0 {
+		t.Fatalf("count = %d, want 0", resp.Count)
+	}
+	if len(resp.Applications) != 0 {
+		t.Fatalf("applications len = %d, want 0", len(resp.Applications))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

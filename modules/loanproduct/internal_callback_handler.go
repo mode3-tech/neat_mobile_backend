@@ -67,7 +67,13 @@ func (h *InternalHandler) GetEmbryoLoanApplicationsForCBA(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetEmbryoLoanApplicationsForCBA(c.Request.Context())
+	var query EmbryoLoanApplicationsForCBAQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query params"})
+		return
+	}
+
+	resp, err := h.service.GetEmbryoLoanApplicationsForCBA(c.Request.Context(), query.Page, query.Limit)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
