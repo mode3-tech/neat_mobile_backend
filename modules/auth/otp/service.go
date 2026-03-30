@@ -18,7 +18,7 @@ import (
 )
 
 type OTPService struct {
-	repo         OTPRepository
+	repo         *OTPRepository
 	verification *verification.VerificationRepo
 	tx           *tx.Transactor
 	sms          notify.SMSSender
@@ -26,8 +26,225 @@ type OTPService struct {
 	pepper       string
 }
 
-func NewOTPService(repo OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) *OTPService {
+func NewOTPService(repo *OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) *OTPService {
 	return &OTPService{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper}
+}
+
+func NewOTPManager(repo *OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) OTPManager {
+	return NewOTPService(repo, verification, tx, sms, email, pepper)
+}
+
+func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult, error) {
+	now := time.Now().UTC()
+
+	normalizeDestination, err := NormalizeDestination(in.Destination, in.Channel)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := in.TTL
+	if ttl <= 0 {
+		ttl = 10 * time.Minute
+	}
+
+	maxAttempts := in.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 5
+	}
+
+	maxResends := in.MaxResends
+	if maxResends <= 0 {
+		maxResends = 3
+	}
+
+	const cooldown = 30 * time.Second
+
+	code, err := Generate6DigitOTP()
+	if err != nil {
+		return nil, errors.New("unable to generate OTP")
+	}
+
+	hashedOTP, err := HashOTP(o.pepper, in.Purpose, normalizeDestination, code)
+	if err != nil {
+		return nil, errors.New("unable to hash OTP")
+	}
+
+	var result IssueOTPResult
+
+	err = o.repo.WithTx(ctx, func(r *OTPRepository) error {
+		active, err := r.GetActiveOTP(ctx, normalizeDestination, in.Purpose)
+		if err != nil {
+			return err
+		}
+
+		if active != nil {
+			if active.NextSendAt != nil && now.Before(*active.NextSendAt) {
+				return errors.New("too many requests")
+			}
+			if active.ResendCount >= active.MaxResends {
+				return errors.New("too many requests")
+			}
+		}
+
+		var smsMsg string
+		switch in.Purpose {
+		case PurposePasswordReset:
+			smsMsg = fmt.Sprintf("Your password reset code is %s. It expires in %d minutes. Do not share this code with anyone.", code, int(ttl.Minutes()))
+		case PurposeLogin:
+			smsMsg = fmt.Sprintf("Your login OTP is %s. It expires in %d minutes. Do not share this code with anyone.", code, int(ttl.Minutes()))
+		default:
+			smsMsg = fmt.Sprintf("Your verification code is %s. It expires in %d minutes. Do not share this code with anyone.", code, int(ttl.Minutes()))
+		}
+
+		switch in.Channel {
+		case ChannelSMS:
+			if err := o.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
+				return err
+			}
+		case ChannelEmail:
+			subject := "Your One Time Password (OTP)"
+			if in.Purpose == PurposePasswordReset {
+				subject = "Your Password Reset OTP"
+			}
+			if err := o.email.Send(ctx, normalizeDestination, subject, code); err != nil {
+				return err
+			}
+		default:
+			return errors.New("unsupported channel")
+		}
+
+		expiresAt := now.Add(ttl)
+		nextSendAt := now.Add(cooldown)
+
+		if active == nil {
+			otpRow := &OTPModel{
+				ID:           uuid.NewString(),
+				UserID:       in.UserID,
+				Purpose:      in.Purpose,
+				Channel:      in.Channel,
+				Destination:  normalizeDestination,
+				OTPHash:      hashedOTP,
+				ExpiresAt:    expiresAt,
+				NextSendAt:   &nextSendAt,
+				ResendCount:  0,
+				MaxResends:   maxResends,
+				AttemptCount: 0,
+				MaxAttempts:  maxAttempts,
+				IssuedAt:     now,
+			}
+			if err := r.CreateOTP(ctx, otpRow); err != nil {
+				return err
+			}
+			result = IssueOTPResult{
+				OTPID:      otpRow.ID,
+				ExpiresAt:  expiresAt,
+				NextSendAt: &nextSendAt,
+			}
+			return nil
+		}
+
+		if err := r.UpdateForResend(ctx, active.ID, hashedOTP, expiresAt, nextSendAt); err != nil {
+			return err
+		}
+		result = IssueOTPResult{
+			OTPID:      active.ID,
+			ExpiresAt:  expiresAt,
+			NextSendAt: &nextSendAt,
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (o *OTPService) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResult, error) {
+	now := time.Now().UTC()
+
+	var result VerifyOTPResult
+	var verifyErr error
+
+	err := o.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		r := NewOTPRepository(txDB)
+		verificationRepo := verification.NewVerification(txDB)
+
+		var active *OTPModel
+		var err error
+
+		if strings.TrimSpace(in.OTPID) != "" {
+			active, err = r.GetActiveOTPByID(ctx, strings.TrimSpace(in.OTPID), in.Purpose)
+		} else {
+			normalizedDestination, normErr := NormalizeDestination(in.Destination, in.Channel)
+			if normErr != nil {
+				return errors.New("invalid otp")
+			}
+			active, err = r.GetActiveOTP(ctx, normalizedDestination, in.Purpose)
+		}
+
+		if err != nil {
+			return err
+		}
+
+		if active == nil {
+			return errors.New("invalid otp")
+		}
+
+		maxAttempts := active.MaxAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 5
+		}
+		if active.AttemptCount >= maxAttempts {
+			return errors.New("invalid otp")
+		}
+
+		hashed, err := HashOTP(o.pepper, in.Purpose, active.Destination, strings.TrimSpace(in.Code))
+		if err != nil {
+			return errors.New("invalid otp")
+		}
+
+		if !HashEqualHex(hashed, active.OTPHash) {
+			if err = r.IncrementAttempt(ctx, active.ID); err != nil {
+				return err
+			}
+			verifyErr = errors.New("invalid otp")
+			return nil
+		}
+
+		if err = r.ConsumeOTP(ctx, active.ID, now); err != nil {
+			return err
+		}
+		record, err := newVerifiedVerificationRecord(active.Channel, active.Destination, now)
+		if err != nil {
+			return err
+		}
+
+		if err := verificationRepo.AddVerification(ctx, record); err != nil {
+			return err
+		}
+
+		result = VerifyOTPResult{
+			OTPID:          active.ID,
+			UserID:         active.UserID,
+			VerifiedAt:     now,
+			VerificationID: record.ID,
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if verifyErr != nil {
+		return nil, verifyErr
+	}
+
+	return &result, nil
 }
 
 func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination string, channel Channel) error {

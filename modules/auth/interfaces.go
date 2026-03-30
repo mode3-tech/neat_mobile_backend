@@ -10,6 +10,7 @@ import (
 )
 
 type JWTSigner interface {
+	// IssueAccessToken takes userID and sessionID and returns access token or error if any
 	IssueAccessToken(userID, sid string) (string, error)
 	IssueRefreshToken(userID, sid string) (string, string, time.Time, error)
 	ParseAndValidate(tokenString string, expectedType TokenType) (jwt.MapClaims, error)
@@ -18,6 +19,10 @@ type JWTSigner interface {
 	ValidRefreshToken(tokenString string) bool
 	ExtractAccessTokenIdentifiers(tokenString string) (string, string, error)
 	ExtractRefreshTokenIdentifiers(tokenString string) (string, string, string, error)
+}
+
+type WalletService interface {
+	GenerateWallet(ctx context.Context, userID string) (string, error)
 }
 
 type TendarValidation interface {

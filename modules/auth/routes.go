@@ -12,14 +12,14 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *AuthHandler, authGuard gin.Han
 		loginHandlers := append(loginMiddlewares, handler.Login)
 		auth.POST("/login", loginHandlers...)
 
-		auth.POST("/verify-device", handler.VerifyDevice)
-		auth.POST("/verify-new-device", handler.VerifyNewDevice)
-		auth.POST("/resend-new-device-otp", handler.ResendNewDeviceOTP)
+		auth.POST("/device/challenge/verify", handler.VerifyDevice)
+		auth.POST("/device/otp/verify", handler.VerifyNewDevice)
+		auth.POST("/device/otp/resend", handler.ResendNewDeviceOTP)
 		auth.POST("/refresh", handler.RefreshAccessToken)
 		auth.POST("/validate-bvn", handler.VerifyBVN)
 		auth.POST("/validate-nin", handler.VerifyNIN)
-		auth.POST("/forgot-password", handler.ForgotPassword)
-		auth.POST("/reset-password", handler.ResetPassword)
+		auth.POST("/password/forgot", handler.ForgotPassword)
+		auth.POST("/password/resetshow", handler.ResetPassword)
 
 		// Protected route
 		auth.POST("/logout", authGuard, handler.Logout)

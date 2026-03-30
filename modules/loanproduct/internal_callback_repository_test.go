@@ -26,7 +26,7 @@ func listEmbryoLoanApplicationSummariesForCBAQueryPattern() string {
 }
 
 func countEmbryoLoanApplicationSummariesForCBAQueryPattern() string {
-	return `(?s)SELECT count\(\*\) FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE \(\(?wallet_loan_applications\.loan_status = \$1 OR wallet_users\.customer_status = \$2\)?\)`
+	return `(?s)SELECT count\(\*\) FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id WHERE \(\(?wallet_loan_applications\.loan_status = \$1 OR wallet_users\.customer_status = \$2\)?\)`
 }
 
 func cbaApplicationReadColumns() []string {

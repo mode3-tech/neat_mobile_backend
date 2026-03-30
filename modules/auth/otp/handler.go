@@ -10,11 +10,11 @@ import (
 )
 
 type OTPHandler struct {
-	service *OTPService
+	manager OTPManager
 }
 
-func NewOTPHandler(service *OTPService) *OTPHandler {
-	return &OTPHandler{service: service}
+func NewOTPHandler(manager OTPManager) *OTPHandler {
+	return &OTPHandler{manager: manager}
 }
 
 var (
@@ -41,7 +41,11 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	if err := o.service.SendOTP(c.Request.Context(), purpose, req.Destination, channel); err != nil {
+	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
+		Purpose:     purpose,
+		Channel:     channel,
+		Destination: req.Destination,
+	}); err != nil {
 		writeOTPError(c, err)
 		return
 	}
@@ -68,14 +72,22 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := o.service.VerifyOTP(c.Request.Context(), req.OTP, req.Destination, channel, purpose)
+	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
+		Code:        req.OTP,
+		Destination: req.Destination,
+		Channel:     channel,
+		Purpose:     purpose,
+	})
 
 	if err != nil {
 		writeOTPError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, VerifyOTPResponse{
+		Message:        "OTP verification was successful",
+		VerificationID: result.VerificationID,
+	})
 }
 
 func parsePurpose(v string) (Purpose, error) {

@@ -88,12 +88,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
 	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
-	authService.ConfigureLoginOTP(smsSender, cfg.Pepper)
 
 	otpRepo := otp.NewOTPRepository(db)
-	otpService := otp.NewOTPService(*otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
-	otpHandler := otp.NewOTPHandler(otpService)
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
+	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
+	authService.ConfigureOTPManager(otpManager)
 
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)

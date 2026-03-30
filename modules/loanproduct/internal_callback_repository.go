@@ -2,6 +2,9 @@ package loanproduct
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
 	"neat_mobile_app_backend/models"
 	"time"
 
@@ -51,6 +54,7 @@ const (
 	defaultEmbryoLoanApplicationsPage  = 1
 	defaultEmbryoLoanApplicationsLimit = 10
 	maxEmbryoLoanApplicationsLimit     = 100
+	internalCallbackSlowQueryThreshold = 2 * time.Second
 )
 
 type cbaApplicationReadRow struct {
@@ -123,31 +127,73 @@ func NewInternalRepository(db *gorm.DB) *InternalRepository {
 	return &InternalRepository{db: db}
 }
 
+func (r *InternalRepository) logInternalCallbackQuery(name string, startedAt time.Time, detail string, err error) {
+	duration := time.Since(startedAt)
+	if err == nil && duration < internalCallbackSlowQueryThreshold {
+		return
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) && duration < internalCallbackSlowQueryThreshold {
+		return
+	}
+
+	message := fmt.Sprintf("loanproduct internal callback query=%s duration=%s", name, duration.Round(time.Millisecond))
+	if detail != "" {
+		message += " " + detail
+	}
+
+	if sqlDB, dbErr := r.db.DB(); dbErr == nil {
+		stats := sqlDB.Stats()
+		message += fmt.Sprintf(
+			" db_open=%d db_in_use=%d db_idle=%d db_wait_count=%d db_wait_duration=%s",
+			stats.OpenConnections,
+			stats.InUse,
+			stats.Idle,
+			stats.WaitCount,
+			stats.WaitDuration.Round(time.Millisecond),
+		)
+	}
+
+	if err != nil {
+		log.Printf("%s err=%v", message, err)
+		return
+	}
+
+	log.Print(message)
+}
+
 func (r *InternalRepository) WithTx(ctx context.Context, fn func(*InternalRepository) error) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	startedAt := time.Now()
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(NewInternalRepository(tx))
 	})
+	r.logInternalCallbackQuery("WithTx", startedAt, "", err)
+	return err
 }
 
 func (r *InternalRepository) GetApplicationByRefForUpdate(ctx context.Context, ref string) (*LoanApplication, error) {
 	var row LoanApplication
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("application_ref = ?", ref).
 		First(&row).Error
+	r.logInternalCallbackQuery("GetApplicationByRefForUpdate", startedAt, fmt.Sprintf("application_ref=%s", ref), err)
 	return &row, err
 }
 
 func (r *InternalRepository) InsertStatusEvent(ctx context.Context, ev *LoanApplicationStatusEvent) (bool, error) {
+	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).
 		Create(ev)
+	r.logInternalCallbackQuery("InsertStatusEvent", startedAt, fmt.Sprintf("rows_affected=%d", tx.RowsAffected), tx.Error)
 	return tx.RowsAffected == 1, tx.Error
 }
 
 func (r *InternalRepository) ListLoanApplicationsForCBA(ctx context.Context) ([]cbaApplicationReadRow, error) {
 	var rows []cbaApplicationReadRow
 
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Table("wallet_loan_applications").
 		Select(`
@@ -186,6 +232,7 @@ func (r *InternalRepository) ListLoanApplicationsForCBA(ctx context.Context) ([]
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
 		Order("wallet_loan_applications.created_at DESC").
 		Find(&rows).Error
+	r.logInternalCallbackQuery("ListLoanApplicationsForCBA", startedAt, fmt.Sprintf("rows=%d", len(rows)), err)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +243,7 @@ func (r *InternalRepository) ListLoanApplicationsForCBA(ctx context.Context) ([]
 func (r *InternalRepository) GetMostRecentEmbryoLoanApplicationForCBA(ctx context.Context, mobileUserID string) (*cbaApplicationReadRow, error) {
 	var row cbaApplicationReadRow
 
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Table("wallet_loan_applications").
 		Select(cbaApplicationSelectColumns).
@@ -209,6 +257,7 @@ func (r *InternalRepository) GetMostRecentEmbryoLoanApplicationForCBA(ctx contex
 		).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error
+	r.logInternalCallbackQuery("GetMostRecentEmbryoLoanApplicationForCBA", startedAt, fmt.Sprintf("mobile_user_id=%s", mobileUserID), err)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +268,7 @@ func (r *InternalRepository) GetMostRecentEmbryoLoanApplicationForCBA(ctx contex
 func (r *InternalRepository) GetLoanApplicationForCBAByRef(ctx context.Context, applicationRef string) (*cbaApplicationReadRow, error) {
 	var row cbaApplicationReadRow
 
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Table("wallet_loan_applications").
 		Select(cbaApplicationSelectColumns).
@@ -227,6 +277,7 @@ func (r *InternalRepository) GetLoanApplicationForCBAByRef(ctx context.Context, 
 		Where("wallet_loan_applications.application_ref = ?", applicationRef).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error
+	r.logInternalCallbackQuery("GetLoanApplicationForCBAByRef", startedAt, fmt.Sprintf("application_ref=%s", applicationRef), err)
 	if err != nil {
 		return nil, err
 	}
@@ -238,14 +289,19 @@ func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx contex
 	var rows []cbaEmbryoApplicationSummaryRow
 	var total int64
 
+	countStartedAt := time.Now()
 	if err := r.embryoLoanApplicationSummariesBaseQuery(ctx).Count(&total).Error; err != nil {
+		r.logInternalCallbackQuery("CountEmbryoLoanApplicationSummariesForCBA", countStartedAt, fmt.Sprintf("limit=%d offset=%d", limit, offset), err)
 		return nil, 0, err
 	}
+	r.logInternalCallbackQuery("CountEmbryoLoanApplicationSummariesForCBA", countStartedAt, fmt.Sprintf("limit=%d offset=%d total=%d", limit, offset, total), nil)
 	if total == 0 {
 		return []cbaEmbryoApplicationSummaryRow{}, 0, nil
 	}
 
+	listStartedAt := time.Now()
 	err := r.embryoLoanApplicationSummariesBaseQuery(ctx).
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
 		Select(`
 			wallet_loan_applications.application_ref,
 			wallet_loan_applications.mobile_user_id,
@@ -261,6 +317,7 @@ func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx contex
 		Offset(offset).
 		Order("wallet_loan_applications.created_at DESC").
 		Find(&rows).Error
+	r.logInternalCallbackQuery("ListEmbryoLoanApplicationSummariesForCBA", listStartedAt, fmt.Sprintf("limit=%d offset=%d rows=%d", limit, offset, len(rows)), err)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -272,7 +329,6 @@ func (r *InternalRepository) embryoLoanApplicationSummariesBaseQuery(ctx context
 	return r.db.WithContext(ctx).
 		Table("wallet_loan_applications").
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
-		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
 		Where(
 			"(wallet_loan_applications.loan_status = ? OR wallet_users.customer_status = ?)",
 			LoanStatusEmbryo,
@@ -283,6 +339,7 @@ func (r *InternalRepository) embryoLoanApplicationSummariesBaseQuery(ctx context
 func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Context, mobileUserID string) (*cbaBVNRecordReadRow, error) {
 	var row cbaBVNRecordReadRow
 
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Table("wallet_loan_applications").
 		Select(`
@@ -309,6 +366,7 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 		Where("wallet_loan_applications.mobile_user_id = ?", mobileUserID).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error
+	r.logInternalCallbackQuery("GetLoanApplicationBVNRecordForCBA", startedAt, fmt.Sprintf("mobile_user_id=%s", mobileUserID), err)
 	if err != nil {
 		return nil, err
 	}
@@ -318,17 +376,21 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 
 func (r *InternalRepository) GetUserByCoreCustomerIDForUpdate(ctx context.Context, coreCustomerID string) (*models.User, error) {
 	var row models.User
+	startedAt := time.Now()
 	err := r.db.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("core_customer_id = ?", coreCustomerID).
 		First(&row).Error
+	r.logInternalCallbackQuery("GetUserByCoreCustomerIDForUpdate", startedAt, fmt.Sprintf("core_customer_id=%s", coreCustomerID), err)
 	return &row, err
 }
 
 func (r *InternalRepository) InsertCustomerStatusEvent(ctx context.Context, ev *CustomerStatusEvent) (bool, error) {
+	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).
 		Create(ev)
+	r.logInternalCallbackQuery("InsertCustomerStatusEvent", startedAt, fmt.Sprintf("rows_affected=%d", tx.RowsAffected), tx.Error)
 	return tx.RowsAffected == 1, tx.Error
 }
 
@@ -341,24 +403,32 @@ func (r *InternalRepository) UpdateApplicationStatus(ctx context.Context, ref st
 		updates["core_loan_id"] = *coreLoanID
 	}
 
-	return r.db.WithContext(ctx).
+	startedAt := time.Now()
+	tx := r.db.WithContext(ctx).
 		Model(&LoanApplication{}).
 		Where("application_ref = ?", ref).
-		Updates(updates).Error
+		Updates(updates)
+	r.logInternalCallbackQuery("UpdateApplicationStatus", startedAt, fmt.Sprintf("application_ref=%s rows_affected=%d", ref, tx.RowsAffected), tx.Error)
+	return tx.Error
 }
 
 func (r *InternalRepository) UpdateUserCustomerStatus(ctx context.Context, coreCustomerID string, status models.CustomerStatus) error {
-	return r.db.WithContext(ctx).
+	startedAt := time.Now()
+	tx := r.db.WithContext(ctx).
 		Model(&models.User{}).
 		Where("core_customer_id = ?", coreCustomerID).
-		Update("customer_status", status).Error
+		Update("customer_status", status)
+	r.logInternalCallbackQuery("UpdateUserCustomerStatus", startedAt, fmt.Sprintf("core_customer_id=%s rows_affected=%d", coreCustomerID, tx.RowsAffected), tx.Error)
+	return tx.Error
 }
 
 func (r *InternalRepository) LinkWalletUserCoreCustomerIDByBVN(ctx context.Context, bvn, coreCustomerID string) (int64, error) {
+	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Table("wallet_users").
 		Where("bvn = ?", bvn).
 		Update("core_customer_id", coreCustomerID)
+	r.logInternalCallbackQuery("LinkWalletUserCoreCustomerIDByBVN", startedAt, fmt.Sprintf("core_customer_id=%s rows_affected=%d", coreCustomerID, tx.RowsAffected), tx.Error)
 	if tx.Error != nil {
 		return 0, tx.Error
 	}

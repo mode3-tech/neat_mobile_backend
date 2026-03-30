@@ -44,6 +44,7 @@ type AuthService struct {
 	prembly        PremblyValidation
 	nin            NINValidation
 	providerSource BVNProviderSource
+	otpManager     authotp.OTPManager
 }
 
 type bvnInfo struct {
@@ -79,9 +80,8 @@ func NewAuthService(repo *Repository, verification *verification.VerificationRep
 	}
 }
 
-func (s *AuthService) ConfigureLoginOTP(smsSender notify.SMSSender, pepper string) {
-	s.smsSender = smsSender
-	s.otpPepper = strings.TrimSpace(pepper)
+func (s *AuthService) ConfigureOTPManager(manager authotp.OTPManager) {
+	s.otpManager = manager
 }
 
 func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
@@ -569,29 +569,27 @@ func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, dev
 		return nil, err
 	}
 
-	var sessionToken string
-	var generatedOTP string
+	otpResult, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+		Purpose:     loginOTPPurpose,
+		Channel:     loginOTPChannel,
+		Destination: normalizedPhone,
+		UserID:      userID,
+		TTL:         10 * time.Minute,
+		MaxAttempts: 5,
+		MaxResends:  3,
+	})
+	if err != nil {
+		return nil, err
+	}
 
+	var sessionToken string
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewDeviceRepository(txDB)
-
-		otpRef, code, err := s.upsertNewDeviceLoginOTP(ctx, txDB, userID, normalizedPhone)
-		if err != nil {
-			return err
-		}
-		generatedOTP = code
-
-		token, err := s.createPendingDeviceSession(ctx, deviceRepo, userID, deviceID, ip, otpRef)
+		token, err := s.createPendingDeviceSession(ctx, deviceRepo, userID, deviceID, ip, otpResult.OTPID)
 		if err != nil {
 			return err
 		}
 		sessionToken = token
-
-		otpMessage := fmt.Sprintf("Your login OTP is %s. It expires in 10 minutes. Do not share this code with anyone.", generatedOTP)
-		if err := s.smsSender.Send(ctx, normalizedPhone, otpMessage); err != nil {
-			return err
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -602,77 +600,6 @@ func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, dev
 		Status:       LoginStatusNewDeviceDetected,
 		SessionToken: sessionToken,
 	}, nil
-}
-
-func (s *AuthService) upsertNewDeviceLoginOTP(ctx context.Context, txDB *gorm.DB, userID, normalizedPhone string) (string, string, error) {
-	if txDB == nil {
-		return "", "", errors.New("transaction db not configured")
-	}
-
-	now := time.Now().UTC()
-	const ttl = 10 * time.Minute
-	const cooldown = 30 * time.Second
-
-	otpRepo := authotp.NewOTPRepository(txDB)
-	activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, loginOTPPurpose)
-	if err != nil {
-		return "", "", err
-	}
-
-	if activeOTP != nil {
-		maxResends := activeOTP.MaxResends
-		if maxResends <= 0 {
-			maxResends = 3
-		}
-
-		if activeOTP.NextSendAt != nil && now.Before(*activeOTP.NextSendAt) {
-			return "", "", errors.New("too many requests")
-		}
-		if activeOTP.ResendCount >= maxResends {
-			return "", "", errors.New("too many requests")
-		}
-	}
-
-	generatedOTP, err := authotp.Generate6DigitOTP()
-	if err != nil {
-		return "", "", errors.New("unable to generate OTP")
-	}
-
-	hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, normalizedPhone, generatedOTP)
-	if err != nil {
-		return "", "", errors.New("unable to hash OTP")
-	}
-
-	expiresAt := now.Add(ttl)
-	nextSendAt := now.Add(cooldown)
-
-	if activeOTP == nil {
-		otpRow := &authotp.OTPModel{
-			ID:           uuid.NewString(),
-			UserID:       userID,
-			Purpose:      loginOTPPurpose,
-			Channel:      loginOTPChannel,
-			Destination:  normalizedPhone,
-			OTPHash:      hashedOTP,
-			ExpiresAt:    expiresAt,
-			NextSendAt:   &nextSendAt,
-			ResendCount:  0,
-			MaxResends:   3,
-			AttemptCount: 0,
-			MaxAttempts:  5,
-			IssuedAt:     now,
-		}
-		if err := otpRepo.CreateOTP(ctx, otpRow); err != nil {
-			return "", "", err
-		}
-		return otpRow.ID, generatedOTP, nil
-	}
-
-	if err := otpRepo.UpdateForResend(ctx, activeOTP.ID, hashedOTP, expiresAt, nextSendAt); err != nil {
-		return "", "", err
-	}
-
-	return activeOTP.ID, generatedOTP, nil
 }
 
 func (s *AuthService) createPendingDeviceSession(ctx context.Context, deviceRepo *device.DeviceRepository, userID, deviceID, ip, otpRef string) (string, error) {
@@ -835,16 +762,20 @@ func (s *AuthService) ResendNewDeviceOTP(ctx context.Context, req ResendNewDevic
 			return err
 		}
 
-		otpRef, code, err := s.upsertNewDeviceLoginOTP(ctx, txDB, session.UserID, phone)
+		otpResult, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+			Purpose:     loginOTPPurpose,
+			Channel:     loginOTPChannel,
+			Destination: phone,
+			UserID:      session.UserID,
+			TTL:         10 * time.Minute,
+			MaxAttempts: 5,
+			MaxResends:  3,
+		})
 		if err != nil {
 			return err
 		}
 
-		if err := deviceRepo.RefreshPendingSession(ctx, session.ID, otpRef, now.Add(10*time.Minute), now); err != nil {
-			return err
-		}
-
-		return s.smsSender.Send(ctx, phone, fmt.Sprintf("Your login OTP is %s. It expires in 10 minutes. Do not share this code with anyone.", code))
+		return deviceRepo.RefreshPendingSession(ctx, session.ID, otpResult.OTPID, now.Add(10*time.Minute), now)
 	})
 }
 
@@ -1455,9 +1386,12 @@ func firstNonEmptyString(values ...string) string {
 }
 
 func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) error {
-
 	if strings.TrimSpace(deviceID) == "" {
 		return errors.New("device id is required")
+	}
+
+	if s.otpManager == nil {
+		return errors.New("otp manager not configured")
 	}
 
 	phone, err := NormalizeNigerianNumber(strings.TrimSpace(req.Phone))
@@ -1484,36 +1418,16 @@ func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 		return err
 	}
 
-	generatedOTP, err := generate6DigitOTP()
-
-	if err != nil {
-		return errors.New(err.Error())
-	}
-
-	otpByte := sha256.Sum256([]byte(generatedOTP))
-	otpHash := hex.EncodeToString(otpByte[:])
-
-	otpRepo := authotp.NewOTPRepository(s.repo.db)
-
-	now := time.Now().UTC()
-
-	otp := &authotp.OTPModel{
-		ID:          uuid.NewString(),
-		UserID:      user.ID,
+	_, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
 		Purpose:     authotp.PurposePasswordReset,
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
-		OTPHash:     otpHash,
-		ExpiresAt:   now.Add(10 * time.Minute),
-	}
-
-	if err := otpRepo.CreateOTP(ctx, otp); err != nil {
-		return errors.New("error occured while saving otp")
-	}
-
-	s.smsSender.Send(ctx, phone, string(fmt.Sprintf("Your password reset code is %s. It expires in 10 minutes. Do not share this code with anyone.", generatedOTP)))
-
-	return nil
+		UserID:      user.ID,
+		TTL:         10 * time.Minute,
+		MaxAttempts: 5,
+		MaxResends:  3,
+	})
+	return err
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, req ResetPasswordRequest, deviceID string) error {

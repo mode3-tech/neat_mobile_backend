@@ -1,13 +1,17 @@
 package loanproduct
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+const internalCallbackRequestTimeout = 10 * time.Second
 
 type InternalHandler struct {
 	service *InternalService
@@ -15,6 +19,23 @@ type InternalHandler struct {
 
 func NewInternalHandler(service *InternalService) *InternalHandler {
 	return &InternalHandler{service: service}
+}
+
+func withInternalCallbackContext(c *gin.Context) (context.Context, context.CancelFunc) {
+	if c == nil || c.Request == nil {
+		return context.WithTimeout(context.Background(), internalCallbackRequestTimeout)
+	}
+
+	return context.WithTimeout(c.Request.Context(), internalCallbackRequestTimeout)
+}
+
+func handleInternalCallbackTimeout(c *gin.Context, err error) bool {
+	if !errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{"error": "internal callback request timed out"})
+	return true
 }
 
 func (h *InternalHandler) GetLoanApplicationsForCBA(c *gin.Context) {
@@ -29,8 +50,14 @@ func (h *InternalHandler) GetLoanApplicationsForCBA(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanApplicationsForCBA(c.Request.Context(), query.UserID)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	resp, err := h.service.GetLoanApplicationsForCBA(ctx, query.UserID)
 	if err != nil {
+		if handleInternalCallbackTimeout(c, err) {
+			return
+		}
 		if errors.Is(err, ErrInvalidMobileUserID) || errors.Is(err, ErrBadRequest) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -48,8 +75,13 @@ func (h *InternalHandler) GetLoanApplicationForCBA(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanApplicationForCBA(c.Request.Context(), strings.TrimSpace(c.Param("application_ref")))
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	resp, err := h.service.GetLoanApplicationForCBA(ctx, strings.TrimSpace(c.Param("application_ref")))
 	switch {
+	case handleInternalCallbackTimeout(c, err):
+		return
 	case errors.Is(err, ErrApplicationNotFound):
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, ErrBadRequest):
@@ -73,8 +105,14 @@ func (h *InternalHandler) GetEmbryoLoanApplicationsForCBA(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetEmbryoLoanApplicationsForCBA(c.Request.Context(), query.Page, query.Limit)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	resp, err := h.service.GetEmbryoLoanApplicationsForCBA(ctx, query.Page, query.Limit)
 	if err != nil {
+		if handleInternalCallbackTimeout(c, err) {
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 		return
 	}
@@ -95,9 +133,15 @@ func (h *InternalHandler) GetLoanApplicationBVNRecordForCBA(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanApplicationBVNRecordForCBA(c.Request.Context(), query.UserID)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	resp, err := h.service.GetLoanApplicationBVNRecordForCBA(ctx, query.UserID)
 
 	if err != nil {
+		if handleInternalCallbackTimeout(c, err) {
+			return
+		}
 		if isUnprocessableEntityBVNRecordError(err) {
 			c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
@@ -156,8 +200,13 @@ func (h *InternalHandler) UpdateCustomerStatusFromCBA(c *gin.Context) {
 		return
 	}
 
-	err = h.service.ApplyCBACustomerStatusUpdate(c.Request.Context(), customerID, req, payload)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	err = h.service.ApplyCBACustomerStatusUpdate(ctx, customerID, req, payload)
 	switch {
+	case handleInternalCallbackTimeout(c, err):
+		return
 	case errors.Is(err, ErrCustomerNotFound):
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, ErrInvalidCustomerID), errors.Is(err, ErrInvalidStatus), errors.Is(err, ErrBadRequest):
@@ -191,8 +240,13 @@ func (h *InternalHandler) UpdateApplicationStatusFromCBA(c *gin.Context) {
 		return
 	}
 
-	err = h.service.ApplyCBAStatusUpdate(c.Request.Context(), applicationRef, req, payload)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	err = h.service.ApplyCBAStatusUpdate(ctx, applicationRef, req, payload)
 	switch {
+	case handleInternalCallbackTimeout(c, err):
+		return
 	case errors.Is(err, ErrApplicationNotFound):
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, ErrInvalidStatus), errors.Is(err, ErrBadRequest):
@@ -218,8 +272,13 @@ func (h *InternalHandler) LinkWalletUserByBVN(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.LinkWalletUserByBVN(c.Request.Context(), req)
+	ctx, cancel := withInternalCallbackContext(c)
+	defer cancel()
+
+	resp, err := h.service.LinkWalletUserByBVN(ctx, req)
 	switch {
+	case handleInternalCallbackTimeout(c, err):
+		return
 	case errors.Is(err, ErrBadRequest):
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case err != nil:

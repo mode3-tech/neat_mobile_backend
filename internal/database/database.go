@@ -215,9 +215,50 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
-	return db.Exec(`
+	if err := db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_device_challenges_active
 		ON wallet_device_challenges (user_id, device_id)
 		WHERE used_at IS NULL
-	`).Error
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_loan_applications_mobile_user_created_at
+		ON wallet_loan_applications (mobile_user_id, created_at DESC)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_loan_applications_embryo_created_at
+		ON wallet_loan_applications (created_at DESC)
+		WHERE loan_status = 'embryo'
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_users_bvn
+		ON wallet_users (bvn)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_users_customer_status_id
+		ON wallet_users (customer_status, id)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_users_core_customer_id
+		ON wallet_users (core_customer_id)
+		WHERE core_customer_id IS NOT NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
