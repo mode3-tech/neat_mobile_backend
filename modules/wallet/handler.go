@@ -32,3 +32,24 @@ func (h *Handler) FetchBanks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": true, "banks": banks})
 
 }
+
+func (h *Handler) FetchBankDetails(c *gin.Context) {
+	var query BankDetailsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+		return
+	}
+
+	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), query.AccountNumber, query.BankCode)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bank details"})
+		return
+	}
+
+	response := &BankDetailsResponse{
+		Status:  true,
+		Account: *bankDetails,
+	}
+
+	c.JSON(http.StatusOK, response)
+}

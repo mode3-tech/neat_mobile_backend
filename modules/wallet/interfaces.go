@@ -12,6 +12,13 @@ type Bank struct {
 	Name string `json:"name"`
 }
 
+type BankDetails struct {
+	BankCode      string `json:"bankCode"`
+	AccountName   string `json:"accountName"`
+	AccountNumber string `json:"accountNumber"`
+}
+
 type ProvidusService interface {
 	FetchBanks(ctx context.Context) ([]Bank, error)
+	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 }

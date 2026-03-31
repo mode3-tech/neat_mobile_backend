@@ -108,3 +108,41 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 
 	return result.Banks, nil
 }
+
+func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*wallet.BankDetails, error) {
+	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+		return nil, errors.New("providus service not configured")
+	}
+
+	url := p.BaseURL + "/transfer/account/details?sortCode=" + bankCode + "&accountNumber=" + accountNumber
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("providus bank details request failed: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if len(respBody) == 0 {
+			return nil, fmt.Errorf("providus bank details fetch failed with status: %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("providus bank details fetch failed with status: %d body: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	defer resp.Body.Close()
+
+	var result wallet.BankDetailsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode providus bank details response: %w", err)
+	}
+
+	return &result.Account, nil
+}
