@@ -4,10 +4,10 @@
   "description": "A special loan",
   "min_loan_amount": 200000,
   "max_loan_amount": 50000000,
-  "interest_rate_bps": 24,
+  "interest_rate_bps": 30,
   "repayment_frequency": "weekly",
   "loan_term_value": 24,
-  "grace_period_days": 3,
+  "grace_period_days": 0,
   "late_penalty_bps": 250,
   "allows_concurrent_loans": false,
   "is_active": true

@@ -62,6 +62,7 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		premblyValidator,
 		nil,
 		stubProviderSource{provider: ProviderTendar},
+		nil,
 	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
@@ -89,6 +90,7 @@ func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
 		nil,
 		nil,
 		stubProviderSource{err: errors.New("cba unavailable")},
+		nil,
 	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")

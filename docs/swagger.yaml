@@ -69,7 +69,7 @@ paths:
         The server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.
         If that device exists and is both active and trusted, returns `challenge_required`.
         If the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's
-        phone number, and returns a `session_token` for `/auth/verify-new-device` and `/auth/resend-new-device-otp`.
+        phone number, and returns a `session_token` for `/auth/device/otp/verify` and `/auth/device/otp/resend`.
       parameters:
         - in: header
           name: X-Device-ID
@@ -125,7 +125,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/verify-device:
+  /auth/device/challenge/verify:
     post:
       tags:
         - Auth
@@ -162,7 +162,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/verify-new-device:
+  /auth/device/otp/verify:
     post:
       tags:
         - Auth
@@ -171,7 +171,7 @@ paths:
         Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an
         active trusted device, using the `session_token` returned by `/auth/login` and the OTP sent
         during `new_device_detected` flow. If the OTP expires or is not received, request another code
-        with `/auth/resend-new-device-otp` using the same `session_token` and `device_id`.
+        with `/auth/device/otp/resend` using the same `session_token` and `device_id`.
       requestBody:
         required: true
         content:
@@ -203,7 +203,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/resend-new-device-otp:
+  /auth/device/otp/resend:
     post:
       tags:
         - Auth
@@ -478,7 +478,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/forgot-password:
+  /auth/password/forgot:
     post:
       tags:
         - Auth
@@ -522,7 +522,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/reset-password:
+  /auth/password/resetshow:
     post:
       tags:
         - Auth
@@ -1742,7 +1742,7 @@ components:
           example: new_device_detected
         session_token:
           type: string
-          description: Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/verify-new-device or to request another code at /auth/resend-new-device-otp.
+          description: Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/device/otp/verify or to request another code at /auth/device/otp/resend.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
     LoginInitResponse:
       discriminator:
@@ -1810,7 +1810,7 @@ components:
       properties:
         session_token:
           type: string
-          description: Session token returned from /auth/login when status is new_device_detected. The same token is also used with /auth/resend-new-device-otp.
+          description: Session token returned from /auth/login when status is new_device_detected. The same token is also used with /auth/device/otp/resend.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
         otp:
           type: string

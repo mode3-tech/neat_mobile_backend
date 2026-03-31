@@ -113,3 +113,61 @@ type ResendNewDeviceOTPRequest struct {
 	SessionToken string `json:"session_token" binding:"required"`
 	DeviceID     string `json:"device_id" binding:"required"`
 }
+
+type WalletPayload struct {
+	BVN         string                 `json:"bvn" binding:"required"`
+	FirstName   string                 `json:"firstName" binding:"required"`
+	LastName    string                 `json:"lastName" binding:"required"`
+	DateOfBirth string                 `json:"dateOfBirth" binding:"required"`
+	PhoneNumber string                 `json:"phoneNumber" binding:"required"`
+	Email       string                 `json:"email" binding:"required,email"`
+	Address     string                 `json:"address" binding:"required"`
+	Meta        map[string]interface{} `json:"meta"`
+}
+
+type WalletResponse struct {
+	Status   *bool           `json:"status"`
+	Customer *WalletCustomer `json:"customer,omitempty"`
+	Wallet   *WalletInfo     `json:"wallet,omitempty"`
+}
+
+type WalletCustomer struct {
+	ID           string         `json:"id"`
+	Metadata     map[string]any `json:"metadata"`
+	BVN          string         `json:"bvn,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
+	DateOfBirth  string         `json:"dateOfBirth,omitempty"`
+	PhoneNumber  string         `json:"phoneNumber,omitempty"`
+	LastName     string         `json:"lastName,omitempty"`
+	FirstName    string         `json:"firstName,omitempty"`
+	BVNLastName  string         `json:"BVNLastName,omitempty"`
+	BVNFirstName string         `json:"BVNFirstName,omitempty"`
+	NameMatch    *bool          `json:"nameMatch,omitempty"`
+	Email        string         `json:"email,omitempty"`
+	Mode         string         `json:"mode,omitempty"`
+	MerchantId   string         `json:"MerchantId,omitempty"`
+	Tier         string         `json:"tier,omitempty"`
+	UpdatedAt    string         `json:"updatedAt,omitempty"`
+	CreatedAt    string         `json:"createdAt,omitempty"`
+	Address      *string        `json:"address,omitempty"`
+}
+
+type WalletInfo struct {
+	ID               string `json:"id"`
+	Mode             string `json:"mode"`
+	Email            string `json:"email"`
+	Currency         string `json:"currency"`
+	BankName         string `json:"bankName"`
+	BankCode         string `json:"bankCode"`
+	AccountName      string `json:"accountName"`
+	AccountNumber    string `json:"accountNumber"`
+	AccountReference string `json:"accountReference"`
+	UpdatedAt        string `json:"updatedAt"`
+	CreatedAt        string `json:"createdAt"`
+	BookedBalance    int64  `json:"bookedBalance"`
+	AvailableBalance int64  `json:"availableBalance"`
+	Status           string `json:"status"`
+	Updated          bool   `json:"updated"`
+	WalletType       string `json:"walletType"`
+	WalletId         string `json:"walletId"`
+}

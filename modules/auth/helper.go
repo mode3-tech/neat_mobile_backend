@@ -99,3 +99,27 @@ func Generate6DigitOTP() (string, error) {
 
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
+
+func SplitFullName(fullName string) (string, string, string) {
+	parts := strings.Fields(fullName)
+	if len(parts) == 0 {
+		return "", "", ""
+	}
+	firstName := parts[0]
+	lastName := ""
+	middleName := ""
+	if len(parts) > 1 {
+		lastName = parts[len(parts)-1]
+		if len(parts) > 2 {
+			middleName = strings.Join(parts[1:len(parts)-1], " ")
+		}
+	}
+	return firstName, middleName, lastName
+}
+
+func UnparseDOB(dob string) string {
+	if len(dob) != 8 {
+		return dob
+	}
+	return fmt.Sprintf("%s-%s-%s", dob[0:4], dob[4:6], dob[6:8])
+}

@@ -22,6 +22,7 @@ import (
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
+	"neat_mobile_app_backend/modules/wallet"
 	"strings"
 	"time"
 
@@ -31,21 +32,6 @@ import (
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
 )
-
-type AuthService struct {
-	repo           *Repository
-	verification   *verification.VerificationRepo
-	tx             *tx.Transactor
-	deviceRepo     *device.DeviceRepository
-	smsSender      notify.SMSSender
-	otpPepper      string
-	jwtSigner      JWTSigner
-	tender         TendarValidation
-	prembly        PremblyValidation
-	nin            NINValidation
-	providerSource BVNProviderSource
-	otpManager     authotp.OTPManager
-}
 
 type bvnInfo struct {
 	name           string
@@ -66,7 +52,23 @@ const (
 	loginOTPChannel = authotp.ChannelSMS
 )
 
-func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource) *AuthService {
+type AuthService struct {
+	repo           *Repository
+	verification   *verification.VerificationRepo
+	tx             *tx.Transactor
+	deviceRepo     *device.DeviceRepository
+	smsSender      notify.SMSSender
+	otpPepper      string
+	jwtSigner      JWTSigner
+	tender         TendarValidation
+	prembly        PremblyValidation
+	nin            NINValidation
+	providerSource BVNProviderSource
+	otpManager     authotp.OTPManager
+	walletService  WalletService
+}
+
+func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource, walletService WalletService) *AuthService {
 	return &AuthService{
 		repo:           repo,
 		verification:   verification,
@@ -77,6 +79,7 @@ func NewAuthService(repo *Repository, verification *verification.VerificationRep
 		prembly:        prembly,
 		nin:            nin,
 		providerSource: providerSource,
+		walletService:  walletService,
 	}
 }
 
@@ -94,8 +97,66 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 		authRepo := NewRespository(txDB)
 		deviceRepo := device.NewDeviceRepository(txDB)
 
-		createdUser, err = s.createUser(ctx, authRepo, req)
+		internalWalletID := uuid.NewString()
+
+		createdUser, err = s.createUser(ctx, authRepo, req, internalWalletID)
 		if err != nil {
+			return err
+		}
+
+		dob := createdUser.DOB.Format("2006-01-02")
+
+		walletInfo := &WalletPayload{
+			BVN:         createdUser.BVN,
+			FirstName:   createdUser.FirstName,
+			LastName:    createdUser.LastName,
+			DateOfBirth: dob,
+			PhoneNumber: createdUser.Phone,
+			Email:       createdUser.Email,
+			Meta:        map[string]interface{}{"customer_id": createdUser.ID},
+		}
+
+		walletResp, err := s.walletService.GenerateWallet(ctx, walletInfo)
+		if err != nil {
+			if strings.ToLower(err.Error()) != "customer already exists" {
+				return err
+			}
+		}
+
+		wallet := &wallet.CustomerWallet{
+			ID:               uuid.NewString(),
+			InternalWalletID: internalWalletID,
+			MobileUserID:     createdUser.ID,
+			CoreCustomerID:   createdUser.CoreCustomerID,
+			PhoneNumber:      walletResp.Customer.PhoneNumber,
+			WalletCustomerID: walletResp.Customer.ID,
+			Metadata:         walletResp.Customer.Metadata,
+			BVN:              walletResp.Customer.BVN,
+			Currency:         walletResp.Customer.Currency,
+			DateOfBirth:      walletResp.Customer.DateOfBirth,
+			FirstName:        walletResp.Customer.FirstName,
+			LastName:         walletResp.Customer.LastName,
+			Email:            walletResp.Customer.Email,
+			Address:          *walletResp.Customer.Address,
+			MerchantID:       walletResp.Customer.MerchantId,
+			Tier:             walletResp.Customer.Tier,
+			WalletID:         walletResp.Wallet.WalletId,
+			Mode:             walletResp.Customer.Mode,
+			BankName:         walletResp.Wallet.BankName,
+			BankCode:         walletResp.Wallet.BankCode,
+			AccountNumber:    walletResp.Wallet.AccountNumber,
+			AccountName:      walletResp.Wallet.AccountName,
+			AccountRef:       walletResp.Wallet.AccountReference,
+			BookedBalance:    walletResp.Wallet.BookedBalance,
+			AvailableBalance: walletResp.Wallet.AvailableBalance,
+			Status:           walletResp.Wallet.Status,
+			WalletType:       walletResp.Wallet.WalletType,
+			Updated:          walletResp.Wallet.Updated,
+			CreatedAt:        time.Now().UTC(),
+			UpdatedAt:        nil,
+		}
+
+		if err = s.repo.CreateWallet(ctx, wallet); err != nil {
 			return err
 		}
 
@@ -255,7 +316,7 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 	return s.ValidateBVNWithTendar(ctx, bvn)
 }
 
-func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest) (*models.User, error) {
+func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest, internalWalletID string) (*models.User, error) {
 	var isEmailVerified bool
 	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
@@ -342,10 +403,16 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 		return nil, errors.New(err.Error())
 	}
 
+	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
+
 	user := &models.User{
 		ID:                  uuid.NewString(),
+		WalletID:            internalWalletID,
 		Phone:               normalizedPhone,
 		Email:               req.Email,
+		FirstName:           firstName,
+		LastName:            lastName,
+		MiddleName:          &middleName,
 		PasswordHash:        hashedPassword,
 		PinHash:             hashedTransactionPin,
 		IsEmailVerified:     isEmailVerified,

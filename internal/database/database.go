@@ -6,6 +6,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/wallet"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -122,6 +123,7 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.LoanApplication{},
 		&loanproduct.LoanApplicationStatusEvent{},
 		&loanproduct.CustomerStatusEvent{},
+		&wallet.CustomerWallet{},
 	); err != nil {
 		return err
 	}

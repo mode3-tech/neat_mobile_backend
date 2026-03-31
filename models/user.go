@@ -12,6 +12,10 @@ const (
 
 type User struct {
 	ID                           string          `gorm:"column:id;primaryKey;index"`
+	WalletID                     string          `gorm:"column:wallet_id;uniqueIndex;not null"`
+	FirstName                    string          `gorm:"column:first_name;not null"`
+	LastName                     string          `gorm:"column:last_name;not null"`
+	MiddleName                   *string         `gorm:"column:middle_name"`
 	Email                        string          `gorm:"column:email;unique;not null"`
 	Phone                        string          `gorm:"column:phone;unique;index;not null"`
 	PasswordHash                 string          `gorm:"column:password;not null"`

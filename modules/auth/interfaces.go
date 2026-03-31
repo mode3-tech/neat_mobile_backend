@@ -22,7 +22,7 @@ type JWTSigner interface {
 }
 
 type WalletService interface {
-	GenerateWallet(ctx context.Context, userID string) (string, error)
+	GenerateWallet(ctx context.Context, walletInfo *WalletPayload) (*WalletResponse, error)
 }
 
 type TendarValidation interface {

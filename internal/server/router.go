@@ -14,11 +14,13 @@ import (
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	"neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
+	"neat_mobile_app_backend/providers/providus"
 	"neat_mobile_app_backend/providers/sms"
 	"strings"
 	"time"
@@ -78,7 +80,9 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 		BlockDuration:    time.Duration(cfg.LoginRateLimitBlockMinutes) * time.Minute,
 	})
 
-	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource)
+	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+
+	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, providusWalletService)
 	authHandler := auth.NewAuthHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, nil)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
@@ -99,6 +103,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
+
+	walletRepo := wallet.NewRepository(db)
+	walletService := wallet.NewService(walletRepo, providusWalletService)
+	walletHandler := wallet.NewHandler(walletService)
+	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)

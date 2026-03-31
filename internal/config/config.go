@@ -26,6 +26,8 @@ type Config struct {
 	ExpoAccessToken            string
 	ExpoPushChannelID          string
 	NotificationInternalSecret string
+	ProvidusSecretKey          string
+	ProvidusBaseURL            string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -57,6 +59,8 @@ func Load() Config {
 		ExpoAccessToken:            getEnv("EXPO_ACCESS_TOKEN", ""),
 		ExpoPushChannelID:          getEnv("EXPO_PUSH_CHANNEL_ID", "default"),
 		NotificationInternalSecret: getEnv("NOTIFICATION_INTERNAL_SECRET", ""),
+		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
+		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

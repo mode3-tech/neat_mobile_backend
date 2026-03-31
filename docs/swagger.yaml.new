@@ -64,10 +64,10 @@ paths:
         Authenticates a user by phone and password, then starts device verification.
 
         Recognized trusted devices return `challenge_required` plus a device challenge for
-        `/auth/verify-device`.
+        `/auth/device/challenge/verify`.
 
         New or untrusted devices trigger an SMS login OTP, create a pending device session, and
-        return `new_device_detected` plus a `session_token` for `/auth/verify-new-device`.
+        return `new_device_detected` plus a `session_token` for `/auth/device/otp/verify`.
       parameters:
         - in: header
           name: X-Device-ID
@@ -123,7 +123,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/verify-device:
+  /auth/device/challenge/verify:
     post:
       tags:
         - Auth
@@ -160,7 +160,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/verify-new-device:
+  /auth/device/otp/verify:
     post:
       tags:
         - Auth
@@ -375,7 +375,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/forgot-password:
+  /auth/password/forgot:
     post:
       tags:
         - Auth
@@ -419,7 +419,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/reset-password:
+  /auth/password/resetshow:
     post:
       tags:
         - Auth

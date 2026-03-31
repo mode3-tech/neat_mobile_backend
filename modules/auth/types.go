@@ -13,13 +13,6 @@ type LoginInitObject struct {
 	SessionToken string
 }
 
-type WalletPayload struct {
-	BVN         string
-	FirstName   string
-	LastName    string
-	DateOfBirth string
-}
-
 const (
 	LoginStatusChallengeRequired = "challenge_required"
 	LoginStatusNewDeviceDetected = "new_device_detected"

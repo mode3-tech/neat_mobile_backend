@@ -4,7 +4,7 @@
   "description": "Group of people loan",
   "min_loan_amount": 20000,
   "max_loan_amount": 2000000,
-  "interest_rate_bps": 24,
+  "interest_rate_bps": 30,
   "repayment_frequency": "weekly",
   "loan_term_value": 24,
   "grace_period_days": 0,
