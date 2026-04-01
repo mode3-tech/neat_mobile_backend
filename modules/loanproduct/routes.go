@@ -3,13 +3,13 @@ package loanproduct
 import "github.com/gin-gonic/gin"
 
 func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc) {
-	loanProduct := rg.Group("/loan")
+	loanProduct := rg.Group("/loan", authGuard)
 
 	{
 		loanProduct.GET("", handler.GetLoanProducts)
 		loanProduct.POST("/apply", handler.ApplyForLoan)
-		loanProduct.GET("/loans", authGuard, handler.GetAllLoans)
-		loanProduct.GET("/repayment-schedule", authGuard, handler.GetRepaymentSchedule)
+		loanProduct.GET("/loans", handler.GetAllLoans)
+		loanProduct.GET("/repayment-schedule", handler.GetRepaymentSchedule)
 	}
 }
 
