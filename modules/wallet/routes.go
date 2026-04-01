@@ -7,5 +7,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	{
 		wallet.GET("/banks", handler.FetchBanks)
 		wallet.GET("/bank/details", handler.FetchBankDetails)
+		wallet.POST("/transfer", handler.InitiateTransfer)
 	}
 }

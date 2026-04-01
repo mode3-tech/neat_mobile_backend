@@ -146,3 +146,46 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 
 	return &result.Account, nil
 }
+
+func (p *Providus) InitiateTransfer(ctx context.Context, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
+	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+		return nil, errors.New("providus service not configured")
+	}
+
+	url := p.BaseURL + "/transfer/bank"
+
+	body, err := json.Marshal(transferInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("providus transfer request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if len(respBody) == 0 {
+			return nil, fmt.Errorf("providus transfer failed with status: %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("providus transfer failed with status: %d body: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var result wallet.TransferResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode providus transfer response: %w", err)
+	}
+
+	return &result, nil
+}

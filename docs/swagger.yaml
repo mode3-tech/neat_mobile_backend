@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     HTTP API for authentication, OTP verification, device trust, identity validation,
-    password reset, and loan product workflows.
+    password reset, loan product workflows, and wallet/bank lookup.
 servers:
   - url: /api/v1
 security: []
@@ -17,6 +17,8 @@ tags:
     description: Loan product discovery and application endpoints
   - name: Notification
     description: Push-token registration and in-app notification history endpoints
+  - name: Wallet
+    description: Bank lookup and account resolution endpoints
   - name: Internal
     description: Internal CBA integration endpoints protected by HMAC headers
   - name: Dev Signer
@@ -1122,6 +1124,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /wallet/banks:
+    get:
+      tags:
+        - Wallet
+      summary: List supported banks
+      description: Returns the list of banks supported for transfers, sourced from Providus.
+      responses:
+        "200":
+          description: Banks fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankListResponse"
+        "500":
+          description: Failed to fetch banks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /wallet/bank/details:
+    get:
+      tags:
+        - Wallet
+      summary: Get bank account details
+      description: Resolves an account number and bank code to the account holder's name and bank details via Providus.
+      parameters:
+        - in: query
+          name: account_number
+          required: true
+          schema:
+            type: string
+          description: Bank account number to resolve.
+        - in: query
+          name: bank_code
+          required: true
+          schema:
+            type: string
+          description: Bank code for the account's institution.
+      responses:
+        "200":
+          description: Bank account details fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankDetailsResponse"
+        "400":
+          description: Missing or invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch bank details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /cba/loan-applications:
     get:
       tags:
@@ -1561,6 +1620,45 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    Bank:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "058"
+        name:
+          type: string
+          example: Guaranty Trust Bank
+    BankListResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        banks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bank"
+    BankDetails:
+      type: object
+      properties:
+        bankCode:
+          type: string
+          example: "058"
+        accountName:
+          type: string
+          example: John Doe
+        accountNumber:
+          type: string
+          example: "0123456789"
+    BankDetailsResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        account:
+          $ref: "#/components/schemas/BankDetails"
     DevHealthResponse:
       type: object
       properties:

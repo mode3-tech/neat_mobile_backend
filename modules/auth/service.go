@@ -118,9 +118,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 
 		walletResp, err := s.walletService.GenerateWallet(ctx, walletInfo)
 		if err != nil {
-			if strings.ToLower(err.Error()) != "customer already exists" {
-				return err
-			}
+			return err
 		}
 
 		wallet := &wallet.CustomerWallet{
