@@ -1,5 +1,12 @@
 package wallet
 
+import "errors"
+
+var (
+	ErrWrongTransactionPin  = errors.New("wrong transaction pin")
+	ErrTransactionPinLocked = errors.New("transaction pin locked")
+)
+
 type TransferStatus string
 
 const (

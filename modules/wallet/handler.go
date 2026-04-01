@@ -1,9 +1,11 @@
 package wallet
 
 import (
+	"errors"
 	"log"
 	"neat_mobile_app_backend/internal/middleware"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,14 +19,20 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) FetchBanks(c *gin.Context) {
-	// userID := middleware.UserIDContextKey
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
 
-	// if strings.TrimSpace(userID) == "" {
-	// 	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-	// 	return
-	// }
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
-	banks, err := h.service.FetchBanks(c.Request.Context())
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
+	banks, err := h.service.FetchBanks(c.Request.Context(), mobileUserID, deviceID)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch banks"})
@@ -36,13 +44,26 @@ func (h *Handler) FetchBanks(c *gin.Context) {
 }
 
 func (h *Handler) FetchBankDetails(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
 	var query BankDetailsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
 		return
 	}
 
-	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), query.AccountNumber, query.BankCode)
+	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), query.AccountNumber, query.BankCode, mobileUserID, deviceID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bank details"})
 		return
@@ -57,14 +78,35 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 }
 
 func (h *Handler) InitiateTransfer(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
 	var req TransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	transferResponse, err := h.service.InitiateTransfer(c.Request.Context(), &req)
+	transferResponse, err := h.service.InitiateTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
+		if errors.Is(err, ErrWrongTransactionPin) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Wrong transaction PIN"})
+			return
+		}
+		if errors.Is(err, ErrTransactionPinLocked) {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
+			return
+		}
 		log.Printf("Error initiating transfer: %v", err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
 		return
@@ -79,13 +121,19 @@ func (h *Handler) AddBeneficiary(c *gin.Context) {
 		return
 	}
 
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
 	var req AddBeneficiaryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	beneficiary, err := h.service.AddBeneficiary(c.Request.Context(), mobileUserID, &req)
+	beneficiary, err := h.service.AddBeneficiary(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to add beneficiary"})
 		return
@@ -107,12 +155,18 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 		return
 	}
 
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
 	var query FetchBeneficiariesQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
 		return
 	}
-	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID, query.WalletID)
+	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID, deviceID, query.WalletID)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch beneficiaries"})

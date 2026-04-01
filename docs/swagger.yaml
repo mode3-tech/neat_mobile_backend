@@ -1181,6 +1181,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /wallet/transfer:
+    post:
+      tags:
+        - Wallet
+      summary: Initiate a bank transfer
+      description: Initiates a transfer from the authenticated user's wallet to the specified bank account via Providus.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+      responses:
+        "200":
+          description: Transfer initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized, missing device ID, or wrong transaction PIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Transaction PIN locked after too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to initiate transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /cba/loan-applications:
     get:
       tags:
@@ -1659,6 +1711,93 @@ components:
           example: true
         account:
           $ref: "#/components/schemas/BankDetails"
+    TransferRequest:
+      type: object
+      required:
+        - amount
+        - sortCode
+        - accountNumber
+        - transaction_pin
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Transfer amount in the smallest currency unit (e.g. kobo).
+          example: 5000
+        sortCode:
+          type: string
+          description: Bank sort code / routing code.
+          example: "058"
+        accountNumber:
+          type: string
+          description: Destination bank account number.
+          example: "0123456789"
+        narration:
+          type: string
+          maxLength: 255
+          description: Optional transfer narration.
+          example: Payment for services
+        accountName:
+          type: string
+          maxLength: 255
+          description: Optional destination account name.
+          example: John Doe
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional arbitrary key-value metadata.
+        transaction_pin:
+          type: string
+          description: User's 4-digit transaction PIN to authorize the transfer.
+          example: "1234"
+    TransferResult:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 50.00
+        charges:
+          type: number
+          format: double
+          example: 1.50
+        vat:
+          type: number
+          format: double
+          example: 0.11
+        reference:
+          type: string
+          example: TXN-20240101-001
+        total:
+          type: number
+          format: double
+          example: 51.61
+        metadata:
+          type: object
+          additionalProperties: true
+        sessionId:
+          type: string
+          example: SESSION-20240101-001
+        destination:
+          type: string
+          example: "0123456789"
+        transactionReference:
+          type: string
+          example: REF-20240101-001
+        description:
+          type: string
+          example: Transfer to John Doe
+    TransferResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Transfer initiated successfully
+        transfer:
+          $ref: "#/components/schemas/TransferResult"
     DevHealthResponse:
       type: object
       properties:
