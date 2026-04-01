@@ -44,11 +44,11 @@ func (s *Service) GetAllLoanProducts(ctx context.Context) ([]PartialLoanProduct,
 	return s.repo.GetAllLoanProducts(ctx)
 }
 
-func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID string) (*ApplyForLoanResponse, error) {
+func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserID string) (*ApplyForLoanResponse, error) {
 	now := time.Now()
 	var coreCustomerID *string
 
-	user, err := s.repo.GetUser(ctx, userID)
+	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("current user does not exist")
@@ -62,7 +62,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		}
 
 		if user.FailedTransactionAttempts > 0 {
-			if err := s.repo.ResetTransactionPinAttempts(ctx, userID); err != nil {
+			if err := s.repo.ResetTransactionPinAttempts(ctx, mobileUserID); err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return nil, errors.New("current user does not exist")
 				}
@@ -81,7 +81,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 			lockedUntil = &until
 		}
 
-		if err := s.repo.UpdateTransactionPinAttempts(ctx, userID, failedAttempts, lockedUntil); err != nil {
+		if err := s.repo.UpdateTransactionPinAttempts(ctx, mobileUserID, failedAttempts, lockedUntil); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.New("current user does not exist")
 			}
@@ -96,7 +96,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 	}
 
 	if user.FailedTransactionAttempts > 0 || user.TransactionPinLockedUntil != nil {
-		if err := s.repo.ResetTransactionPinAttempts(ctx, userID); err != nil {
+		if err := s.repo.ResetTransactionPinAttempts(ctx, mobileUserID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.New("current user does not exist")
 			}
@@ -170,7 +170,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 	}
 
 	// Core matching is best-effort. A locally registered user may not exist in CBA yet.
-	coreCustomerID, err = s.resolveCoreCustomerIDIfAvailable(ctx, userID, user)
+	coreCustomerID, err = s.resolveCoreCustomerIDIfAvailable(ctx, mobileUserID, user)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, userID stri
 		ApplicationRef:  uuid.NewString(),
 		CoreCustomerID:  coreCustomerID,
 		PhoneNumber:     user.Phone,
-		MobileUserID:    userID,
+		MobileUserID:    mobileUserID,
 		LoanProductType: req.LoanProductType,
 		LoanStatus:      LoanStatusEmbryo,
 		BusinessAddress: req.BusinessAddress,

@@ -245,7 +245,7 @@ func (s *AuthService) ValidateNIN(ctx context.Context, ninVerificationID, nin st
 		return nil, err
 	}
 
-	_, err = compareBVNAndNinDetails(*row.VerifiedName, *row.VerifiedDOB, fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
+	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
 
 	if err != nil {
 		return nil, errors.New(err.Error())

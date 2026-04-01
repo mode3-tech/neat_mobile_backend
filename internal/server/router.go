@@ -13,6 +13,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
+	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
@@ -108,6 +109,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	walletService := wallet.NewService(walletRepo, providusWalletService)
 	walletHandler := wallet.NewHandler(walletService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
+
+	accountRepo := account.NewRepository(db)
+	accountService := account.NewService(accountRepo, loanService)
+	accountHandler := account.NewHandler(accountService)
+	account.RegisterRoutes(apiV1, accountHandler, authGuard)
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)

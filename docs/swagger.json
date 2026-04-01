@@ -29,6 +29,14 @@
       "description": "Push-token registration and in-app notification history endpoints"
     },
     {
+      "name": "Account",
+      "description": "Account summary and profile endpoints"
+    },
+    {
+      "name": "Wallet",
+      "description": "Bank lookup and account resolution endpoints"
+    },
+    {
       "name": "Internal",
       "description": "Internal CBA integration endpoints protected by HMAC headers"
     },
@@ -2495,6 +2503,49 @@
         }
       }
     },
+    "/account/summary": {
+      "get": {
+        "tags": ["Account"],
+        "summary": "Get account summary",
+        "description": "Returns the authenticated user's full name, account number, available balance, total loan balance, and a list of active loans with repayment details.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account summary fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AccountSummaryResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch account summary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/wallet/banks": {
       "get": {
         "tags": ["Wallet"],
@@ -4384,6 +4435,37 @@
             "description": "Correlation identifier included in responses for request tracing.",
             "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
           }
+        }
+      },
+      "ActiveLoan": {
+        "type": "object",
+        "properties": {
+          "loan_id": { "type": "string", "example": "LN-001" },
+          "loan_number": { "type": "string", "example": "20240001" },
+          "loan_amount": { "type": "number", "format": "double", "description": "Original principal amount of the loan.", "example": 50000.00 },
+          "total_repayment": { "type": "number", "format": "double", "description": "Total outstanding balance remaining to be repaid.", "example": 45000.00 },
+          "monthly_repayment": { "type": "number", "format": "double", "description": "Amount due on the next repayment date.", "example": 5000.00 },
+          "next_due_date": { "type": "string", "example": "2026-05-01" }
+        }
+      },
+      "AccountSummary": {
+        "type": "object",
+        "properties": {
+          "full_name": { "type": "string", "example": "John Doe" },
+          "account_number": { "type": "string", "example": "0123456789" },
+          "available_balance": { "type": "integer", "format": "int64", "description": "Available wallet balance in the smallest currency unit (e.g. kobo).", "example": 250000 },
+          "loan_balance": { "type": "number", "format": "double", "description": "Sum of outstanding balances across all active loans.", "example": 45000.00 },
+          "active_loans": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ActiveLoan" }
+          }
+        }
+      },
+      "AccountSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "data": { "$ref": "#/components/schemas/AccountSummary" }
         }
       },
       "Bank": {
