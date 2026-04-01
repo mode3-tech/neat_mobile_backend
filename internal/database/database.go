@@ -125,6 +125,7 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.CustomerStatusEvent{},
 		&wallet.CustomerWallet{},
 		&wallet.Transfer{},
+		&wallet.Beneficiary{},
 	); err != nil {
 		return err
 	}

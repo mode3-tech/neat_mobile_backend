@@ -2494,6 +2494,296 @@
           }
         }
       }
+    },
+    "/wallet/banks": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "List supported banks",
+        "description": "Returns the list of banks supported for transfers, sourced from Providus.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Banks fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BankListResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch banks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/bank/details": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get bank account details",
+        "description": "Resolves an account number and bank code to the account holder's name and bank details via Providus.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "account_number",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Bank account number to resolve."
+          },
+          {
+            "in": "query",
+            "name": "bank_code",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Bank code for the account's institution."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account details fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BankDetailsResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch bank details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/transfer": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Initiate a bank transfer",
+        "description": "Initiates a transfer from the authenticated user's wallet to the specified bank account via Providus.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TransferRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transfer initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TransferResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized, missing device ID, or wrong transaction PIN",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "Transaction PIN locked after too many failed attempts",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to initiate transfer",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/beneficiaries": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Add a beneficiary",
+        "description": "Saves a bank account as a beneficiary for future transfers on the given wallet.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AddBeneficiaryRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Beneficiary added successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AddBeneficiaryResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to add beneficiary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "List beneficiaries",
+        "description": "Returns all saved beneficiaries for the given wallet.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "wallet_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Wallet ID to fetch beneficiaries for."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Beneficiaries fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FetchBeneficiariesResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch beneficiaries",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4093,6 +4383,121 @@
             "type": "string",
             "description": "Correlation identifier included in responses for request tracing.",
             "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
+          }
+        }
+      },
+      "Bank": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "example": "058" },
+          "name": { "type": "string", "example": "Guaranty Trust Bank" }
+        }
+      },
+      "BankListResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "banks": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Bank" }
+          }
+        }
+      },
+      "BankDetails": {
+        "type": "object",
+        "properties": {
+          "bankCode": { "type": "string", "example": "058" },
+          "accountName": { "type": "string", "example": "John Doe" },
+          "accountNumber": { "type": "string", "example": "0123456789" }
+        }
+      },
+      "BankDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "account": { "$ref": "#/components/schemas/BankDetails" }
+        }
+      },
+      "TransferRequest": {
+        "type": "object",
+        "required": ["amount", "sortCode", "accountNumber", "transaction_pin"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Transfer amount in the smallest currency unit (e.g. kobo).",
+            "example": 5000
+          },
+          "sortCode": { "type": "string", "description": "Bank sort code / routing code.", "example": "058" },
+          "accountNumber": { "type": "string", "description": "Destination bank account number.", "example": "0123456789" },
+          "narration": { "type": "string", "maxLength": 255, "description": "Optional transfer narration.", "example": "Payment for services" },
+          "accountName": { "type": "string", "maxLength": 255, "description": "Optional destination account name.", "example": "John Doe" },
+          "metadata": { "type": "object", "additionalProperties": true, "description": "Optional arbitrary key-value metadata." },
+          "transaction_pin": { "type": "string", "description": "User's 4-digit transaction PIN to authorize the transfer.", "example": "1234" }
+        }
+      },
+      "TransferResult": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": "number", "format": "double", "example": 50.00 },
+          "charges": { "type": "number", "format": "double", "example": 1.50 },
+          "vat": { "type": "number", "format": "double", "example": 0.11 },
+          "reference": { "type": "string", "example": "TXN-20240101-001" },
+          "total": { "type": "number", "format": "double", "example": 51.61 },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "sessionId": { "type": "string", "example": "SESSION-20240101-001" },
+          "destination": { "type": "string", "example": "0123456789" },
+          "transactionReference": { "type": "string", "example": "REF-20240101-001" },
+          "description": { "type": "string", "example": "Transfer to John Doe" }
+        }
+      },
+      "TransferResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Transfer initiated successfully" },
+          "transfer": { "$ref": "#/components/schemas/TransferResult" }
+        }
+      },
+      "Beneficiary": {
+        "type": "object",
+        "properties": {
+          "ID": { "type": "string", "example": "3f7e2c1a-4b5d-4e6f-8a9b-0c1d2e3f4a5b" },
+          "MobileUserID": { "type": "string", "example": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d" },
+          "WalletID": { "type": "string", "example": "WLT-001" },
+          "BankCode": { "type": "string", "example": "058" },
+          "AccountNumber": { "type": "string", "example": "0123456789" },
+          "AccountName": { "type": "string", "example": "John Doe" },
+          "CreatedAt": { "type": "string", "format": "date-time" },
+          "UpdatedAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "AddBeneficiaryRequest": {
+        "type": "object",
+        "required": ["bank_code", "account_number", "account_name", "wallet_id"],
+        "properties": {
+          "bank_code": { "type": "string", "example": "058" },
+          "account_number": { "type": "string", "example": "0123456789" },
+          "account_name": { "type": "string", "example": "John Doe" },
+          "wallet_id": { "type": "string", "example": "WLT-001" }
+        }
+      },
+      "AddBeneficiaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Beneficiary added successfully" },
+          "beneficiary": { "$ref": "#/components/schemas/Beneficiary" }
+        }
+      },
+      "FetchBeneficiariesResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Beneficiaries fetched successfully" },
+          "beneficiaries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Beneficiary" }
           }
         }
       }
