@@ -35,6 +35,8 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 
 	url := p.BaseURL + "/wallet"
 
+	walletInfo.BVN = "01234567891"
+
 	body, err := json.Marshal(walletInfo)
 	if err != nil {
 		return nil, err
