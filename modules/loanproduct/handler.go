@@ -18,6 +18,13 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) GetLoanProducts(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	loanProducts, err := h.service.GetAllLoanProducts(c.Request.Context())
 
 	if err != nil {
@@ -30,12 +37,12 @@ func (h *Handler) GetLoanProducts(c *gin.Context) {
 
 func (h *Handler) ApplyForLoan(c *gin.Context) {
 	var req LoanRequest
-	// userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 
-	// if userID == "" {
-	// 	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-	// 	return
-	// }
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		if isBadRequestApplyForLoanError(err) {
@@ -50,7 +57,7 @@ func (h *Handler) ApplyForLoan(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid req body"})
 		return
 	}
-	loanSummary, err := h.service.ApplyForLoan(c.Request.Context(), req, "1aef83e6-b3f7-4899-8d30-3deed2c3304d")
+	loanSummary, err := h.service.ApplyForLoan(c.Request.Context(), req, userID)
 	if err != nil {
 		_ = c.Error(err)
 		abortApplyForLoanError(c, err)
