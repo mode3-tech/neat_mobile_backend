@@ -6,7 +6,6 @@ type CustomerWallet struct {
 	ID               string         `gorm:"column:id;type:text;primaryKey;index"`
 	InternalWalletID string         `gorm:"column:internal_wallet_id;type:text;not null;uniqueIndex"`
 	MobileUserID     string         `gorm:"column:mobile_user_id;type:text;not null;index"`
-	CoreCustomerID   *string        `gorm:"column:core_customer_id;type:text"`
 	PhoneNumber      string         `gorm:"column:phone_number;type:text;not null"`
 	WalletCustomerID string         `gorm:"column:wallet_customer_id;type:text;not null"`
 	Metadata         map[string]any `gorm:"column:metadata;type:jsonb;not null"`

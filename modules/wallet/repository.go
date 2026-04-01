@@ -17,6 +17,13 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) CreateWallet(ctx context.Context, wallet *CustomerWallet) error {
+	if err := r.db.WithContext(ctx).Create(wallet).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *Repository) GetDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
 	var device device.UserDevice
 	err := r.db.WithContext(ctx).Where("user_id = ? AND device_id = ?", mobileUserID, deviceID).First(&device).Error

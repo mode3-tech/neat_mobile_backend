@@ -122,7 +122,7 @@ type WalletPayload struct {
 	PhoneNumber string                 `json:"phoneNumber" binding:"required"`
 	Email       string                 `json:"email" binding:"required,email"`
 	Address     string                 `json:"address" binding:"required"`
-	Meta        map[string]interface{} `json:"meta"`
+	Metadata    map[string]interface{} `json:"metadata" binding:"required"`
 }
 
 type WalletResponse struct {

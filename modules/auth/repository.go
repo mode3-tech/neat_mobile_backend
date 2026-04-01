@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"neat_mobile_app_backend/models"
-	"neat_mobile_app_backend/modules/wallet"
 	"strings"
 	"time"
 
@@ -237,11 +236,4 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models
 		return nil, err
 	}
 	return user, nil
-}
-
-func (r *Repository) CreateWallet(ctx context.Context, wallet *wallet.CustomerWallet) error {
-	if err := r.db.WithContext(ctx).Create(wallet).Error; err != nil {
-		return err
-	}
-	return nil
 }

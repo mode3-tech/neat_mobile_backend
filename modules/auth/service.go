@@ -88,44 +88,62 @@ func (s *AuthService) ConfigureOTPManager(manager authotp.OTPManager) {
 }
 
 func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
-	var createdUser *models.User
-	var err error
-
 	now := time.Now().UTC()
+	mobileUserID := uuid.NewString()
+	internalWalletID := uuid.NewString()
+
+	// Pre-fetch verification records to build the Providus payload before any DB writes
+	bvnRecord, err := s.repo.GetValidationRow(ctx, req.BVNVerificationID)
+	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedID == nil {
+		return nil, errors.New("bvn verification record not found")
+	}
+
+	ninRecord, err := s.repo.GetValidationRow(ctx, req.NINVerificationID)
+	if err != nil || ninRecord.VerifiedDOB == nil {
+		return nil, errors.New("nin verification record not found")
+	}
+
+	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	dobParsed, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	firstName, _, lastName := SplitFullName(*bvnRecord.VerifiedName)
+
+	walletInfo := &WalletPayload{
+		BVN:         *bvnRecord.VerifiedID,
+		FirstName:   firstName,
+		LastName:    lastName,
+		DateOfBirth: dobParsed.Format("2006-01-02"),
+		PhoneNumber: normalizedPhone,
+		Email:       req.Email,
+		Metadata:    map[string]interface{}{"customer_id": mobileUserID},
+	}
+
+	walletResp, err := s.walletService.GenerateWallet(ctx, walletInfo)
+	if err != nil {
+		return nil, err
+	}
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		authRepo := NewRespository(txDB)
 		deviceRepo := device.NewDeviceRepository(txDB)
+		walletRepo := wallet.NewRepository(txDB)
 
-		internalWalletID := uuid.NewString()
-
-		createdUser, err = s.createUser(ctx, authRepo, req, internalWalletID)
-		if err != nil {
-			return err
+		_, txErr := s.createUser(ctx, authRepo, req, mobileUserID, internalWalletID)
+		if txErr != nil {
+			return txErr
 		}
 
-		dob := createdUser.DOB.Format("2006-01-02")
-
-		walletInfo := &WalletPayload{
-			BVN:         createdUser.BVN,
-			FirstName:   createdUser.FirstName,
-			LastName:    createdUser.LastName,
-			DateOfBirth: dob,
-			PhoneNumber: createdUser.Phone,
-			Email:       createdUser.Email,
-			Meta:        map[string]interface{}{"customer_id": createdUser.ID},
-		}
-
-		walletResp, err := s.walletService.GenerateWallet(ctx, walletInfo)
-		if err != nil {
-			return err
-		}
-
-		wallet := &wallet.CustomerWallet{
+		walletRecord := &wallet.CustomerWallet{
 			ID:               uuid.NewString(),
 			InternalWalletID: internalWalletID,
-			MobileUserID:     createdUser.ID,
-			CoreCustomerID:   createdUser.CoreCustomerID,
+			MobileUserID:     mobileUserID,
 			PhoneNumber:      walletResp.Customer.PhoneNumber,
 			WalletCustomerID: walletResp.Customer.ID,
 			Metadata:         walletResp.Customer.Metadata,
@@ -154,8 +172,8 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 			UpdatedAt:        nil,
 		}
 
-		if err = s.repo.CreateWallet(ctx, wallet); err != nil {
-			return err
+		if txErr = walletRepo.CreateWallet(ctx, walletRecord); txErr != nil {
+			return txErr
 		}
 
 		deviceReq := device.DeviceBindingRequest{
@@ -169,7 +187,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 			IP:          ip,
 		}
 		deviceService := device.NewDeviceService(*deviceRepo)
-		return deviceService.BindDevice(ctx, createdUser.ID, &deviceReq)
+		return deviceService.BindDevice(ctx, mobileUserID, &deviceReq)
 	})
 
 	if err != nil {
@@ -178,13 +196,13 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 
 	sid := uuid.NewString()
 
-	accessToken, err := s.jwtSigner.IssueAccessToken(createdUser.ID, sid)
+	accessToken, err := s.jwtSigner.IssueAccessToken(mobileUserID, sid)
 	if err != nil {
 		return nil, err
 	}
 
 	authSession := &models.AuthSession{
-		UserID:   createdUser.ID,
+		UserID:   mobileUserID,
 		SID:      sid,
 		DeviceID: &req.Device.DeviceID,
 		IP:       &ip,
@@ -194,7 +212,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 		return nil, err
 	}
 
-	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(createdUser.ID, sid)
+	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(mobileUserID, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +222,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 	refreshTokenObj := &models.RefreshToken{
 		JTI:       jti,
 		SessionID: sid,
-		UserID:    createdUser.ID,
+		UserID:    mobileUserID,
 		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
 		IssuedAt:  now,
 		ExpiresAt: now.Add(time.Hour * 24 * 30),
@@ -314,7 +332,7 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 	return s.ValidateBVNWithTendar(ctx, bvn)
 }
 
-func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest, internalWalletID string) (*models.User, error) {
+func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest, mobileUserID, internalWalletID string) (*models.User, error) {
 	var isEmailVerified bool
 	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
@@ -404,7 +422,7 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
 	user := &models.User{
-		ID:                  uuid.NewString(),
+		ID:                  mobileUserID,
 		WalletID:            internalWalletID,
 		Phone:               normalizedPhone,
 		Email:               req.Email,
