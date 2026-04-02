@@ -52,12 +52,36 @@ type AddBeneficiaryResponse struct {
 	Beneficiary Beneficiary `json:"beneficiary"`
 }
 
-type FetchBeneficiariesQuery struct {
-	WalletID string `form:"wallet_id" binding:"required"`
-}
+// type FetchBeneficiariesQuery struct {
+// 	WalletID string `form:"wallet_id" binding:"required"`
+// }
 
 type FetchBeneficiariesResponse struct {
-	Status        bool          `json:"status"`
-	Message       string        `json:"message"`
-	Beneficiaries []Beneficiary `json:"beneficiaries"`
+	Status        bool                        `json:"status"`
+	Message       string                      `json:"message"`
+	Beneficiaries []BeneficiaryResponseStruct `json:"beneficiaries"`
+}
+
+type BeneficiaryResponseStruct struct {
+	WalletID      string `json:"wallet_id"`
+	BankCode      string `json:"bank_code"`
+	AccountNumber string `json:"account_number"`
+	AccountName   string `json:"account_name"`
+}
+
+type ProvidusCredit struct {
+	AccountNumber          string `json:"accountNumber"`
+	TransactionAmount      string `json:"transactionAmount"`
+	SettledAmount          string `json:"settledAmount"`
+	Currency               string `json:"currency"`
+	TranType               string `json:"tranType"`
+	TranRemarks            string `json:"tranRemarks"`
+	TranDate               string `json:"tranDate"`
+	SessionID              string `json:"sessionId"`
+	TranID                 string `json:"tranId"`
+	InitiationTranRef      string `json:"initiationTranRef"`
+	OriginatorAccountName  string `json:"originatorAccountName"`
+	OriginatorAccountNo    string `json:"originatorAccountNumber"`
+	BeneficiaryAccountName string `json:"beneficiaryAccountName"`
+	BeneficiaryAccountNo   string `json:"beneficiaryAccountNumber"`
 }

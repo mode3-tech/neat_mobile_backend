@@ -81,8 +81,35 @@ func (r *Repository) CreateBeneficiary(ctx context.Context, beneficiary *Benefic
 	return r.db.WithContext(ctx).Create(beneficiary).Error
 }
 
-func (r *Repository) GetBeneficiaries(ctx context.Context, mobileUserID, walletID string) ([]Beneficiary, error) {
+func (r *Repository) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]Beneficiary, error) {
 	var beneficiaries []Beneficiary
-	err := r.db.WithContext(ctx).Select("WalletID, BankCode, AccountNumber, AccountName").Where("mobile_user_id = ? AND wallet_id = ?", mobileUserID, walletID).Find(&beneficiaries).Error
+	err := r.db.WithContext(ctx).Select("wallet_id, bank_code, account_number, account_name").Where("mobile_user_id = ?", mobileUserID).Find(&beneficiaries).Error
 	return beneficiaries, err
+}
+
+func (r *Repository) GetWalletByAccountNumber(ctx context.Context, accountNumber string) (*CustomerWallet, error) {
+	var w CustomerWallet
+	err := r.db.WithContext(ctx).Where("account_number = ?", accountNumber).First(&w).Error
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func (r *Repository) GetTransferByProviderRef(ctx context.Context, providerRef string) (*Transfer, error) {
+	var t Transfer
+	err := r.db.WithContext(ctx).Where("transaction_reference = ?", providerRef).First(&t).Error
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *Repository) CreditWalletBalance(ctx context.Context, walletID string, amount int64) error {
+	return r.db.WithContext(ctx).Model(&CustomerWallet{}).
+		Where("wallet_id = ?", walletID).
+		Updates(map[string]interface{}{
+			"booked_balance":    gorm.Expr("booked_balance + ?", amount),
+			"available_balance": gorm.Expr("available_balance + ?", amount),
+		}).Error
 }

@@ -148,6 +148,22 @@ func (h *Handler) AddBeneficiary(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func (h *Handler) HandleCreditWebhook(c *gin.Context) {
+	var payload ProvidusCredit
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		// Always return 200 — a non-200 causes Providus to retry indefinitely
+		log.Printf("providus credit webhook: invalid payload: %v", err)
+		c.JSON(http.StatusOK, gin.H{"status": true})
+		return
+	}
+
+	if err := h.service.HandleCreditWebhook(c.Request.Context(), &payload); err != nil {
+		log.Printf("providus credit webhook: processing error: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": true})
+}
+
 func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
 	if mobileUserID == "" {
@@ -161,22 +177,32 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 		return
 	}
 
-	var query FetchBeneficiariesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
-		return
-	}
-	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID, deviceID, query.WalletID)
+	// var query FetchBeneficiariesQuery
+	// if err := c.ShouldBindQuery(&query); err != nil {
+	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+	// 	return
+	// }
+	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID, deviceID)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch beneficiaries"})
 		return
 	}
 
+	result := make([]BeneficiaryResponseStruct, len(beneficiaries))
+	for i, b := range beneficiaries {
+		result[i] = BeneficiaryResponseStruct{
+			WalletID:      b.WalletID,
+			BankCode:      b.BankCode,
+			AccountNumber: b.AccountNumber,
+			AccountName:   b.AccountName,
+		}
+	}
+
 	response := &FetchBeneficiariesResponse{
 		Status:        true,
 		Message:       "Beneficiaries fetched successfully",
-		Beneficiaries: beneficiaries,
+		Beneficiaries: result,
 	}
 
 	c.JSON(http.StatusOK, response)

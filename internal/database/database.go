@@ -264,5 +264,13 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_transfers_transaction_reference
+		ON wallet_transfers (transaction_reference)
+		WHERE transaction_reference IS NOT NULL AND transaction_reference != ''
+	`).Error; err != nil {
+		return err
+	}
+
 	return nil
 }

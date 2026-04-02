@@ -110,6 +110,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	walletHandler := wallet.NewHandler(walletService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
 
+	webhooksGroup := r.Group("/webhooks")
+	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
+		log.Print("Providus webhook secret is not configured; credit webhook will reject all requests")
+	}
+	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusWebhookSecret))
+
 	accountRepo := account.NewRepository(db)
 	accountService := account.NewService(accountRepo, loanService)
 	accountHandler := account.NewHandler(accountService)

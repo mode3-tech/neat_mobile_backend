@@ -28,6 +28,7 @@ type Config struct {
 	NotificationInternalSecret string
 	ProvidusSecretKey          string
 	ProvidusBaseURL            string
+	ProvidusWebhookSecret      string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -61,6 +62,7 @@ func Load() Config {
 		NotificationInternalSecret: getEnv("NOTIFICATION_INTERNAL_SECRET", ""),
 		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
+		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),
