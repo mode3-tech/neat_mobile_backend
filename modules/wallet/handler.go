@@ -108,7 +108,7 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 			return
 		}
 		log.Printf("Error initiating transfer: %v", err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, transferResponse)

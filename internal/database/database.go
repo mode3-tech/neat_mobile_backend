@@ -6,6 +6,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
 	"time"
 
@@ -125,6 +126,7 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.CustomerStatusEvent{},
 		&wallet.CustomerWallet{},
 		&wallet.Transfer{},
+		&transaction.Transaction{},
 		&wallet.Beneficiary{},
 	); err != nil {
 		return err
