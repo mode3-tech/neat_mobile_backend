@@ -247,7 +247,7 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 }
 
 func (s *InternalService) LinkWalletUserByBVN(ctx context.Context, req LinkWalletUserByBVNRequest) (*LinkWalletUserByBVNResponse, error) {
-	customerID := strings.TrimSpace(req.CustomerID)
+	customerID := strings.TrimSpace(req.AccountUserID)
 	bvn := strings.TrimSpace(req.BVN)
 
 	if customerID == "" || bvn == "" {
@@ -311,6 +311,22 @@ func sameCustomerStatusPtr(current *models.CustomerStatus, next models.CustomerS
 	return normalizedCustomerStatus(current) == next
 }
 
+var loanProductTypeNames = map[string]string{
+	"BUSINESS-WK":   "Product Loan Business",
+	"GROUP-WK":      "Group Loan",
+	"INDIVIDUAL-WK": "Individual Loan",
+	"SALARY-MTH":    "Product Loan Salary",
+	"SME-WK":        "SME Loan",
+	"SPECIAL-WK":    "Special Loan",
+}
+
+func loanProductTypeName(code string) string {
+	if name, ok := loanProductTypeNames[code]; ok {
+		return name
+	}
+	return code
+}
+
 func mapCBAApplicationItem(row *cbaApplicationReadRow) CBAListLoanApplicationItem {
 	coreCustomerID := row.ApplicationCoreCustomerID
 	if coreCustomerID == nil {
@@ -320,19 +336,20 @@ func mapCBAApplicationItem(row *cbaApplicationReadRow) CBAListLoanApplicationIte
 	return CBAListLoanApplicationItem{
 		ApplicationRef: row.ApplicationRef,
 		Loan: CBALoanApplicationReadDTO{
-			ApplicationRef:  row.ApplicationRef,
-			MobileUserID:    row.MobileUserID,
-			CoreCustomerID:  coreCustomerID,
-			PhoneNumber:     row.PhoneNumber,
-			Name:            buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
-			LoanProductType: row.LoanProductType,
-			BusinessAddress: row.BusinessAddress,
-			BusinessValue:   row.BusinessValue,
-			BusinessType:    row.BusinessType,
-			RequestedAmount: row.RequestedAmount,
-			LoanStatus:      row.LoanStatus,
-			Tenure:          row.Tenure,
-			TenureValue:     row.TenureValue,
+			ApplicationRef:    row.ApplicationRef,
+			MobileUserID:      row.MobileUserID,
+			CoreCustomerID:    coreCustomerID,
+			PhoneNumber:       row.PhoneNumber,
+			Name:              buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
+			LoanProductType:   loanProductTypeName(row.LoanProductType),
+			BusinessStartDate: row.BusinessStartDate,
+			BusinessAddress:   row.BusinessAddress,
+			BusinessValue:     row.BusinessValue,
+			BusinessType:      row.BusinessType,
+			RequestedAmount:   row.RequestedAmount,
+			LoanStatus:        row.LoanStatus,
+			Tenure:            row.Tenure,
+			TenureValue:       row.TenureValue,
 		},
 	}
 }
@@ -349,6 +366,8 @@ func buildDisplayName(parts ...*string) string {
 
 func parseCustomerStatusValue(value string) (models.CustomerStatus, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(models.CustomerStatusDraft):
+		return models.CustomerStatusDraft, true
 	case string(models.CustomerStatusPending):
 		return models.CustomerStatusPending, true
 	case string(models.CustomerStatusApproved):

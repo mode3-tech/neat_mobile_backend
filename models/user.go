@@ -5,6 +5,7 @@ import "time"
 type CustomerStatus string
 
 const (
+	CustomerStatusDraft    CustomerStatus = "draft"
 	CustomerStatusEmbryo   CustomerStatus = "embryo"
 	CustomerStatusPending  CustomerStatus = "pending"
 	CustomerStatusApproved CustomerStatus = "approved"

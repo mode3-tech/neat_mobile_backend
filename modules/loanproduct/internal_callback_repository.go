@@ -23,6 +23,7 @@ const cbaApplicationSelectColumns = `
 	wallet_loan_applications.business_address,
 	wallet_loan_applications.business_value,
 	wallet_loan_applications.business_type,
+	wallet_loan_applications.business_start_date::text AS business_start_date,
 	wallet_loan_applications.requested_amount,
 	wallet_loan_applications.loan_status,
 	wallet_loan_applications.tenure,
@@ -68,6 +69,7 @@ type cbaApplicationReadRow struct {
 	BusinessAddress           string     `gorm:"column:business_address"`
 	BusinessValue             int64      `gorm:"column:business_value"`
 	BusinessType              string     `gorm:"column:business_type"`
+	BusinessStartDate         string     `gorm:"column:business_start_date"`
 	RequestedAmount           int64      `gorm:"column:requested_amount"`
 	LoanStatus                string     `gorm:"column:loan_status"`
 	Tenure                    string     `gorm:"column:tenure"`

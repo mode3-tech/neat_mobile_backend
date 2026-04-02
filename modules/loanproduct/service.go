@@ -205,18 +205,19 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	}
 
 	eoi := &LoanApplication{
-		ID:              uuid.NewString(),
-		ApplicationRef:  uuid.NewString(),
-		CoreCustomerID:  coreCustomerID,
-		PhoneNumber:     user.Phone,
-		MobileUserID:    mobileUserID,
-		LoanProductType: req.LoanProductType,
-		LoanStatus:      LoanStatusEmbryo,
-		BusinessAddress: req.BusinessAddress,
-		BusinessValue:   parsedBV,
-		RequestedAmount: parsedAmount,
-		Tenure:          loanProduct.RepaymentFrequency,
-		TenureValue:     loanProduct.LoanTermValue,
+		ID:                uuid.NewString(),
+		ApplicationRef:    uuid.NewString(),
+		CoreCustomerID:    coreCustomerID,
+		PhoneNumber:       user.Phone,
+		MobileUserID:      mobileUserID,
+		LoanProductType:   req.LoanProductType,
+		LoanStatus:        LoanStatusEmbryo,
+		BusinessAddress:   req.BusinessAddress,
+		BusinessValue:     parsedBV,
+		BusinessStartDate: req.BusinessStartDate,
+		RequestedAmount:   parsedAmount,
+		Tenure:            loanProduct.RepaymentFrequency,
+		TenureValue:       loanProduct.LoanTermValue,
 	}
 
 	if err := s.repo.CreateEOI(ctx, eoi); err != nil {

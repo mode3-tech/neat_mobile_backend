@@ -66,22 +66,23 @@ func (LoanProductEvaluation) TableName() string {
 }
 
 type LoanApplication struct {
-	ID              string        `gorm:"column:id;type:text;primaryKey"`
-	MobileUserID    string        `gorm:"column:mobile_user_id;type:text;not null;index"`
-	CoreCustomerID  *string       `gorm:"column:core_customer_id"`
-	PhoneNumber     string        `gorm:"column:phone_number;not null"`
-	ApplicationRef  string        `gorm:"column:application_ref;not null;uniqueIndex"`
-	CoreLoanID      *string       `gorm:"column:core_loan_id"`
-	LoanProductType LoanType      `gorm:"column:loan_product_type;not null"`
-	BusinessAddress string        `gorm:"column:business_address;not null"`
-	BusinessValue   int64         `gorm:"column:business_value;not null;default:0"`
-	BusinessType    string        `gorm:"column:business_type;not null"`
-	RequestedAmount int64         `gorm:"column:requested_amount;not null;default:0"`
-	LoanStatus      LoanStatus    `gorm:"column:loan_status;not null;default:embryo"`
-	Tenure          LoanFrequency `gorm:"column:tenure;not null"`
-	TenureValue     int           `gorm:"column:tenure_value"`
-	CreatedAt       time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
-	UpdatedAt       *time.Time    `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
+	ID                string        `gorm:"column:id;type:text;primaryKey"`
+	MobileUserID      string        `gorm:"column:mobile_user_id;type:text;not null;index"`
+	CoreCustomerID    *string       `gorm:"column:core_customer_id"`
+	PhoneNumber       string        `gorm:"column:phone_number;not null"`
+	ApplicationRef    string        `gorm:"column:application_ref;not null;uniqueIndex"`
+	CoreLoanID        *string       `gorm:"column:core_loan_id"`
+	LoanProductType   LoanType      `gorm:"column:loan_product_type;not null"`
+	BusinessAddress   string        `gorm:"column:business_address;not null"`
+	BusinessValue     int64         `gorm:"column:business_value;not null;default:0"`
+	BusinessStartDate string        `gorm:"column:business_start_date;not null"`
+	BusinessType      string        `gorm:"column:business_type;not null"`
+	RequestedAmount   int64         `gorm:"column:requested_amount;not null;default:0"`
+	LoanStatus        LoanStatus    `gorm:"column:loan_status;not null;default:embryo"`
+	Tenure            LoanFrequency `gorm:"column:tenure;not null"`
+	TenureValue       int           `gorm:"column:tenure_value"`
+	CreatedAt         time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
+	UpdatedAt         *time.Time    `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
 }
 
 func (LoanApplication) TableName() string {
