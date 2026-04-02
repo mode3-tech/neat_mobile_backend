@@ -438,11 +438,11 @@ func isAllowedCustomerCallbackStatus(status models.CustomerStatus) bool {
 func canTransitionCustomerStatus(from *models.CustomerStatus, to models.CustomerStatus) bool {
 	switch normalizedCustomerStatus(from) {
 	case models.CustomerStatusEmbryo:
-		return to == models.CustomerStatusPending
-	case models.CustomerStatusPending:
-		return to == models.CustomerStatusEmbryo || to == models.CustomerStatusApproved
+		return to == models.CustomerStatusDraft
+	case models.CustomerStatusDraft:
+		return to == models.CustomerStatusPending || to == models.CustomerStatusApproved
 	case models.CustomerStatusApproved:
-		return false
+		return to == models.CustomerStatusPending
 	default:
 		return false
 	}
