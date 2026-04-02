@@ -247,7 +247,7 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 }
 
 func (s *InternalService) LinkWalletUserByBVN(ctx context.Context, req LinkWalletUserByBVNRequest) (*LinkWalletUserByBVNResponse, error) {
-	customerID := strings.TrimSpace(req.AccountUserID)
+	customerID := strings.TrimSpace(req.CustomerID)
 	bvn := strings.TrimSpace(req.BVN)
 
 	if customerID == "" || bvn == "" {
