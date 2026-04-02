@@ -181,6 +181,8 @@ func isUnprocessableEntityApplyForLoanError(err error) bool {
 		return true
 	case "loan term must be greater than zero":
 		return true
+	case "invalid format, expected MM/YYYY":
+		return true
 	}
 
 	return false

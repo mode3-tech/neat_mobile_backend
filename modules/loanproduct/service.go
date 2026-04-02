@@ -287,6 +287,12 @@ func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now ti
 		return nil, 0, 0, 0, errors.New("invalid loan amount")
 	}
 
+	_, err = time.Parse("01/2006", req.BusinessStartDate)
+
+	if err != nil {
+		return nil, 0, 0, 0, errors.New("invalid format, expected MM/YYYY")
+	}
+
 	startDate, err := timeutil.ParseDOB(req.BusinessStartDate)
 	if err != nil {
 		return nil, 0, 0, 0, errors.New(err.Error())

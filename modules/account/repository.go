@@ -41,7 +41,7 @@ func (r *Repository) GetUser(ctx context.Context, userID string) (*models.User, 
 func (r *Repository) GetCustomerWallet(ctx context.Context, mobileUserID string) (*wallet.CustomerWallet, error) {
 	var w wallet.CustomerWallet
 	err := r.db.WithContext(ctx).
-		Select("account_number", "available_balance", "booked_balance").
+		Select("account_number", "available_balance", "booked_balance", "internal_wallet_id").
 		Where("mobile_user_id = ?", mobileUserID).
 		First(&w).Error
 	if err != nil {
