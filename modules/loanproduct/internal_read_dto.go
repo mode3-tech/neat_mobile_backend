@@ -42,22 +42,20 @@ type GetLoanApplicationForCBAResponse struct {
 }
 
 type CBALoanApplicationReadDTO struct {
-	ApplicationRef      string  `json:"application_ref"`
-	MobileUserID        string  `json:"mobile_user_id"`
-	CoreCustomerID      *string `json:"core_customer_id,omitempty"`
-	Name                string  `json:"name"`
-	PhoneNumber         string  `json:"phone_number"`
-	LoanProductType     string  `json:"loan_product_type"`
-	BusinessStartDate   string  `json:"business_start_date"`
-	BusinessAddress     string  `json:"business_address"`
-	BusinessValue       int64   `json:"business_value"`
-	BusinessType        string  `json:"business_type"`
-	RequestedAmount     int64   `json:"requested_amount"`
-	LoanStatus          string  `json:"loan_status"`
-	Tenure              string  `json:"tenure"`
-	TenureValue         int     `json:"tenure_value"`
-	WalletBankName      *string `json:"wallet_bank_name,omitempty"`
-	WalletAccountNumber *string `json:"wallet_account_number,omitempty"`
+	ApplicationRef    string  `json:"application_ref"`
+	MobileUserID      string  `json:"mobile_user_id"`
+	CoreCustomerID    *string `json:"core_customer_id,omitempty"`
+	Name              string  `json:"name"`
+	PhoneNumber       string  `json:"phone_number"`
+	LoanProductType   string  `json:"loan_product_type"`
+	BusinessStartDate string  `json:"business_start_date"`
+	BusinessAddress   string  `json:"business_address"`
+	BusinessValue     int64   `json:"business_value"`
+	BusinessType      string  `json:"business_type"`
+	RequestedAmount   int64   `json:"requested_amount"`
+	LoanStatus        string  `json:"loan_status"`
+	Tenure            string  `json:"tenure"`
+	TenureValue       int     `json:"tenure_value"`
 }
 
 type CBABVNRecordReadDTO struct {
@@ -78,6 +76,8 @@ type CBABVNRecordReadDTO struct {
 	PassportOnBVN          string  `json:"passport_on_bvn"`
 	City                   *string `json:"city,omitempty"`
 	Landmark               *string `json:"landmark,omitempty"`
+	WalletBankName         *string `json:"wallet_bank_name,omitempty"`
+	WalletAccountNumber    *string `json:"wallet_account_number,omitempty"`
 }
 
 type LoanApplicationBVNRecordQuery struct {

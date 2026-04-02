@@ -44,9 +44,7 @@ const cbaApplicationSelectColumns = `
 	wallet_bvn_records.full_home_address,
 	wallet_bvn_records.passport_on_bvn,
 	wallet_bvn_records.city,
-	wallet_bvn_records.landmark,
-	wallet_customer_wallets.bank_name AS wallet_bank_name,
-	wallet_customer_wallets.account_number AS wallet_account_number
+	wallet_bvn_records.landmark
 `
 
 type InternalRepository struct {
@@ -93,8 +91,6 @@ type cbaApplicationReadRow struct {
 	PassportOnBVN             *string    `gorm:"column:passport_on_bvn"`
 	City                      *string    `gorm:"column:city"`
 	Landmark                  *string    `gorm:"column:landmark"`
-	WalletBankName            *string    `gorm:"column:wallet_bank_name"`
-	WalletAccountNumber       *string    `gorm:"column:wallet_account_number"`
 }
 
 type cbaEmbryoApplicationSummaryRow struct {
@@ -127,6 +123,8 @@ type cbaBVNRecordReadRow struct {
 	PassportOnBVN          *string    `gorm:"column:passport_on_bvn"`
 	City                   *string    `gorm:"column:city"`
 	Landmark               *string    `gorm:"column:landmark"`
+	WalletBankName         *string    `gorm:"column:wallet_bank_name"`
+	WalletAccountNumber    *string    `gorm:"column:wallet_account_number"`
 }
 
 func NewInternalRepository(db *gorm.DB) *InternalRepository {
@@ -280,7 +278,6 @@ func (r *InternalRepository) GetLoanApplicationForCBAByRef(ctx context.Context, 
 		Select(cbaApplicationSelectColumns).
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
-		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_loan_applications.mobile_user_id").
 		Where("wallet_loan_applications.application_ref = ?", applicationRef).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error
@@ -366,10 +363,13 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 			wallet_bvn_records.full_home_address,
 			wallet_bvn_records.passport_on_bvn,
 			wallet_bvn_records.city,
-			wallet_bvn_records.landmark
+			wallet_bvn_records.landmark,
+			wallet_customer_wallets.bank_name AS wallet_bank_name,
+			wallet_customer_wallets.account_number AS wallet_account_number
 		`).
 		Joins("INNER JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
 		Joins("INNER JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_loan_applications.mobile_user_id").
 		Where("wallet_loan_applications.mobile_user_id = ?", mobileUserID).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error

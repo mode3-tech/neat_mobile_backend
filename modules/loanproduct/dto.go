@@ -5,7 +5,7 @@ import "time"
 type LoanRequest struct {
 	LoanProductType   LoanType `json:"loan_product_type" binding:"required"`
 	BusinessAddress   string   `json:"business_address" binding:"required"`
-	BusinessStartDate string   `json:"business_start_date" binding:"required,datetime=01-2006"`
+	BusinessStartDate string   `json:"business_start_date" binding:"required,datetime=01/2006"`
 	BusinessValue     string   `json:"business_value" binding:"required"`
 	LoanAmount        string   `json:"loan_amount" binding:"required"`
 	TransactionPin    string   `json:"transaction_pin" binding:"required"`
