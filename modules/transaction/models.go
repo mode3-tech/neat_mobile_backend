@@ -19,7 +19,7 @@ type Transaction struct {
 	CounterpartyAccount string            `gorm:"type:text"`
 	CounterpartyBank    string            `gorm:"type:text"`
 	Status              TransactionStatus `gorm:"type:text;not null"` // "pending"|"successful"|"failed"|"reversed"
-	Source              string            `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement" etc.
+	Source              string            `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
 	Metadata            map[string]any    `gorm:"type:jsonb"`
 	CreatedAt           time.Time         `gorm:"autoCreateTime"`
 	UpdatedAt           *time.Time        `gorm:"autoUpdateTime"`
