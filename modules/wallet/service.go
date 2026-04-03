@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"neat_mobile_app_backend/modules/transaction"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -119,17 +121,51 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	if accountName == "" {
 		return nil, fmt.Errorf("account name is required")
 	}
-
-	transferInfo := &Transfer{
-		ID:     uuid.NewString(),
-		Status: "pending",
+	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch wallet: %w", err)
 	}
 
-	if err := s.repo.CreateTransfer(ctx, transferInfo); err != nil {
-		return nil, fmt.Errorf("failed to create transfer record: %w", err)
+	narration := ""
+	if req.Narration != nil {
+		narration = *req.Narration
 	}
 
-	return s.providusService.InitiateTransfer(ctx, req)
+	txID := uuid.NewString()
+	txRecord := &transaction.Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            walletUser.WalletID,
+		Category:            transaction.TransactionCategoryTransferTo,
+		Type:                transaction.TransactionTypeDebit,
+		Description:         fmt.Sprintf("Transfer to %s", *req.AccountName),
+		Amount:              req.Amount,
+		Reference:           uuid.NewString(),
+		Narration:           &narration,
+		CounterpartyAccount: accountNumber,
+		CounterpartyName:    accountName,
+		CounterpartyBank:    req.SortCode,
+		Source:              "transfer",
+		Status:              transaction.TransactionStatusPending,
+	}
+
+	if err := s.repo.AddTransaction(ctx, txRecord); err != nil {
+		return nil, fmt.Errorf("failed to create transaction record: %w", err)
+	}
+
+	resp, err := s.providusService.InitiateTransfer(ctx, req)
+	if err != nil {
+		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+	}
+
+	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
+
+	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
+		return nil, fmt.Errorf("failed to set a successful transaction record: %w", err)
+	}
+
+	return resp, nil
+
 }
 
 func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID string, req *AddBeneficiaryRequest) (*Beneficiary, error) {
@@ -149,7 +185,16 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
-	walletID := strings.TrimSpace(req.WalletID)
+	user, err := s.repo.GetUserWalletID(ctx, mobileUserID)
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	walletID := strings.TrimSpace(user.WalletID)
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	accountName := strings.TrimSpace(req.AccountName)
 	bankCode := strings.TrimSpace(req.BankCode)
@@ -221,22 +266,22 @@ func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCred
 	}
 
 	narration := strings.TrimSpace(payload.TranRemarks)
-	transfer := &Transfer{
-		ID:                   uuid.NewString(),
-		MobileUserID:         wallet.MobileUserID,
-		WalletID:             wallet.WalletID,
-		Reference:            uuid.NewString(),
-		TransactionReference: providerRef,
-		SessionID:            payload.SessionID,
-		Amount:               amountKobo,
-		Narration:            &narration,
-		Destination:          payload.AccountNumber,
-		Description:          payload.TranRemarks,
-		Status:               TransferStatusCompleted,
-		TransferType:         TransferTypeCredit,
+	transfer := &transaction.Transaction{
+		ID:                  uuid.NewString(),
+		MobileUserID:        wallet.MobileUserID,
+		WalletID:            wallet.WalletID,
+		Reference:           uuid.NewString(),
+		ProviderReference:   providerRef,
+		SessionID:           payload.SessionID,
+		Amount:              amountKobo,
+		Narration:           &narration,
+		CounterpartyAccount: payload.AccountNumber,
+		Description:         payload.TranRemarks,
+		Status:              transaction.TransactionStatusSuccessful,
+		Type:                transaction.TransactionTypeCredit,
 	}
 
-	if err := s.repo.CreateTransfer(ctx, transfer); err != nil {
+	if err := s.repo.AddTransaction(ctx, transfer); err != nil {
 		return fmt.Errorf("failed to save credit transfer: %w", err)
 	}
 

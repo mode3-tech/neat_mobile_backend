@@ -15,6 +15,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -111,6 +112,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	walletService := wallet.NewService(walletRepo, providusWalletService)
 	walletHandler := wallet.NewHandler(walletService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
+
+	transactionRepo := transaction.NewRepository(db)
+	transactionService := transaction.NewServie(transactionRepo)
+	transactionHandler := transaction.NewHandler(transactionService)
+	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard)
 
 	webhooksGroup := r.Group("/webhooks")
 	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {

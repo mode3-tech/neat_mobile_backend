@@ -21,6 +21,10 @@ tags:
     description: Account summary and profile endpoints
   - name: Wallet
     description: Bank lookup and account resolution endpoints
+  - name: Transaction
+    description: Transaction history endpoints
+  - name: Webhook
+    description: Inbound webhook endpoints from external providers
   - name: Internal
     description: Internal CBA integration endpoints protected by HMAC headers
   - name: Dev Signer
@@ -1385,6 +1389,75 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Failed to fetch beneficiaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /transaction/recent:
+    get:
+      tags:
+        - Transaction
+      summary: Fetch recent transactions
+      description: Returns the most recent transactions for the authenticated user's wallet.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Recent transactions fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchRecentTransactionsResponse"
+        "401":
+          description: Unauthorized or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /webhooks/providus/credit:
+    post:
+      tags:
+        - Webhook
+      summary: Providus credit notification
+      description: |
+        Receives inbound credit notifications from Providus when money lands on a
+        user's virtual account. Protected by a shared secret sent in the
+        `X-Notification-Secret` header. Always returns 200 — errors are logged
+        internally and do not trigger Providus retries.
+      servers:
+        - url: /
+      parameters:
+        - in: header
+          name: X-Notification-Secret
+          required: true
+          schema:
+            type: string
+          description: Shared secret configured with Providus to authenticate inbound webhook calls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvidusCreditPayload"
+      responses:
+        "200":
+          description: Notification acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+        "401":
+          description: Missing or invalid notification secret
           content:
             application/json:
               schema:
@@ -3250,6 +3323,100 @@ components:
         message:
           type: string
           example: otp sent
+    TransactionItem:
+      type: object
+      required:
+        - id
+        - type
+        - description
+        - date
+        - status
+        - amount
+      properties:
+        id:
+          type: string
+          example: 3f7a1c2e-d84b-4f90-a3c1-2e5b6d8f0a1c
+        type:
+          type: string
+          enum:
+            - credit
+            - debit
+          example: credit
+        description:
+          type: string
+          example: Transfer from John Doe
+        date:
+          type: string
+          format: date-time
+          example: "2026-04-03T14:22:00+01:00"
+        status:
+          type: string
+          enum:
+            - pending
+            - successful
+            - failed
+            - reversed
+          example: successful
+        amount:
+          type: integer
+          format: int64
+          description: Amount in the smallest currency unit (kobo).
+          example: 500000
+    FetchRecentTransactionsResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionItem"
+    ProvidusCreditPayload:
+      type: object
+      properties:
+        accountNumber:
+          type: string
+          example: "1234567890"
+        transactionAmount:
+          type: string
+          example: "5000.00"
+        settledAmount:
+          type: string
+          example: "5000.00"
+        currency:
+          type: string
+          example: NGN
+        tranType:
+          type: string
+          example: C
+        tranRemarks:
+          type: string
+          example: Transfer from John Doe
+        tranDate:
+          type: string
+          example: "2026-04-03T14:22:00"
+        sessionId:
+          type: string
+          example: "090405240115103012345678901234"
+        tranId:
+          type: string
+          example: FT26094123456
+        initiationTranRef:
+          type: string
+          example: NXG20260403142200
+        originatorAccountName:
+          type: string
+          example: JOHN DOE
+        originatorAccountNumber:
+          type: string
+          example: "0123456789"
+        beneficiaryAccountName:
+          type: string
+          example: JANE DOE
+        beneficiaryAccountNumber:
+          type: string
+          example: "1234567890"
     ErrorResponse:
       type: object
       properties:

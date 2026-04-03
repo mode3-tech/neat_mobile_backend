@@ -178,7 +178,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	if coreCustomerID != nil {
 		customerLoans, err := s.getCoreCustomerLoans(ctx, *coreCustomerID)
 		if err != nil {
-			return nil, err
+			customerLoans = []CoreCustomerLoanItem{}
 		}
 
 		activeLoanCount := countActiveCoreLoans(customerLoans)

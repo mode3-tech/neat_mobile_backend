@@ -43,7 +43,6 @@ type AddBeneficiaryRequest struct {
 	BankCode      string `json:"bank_code" binding:"required"`
 	AccountNumber string `json:"account_number" binding:"required"`
 	AccountName   string `json:"account_name" binding:"required"`
-	WalletID      string `json:"wallet_id" binding:"required"`
 }
 
 type AddBeneficiaryResponse struct {
