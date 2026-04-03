@@ -3,10 +3,11 @@ package transaction
 import "time"
 
 type Transaction struct {
-	ID                  string            `gorm:"primaryKey;type:text"`
-	MobileUserID        string            `gorm:"type:text;not null;index"`
-	WalletID            string            `gorm:"type:text;not null;index"`
-	Type                TransactionType   `gorm:"type:text;not null"` // "credit" | "debit"
+	ID           string          `gorm:"primaryKey;type:text"`
+	MobileUserID string          `gorm:"type:text;not null;index"`
+	WalletID     string          `gorm:"type:text;not null;index"`
+	Type         TransactionType `gorm:"type:text;not null"` // "credit" | "debit"
+	// Category            sr
 	Amount              int64             `gorm:"type:bigint;not null"`
 	Charges             int64             `gorm:"type:bigint;not null;default:0"`
 	VAT                 int64             `gorm:"bigint;not null;default:0"`

@@ -9,11 +9,11 @@ import (
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
-	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
@@ -56,6 +56,13 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	if cfg.JWTSecret == "" {
 		return nil, errors.New("jwt secret can't be empty")
 	}
+
+	smsApiKey := cfg.TermiiApiKey
+	smsSenderID := cfg.TermiiSenderID
+
+	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
+	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
+
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
 	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
@@ -83,16 +90,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
-	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, providusWalletService)
+	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, smsSender, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, providusWalletService)
 	authHandler := auth.NewAuthHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, nil)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
-
-	smsApiKey := cfg.TermiiApiKey
-	smsSenderID := cfg.TermiiSenderID
-
-	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
-	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
 
 	otpRepo := otp.NewOTPRepository(db)
 	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)

@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -13,11 +14,17 @@ func NewServie(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) FetchTransactions(ctx context.Context, mobileUserID, walletID string) {
+func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID, walletID string) (*TransactionResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	walletID = strings.TrimSpace(walletID)
 
 	if mobileUserID == "" {
-		// return
+		return nil, errors.New("missing user id")
 	}
+
+	if walletID == "" {
+		return nil, errors.New("missing wallet id")
+	}
+
+	return nil, nil
 }
