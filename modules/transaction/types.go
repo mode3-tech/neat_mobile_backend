@@ -23,3 +23,12 @@ const (
 	TransactionSourceCredit           TransactionSource = "credit"
 	TransactionSourceLoanDisbursement TransactionSource = "loan_disbursement"
 )
+
+type TransactionCategory string
+
+const (
+	TransactionCategoryTransferFrom TransactionCategory = "transfer_from"
+	TransactionCategoryTransferTo   TransactionCategory = "transfer_to"
+	TransactionCategoryAirtime      TransactionCategory = "airtime"
+	TransactionCategoryDataBundle   TransactionCategory = "data_bundle"
+)

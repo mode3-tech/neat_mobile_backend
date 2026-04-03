@@ -3,10 +3,9 @@ package auth
 import (
 	"context"
 	"errors"
-	"testing"
-
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/providers/bvn"
+	"testing"
 )
 
 type stubProviderSource struct {
@@ -58,10 +57,13 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		"",
+		nil,
 		tendarValidator,
 		premblyValidator,
 		nil,
 		stubProviderSource{provider: ProviderTendar},
+		nil,
 		nil,
 	)
 
@@ -86,10 +88,13 @@ func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		"",
+		nil,
 		tendarValidator,
 		nil,
 		nil,
 		stubProviderSource{err: errors.New("cba unavailable")},
+		nil,
 		nil,
 	)
 

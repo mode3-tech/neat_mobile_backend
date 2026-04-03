@@ -90,15 +90,16 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 
 	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
-	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, smsSender, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, providusWalletService)
-	authHandler := auth.NewAuthHandler(authService)
-	authGuard := middleware.AuthGuard(tokenSigner, nil)
-	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
-
 	otpRepo := otp.NewOTPRepository(db)
 	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
+
+	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService)
+	authHandler := auth.NewAuthHandler(authService)
+	authGuard := middleware.AuthGuard(tokenSigner, nil)
+	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
+
 	authService.ConfigureOTPManager(otpManager)
 
 	loanRepo := loanproduct.NewRepository(db)

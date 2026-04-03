@@ -68,18 +68,20 @@ type AuthService struct {
 	walletService  WalletService
 }
 
-func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, smsSender notify.SMSSender, signer JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource, walletService WalletService) *AuthService {
+func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, smsSender notify.SMSSender, otpPepper string, jwtSigner JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource, otpManager authotp.OTPManager, walletService WalletService) *AuthService {
 	return &AuthService{
 		repo:           repo,
 		verification:   verification,
 		tx:             tx,
-		jwtSigner:      signer,
 		deviceRepo:     deviceRepo,
 		smsSender:      smsSender,
+		otpPepper:      otpPepper,
+		jwtSigner:      jwtSigner,
 		tender:         tender,
 		prembly:        prembly,
 		nin:            nin,
 		providerSource: providerSource,
+		otpManager:     otpManager,
 		walletService:  walletService,
 	}
 }
