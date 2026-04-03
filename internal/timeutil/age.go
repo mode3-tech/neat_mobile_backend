@@ -19,8 +19,8 @@ func AgeFromDOB(dob time.Time, now time.Time) int {
 	return age
 }
 
-// ParseDOB parses DOB in DD-MM-YYYY, DD/MM/YYYY, YYYY-MM, or YYYY/MM format.
-// For year-month inputs, day is assumed to be 01.
+// ParseDOB parses DOB in DD-MM-YYYY, DD/MM/YYYY, YYYY-MM, YYYY/MM, MM-YYYY, or MM/YYYY format.
+// For month-year or year-month inputs, day is assumed to be 01.
 func ParseDOB(value string) (time.Time, error) {
 	clean := strings.TrimSpace(value)
 	if clean == "" {
@@ -38,7 +38,12 @@ func ParseDOB(value string) (time.Time, error) {
 		return yearMonthDOB, nil
 	}
 
-	return time.Time{}, fmt.Errorf("invalid dob format %q: expected DD-MM-YYYY, DD/MM/YYYY, YYYY-MM or YYYY/MM", value)
+	monthYearDOB, err := time.Parse("01-2006", clean)
+	if err == nil {
+		return monthYearDOB, nil
+	}
+
+	return time.Time{}, fmt.Errorf("invalid dob format %q: expected DD-MM-YYYY, DD/MM/YYYY, YYYY-MM, YYYY/MM, MM-YYYY or MM/YYYY", value)
 }
 
 func AgeFromDOBString(value string, now time.Time) (int, error) {
