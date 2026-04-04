@@ -106,6 +106,11 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Drop unique index on provider_reference if it exists — changed to non-unique index.
+	if err := db.Exec(`DROP INDEX IF EXISTS idx_wallet_transactions_provider_reference`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},

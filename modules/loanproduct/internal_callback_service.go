@@ -143,6 +143,7 @@ func (s *InternalService) GetLoanApplicationBVNRecordForCBA(ctx context.Context,
 			Landmark:               trimmedPtr(valueOrEmpty(row.Landmark)),
 			WalletBankName:         trimmedPtr(valueOrEmpty(row.WalletBankName)),
 			WalletAccountNumber:    trimmedPtr(valueOrEmpty(row.WalletAccountNumber)),
+			WalletBankCode:         trimmedPtr(valueOrEmpty(row.WalletBankCode)),
 		},
 	}, nil
 }

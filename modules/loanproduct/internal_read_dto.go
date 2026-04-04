@@ -78,6 +78,7 @@ type CBABVNRecordReadDTO struct {
 	Landmark               *string `json:"landmark,omitempty"`
 	WalletBankName         *string `json:"wallet_bank_name,omitempty"`
 	WalletAccountNumber    *string `json:"wallet_account_number,omitempty"`
+	WalletBankCode         *string `json:"wallet_bank_code,omitempty"`
 }
 
 type LoanApplicationBVNRecordQuery struct {
