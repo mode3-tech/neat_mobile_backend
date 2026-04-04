@@ -6,5 +6,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	tx := rg.Group("/transaction", authGuard)
 	{
 		tx.GET("/recent", handler.FetchRecentTransactions)
+		tx.GET("/all", handler.FetchAllTransactions)
 	}
 }

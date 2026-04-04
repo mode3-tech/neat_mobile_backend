@@ -1420,6 +1420,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /transaction/all:
+    get:
+      tags:
+        - Transaction
+      summary: Fetch all transactions (paginated)
+      description: |
+        Returns all transactions for the authenticated user's wallet, grouped by
+        month and paginated via a cursor. Pass the `next_cursor` from the previous
+        response as the `cursor` query parameter to fetch the next page. Omit
+        `cursor` on the first request.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: true
+          schema:
+            type: integer
+            example: 20
+          description: Number of transactions to return per page.
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: "2026-04-01T00:00:00Z"
+          description: RFC3339 timestamp cursor from the previous page's `next_cursor`. Omit on the first request.
+      responses:
+        "200":
+          description: Transactions fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedTransactionResponse"
+        "400":
+          description: Missing or invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /webhooks/providus/credit:
     post:
       tags:
@@ -3372,6 +3425,38 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionItem"
+    TransactionSection:
+      type: object
+      description: A group of transactions belonging to a single calendar month.
+      properties:
+        month:
+          type: string
+          description: Human-readable month label.
+          example: April 2026
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionItem"
+    PagedTransactionResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        sections:
+          type: array
+          description: Transactions grouped by month, ordered newest-first.
+          items:
+            $ref: "#/components/schemas/TransactionSection"
+        next_cursor:
+          type: string
+          format: date-time
+          description: RFC3339 timestamp to pass as `cursor` on the next request. Empty string when there are no more pages.
+          example: "2026-03-01T00:00:00Z"
+        has_more:
+          type: boolean
+          description: True if there are additional pages of transactions available.
+          example: true
     ProvidusCreditPayload:
       type: object
       properties:

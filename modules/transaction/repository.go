@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"neat_mobile_app_backend/models"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -32,4 +33,18 @@ func (r *Repository) FetchRecentTransactions(ctx context.Context, userID, wallet
 		Limit(2).
 		Find(&transactions).Error
 	return transactions, err
+}
+
+func (r *Repository) FetchTransactionPaged(ctx context.Context, userID, walletID string, cursor time.Time, limit int) ([]Transaction, error) {
+	var txs []Transaction
+	q := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND wallet_id = ?", userID, walletID)
+
+	if !cursor.IsZero() {
+		q = q.Where("created_at < ?", cursor)
+	}
+
+	err := q.Order("created_at DESC").Limit(limit + 1). // +1 to detect has_more
+								Find(&txs).Error
+	return txs, err
 }

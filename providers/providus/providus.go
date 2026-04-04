@@ -156,12 +156,12 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	return &result.Account, nil
 }
 
-func (p *Providus) InitiateTransfer(ctx context.Context, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
+func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
 
-	url := p.BaseURL + "/transfer/bank"
+	url := p.BaseURL + "/transfer/bank/customer"
 
 	body, err := json.Marshal(transferInfo)
 	if err != nil {

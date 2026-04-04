@@ -35,3 +35,25 @@ func (h *Handler) FetchRecentTransactions(c *gin.Context) {
 		"transactions": transactions,
 	})
 }
+
+func (h *Handler) FetchAllTransactions(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var query FetchAllTransactionsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query"})
+		return
+	}
+
+	result, err := h.service.FetchTransactionsPaged(c.Request.Context(), mobileUserID, query.Cursor, query.Limit)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}

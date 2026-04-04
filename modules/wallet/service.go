@@ -131,6 +131,14 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		narration = *req.Narration
 	}
 
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID, user.WalletID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("wallet not found")
+		}
+		return nil, err
+	}
+
 	txID := uuid.NewString()
 	txRecord := &transaction.Transaction{
 		ID:                  txID,
@@ -153,7 +161,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		return nil, fmt.Errorf("failed to create transaction record: %w", err)
 	}
 
-	resp, err := s.providusService.InitiateTransfer(ctx, req)
+	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
 	}

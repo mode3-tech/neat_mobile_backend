@@ -25,6 +25,16 @@ func (r *Repository) CreateWallet(ctx context.Context, wallet *CustomerWallet) e
 	return nil
 }
 
+func (r *Repository) GetWallet(ctx context.Context, mobileUserID, walletID string) (*CustomerWallet, error) {
+	var wallet CustomerWallet
+	err := r.db.WithContext(ctx).Where("mobile_user_id = ? AND internal_wallet_id = ?", mobileUserID, walletID).First(&wallet).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &wallet, nil
+}
+
 func (r *Repository) GetDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
 	var device device.UserDevice
 	err := r.db.WithContext(ctx).Where("user_id = ? AND device_id = ?", mobileUserID, deviceID).First(&device).Error
