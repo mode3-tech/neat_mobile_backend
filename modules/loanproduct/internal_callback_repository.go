@@ -366,7 +366,7 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 			wallet_bvn_records.city,
 			wallet_bvn_records.landmark,
 			wallet_customer_wallets.bank_name AS wallet_bank_name,
-			wallet_customer_wallets.account_number AS wallet_account_number
+			wallet_customer_wallets.account_number AS wallet_account_number,
 			wallet_customer_wallets.bank_code AS wallet_bank_code
 		`).
 		Joins("INNER JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
