@@ -1,6 +1,9 @@
 package transaction
 
-import "time"
+import (
+	"neat_mobile_app_backend/internal/types"
+	"time"
+)
 
 type Transaction struct {
 	ID                  string              `gorm:"primaryKey;type:text"`
@@ -23,7 +26,7 @@ type Transaction struct {
 	CounterpartyBank    string              `gorm:"type:text"`
 	Status              TransactionStatus   `gorm:"type:text;not null"` // "pending"|"successful"|"failed"|"reversed"
 	Source              string              `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
-	Metadata            map[string]any      `gorm:"type:jsonb"`
+	Metadata            types.JSONMap       `gorm:"type:jsonb"`
 	CreatedAt           time.Time           `gorm:"autoCreateTime"`
 	UpdatedAt           *time.Time          `gorm:"autoUpdateTime"`
 }

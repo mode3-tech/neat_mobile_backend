@@ -98,7 +98,7 @@ func (r *Repository) AddTransaction(ctx context.Context, transaction *transactio
 }
 
 func (r *Repository) UpdateTransactionStatus(ctx context.Context, txID string, status transaction.TransactionStatus) error {
-	return r.db.WithContext(ctx).Model(&Transfer{}).Where("id = ?", txID).Update("status", status).Error
+	return r.db.WithContext(ctx).Model(&transaction.Transaction{}).Where("id = ?", txID).Update("status", status).Error
 }
 
 func (r *Repository) UpdateTransactionProviderRef(ctx context.Context, txID, providerRef string, status transaction.TransactionStatus) error {
@@ -147,15 +147,6 @@ func (r *Repository) GetWalletByAccountNumber(ctx context.Context, accountNumber
 		return nil, err
 	}
 	return &w, nil
-}
-
-func (r *Repository) GetTransferByProviderRef(ctx context.Context, providerRef string) (*Transfer, error) {
-	var t Transfer
-	err := r.db.WithContext(ctx).Where("transaction_reference = ?", providerRef).First(&t).Error
-	if err != nil {
-		return nil, err
-	}
-	return &t, nil
 }
 
 func (r *Repository) CreditWalletBalance(ctx context.Context, walletID string, amount int64) error {

@@ -131,7 +131,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		narration = *req.Narration
 	}
 
-	wallet, err := s.repo.GetWallet(ctx, mobileUserID, user.WalletID)
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("wallet not found")
@@ -268,10 +268,10 @@ func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCred
 		return nil
 	}
 
-	existing, _ := s.repo.GetTransferByProviderRef(ctx, providerRef)
-	if existing != nil {
-		return nil // duplicate webhook, already processed
-	}
+	// existing, _ := s.repo.GetTransferByProviderRef(ctx, providerRef)
+	// if existing != nil {
+	// 	return nil // duplicate webhook, already processed
+	// }
 
 	narration := strings.TrimSpace(payload.TranRemarks)
 	transfer := &transaction.Transaction{
