@@ -273,7 +273,7 @@ func (s *InternalService) LinkWalletUserByBVN(ctx context.Context, req LinkWalle
 
 func isAllowedCallbackStatus(s LoanStatus) bool {
 	switch s {
-	case LoanStatusApproved, LoanStatusDeclined, LoanStatusActive:
+	case LoanStatusPending, LoanStatusApproved, LoanStatusDeclined, LoanStatusActive:
 		return true
 	default:
 		return false
