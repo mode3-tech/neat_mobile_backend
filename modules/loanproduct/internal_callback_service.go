@@ -282,11 +282,15 @@ func isAllowedCallbackStatus(s LoanStatus) bool {
 
 func canTransition(from, to LoanStatus) bool {
 	switch from {
+	case LoanStatusEmbryo:
+		return to == LoanStatusPending
 	case LoanStatusPending:
 		return to == LoanStatusApproved || to == LoanStatusDeclined
 	case LoanStatusApproved:
-		return to == LoanStatusActive
-	case LoanStatusDeclined, LoanStatusActive:
+		return to == LoanStatusActive || to == LoanStatusDeclined
+	case LoanStatusDeclined:
+		return to == LoanStatusPending
+	case LoanStatusActive:
 		return false
 	default:
 		return false
