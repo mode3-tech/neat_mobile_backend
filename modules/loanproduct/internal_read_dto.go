@@ -45,6 +45,7 @@ type CBALoanApplicationReadDTO struct {
 	ApplicationRef    string  `json:"application_ref"`
 	MobileUserID      string  `json:"mobile_user_id"`
 	CoreCustomerID    *string `json:"core_customer_id,omitempty"`
+	Username          string  `json:"username"`
 	Name              string  `json:"name"`
 	PhoneNumber       string  `json:"phone_number"`
 	LoanProductType   string  `json:"loan_product_type"`

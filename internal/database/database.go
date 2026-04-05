@@ -128,7 +128,7 @@ func Migrate(db *gorm.DB) error {
 		&loanproduct.LoanProductRule{},
 		&loanproduct.LoanApplication{},
 		&loanproduct.LoanApplicationStatusEvent{},
-		&loanproduct.CustomerStatusEvent{},
+		&loanproduct.CustomerEvent{},
 		&wallet.CustomerWallet{},
 		&transaction.Transaction{},
 		&wallet.Beneficiary{},

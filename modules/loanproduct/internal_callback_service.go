@@ -148,7 +148,7 @@ func (s *InternalService) GetLoanApplicationBVNRecordForCBA(ctx context.Context,
 	}, nil
 }
 
-func (s *InternalService) ApplyCBACustomerStatusUpdate(ctx context.Context, customerID string, req UpdateCustomerStatusRequest, rawPayload []byte) error {
+func (s *InternalService) ApplyCBACustomerUpdate(ctx context.Context, customerID string, req UpdateCustomerRequest, rawPayload []byte) error {
 	customerID = strings.TrimSpace(customerID)
 	if customerID == "" || strings.TrimSpace(req.EventID) == "" {
 		return ErrBadRequest
@@ -177,11 +177,12 @@ func (s *InternalService) ApplyCBACustomerStatusUpdate(ctx context.Context, cust
 			return ErrInvalidCustomerTransition
 		}
 
-		created, err := repo.InsertCustomerStatusEvent(ctx, &CustomerStatusEvent{
+		created, err := repo.InsertCustomerEvent(ctx, &CustomerEvent{
 			ID:             uuid.NewString(),
 			EventID:        strings.TrimSpace(req.EventID),
 			CoreCustomerID: customerID,
 			Status:         status,
+			Username:       req.Username,
 			RawPayload:     string(rawPayload),
 			ProcessedAt:    now,
 		})
@@ -193,7 +194,7 @@ func (s *InternalService) ApplyCBACustomerStatusUpdate(ctx context.Context, cust
 			return nil
 		}
 
-		return repo.UpdateUserCustomerStatus(ctx, customerID, status)
+		return repo.UpdateUserCustomer(ctx, customerID, req.Username, status)
 	})
 }
 
@@ -342,6 +343,7 @@ func mapCBAApplicationItem(row *cbaApplicationReadRow) CBAListLoanApplicationIte
 			ApplicationRef:    row.ApplicationRef,
 			MobileUserID:      row.MobileUserID,
 			CoreCustomerID:    coreCustomerID,
+			Username:          valueOrEmpty(row.UserUsername),
 			PhoneNumber:       row.PhoneNumber,
 			Name:              buildDisplayName(row.FirstName, row.MiddleName, row.LastName),
 			LoanProductType:   loanProductTypeName(row.LoanProductType),

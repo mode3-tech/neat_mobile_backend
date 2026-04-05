@@ -189,7 +189,7 @@ func (h *InternalHandler) UpdateCustomerStatusFromCBA(c *gin.Context) {
 		return
 	}
 
-	var req UpdateCustomerStatusRequest
+	var req UpdateCustomerRequest
 	if err := json.Unmarshal(payload, &req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
@@ -203,7 +203,7 @@ func (h *InternalHandler) UpdateCustomerStatusFromCBA(c *gin.Context) {
 	ctx, cancel := withInternalCallbackContext(c)
 	defer cancel()
 
-	err = h.service.ApplyCBACustomerStatusUpdate(ctx, customerID, req, payload)
+	err = h.service.ApplyCBACustomerUpdate(ctx, customerID, req, payload)
 	switch {
 	case handleInternalCallbackTimeout(c, err):
 		return

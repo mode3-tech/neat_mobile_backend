@@ -6,9 +6,10 @@ type UpdateLoanApplicationStatusRequest struct {
 	CoreLoanID string `json:"core_loan_id"`
 }
 
-type UpdateCustomerStatusRequest struct {
-	EventID string `json:"event_id" binding:"required"`
-	Status  string `json:"status" binding:"required"`
+type UpdateCustomerRequest struct {
+	EventID  string `json:"event_id" binding:"required"`
+	Status   string `json:"status" binding:"required"`
+	Username string `json:"username" binding:"required"`
 }
 
 type LinkWalletUserByBVNRequest struct {

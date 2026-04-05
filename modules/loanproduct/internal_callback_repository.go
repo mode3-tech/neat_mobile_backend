@@ -18,6 +18,7 @@ const cbaApplicationSelectColumns = `
 	wallet_loan_applications.core_customer_id AS application_core_customer_id,
 	wallet_users.core_customer_id AS user_core_customer_id,
 	wallet_users.customer_status AS user_customer_status,
+	wallet_users.username AS user_username,
 	wallet_loan_applications.phone_number,
 	wallet_loan_applications.loan_product_type,
 	wallet_loan_applications.business_address,
@@ -64,6 +65,7 @@ type cbaApplicationReadRow struct {
 	ApplicationCoreCustomerID *string    `gorm:"column:application_core_customer_id"`
 	UserCoreCustomerID        *string    `gorm:"column:user_core_customer_id"`
 	UserCustomerStatus        *string    `gorm:"column:user_customer_status"`
+	UserUsername              *string    `gorm:"column:user_username"`
 	PhoneNumber               string     `gorm:"column:phone_number"`
 	LoanProductType           string     `gorm:"column:loan_product_type"`
 	BusinessAddress           string     `gorm:"column:business_address"`
@@ -394,12 +396,12 @@ func (r *InternalRepository) GetUserByCoreCustomerIDForUpdate(ctx context.Contex
 	return &row, err
 }
 
-func (r *InternalRepository) InsertCustomerStatusEvent(ctx context.Context, ev *CustomerStatusEvent) (bool, error) {
+func (r *InternalRepository) InsertCustomerEvent(ctx context.Context, ev *CustomerEvent) (bool, error) {
 	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).
 		Create(ev)
-	r.logInternalCallbackQuery("InsertCustomerStatusEvent", startedAt, fmt.Sprintf("rows_affected=%d", tx.RowsAffected), tx.Error)
+	r.logInternalCallbackQuery("InsertCustomerEvent", startedAt, fmt.Sprintf("rows_affected=%d", tx.RowsAffected), tx.Error)
 	return tx.RowsAffected == 1, tx.Error
 }
 
@@ -421,12 +423,15 @@ func (r *InternalRepository) UpdateApplicationStatus(ctx context.Context, ref st
 	return tx.Error
 }
 
-func (r *InternalRepository) UpdateUserCustomerStatus(ctx context.Context, coreCustomerID string, status models.CustomerStatus) error {
+func (r *InternalRepository) UpdateUserCustomer(ctx context.Context, coreCustomerID, username string, status models.CustomerStatus) error {
 	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Model(&models.User{}).
 		Where("core_customer_id = ?", coreCustomerID).
-		Update("customer_status", status)
+		Updates(map[string]any{
+			"customer_status": status,
+			"username":        username,
+		})
 	r.logInternalCallbackQuery("UpdateUserCustomerStatus", startedAt, fmt.Sprintf("core_customer_id=%s rows_affected=%d", coreCustomerID, tx.RowsAffected), tx.Error)
 	return tx.Error
 }

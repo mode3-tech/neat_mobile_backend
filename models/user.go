@@ -27,6 +27,7 @@ type User struct {
 	BVN                          string          `gorm:"column:bvn;not null"`
 	NIN                          string          `gorm:"column:nin;not null"`
 	CustomerStatus               *CustomerStatus `gorm:"column:customer_status;default:embryo"`
+	Username                     *string         `gorm:"column:username"`
 	CoreCustomerID               *string         `gorm:"column:core_customer_id"`
 	IsEmailVerified              bool            `gorm:"is_email_verified"`
 	IsPhoneVerified              bool            `gorm:"is_phone_verified;not null"`
