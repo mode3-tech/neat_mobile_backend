@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const internalCallbackRequestTimeout = 10 * time.Second
+const internalCallbackRequestTimeout = 30 * time.Second
 
 type InternalHandler struct {
 	service *InternalService
