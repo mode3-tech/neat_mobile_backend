@@ -42,7 +42,7 @@ const (
 	LoanStatusEmbryo   LoanStatus = "embryo"
 	LoanStatusPending  LoanStatus = "pending"
 	LoanStatusApproved LoanStatus = "approved"
-	LoanStatusDeclined LoanStatus = "decline"
+	LoanStatusDeclined LoanStatus = "declined"
 	LoanStatusActive   LoanStatus = "active"
 )
 

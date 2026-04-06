@@ -19,4 +19,5 @@ func RegisterInternalRoutes(rg *gin.RouterGroup, handler *Handler, internalAuth 
 	internal.Use(internalAuth)
 
 	internal.POST("/send", handler.SendNotification)
+	internal.POST("/store", handler.StoreNotification)
 }
