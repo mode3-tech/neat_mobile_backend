@@ -24,6 +24,7 @@ import (
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/providus"
 	"neat_mobile_app_backend/providers/sms"
+	"net/http"
 	"strings"
 	"time"
 
@@ -53,6 +54,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")
 	internalV1 := r.Group("/internal/v1")
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	if cfg.JWTSecret == "" {
 		return nil, errors.New("jwt secret can't be empty")
