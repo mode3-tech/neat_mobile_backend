@@ -324,37 +324,6 @@ func isDeviceNotRegistered(ticket ExpoPushTicket) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "DeviceNotRegistered")
 }
 
-func (s *Service) StoreNotification(ctx context.Context, req SendNotificationRequest) error {
-	if s.repo == nil {
-		return errors.New("notification repository is not configured")
-	}
-
-	userID := strings.TrimSpace(req.UserID)
-	title := strings.TrimSpace(req.Title)
-	body := strings.TrimSpace(req.Body)
-
-	if userID == "" {
-		return errors.New("user id is required")
-	}
-	if title == "" {
-		return errors.New("title is required")
-	}
-	if body == "" {
-		return errors.New("body is required")
-	}
-
-	row := models.Notification{
-		ID:     uuid.NewString(),
-		UserID: userID,
-		Title:  title,
-		Body:   body,
-		Type:   req.Type,
-		Data:   req.Data,
-	}
-
-	return s.repo.CreateNotification(ctx, row)
-}
-
 func (s *Service) GetNotifications(ctx context.Context, userID string, page, pageSize int) (*ListNotificationsResponse, error) {
 	if s.repo == nil {
 		return nil, errors.New("notification repository is not configured")

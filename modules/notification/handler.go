@@ -106,30 +106,6 @@ func (h *Handler) SendNotification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "notification sent"})
 }
 
-func (h *Handler) StoreNotification(c *gin.Context) {
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
-	}
-
-	var req SendNotificationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	if err := h.service.StoreNotification(c.Request.Context(), req); err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to store notification"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "notification stored"})
-}
-
 func (h *Handler) GetNotifications(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if userID == "" {
