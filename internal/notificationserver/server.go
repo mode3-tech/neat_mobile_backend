@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-func New(cfg config.Config) (*http.Server, error) {
-	router, err := NewRouter(cfg)
+func New(cfg config.Config) (*http.Server, func(), error) {
+	router, stopCron, err := NewRouter(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &http.Server{
@@ -19,5 +19,5 @@ func New(cfg config.Config) (*http.Server, error) {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
-	}, nil
+	}, stopCron, nil
 }

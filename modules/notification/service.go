@@ -7,6 +7,7 @@ import (
 	"log"
 	"neat_mobile_app_backend/models"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -90,6 +91,82 @@ func (s *Service) DeleteToken(ctx context.Context, userID, deviceID string) erro
 	}
 
 	return s.repo.DeleteTokenByUserAndDevice(ctx, userID, deviceID)
+}
+
+const receiptPollBatchSize = 300
+
+func (s *Service) ProcessPendingReceipts(ctx context.Context) error {
+	if s.repo == nil || s.sender == nil {
+		return nil
+	}
+
+	tickets, err := s.repo.ListPendingNotificationTickets(ctx, receiptPollBatchSize)
+	if err != nil {
+		return fmt.Errorf("list pending tickers: %w", err)
+	}
+	if len(tickets) == 0 {
+		return nil
+	}
+
+	ids := make([]string, len(tickets))
+	for i, t := range tickets {
+		ids[i] = t.ExpoTicketID
+	}
+
+	receipts, err := s.sender.GetReceipts(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("get receipts: %w", err)
+	}
+
+	now := time.Now().UTC()
+	for _, ticket := range tickets {
+		receipt, ok := receipts[ticket.ExpoTicketID]
+		if !ok {
+			continue
+		}
+
+		status := strings.TrimSpace(receipt.Status)
+
+		var msg, errDetail *string
+		if v := strings.TrimSpace(receipt.Message); v != "" {
+			msg = &v
+		}
+		if receipt.Details != nil {
+			if errVal, ok := receipt.Details["error"]; ok {
+				if s := strings.TrimSpace(fmt.Sprint(errVal)); s != "" {
+					errDetail = &s
+				}
+			}
+		}
+
+		if err := s.repo.MarkNotificationTicketReceipt(ctx, ticket.ExpoTicketID, &status, msg, errDetail, now); err != nil {
+			log.Printf("notification: mark receipt %s: %v", ticket.ExpoTicketID, err)
+		}
+
+		if isDeviceNotRegisteredReceipt(receipt) {
+			if delErr := s.repo.DeleteTokenByValue(ctx, ticket.ExpoPushToken); delErr != nil {
+				log.Printf("notification: delete unregistered token for ticket %s: %v", ticket.ExpoTicketID, delErr)
+			}
+		}
+	}
+	return nil
+}
+
+func isDeviceNotRegisteredReceipt(r ExpoPushReceipt) bool {
+	if !strings.EqualFold(strings.TrimSpace(r.Status), "error") {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Message), "DeviceNotRegistered") {
+		return true
+	}
+	if r.Details == nil {
+		return false
+	}
+	val, ok := r.Details["error"]
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(val)), "DeviceNotRegistered")
 }
 
 func (s *Service) SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error {

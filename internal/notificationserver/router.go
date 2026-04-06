@@ -1,6 +1,7 @@
 package notificationserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -14,21 +15,22 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 )
 
-func NewRouter(cfg config.Config) (*gin.Engine, error) {
+func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	db, err := connectPostgresWithRetry(cfg.DBUrl, 5, time.Second)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := database.Migrate(db); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if cfg.JWTSecret == "" {
-		return nil, errors.New("jwt secret can't be empty")
+		return nil, nil, errors.New("jwt secret can't be empty")
 	}
 
 	r := gin.New()
@@ -59,7 +61,18 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	}
 	notification.RegisterInternalRoutes(internalV1, notificationHandler, internalAuth)
 
-	return r, nil
+	c := cron.New(cron.WithLocation(time.UTC))
+	c.AddFunc("@every 5m", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := notificationService.ProcessPendingReceipts(ctx); err != nil {
+			log.Printf("receipt poll: %v", err)
+		}
+	})
+	c.Start()
+
+	stopCron := func() { <-c.Stop().Done() }
+	return r, stopCron, nil
 }
 
 func connectPostgresWithRetry(dsn string, attempts int, baseDelay time.Duration) (*gorm.DB, error) {
