@@ -73,6 +73,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
+	if req == nil {
+		return nil, errors.New("transfer request is required")
+	}
+
 	if mobileUserID == "" {
 		return nil, errors.New("mobile user ID is required")
 	}
@@ -112,7 +116,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		return nil, fmt.Errorf("amount must be greater than zero")
 	}
 	accountNumber := strings.TrimSpace(req.AccountNumber)
-	accountName := strings.TrimSpace(*req.AccountName)
+	accountName := ""
+	if req.AccountName != nil {
+		accountName = strings.TrimSpace(*req.AccountName)
+	}
 
 	if accountNumber == "" {
 		return nil, fmt.Errorf("account number is required")
@@ -146,7 +153,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		WalletID:            walletUser.WalletID,
 		Category:            transaction.TransactionCategoryTransferTo,
 		Type:                transaction.TransactionTypeDebit,
-		Description:         fmt.Sprintf("Transfer to %s", *req.AccountName),
+		Description:         fmt.Sprintf("Transfer to %s", accountName),
 		Amount:              req.Amount,
 		Reference:           uuid.NewString(),
 		Narration:           &narration,
@@ -164,6 +171,21 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		return nil, fmt.Errorf("failed to initiate transfer with provider: %w", err)
+	}
+
+	if resp == nil {
+		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		return nil, errors.New("failed to initiate transfer with provider: empty response")
+	}
+
+	if !resp.Status {
+		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		message := strings.TrimSpace(resp.Message)
+		if message == "" {
+			message = "provider returned an unsuccessful transfer response"
+		}
+		return nil, fmt.Errorf("failed to initiate transfer with provider: %s", message)
 	}
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
@@ -242,6 +264,14 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 
 	return beneficiary, nil
 }
+
+// func (s *Service) InitiateDeposit(ctx context.Context, mobileUserID string) (*InitiatedDepositResponse, error) {
+// 	mobileUserID = strings.TrimSpace(mobileUserID)
+// 	if mobileUserID == "" {
+// 		return nil, errors.New("invalid mobile user id")
+// 	}
+
+// }
 
 func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
 	if strings.TrimSpace(payload.TranType) != "C" {

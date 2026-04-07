@@ -1,5 +1,7 @@
 package wallet
 
+import "time"
+
 type BankDetailsQuery struct {
 	AccountNumber string `form:"account_number" binding:"required"`
 	BankCode      string `form:"bank_code" binding:"required"`
@@ -15,7 +17,7 @@ type TransferRequest struct {
 	SortCode       string         `json:"sortCode" binding:"required"`
 	Narration      *string        `json:"narration" binding:"omitempty,max=255"`
 	AccountNumber  string         `json:"accountNumber" binding:"required"`
-	AccountName    *string        `json:"accountName" binding:"omitempty,max=255"`
+	AccountName    *string        `json:"accountName" binding:"required,max=255"`
 	Metadata       map[string]any `json:"metadata" binding:"omitempty"`
 	TransactionPin string         `json:"transaction_pin" binding:"required"`
 }
@@ -83,4 +85,43 @@ type ProvidusCredit struct {
 	OriginatorAccountNo    string `json:"originatorAccountNumber"`
 	BeneficiaryAccountName string `json:"beneficiaryAccountName"`
 	BeneficiaryAccountNo   string `json:"beneficiaryAccountNumber"`
+}
+
+type InitiatedDepositRequest struct {
+	ExpectedAmount string `json:"expected_amount"`
+}
+
+type InitiatedDepositResponse struct {
+	Status     bool       `json:"status" binding:"required"`
+	TrackingID string     `json:"tracking_id" binding:"required"`
+	ExpiresAt  time.Time  `json:"expires_at" binding:"required"`
+	Account    AccountObj `json:"account" binding:"required"`
+}
+
+type AccountObj struct {
+	AccountNumber string `json:"account_number" binding:"required"`
+	AccountName   string `json:"account_name" binding:"required"`
+	BankName      string `json:"bank_name" binding:"required"`
+	BankCode      string `json:"bank_code" binding:"required"`
+}
+
+type PolledDepositResponse struct {
+	Status bool `json:"status" binding:"status"`
+}
+
+type DepositObj struct {
+	TrackingID     string                `json:"tracking_id" binding:"required"`
+	Status         ExpectedDepositStatus `json:"status" binding:"required"`
+	ExpectedAmount int64                 `json:"expected_amount" binding:"required"`
+	ActualAmount   int64                 `json:"actual_amount" binding:"required"`
+	ExpiresAt      time.Time             `json:"expires_at" binding:"required"`
+	Transaction    TransactionObj        `json:"transaction" binding:"required"`
+}
+
+type TransactionObj struct {
+	ID        string    `json:"id" binding:"required"`
+	Amount    int64     `json:"amount" binding:"required"`
+	Reference string    `json:"reference" binding:"required"`
+	Narration string    `json:"narration" binding:"required"`
+	CreatedAt time.Time `json:"created_at" binding:"required"`
 }

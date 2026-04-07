@@ -22,3 +22,11 @@ const (
 	TransferTypeDebit  TransferType = "debit"
 	TransferTypeCredit TransferType = "credit"
 )
+
+type ExpectedDepositStatus string
+
+const (
+	ExpectedDepositStatusPending   ExpectedDepositStatus = "pending"
+	ExpectedDepositStatusExpired   ExpectedDepositStatus = "expired"
+	ExpectedDepositStatusFulfilled ExpectedDepositStatus = "fulfilled"
+)

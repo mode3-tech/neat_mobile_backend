@@ -132,6 +132,7 @@ func Migrate(db *gorm.DB) error {
 		&wallet.CustomerWallet{},
 		&transaction.Transaction{},
 		&wallet.Beneficiary{},
+		&wallet.ExpectedDeposit{},
 	); err != nil {
 		return err
 	}

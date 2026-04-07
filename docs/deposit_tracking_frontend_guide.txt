@@ -1,0 +1,178 @@
+DEPOSIT TRACKING - FRONTEND INTEGRATION GUIDE
+==============================================
+
+OVERVIEW
+--------
+When a user wants to deposit money, the app creates a "deposit expectation" on the
+server. The server then waits for Providus to confirm the inbound transfer via webhook.
+The client tracks the deposit status using a tracking ID and can poll for updates.
+A push notification is also sent the moment the deposit is confirmed.
+
+
+FLOW SUMMARY
+------------
+1. User opens the deposit screen — display their virtual account details (already stored).
+2. User taps "I'm about to make a deposit" — call POST /wallet/deposit/initiate.
+3. Server returns a tracking_id.
+4. Show a "waiting for deposit" screen.
+5. Poll GET /wallet/deposit/:tracking_id every 4–5 seconds.
+6. When status is "fulfilled", show success screen with transaction details.
+7. A push notification will also arrive independently — handle it to navigate to the
+   success screen if the app is in the background or closed.
+
+
+STEP 1 — INITIATE A DEPOSIT
+----------------------------
+Endpoint:   POST /wallet/deposit/initiate
+Auth:       Bearer token (Authorization header) + X-Device-ID header
+Body:       Optional — you can send an expected_amount in kobo if the user specifies
+            how much they plan to send. If omitted, any incoming amount is matched.
+
+Request body (optional):
+{
+  "expected_amount": 500000   // 5000.00 NGN in kobo — omit if amount is open
+}
+
+Success response (200):
+{
+  "status": true,
+  "tracking_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "expires_at": "2025-04-07T14:30:00Z",    // deposit window closes after this
+  "account": {
+    "account_number": "1234567890",
+    "account_name": "John Doe",
+    "bank_name": "Providus Bank",
+    "bank_code": "101"
+  }
+}
+
+Notes:
+- The account details are the user's static virtual account — they are just echoed
+  back here for convenience so the frontend doesn't need a separate fetch.
+- The expiry window is 30 minutes. If no deposit arrives before expires_at,
+  the status becomes "expired".
+- You can show a countdown timer on the waiting screen using expires_at.
+
+
+STEP 2 — POLL FOR STATUS
+--------------------------
+Endpoint:   GET /wallet/deposit/:tracking_id
+Auth:       Bearer token + X-Device-ID header
+
+Example:    GET /wallet/deposit/f47ac10b-58cc-4372-a567-0e02b2c3d479
+
+Response when pending (200):
+{
+  "status": true,
+  "deposit": {
+    "tracking_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "status": "pending",
+    "expected_amount": 500000,
+    "actual_amount": null,
+    "expires_at": "2025-04-07T14:30:00Z",
+    "transaction": null
+  }
+}
+
+Response when fulfilled (200):
+{
+  "status": true,
+  "deposit": {
+    "tracking_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "status": "fulfilled",
+    "expected_amount": 500000,
+    "actual_amount": 500000,
+    "expires_at": "2025-04-07T14:30:00Z",
+    "transaction": {
+      "id": "txn_abc123",
+      "amount": 500000,
+      "reference": "REF-XYZ",
+      "narration": "Transfer from Sender Name",
+      "created_at": "2025-04-07T14:12:44Z"
+    }
+  }
+}
+
+Response when expired (200):
+{
+  "status": true,
+  "deposit": {
+    "tracking_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "status": "expired",
+    "expected_amount": 500000,
+    "actual_amount": null,
+    "expires_at": "2025-04-07T14:30:00Z",
+    "transaction": null
+  }
+}
+
+Polling logic:
+- Start polling after initiating the deposit.
+- Poll every 4–5 seconds.
+- Stop polling when status is "fulfilled" or "expired".
+- Stop polling when expires_at is passed (no point continuing).
+- Stop polling if the user navigates away or closes the screen.
+
+
+STEP 3 — HANDLE PUSH NOTIFICATION
+------------------------------------
+When the deposit is confirmed, the server sends a push notification to the user's
+registered Expo push token.
+
+Notification payload:
+{
+  "title": "Deposit Confirmed",
+  "body": "Your deposit of ₦5,000.00 has been received.",
+  "data": {
+    "type": "deposit_confirmed",
+    "tracking_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "amount": 500000,
+    "transaction_id": "txn_abc123"
+  }
+}
+
+What to do on receipt:
+- If the app is foregrounded and already on the waiting screen, the poll will catch
+  it anyway — no extra action needed.
+- If the app is backgrounded or closed, tapping the notification should deep-link
+  to a deposit success screen using tracking_id or transaction_id from data.
+- Use data.type === "deposit_confirmed" to distinguish this from other notification types.
+
+
+AMOUNTS
+-------
+All amounts are in kobo (smallest NGN unit).
+Divide by 100 to display in naira.
+
+Example: 500000 kobo = ₦5,000.00
+
+
+STATUS VALUES
+-------------
+"pending"   — waiting for the deposit to arrive
+"fulfilled" — deposit received and wallet credited
+"expired"   — the 30-minute window passed with no deposit
+
+
+ERROR CASES TO HANDLE
+-----------------------
+- 401 Unauthorized     — token expired, redirect to login
+- 404 Not Found        — tracking_id doesn't exist or doesn't belong to this user
+- 400 Bad Request      — invalid expected_amount (must be > 0 if provided)
+- Network timeout      — retry the poll silently, don't show an error to the user
+
+
+UX RECOMMENDATIONS
+------------------
+- Show the user's account number and bank name prominently on the waiting screen.
+- Include a "Copy account number" button.
+- Show a countdown timer ("Expires in 14:32") using the expires_at timestamp.
+- If the deposit expires, offer a "Try again" button that calls initiate again.
+- After fulfillment, refresh the wallet balance display — it will have been updated.
+
+
+HEADERS REQUIRED ON ALL REQUESTS
+----------------------------------
+Authorization: Bearer <access_token>
+X-Device-ID: <device_id>
+Content-Type: application/json
