@@ -93,25 +93,40 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 
 	var req TransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	transferResponse, err := h.service.InitiateTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		if errors.Is(err, ErrWrongTransactionPin) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Wrong transaction PIN"})
-			return
-		}
-		if errors.Is(err, ErrTransactionPinLocked) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
-			return
-		}
-		log.Printf("Error initiating transfer: %v", err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.handleInitiateTransferError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, transferResponse)
+}
+
+func (h *Handler) handleInitiateTransferError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrWrongTransactionPin):
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrTransactionPinLocked):
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
+	case errors.Is(err, ErrInvalidTransferRequest):
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, ErrDeviceVerificationFailed):
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device verification failed"})
+	case errors.Is(err, ErrWalletNotFound):
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+	case errors.Is(err, ErrTransferProviderFailed):
+		log.Printf("Transfer provider error: %v", err)
+		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+	default:
+		log.Printf("Error initiating transfer: %v", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
+	}
 }
 
 func (h *Handler) AddBeneficiary(c *gin.Context) {

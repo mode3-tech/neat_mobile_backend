@@ -74,19 +74,22 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	deviceID = strings.TrimSpace(deviceID)
 
 	if req == nil {
-		return nil, errors.New("transfer request is required")
+		return nil, fmt.Errorf("%w: transfer request is required", ErrInvalidTransferRequest)
 	}
 
 	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
+		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
 	}
 
 	if deviceID == "" {
-		return nil, errors.New("device ID is required")
+		return nil, fmt.Errorf("%w: device ID is required", ErrInvalidTransferRequest)
 	}
 
 	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("%w: device not found", ErrDeviceVerificationFailed)
+		}
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
@@ -107,13 +110,13 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		} else {
 			_ = s.repo.IncrementFailedPinAttempts(ctx, mobileUserID)
 		}
-		return nil, fmt.Errorf("%s, you have %d attempt(s) left", ErrWrongTransactionPin.Error(), maxPinAttempts-newAttempts)
+		return nil, fmt.Errorf("%w: you have %d attempt(s) left", ErrWrongTransactionPin, maxPinAttempts-newAttempts)
 	}
 
 	_ = s.repo.ResetPinAttempts(ctx, mobileUserID)
 
 	if amount := req.Amount; amount <= 0 {
-		return nil, fmt.Errorf("amount must be greater than zero")
+		return nil, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidTransferRequest)
 	}
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	accountName := ""
@@ -122,11 +125,11 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	}
 
 	if accountNumber == "" {
-		return nil, fmt.Errorf("account number is required")
+		return nil, fmt.Errorf("%w: account number is required", ErrInvalidTransferRequest)
 	}
 
 	if accountName == "" {
-		return nil, fmt.Errorf("account name is required")
+		return nil, fmt.Errorf("%w: account name is required", ErrInvalidTransferRequest)
 	}
 	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
@@ -141,7 +144,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	wallet, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("wallet not found")
+			return nil, ErrWalletNotFound
 		}
 		return nil, err
 	}
@@ -171,12 +174,12 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		return nil, fmt.Errorf("failed to initiate transfer with provider: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
 	}
 
 	if resp == nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		return nil, errors.New("failed to initiate transfer with provider: empty response")
+		return nil, fmt.Errorf("%w: empty response", ErrTransferProviderFailed)
 	}
 
 	if !resp.Status {
@@ -185,7 +188,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		if message == "" {
 			message = "provider returned an unsuccessful transfer response"
 		}
-		return nil, fmt.Errorf("failed to initiate transfer with provider: %s", message)
+		return nil, fmt.Errorf("%w: %s", ErrTransferProviderFailed, message)
 	}
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))

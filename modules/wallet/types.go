@@ -3,8 +3,12 @@ package wallet
 import "errors"
 
 var (
-	ErrWrongTransactionPin  = errors.New("wrong transaction pin")
-	ErrTransactionPinLocked = errors.New("transaction pin locked")
+	ErrWrongTransactionPin      = errors.New("wrong transaction pin")
+	ErrTransactionPinLocked     = errors.New("transaction pin locked")
+	ErrInvalidTransferRequest   = errors.New("invalid transfer request")
+	ErrWalletNotFound           = errors.New("wallet not found")
+	ErrDeviceVerificationFailed = errors.New("device verification failed")
+	ErrTransferProviderFailed   = errors.New("transfer provider failed")
 )
 
 type TransferStatus string
