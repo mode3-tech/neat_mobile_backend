@@ -110,6 +110,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			return
 		}
 
+		if status, message, ok := classifyUpstreamError(err); ok {
+			h.respondError(c, status, message, err)
+			return
+		}
+		if isProvidusWalletError(err) {
+			h.respondError(c, http.StatusBadGateway, err.Error(), err)
+			return
+		}
+
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
@@ -153,6 +162,12 @@ func isBadPasswordError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	return msg == "password length should be at least 8 characters long" ||
 		msg == "password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+}
+
+func isProvidusWalletError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	return strings.HasPrefix(msg, "providus wallet") ||
+		strings.HasPrefix(msg, "failed to decode providus wallet generation")
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
