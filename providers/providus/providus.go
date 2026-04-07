@@ -38,8 +38,8 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 	walletInfo.BVN = "01234567889"
 	walletInfo.PhoneNumber = "08012345672"
 	walletInfo.FirstName = "Jane"
-	walletInfo.LastName = "Doe"
-	walletInfo.Metadata = map[string]interface{}{"customer_id": "user123"}
+	walletInfo.LastName = "Lagbaja"
+	walletInfo.Metadata = map[string]interface{}{"customer_id": "user124"}
 	walletInfo.Address = "123 Main St, Lagos"
 	walletInfo.Email = "jane.doe@example.com"
 	walletInfo.DateOfBirth = "1991-01-01"
