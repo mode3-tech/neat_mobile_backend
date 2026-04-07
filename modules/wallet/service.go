@@ -268,13 +268,67 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 	return beneficiary, nil
 }
 
-// func (s *Service) InitiateDeposit(ctx context.Context, mobileUserID string) (*InitiatedDepositResponse, error) {
-// 	mobileUserID = strings.TrimSpace(mobileUserID)
-// 	if mobileUserID == "" {
-// 		return nil, errors.New("invalid mobile user id")
-// 	}
+func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID string, req InitiatedDepositRequest) (*InitiatedDepositResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("invalid mobile user id")
+	}
 
-// }
+	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify device: %s", err.Error())
+	}
+
+	user, err := s.repo.GetUserWalletID(ctx, mobileUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("error fetching user: %s", err.Error())
+	}
+
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID, user.WalletID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("wallet not found")
+		}
+		return nil, fmt.Errorf("error fetching wallet: %s", err.Error())
+	}
+
+	trackingID := uuid.NewString()
+	now := time.Now().UTC()
+	expiresAt := now.Add(30 * time.Minute)
+
+	expectedDeposit := &ExpectedDeposit{
+		ID:             uuid.NewString(),
+		TrackingID:     trackingID,
+		MobileUserID:   mobileUserID,
+		ExpectedAmount: req.ExpectedAmount,
+		WalletID:       user.WalletID,
+		Status:         ExpectedDepositStatusPending,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      now,
+	}
+
+	if err := s.repo.CreateExpectedDeposit(ctx, expectedDeposit); err != nil {
+		return nil, errors.New("could not create deposit")
+	}
+
+	account := &AccountObj{
+		AccountNumber: wallet.AccountNumber,
+		AccountName:   wallet.AccountName,
+		BankName:      wallet.BankName,
+		BankCode:      wallet.BankCode,
+	}
+
+	return &InitiatedDepositResponse{
+		Status:     true,
+		TrackingID: trackingID,
+		ExpiresAt:  expiresAt,
+		Account:    *account,
+	}, nil
+
+}
 
 func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
 	if strings.TrimSpace(payload.TranType) != "C" {

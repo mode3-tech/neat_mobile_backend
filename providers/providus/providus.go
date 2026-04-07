@@ -202,7 +202,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 		return nil, errors.New("providus service not configured")
 	}
 
-	url := p.BaseURL + "/transfer/bank/customer"
+	url := p.BaseURL + "/transfer/bank"
 
 	payload := map[string]any{
 		"amount":        transferInfo.Amount,

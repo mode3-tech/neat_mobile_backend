@@ -88,7 +88,7 @@ type ProvidusCredit struct {
 }
 
 type InitiatedDepositRequest struct {
-	ExpectedAmount string `json:"expected_amount"`
+	ExpectedAmount int64 `json:"expected_amount" binding:"omitempty,gt=0"`
 }
 
 type InitiatedDepositResponse struct {

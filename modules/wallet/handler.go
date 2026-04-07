@@ -222,3 +222,12 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *Handler) InitiateDeposit(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unathorized"})
+	}
+
+	// deviceID :=
+}
