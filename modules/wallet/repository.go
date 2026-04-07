@@ -157,3 +157,7 @@ func (r *Repository) CreditWalletBalance(ctx context.Context, walletID string, a
 			"available_balance": gorm.Expr("available_balance + ?", amount),
 		}).Error
 }
+
+func (r *Repository) CreateExpectedDeposit(ctx context.Context, expectedDeposit *ExpectedDeposit) error {
+	return r.db.WithContext(ctx).Create(expectedDeposit).Error
+}
