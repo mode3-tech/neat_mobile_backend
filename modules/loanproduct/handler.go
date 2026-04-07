@@ -284,6 +284,8 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 	loans, err := h.service.GetAllLoans(c.Request.Context(), userID)
 
 	if err != nil {
+		_ = c.Error(err)
+
 		if isBadRequestGetAllLoansError(err) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 			return
@@ -300,6 +302,7 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 		}
 
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "all loans fetched successfully", "loans": loans})
@@ -320,7 +323,7 @@ func isServiceUnavailableGetAllLoansError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 
 	switch msg {
-	case "core customer loans finder not configured":
+	case "core loan finder is not configured":
 		return true
 	default:
 		return false

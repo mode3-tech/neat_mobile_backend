@@ -48,6 +48,9 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	loans, err := s.loanProvider.GetAllLoans(ctx, mobileUserID)
 	if err == nil {
 		for _, loan := range loans {
+			if strings.ToLower(loan.Status) != "active" {
+				continue
+			}
 			loanBalance += loan.OutstandingBalance
 			activeLoans = append(activeLoans, ActiveLoan{
 				LoanID:           loan.LoanID,
