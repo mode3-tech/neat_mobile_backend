@@ -14,10 +14,10 @@ type BankDetailsResponse struct {
 
 type TransferRequest struct {
 	Amount         int64          `json:"amount" binding:"required,gt=0"`
-	SortCode       string         `json:"sortCode" binding:"required"`
+	SortCode       string         `json:"sort_code" binding:"required"`
 	Narration      *string        `json:"narration" binding:"omitempty,max=255"`
-	AccountNumber  string         `json:"accountNumber" binding:"required"`
-	AccountName    *string        `json:"accountName" binding:"required,max=255"`
+	AccountNumber  string         `json:"account_number" binding:"required"`
+	AccountName    *string        `json:"account_name" binding:"required,max=255"`
 	Metadata       map[string]any `json:"metadata" binding:"omitempty"`
 	TransactionPin string         `json:"transaction_pin" binding:"required"`
 }
