@@ -16,6 +16,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
@@ -162,6 +163,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Print("CBA webhook secret is not configured; internal callback endpoints will reject requests")
 	}
 	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
+
+	reportingRepo := reporting.NewRepository(db)
+	reportingService := reporting.NewService(reportingRepo)
+	reportingHandler := reporting.NewHandler(reportingService)
+	reporting.RegisterInternalRoutes(internalV1, reportingHandler, internalAuth)
 
 	return r, stopCron, nil
 }

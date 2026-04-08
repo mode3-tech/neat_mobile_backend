@@ -248,7 +248,7 @@ func (r *Repository) GetUsersWithoutCoreCustomerID(ctx context.Context, limit in
 		Table("wallet_users wu").
 		Select("wu.id, wbr.bvn, cw.account_number, cw.account_name, cw.bank_code, cw.bank_name as bank").
 		Joins("JOIN wallet_bvn_records wbr ON wbr.user_id = wu.id").
-		Joins("JOIN customer_wallets cw ON cw.mobile_user_id = wu.id").
+		Joins("JOIN wallet_customer_wallets cw ON cw.mobile_user_id = wu.id").
 		Where("wu.core_customer_id IS NULL").
 		Limit(limit).
 		Scan(&rows).Error

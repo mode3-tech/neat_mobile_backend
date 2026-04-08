@@ -259,7 +259,7 @@ func (s *Service) syncAndUpdateCBACustomer(ctx context.Context, userID, bvn, acc
 		return
 	}
 
-	s.updateCustomerWalletInfoOnTheCBA(ctx, *customerID, userID, &internal.CustomerUpdateRequest{
+	s.updateCustomerWalletInfoOnTheCBA(ctx, userID, *customerID, &internal.CustomerUpdateRequest{
 		AccountNumber: accountNumber,
 		AccountName:   accountName,
 		Bank:          bank,
@@ -320,7 +320,6 @@ func (s *Service) syncUpCustomerExistingOnCBA(ctx context.Context, userID, BVN s
 			log.Printf("syncUpCustomerExistingOnCBA: db update failed for user %s: %v", userID, err)
 			return nil
 		}
-
 		return &match.Customer.CustomerID
 
 	}
@@ -564,7 +563,6 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 
 	createdUser, err := repo.CreateUser(ctx, user)
 	if err != nil {
-		fmt.Println("created user" + " " + err.Error())
 		return nil, err
 	}
 
@@ -584,7 +582,6 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
 
 	if err != nil {
-		fmt.Println("no account exists with this phone")
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -594,7 +591,6 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	)
 
 	if err != nil {
-		fmt.Println("incorrect password")
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -864,7 +860,6 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 	storedChallenge, err := s.deviceRepo.GetChallengeByHash(ctx, hex.EncodeToString(challengeHash[:]))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			fmt.Println("challenge not found")
 			return nil, errors.New("invalid challenge")
 		}
 		return nil, err
@@ -872,21 +867,16 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 
 	now := time.Now().UTC()
 	if storedChallenge.IsUsed() || storedChallenge.IsExpired(now) {
-		fmt.Println("challenge expired")
 		return nil, errors.New("invalid challenge")
 	}
 
 	if storedChallenge.DeviceID != deviceID {
-		fmt.Println("challenge device id don't match")
 		return nil, errors.New("invalid challenge")
 	}
 
 	deviceRecord, err := s.deviceRepo.FindDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
-	fmt.Printf("user id: %s\n", storedChallenge.UserID)
-	fmt.Printf("device id: %s\n", storedChallenge.DeviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			fmt.Println("device not found")
 			return nil, errors.New("device verification failed")
 		}
 		return nil, err
@@ -897,11 +887,7 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 	}
 
 	validSig, err := verifyDeviceSignature(deviceRecord.PublicKey, challenge, signature)
-	fmt.Printf("public key: %s\n", deviceRecord.PublicKey)
-	fmt.Printf("challenge: %s\n", challenge)
-	fmt.Printf("signature: %s\n", signature)
 	if err != nil || !validSig {
-		fmt.Println("sign failed")
 		return nil, errors.New("device verification failed")
 	}
 
@@ -1297,7 +1283,6 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
-		fmt.Printf("service %s\n", err.Error())
 		return nil, err
 	}
 	if bvnDetails == nil {
@@ -1385,8 +1370,6 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		log.Printf("failed to add verification record err=%v", err)
 		return nil, err
 	}
-
-	fmt.Printf("tendar verification id: %s\n", verificationID)
 
 	return &bvnInfo{
 		name:           fullName,
@@ -1496,8 +1479,6 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("prembly verification id: %s\n", verificationID)
 
 	return &bvnInfo{
 		name:           fullName,

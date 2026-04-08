@@ -18,9 +18,11 @@ func (c *ProviderClient) UpdateCBACustomerBankInfo(ctx context.Context, coreCust
 		return nil, errors.New("cba base url is missing")
 	}
 
-	if strings.TrimSpace(c.baseURL) == "" {
+	if strings.TrimSpace(c.apiKey) == "" {
 		return nil, errors.New("cba api key is not configured")
 	}
+
+	fmt.Println("api key :" + c.apiKey)
 
 	if strings.TrimSpace(coreCustomerID) == "" {
 		return nil, errors.New("core customer for cba customer is missing")
@@ -39,7 +41,7 @@ func (c *ProviderClient) UpdateCBACustomerBankInfo(ctx context.Context, coreCust
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorizatin", "bearer "+c.apiKey)
+	req.Header.Set("X-Internal-Api-Key", c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
