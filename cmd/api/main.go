@@ -20,7 +20,7 @@ func run(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
-	srv, err := server.New(cfg)
+	srv, stopCron, err := server.New(cfg)
 
 	if err != nil {
 		return err
@@ -44,6 +44,7 @@ func run(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	stopCron()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return err
 	}

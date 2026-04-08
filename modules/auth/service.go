@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"neat_mobile_app_backend/internal"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/internal/timeutil"
@@ -22,6 +23,7 @@ import (
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
+	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/modules/wallet"
 	"strings"
 	"time"
@@ -52,45 +54,53 @@ const (
 	loginOTPChannel = authotp.ChannelSMS
 )
 
-type AuthService struct {
-	repo           *Repository
-	verification   *verification.VerificationRepo
-	tx             *tx.Transactor
-	deviceRepo     *device.DeviceRepository
-	smsSender      notify.SMSSender
-	otpPepper      string
-	jwtSigner      JWTSigner
-	tender         TendarValidation
-	prembly        PremblyValidation
-	nin            NINValidation
-	providerSource BVNProviderSource
-	otpManager     authotp.OTPManager
-	walletService  WalletService
+type Service struct {
+	repo               *Repository
+	coreCustomerFinder CoreCustomerFinder
+	cbaCustomerUpdater CBACustomerUpdater
+	verification       *verification.VerificationRepo
+	tx                 *tx.Transactor
+	deviceRepo         *device.DeviceRepository
+	smsSender          notify.SMSSender
+	otpPepper          string
+	jwtSigner          JWTSigner
+	tender             TendarValidation
+	prembly            PremblyValidation
+	nin                NINValidation
+	providerSource     BVNProviderSource
+	otpManager         authotp.OTPManager
+	walletService      WalletService
+	cbaSyncSem         chan struct{}
+	cbaWalletUpdateSem chan struct{}
 }
 
-func NewAuthService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, smsSender notify.SMSSender, otpPepper string, jwtSigner JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource, otpManager authotp.OTPManager, walletService WalletService) *AuthService {
-	return &AuthService{
-		repo:           repo,
-		verification:   verification,
-		tx:             tx,
-		deviceRepo:     deviceRepo,
-		smsSender:      smsSender,
-		otpPepper:      otpPepper,
-		jwtSigner:      jwtSigner,
-		tender:         tender,
-		prembly:        prembly,
-		nin:            nin,
-		providerSource: providerSource,
-		otpManager:     otpManager,
-		walletService:  walletService,
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, cbaCustomerUpdater CBACustomerUpdater, verification *verification.VerificationRepo, tx *tx.Transactor, deviceRepo *device.DeviceRepository, smsSender notify.SMSSender, otpPepper string, jwtSigner JWTSigner, tender TendarValidation, prembly PremblyValidation, nin NINValidation, providerSource BVNProviderSource, otpManager authotp.OTPManager, walletService WalletService, cbaSyncSem, cbaWalletUpdateSem chan struct{}) *Service {
+	return &Service{
+		repo:               repo,
+		coreCustomerFinder: coreCustomerFinder,
+		cbaCustomerUpdater: cbaCustomerUpdater,
+		verification:       verification,
+		tx:                 tx,
+		deviceRepo:         deviceRepo,
+		smsSender:          smsSender,
+		otpPepper:          otpPepper,
+		jwtSigner:          jwtSigner,
+		tender:             tender,
+		prembly:            prembly,
+		nin:                nin,
+		providerSource:     providerSource,
+		otpManager:         otpManager,
+		walletService:      walletService,
+		cbaSyncSem:         cbaSyncSem,
+		cbaWalletUpdateSem: cbaWalletUpdateSem,
 	}
 }
 
-func (s *AuthService) ConfigureOTPManager(manager authotp.OTPManager) {
+func (s *Service) ConfigureOTPManager(manager authotp.OTPManager) {
 	s.otpManager = manager
 }
 
-func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
+func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
 	now := time.Now().UTC()
 	mobileUserID := uuid.NewString()
 	internalWalletID := uuid.NewString()
@@ -235,13 +245,121 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest, ip stri
 		return nil, err
 	}
 
+	go s.syncAndUpdateCBACustomer(context.Background(), mobileUserID, *bvnRecord.VerifiedID, walletResp.Wallet.AccountName, walletResp.Wallet.AccountNumber, walletResp.Wallet.BankCode, walletResp.Wallet.BankName)
+
 	return &AuthObject{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
 }
 
-func (s *AuthService) ValidateNIN(ctx context.Context, ninVerificationID, nin string) (*ninInfo, error) {
+func (s *Service) syncAndUpdateCBACustomer(ctx context.Context, userID, bvn, accountName, accountNumber, bankCode, bank string) {
+	customerID := s.syncUpCustomerExistingOnCBA(ctx, userID, bvn)
+	if customerID == nil {
+		return
+	}
+
+	s.updateCustomerWalletInfoOnTheCBA(ctx, *customerID, userID, &internal.CustomerUpdateRequest{
+		AccountNumber: accountNumber,
+		AccountName:   accountName,
+		Bank:          bank,
+		BankCode:      bankCode,
+	})
+}
+
+func (s *Service) SyncPendingCBACustomers(ctx context.Context) error {
+	users, err := s.repo.GetUsersWithoutCoreCustomerID(ctx, 50)
+	if err != nil {
+		return err
+	}
+
+	if len(users) <= 0 {
+		return nil
+	}
+
+	for _, u := range users {
+		go s.syncAndUpdateCBACustomer(ctx, u.ID, u.BVN, u.AccountName, u.AccountNumber, u.BankCode, u.Bank)
+	}
+
+	return nil
+}
+
+func (s *Service) syncUpCustomerExistingOnCBA(ctx context.Context, userID, BVN string) *string {
+	select {
+	case s.cbaSyncSem <- struct{}{}:
+		defer func() {
+			<-s.cbaSyncSem
+		}()
+	case <-ctx.Done():
+		return nil
+
+	}
+
+	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
+
+	for attempt, delay := range delays {
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil
+			}
+		}
+
+		match, err := s.coreCustomerFinder.MatchCustomerByBVN(ctx, BVN)
+		if err != nil {
+			log.Printf("syncUpCustomerExistingONCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
+			continue
+		}
+
+		if match.MatchStatus != loanproduct.CoreCustomerSingleMatch || match.Customer == nil {
+			return nil
+		}
+
+		if err := s.repo.UpdateCoreCustomerID(ctx, userID, match.Customer.CustomerID); err != nil {
+			log.Printf("syncUpCustomerExistingOnCBA: db update failed for user %s: %v", userID, err)
+			return nil
+		}
+
+		return &match.Customer.CustomerID
+
+	}
+	log.Printf("syncUpCustomerExistingOnCBA: all attempts exhausted for user %s", userID)
+	return nil
+}
+
+func (s *Service) updateCustomerWalletInfoOnTheCBA(ctx context.Context, userID, coreCustomerID string, info *internal.CustomerUpdateRequest) {
+	select {
+	case s.cbaWalletUpdateSem <- struct{}{}:
+		defer func() { <-s.cbaWalletUpdateSem }()
+	case <-ctx.Done():
+		return
+	}
+
+	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
+
+	for attempt, delay := range delays {
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return
+			}
+		}
+
+		_, err := s.cbaCustomerUpdater.UpdateCBACustomerBankInfo(ctx, coreCustomerID, info)
+		if err != nil {
+			log.Printf("updateCustomerWalletInfoOnTheCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
+			continue
+		}
+		return
+	}
+
+	log.Printf("updateCustomerWalletInfoOnTheCBA: all attempts exhausted for user %s", userID)
+
+}
+
+func (s *Service) ValidateNIN(ctx context.Context, ninVerificationID, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
 	}
@@ -318,7 +436,7 @@ func (s *AuthService) ValidateNIN(ctx context.Context, ninVerificationID, nin st
 	}, nil
 }
 
-func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.providerSource == nil {
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
@@ -335,7 +453,7 @@ func (s *AuthService) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, er
 	return s.ValidateBVNWithTendar(ctx, bvn)
 }
 
-func (s *AuthService) createUser(ctx context.Context, repo *Repository, req RegisterRequest, mobileUserID, internalWalletID string) (*models.User, error) {
+func (s *Service) createUser(ctx context.Context, repo *Repository, req RegisterRequest, mobileUserID, internalWalletID string) (*models.User, error) {
 	var isEmailVerified bool
 	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
@@ -457,7 +575,7 @@ func (s *AuthService) createUser(ctx context.Context, repo *Repository, req Regi
 	return createdUser, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password string) (*LoginInitObject, error) {
+func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password string) (*LoginInitObject, error) {
 	normalizedPhone, err := NormalizeNigerianNumber(phone)
 	if err != nil {
 		return nil, err
@@ -513,7 +631,7 @@ func (s *AuthService) Login(ctx context.Context, deviceID, ip, phone, password s
 	}, nil
 }
 
-func (s *AuthService) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceResquest) (*AuthObject, error) {
+func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceResquest) (*AuthObject, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
 	}
@@ -639,7 +757,7 @@ func (s *AuthService) VerifyNewDevice(ctx context.Context, ip string, req NewDev
 	return authObj, nil
 }
 
-func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, deviceID, ip string) (*LoginInitObject, error) {
+func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceID, ip string) (*LoginInitObject, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
 	}
@@ -688,7 +806,7 @@ func (s *AuthService) startNewDeviceFlow(ctx context.Context, userID, phone, dev
 	}, nil
 }
 
-func (s *AuthService) createPendingDeviceSession(ctx context.Context, deviceRepo *device.DeviceRepository, userID, deviceID, ip, otpRef string) (string, error) {
+func (s *Service) createPendingDeviceSession(ctx context.Context, deviceRepo *device.DeviceRepository, userID, deviceID, ip, otpRef string) (string, error) {
 	repo := deviceRepo
 	if repo == nil {
 		repo = s.deviceRepo
@@ -722,7 +840,7 @@ func (s *AuthService) createPendingDeviceSession(ctx context.Context, deviceRepo
 	return sessionToken, nil
 }
 
-func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip string) (*AuthObject, error) {
 	challenge = strings.TrimSpace(challenge)
 	if challenge == "" {
 		return nil, errors.New("challenge is required")
@@ -802,7 +920,7 @@ func (s *AuthService) VerifyDeviceChallenge(ctx context.Context, challenge, sign
 	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip)
 }
 
-func (s *AuthService) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTPRequest) error {
+func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTPRequest) error {
 	if s.tx == nil {
 		return errors.New("transaction manager not configured")
 	}
@@ -865,11 +983,11 @@ func (s *AuthService) ResendNewDeviceOTP(ctx context.Context, req ResendNewDevic
 	})
 }
 
-func (s *AuthService) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
 	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
 }
 
-func (s *AuthService) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*AuthObject, error) {
 	if repo == nil {
 		return nil, errors.New("auth repository not configured")
 	}
@@ -1029,7 +1147,7 @@ func randomToken(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, refreshToken, accessToken string) error {
+func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) error {
 	isValidAccessToken := s.jwtSigner.ValidAccessToken(accessToken)
 	isValidRefreshToken := s.jwtSigner.ValidRefreshToken(refreshToken)
 	if !isValidAccessToken || !isValidRefreshToken {
@@ -1065,7 +1183,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken, accessToken stri
 	return nil
 }
 
-func (s *AuthService) RefreshAccessToken(ctx context.Context, deviceID, refreshToken string) (*AuthObject, error) {
+func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken string) (*AuthObject, error) {
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
 		return nil, errors.New("device id is required")
@@ -1161,7 +1279,7 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, deviceID, refreshT
 
 }
 
-func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
 		log.Printf("tendar validator is not configured")
 		return nil, errors.New("tendar validator is not configured")
@@ -1278,7 +1396,7 @@ func (s *AuthService) ValidateBVNWithTendar(ctx context.Context, bvn string) (*b
 	}, nil
 }
 
-func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
+func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
 		return nil, errors.New("couldn't resolve prembly provider")
 	}
@@ -1389,7 +1507,7 @@ func (s *AuthService) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*
 	}, nil
 }
 
-func (s *AuthService) saveVerifiedBVN(ctx context.Context, verificationRecord *models.VerificationRecord, bvnRecord *models.BVNRecord) error {
+func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *models.VerificationRecord, bvnRecord *models.BVNRecord) error {
 	if s.verification == nil {
 		return errors.New("verification repository not configured")
 	}
@@ -1471,7 +1589,7 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) error {
+func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) error {
 	if strings.TrimSpace(deviceID) == "" {
 		return errors.New("device id is required")
 	}
@@ -1516,7 +1634,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 	return err
 }
 
-func (s *AuthService) ResetPassword(ctx context.Context, req ResetPasswordRequest, deviceID string) error {
+func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, deviceID string) error {
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
 		return errors.New("device id is required")

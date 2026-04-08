@@ -10,11 +10,11 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func New(cfg config.Config) (*http.Server, error) {
+func New(cfg config.Config) (*http.Server, func(), error) {
 
-	router, err := NewRouter(cfg)
+	router, stopCron, err := NewRouter(cfg)
 	if err != nil {
-		return nil, err
+		return nil, stopCron, err
 	}
 
 	s := &http.Server{
@@ -26,5 +26,5 @@ func New(cfg config.Config) (*http.Server, error) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	return s, nil
+	return s, stopCron, nil
 }

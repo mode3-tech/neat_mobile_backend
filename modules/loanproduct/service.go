@@ -238,8 +238,8 @@ func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID s
 	}
 
 	if user.CoreCustomerID != nil && strings.TrimSpace(*user.CoreCustomerID) != "" {
-		id := strings.TrimSpace(*user.CoreCustomerID)
-		return &id, nil
+		coreCustomerID := strings.TrimSpace(*user.CoreCustomerID)
+		return &coreCustomerID, nil
 	}
 
 	if !user.IsBVNVerified || strings.TrimSpace(user.BVN) == "" || s.coreCustomerFinder == nil {
@@ -262,15 +262,15 @@ func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID s
 			return nil, errors.New("core app returned empty matched customer")
 		}
 
-		id := strings.TrimSpace(match.Customer.CustomerID)
-		if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, id); err != nil {
+		coreCustomerID := strings.TrimSpace(match.Customer.CustomerID)
+		if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, coreCustomerID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.New("current user does not exist")
 			}
 			return nil, err
 		}
 
-		return &id, nil
+		return &coreCustomerID, nil
 	default:
 		return nil, errors.New("an error occured while looking up customer on the core app")
 	}

@@ -24,3 +24,12 @@ const (
 	ProviderTendar  Provider = "tendar"
 	ProviderPrembly Provider = "prembly"
 )
+
+type PendingSyncUser struct {
+	ID            string
+	BVN           string
+	AccountNumber string
+	AccountName   string
+	BankCode      string
+	Bank          string
+}

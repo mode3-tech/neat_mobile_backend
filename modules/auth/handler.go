@@ -13,12 +13,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type AuthHandler struct {
-	authService *AuthService
+type Handler struct {
+	service *Service
 }
 
-func NewAuthHandler(authService *AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 func requestIDFromContext(c *gin.Context) string {
@@ -38,7 +38,7 @@ func requestIDFromContext(c *gin.Context) string {
 	return strings.TrimSpace(c.GetHeader(middleware.RequestIDHeader))
 }
 
-func (h *AuthHandler) respondError(c *gin.Context, status int, clientMessage string, err error) {
+func (h *Handler) respondError(c *gin.Context, status int, clientMessage string, err error) {
 	if c == nil {
 		return
 	}
@@ -85,7 +85,7 @@ func (h *AuthHandler) respondError(c *gin.Context, status int, clientMessage str
 	})
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -95,7 +95,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	ip := c.ClientIP()
 
-	authObj, err := h.authService.Register(c.Request.Context(), req, ip)
+	authObj, err := h.service.Register(c.Request.Context(), req, ip)
 	if err != nil {
 		if isBadRequestRegisterError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
@@ -170,7 +170,7 @@ func isProvidusWalletError(err error) bool {
 		strings.HasPrefix(msg, "failed to decode providus wallet generation")
 }
 
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -181,7 +181,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	ip := c.ClientIP()
 	deviceID := c.GetHeader("X-Device-ID")
 
-	loginObj, err := h.authService.Login(c.Request.Context(), deviceID, ip, req.Phone, req.Password)
+	loginObj, err := h.service.Login(c.Request.Context(), deviceID, ip, req.Phone, req.Password)
 
 	if err != nil {
 		if isBadRequestLoginError(err) {
@@ -214,7 +214,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func (h *AuthHandler) VerifyDevice(c *gin.Context) {
+func (h *Handler) VerifyDevice(c *gin.Context) {
 	var req VerifyDeviceRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -224,7 +224,7 @@ func (h *AuthHandler) VerifyDevice(c *gin.Context) {
 
 	ip := c.ClientIP()
 
-	authObj, err := h.authService.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
+	authObj, err := h.service.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
 	if err != nil {
 		if isBadRequestVerifyDeviceError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
@@ -296,7 +296,7 @@ func isUnauthorizedVerifyDeviceError(err error) bool {
 	return false
 }
 
-func (h *AuthHandler) Logout(c *gin.Context) {
+func (h *Handler) Logout(c *gin.Context) {
 	var req LogoutRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -316,14 +316,14 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 	accessToken := splittedAuthHeader[1]
 
-	if err := h.authService.Logout(c.Request.Context(), req.RefreshToken, accessToken); err != nil {
+	if err := h.service.Logout(c.Request.Context(), req.RefreshToken, accessToken); err != nil {
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
-func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
+func (h *Handler) RefreshAccessToken(c *gin.Context) {
 	var req RefreshTokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -331,7 +331,7 @@ func (h *AuthHandler) RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	tokenObj, err := h.authService.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.DeviceID), strings.TrimSpace(req.RefreshToken))
+	tokenObj, err := h.service.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.DeviceID), strings.TrimSpace(req.RefreshToken))
 	if err != nil {
 		if isBadRequestRefreshError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
@@ -374,7 +374,7 @@ func isUnauthorizedRefreshError(err error) bool {
 	return false
 }
 
-func (h *AuthHandler) VerifyBVN(c *gin.Context) {
+func (h *Handler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -382,7 +382,7 @@ func (h *AuthHandler) VerifyBVN(c *gin.Context) {
 		return
 	}
 
-	bvnInfo, err := h.authService.ValidateBVN(c.Request.Context(), req.BVN)
+	bvnInfo, err := h.service.ValidateBVN(c.Request.Context(), req.BVN)
 	if err != nil {
 		if isBadRequestBVNError(err) {
 			switch err.Error() {
@@ -443,7 +443,7 @@ func isBadRequestBVNError(err error) bool {
 	return false
 }
 
-func (h *AuthHandler) VerifyNIN(c *gin.Context) {
+func (h *Handler) VerifyNIN(c *gin.Context) {
 	var req NINValidationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -451,7 +451,7 @@ func (h *AuthHandler) VerifyNIN(c *gin.Context) {
 		return
 	}
 
-	ninInfo, err := h.authService.ValidateNIN(c.Request.Context(), req.BVNValidationID, req.NIN)
+	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.BVNValidationID, req.NIN)
 	if err != nil {
 		if isBadRequestNINError(err) {
 			switch err.Error() {
@@ -579,7 +579,7 @@ func extractUpstreamStatusCode(msg string) (int, bool) {
 	return 0, false
 }
 
-func (h *AuthHandler) VerifyNewDevice(c *gin.Context) {
+func (h *Handler) VerifyNewDevice(c *gin.Context) {
 	var req NewDeviceResquest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
@@ -588,7 +588,7 @@ func (h *AuthHandler) VerifyNewDevice(c *gin.Context) {
 
 	ip := c.ClientIP()
 
-	authObj, err := h.authService.VerifyNewDevice(c.Request.Context(), ip, req)
+	authObj, err := h.service.VerifyNewDevice(c.Request.Context(), ip, req)
 	if err != nil {
 		if isBadRequestVerifyNewDeviceError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
@@ -636,14 +636,14 @@ func isUnauthorizedVerifyNewDeviceError(err error) bool {
 	return false
 }
 
-func (h *AuthHandler) ResendNewDeviceOTP(c *gin.Context) {
+func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
 	var req ResendNewDeviceOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
-	if err := h.authService.ResendNewDeviceOTP(c.Request.Context(), req); err != nil {
+	if err := h.service.ResendNewDeviceOTP(c.Request.Context(), req); err != nil {
 		if isBadRequestResendNewDeviceOTPError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
@@ -681,7 +681,7 @@ func isUnauthorizedResendNewDeviceOTPError(err error) bool {
 	return strings.TrimSpace(err.Error()) == "invalid session token"
 }
 
-func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+func (h *Handler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -690,7 +690,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
-	if err := h.authService.ForgotPassword(c.Request.Context(), req, deviceID); err != nil {
+	if err := h.service.ForgotPassword(c.Request.Context(), req, deviceID); err != nil {
 		if isNoUserForgotPasswordError(err) {
 			switch err.Error() {
 			case "no account exists under this phone number":
@@ -737,7 +737,7 @@ func isOTPForgotPasswordError(err error) bool {
 	return false
 }
 
-func (h *AuthHandler) ResetPassword(c *gin.Context) {
+func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -747,7 +747,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
-	if err := h.authService.ResetPassword(c.Request.Context(), req, deviceID); err != nil {
+	if err := h.service.ResetPassword(c.Request.Context(), req, deviceID); err != nil {
 		if isBadRequestResetPasswordError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return

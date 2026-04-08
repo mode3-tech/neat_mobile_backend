@@ -171,3 +171,10 @@ type WalletInfo struct {
 	WalletType       string `json:"walletType"`
 	WalletId         string `json:"walletId"`
 }
+
+type CBAWalletUpdate struct {
+	AccountNumber string `json:"account_number"`
+	AccountName   string `json:"account_name"`
+	Bank          string `json:"bank"`
+	BankCode      string `json:"bank_code"`
+}

@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"neat_mobile_app_backend/internal"
+	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/providers/bvn"
 	"neat_mobile_app_backend/providers/nin"
 	"time"
@@ -39,4 +41,12 @@ type BVNProviderSource interface {
 
 type NINValidation interface {
 	ValidateNIN(ctx context.Context, nin string) (*nin.PremblyNINValidationSuccessResponse, error)
+}
+
+type CoreCustomerFinder interface {
+	MatchCustomerByBVN(ctx context.Context, bvn string) (*loanproduct.CoreCustomerMatchData, error)
+}
+
+type CBACustomerUpdater interface {
+	UpdateCBACustomerBankInfo(ctx context.Context, coreCustomerID string, customerUpdate *internal.CustomerUpdateRequest) (*internal.CustomerUpdateResponse, error)
 }

@@ -237,3 +237,20 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models
 	}
 	return user, nil
 }
+
+func (r *Repository) UpdateCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {
+	return r.db.WithContext(ctx).Model(models.User{}).Where("id = ? AND core_customer_id IS NULL", userID).Update("core_customer_id", coreCustomerID).Error
+}
+
+func (r *Repository) GetUsersWithoutCoreCustomerID(ctx context.Context, limit int) ([]PendingSyncUser, error) {
+	var rows []PendingSyncUser
+	err := r.db.WithContext(ctx).
+		Table("wallet_users wu").
+		Select("wu.id, wbr.bvn, cw.account_number, cw.account_name, cw.bank_code, cw.bank_name as bank").
+		Joins("JOIN wallet_bvn_records wbr ON wbr.user_id = wu.id").
+		Joins("JOIN customer_wallets cw ON cw.mobile_user_id = wu.id").
+		Where("wu.core_customer_id IS NULL").
+		Limit(limit).
+		Scan(&rows).Error
+	return rows, err
+}

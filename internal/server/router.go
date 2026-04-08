@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -29,19 +30,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 )
 
-func NewRouter(cfg config.Config) (*gin.Engine, error) {
+func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	db, err := connectPostgresWithRetry(cfg.DBUrl, 5, time.Second)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := database.Migrate(db); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	r := gin.New()
@@ -60,7 +62,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	})
 
 	if cfg.JWTSecret == "" {
-		return nil, errors.New("jwt secret can't be empty")
+		return nil, nil, errors.New("jwt secret can't be empty")
 	}
 
 	smsApiKey := cfg.TermiiApiKey
@@ -101,12 +103,30 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 
-	authService := auth.NewAuthService(authRepo, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService)
-	authHandler := auth.NewAuthHandler(authService)
+	cbaSyncSem := make(chan struct{}, 10)
+	cbaWalletUpdateSem := make(chan struct{}, 10)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, cbaSyncSem, cbaWalletUpdateSem)
+	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, nil)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
 
 	authService.ConfigureOTPManager(otpManager)
+
+	c := cron.New(cron.WithLocation(time.UTC))
+
+	c.AddFunc("@every 10m", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := authService.SyncPendingCBACustomers(ctx); err != nil {
+			log.Printf("cba sync sweep: %v", err)
+		}
+	})
+
+	c.Start()
+
+	stopCron := func() {
+		<-c.Stop().Done()
+	}
 
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
@@ -143,7 +163,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, error) {
 	}
 	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
 
-	return r, nil
+	return r, stopCron, nil
 }
 
 func connectPostgresWithRetry(dsn string, attempts int, baseDelay time.Duration) (*gorm.DB, error) {

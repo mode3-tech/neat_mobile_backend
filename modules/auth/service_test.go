@@ -51,7 +51,9 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		err: wantErr,
 	}
 	premblyValidator := &stubPremblyValidation{}
-	service := NewAuthService(
+	service := NewService(
+		nil,
+		nil,
 		nil,
 		&verification.VerificationRepo{},
 		nil,
@@ -63,6 +65,8 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		premblyValidator,
 		nil,
 		stubProviderSource{provider: ProviderTendar},
+		nil,
+		nil,
 		nil,
 		nil,
 	)
@@ -82,7 +86,9 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
 	fallbackErr := errors.New("fallback validator invoked")
 	tendarValidator := &stubTendarValidation{err: fallbackErr}
-	service := NewAuthService(
+	service := NewService(
+		nil,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -94,6 +100,8 @@ func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
 		nil,
 		nil,
 		stubProviderSource{err: errors.New("cba unavailable")},
+		nil,
+		nil,
 		nil,
 		nil,
 	)

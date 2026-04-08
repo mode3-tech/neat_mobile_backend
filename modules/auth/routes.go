@@ -2,7 +2,7 @@ package auth
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, handler *AuthHandler, authGuard gin.HandlerFunc, loginMiddlewares ...gin.HandlerFunc) {
+func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc, loginMiddlewares ...gin.HandlerFunc) {
 
 	auth := rg.Group("/auth")
 
