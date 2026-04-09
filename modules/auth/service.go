@@ -253,111 +253,6 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) 
 	}, nil
 }
 
-func (s *Service) syncAndUpdateCBACustomer(ctx context.Context, userID, bvn, accountName, accountNumber, bankCode, bank string) {
-	customerID := s.syncUpCustomerExistingOnCBA(ctx, userID, bvn)
-	if customerID == nil {
-		return
-	}
-
-	s.updateCustomerWalletInfoOnTheCBA(ctx, userID, *customerID, &internal.CustomerUpdateRequest{
-		AccountNumber: accountNumber,
-		AccountName:   accountName,
-		Bank:          bank,
-		BankCode:      bankCode,
-	})
-}
-
-func (s *Service) SyncPendingCBACustomers(ctx context.Context) error {
-	users, err := s.repo.GetUsersWithoutCoreCustomerID(ctx, 50)
-	if err != nil {
-		return err
-	}
-
-	if len(users) <= 0 {
-		return nil
-	}
-
-	for _, u := range users {
-		go s.syncAndUpdateCBACustomer(ctx, u.ID, u.BVN, u.AccountName, u.AccountNumber, u.BankCode, u.Bank)
-	}
-
-	return nil
-}
-
-func (s *Service) syncUpCustomerExistingOnCBA(ctx context.Context, userID, BVN string) *string {
-	select {
-	case s.cbaSyncSem <- struct{}{}:
-		defer func() {
-			<-s.cbaSyncSem
-		}()
-	case <-ctx.Done():
-		return nil
-
-	}
-
-	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
-
-	for attempt, delay := range delays {
-		if delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return nil
-			}
-		}
-
-		match, err := s.coreCustomerFinder.MatchCustomerByBVN(ctx, BVN)
-		if err != nil {
-			log.Printf("syncUpCustomerExistingONCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
-			continue
-		}
-
-		if match.MatchStatus != loanproduct.CoreCustomerSingleMatch || match.Customer == nil {
-			return nil
-		}
-
-		if err := s.repo.UpdateCoreCustomerID(ctx, userID, match.Customer.CustomerID); err != nil {
-			log.Printf("syncUpCustomerExistingOnCBA: db update failed for user %s: %v", userID, err)
-			return nil
-		}
-		return &match.Customer.CustomerID
-
-	}
-	log.Printf("syncUpCustomerExistingOnCBA: all attempts exhausted for user %s", userID)
-	return nil
-}
-
-func (s *Service) updateCustomerWalletInfoOnTheCBA(ctx context.Context, userID, coreCustomerID string, info *internal.CustomerUpdateRequest) {
-	select {
-	case s.cbaWalletUpdateSem <- struct{}{}:
-		defer func() { <-s.cbaWalletUpdateSem }()
-	case <-ctx.Done():
-		return
-	}
-
-	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
-
-	for attempt, delay := range delays {
-		if delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return
-			}
-		}
-
-		_, err := s.cbaCustomerUpdater.UpdateCBACustomerBankInfo(ctx, coreCustomerID, info)
-		if err != nil {
-			log.Printf("updateCustomerWalletInfoOnTheCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
-			continue
-		}
-		return
-	}
-
-	log.Printf("updateCustomerWalletInfoOnTheCBA: all attempts exhausted for user %s", userID)
-
-}
-
 func (s *Service) ValidateNIN(ctx context.Context, ninVerificationID, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
@@ -541,6 +436,10 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
+	isPhoneVerified := phoneRecord.VerifiedPhone == &normalizedNumber
+	isBvnVerified := bvnRecord != nil
+	isNinVerified := ninRecord != nil
+
 	user := &models.User{
 		ID:                  mobileUserID,
 		WalletID:            internalWalletID,
@@ -555,9 +454,9 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		BVN:                 *bvnRecord.VerifiedID,
 		NIN:                 *ninRecord.VerifiedID,
 		DOB:                 dob,
-		IsPhoneVerified:     true,
-		IsBvnVerified:       true,
-		IsNinVerified:       true,
+		IsPhoneVerified:     isPhoneVerified,
+		IsBvnVerified:       isBvnVerified,
+		IsNinVerified:       isNinVerified,
 		IsBiometricsEnabled: req.IsBiometricsEnabled,
 	}
 
@@ -874,15 +773,8 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 		return nil, errors.New("invalid challenge")
 	}
 
-	deviceRecord, err := s.deviceRepo.FindDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
+	deviceRecord, err := s.verifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device verification failed")
-		}
-		return nil, err
-	}
-
-	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
 		return nil, errors.New("device verification failed")
 	}
 
@@ -1158,6 +1050,18 @@ func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) 
 		return errors.New("access token and refresh token do not match")
 	}
 
+	if s.deviceRepo != nil {
+		session, sessionErr := s.repo.GetAccessTokenWithSID(ctx, accessTokenSID)
+		if sessionErr != nil {
+			return sessionErr
+		}
+		if session.DeviceID != nil && strings.TrimSpace(*session.DeviceID) != "" {
+			if err = s.deviceRepo.DeactivateDevice(ctx, accessTokenSub, *session.DeviceID); err != nil {
+				return err
+			}
+		}
+	}
+
 	if err = s.repo.DeleteAccessToken(ctx, accessTokenSID); err != nil {
 		return err
 	}
@@ -1199,20 +1103,8 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 		}
 	}
 
-	if s.deviceRepo == nil {
-		return nil, errors.New("device repository not configured")
-	}
-
-	deviceRecord, err := s.deviceRepo.FindDevice(ctx, refreshTokenObj.UserID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device not found")
-		}
+	if _, err := s.verifyUserDevice(ctx, refreshTokenObj.UserID, deviceID); err != nil {
 		return nil, err
-	}
-
-	if !deviceRecord.IsActive || !deviceRecord.IsTrusted {
-		return nil, errors.New("device not allowed")
 	}
 
 	now := time.Now().UTC()
@@ -1594,9 +1486,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest,
 		return err
 	}
 
-	_, err = s.deviceRepo.FindDevice(ctx, user.ID, deviceID)
-
-	if err != nil {
+	if _, err = s.deviceRepo.FindDevice(ctx, user.ID, deviceID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("no record of device found")
 		}
@@ -1716,4 +1606,126 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 
 		return nil
 	})
+}
+
+func (s *Service) syncAndUpdateCBACustomer(ctx context.Context, userID, bvn, accountName, accountNumber, bankCode, bank string) {
+	customerID := s.syncUpCustomerExistingOnCBA(ctx, userID, bvn)
+	if customerID == nil {
+		return
+	}
+
+	s.updateCustomerWalletInfoOnTheCBA(ctx, userID, *customerID, &internal.CustomerUpdateRequest{
+		AccountNumber: accountNumber,
+		AccountName:   accountName,
+		Bank:          bank,
+		BankCode:      bankCode,
+	})
+}
+
+func (s *Service) SyncPendingCBACustomers(ctx context.Context) error {
+	users, err := s.repo.GetUsersWithoutCoreCustomerID(ctx, 50)
+	if err != nil {
+		return err
+	}
+
+	if len(users) <= 0 {
+		return nil
+	}
+
+	for _, u := range users {
+		go s.syncAndUpdateCBACustomer(ctx, u.ID, u.BVN, u.AccountName, u.AccountNumber, u.BankCode, u.Bank)
+	}
+
+	return nil
+}
+
+func (s *Service) syncUpCustomerExistingOnCBA(ctx context.Context, userID, BVN string) *string {
+	select {
+	case s.cbaSyncSem <- struct{}{}:
+		defer func() {
+			<-s.cbaSyncSem
+		}()
+	case <-ctx.Done():
+		return nil
+
+	}
+
+	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
+
+	for attempt, delay := range delays {
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil
+			}
+		}
+
+		match, err := s.coreCustomerFinder.MatchCustomerByBVN(ctx, BVN)
+		if err != nil {
+			log.Printf("syncUpCustomerExistingONCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
+			continue
+		}
+
+		if match.MatchStatus != loanproduct.CoreCustomerSingleMatch || match.Customer == nil {
+			return nil
+		}
+
+		if err := s.repo.UpdateCoreCustomerID(ctx, userID, match.Customer.CustomerID); err != nil {
+			log.Printf("syncUpCustomerExistingOnCBA: db update failed for user %s: %v", userID, err)
+			return nil
+		}
+		return &match.Customer.CustomerID
+
+	}
+	log.Printf("syncUpCustomerExistingOnCBA: all attempts exhausted for user %s", userID)
+	return nil
+}
+
+func (s *Service) updateCustomerWalletInfoOnTheCBA(ctx context.Context, userID, coreCustomerID string, info *internal.CustomerUpdateRequest) {
+	select {
+	case s.cbaWalletUpdateSem <- struct{}{}:
+		defer func() { <-s.cbaWalletUpdateSem }()
+	case <-ctx.Done():
+		return
+	}
+
+	delays := []time.Duration{0, 5 * time.Second, 30 * time.Second}
+
+	for attempt, delay := range delays {
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return
+			}
+		}
+
+		_, err := s.cbaCustomerUpdater.UpdateCBACustomerBankInfo(ctx, coreCustomerID, info)
+		if err != nil {
+			log.Printf("updateCustomerWalletInfoOnTheCBA: attempt %d failed for user %s: %v", attempt+1, userID, err)
+			continue
+		}
+		return
+	}
+
+	log.Printf("updateCustomerWalletInfoOnTheCBA: all attempts exhausted for user %s", userID)
+
+}
+
+func (s *Service) verifyUserDevice(ctx context.Context, userID, deviceID string) (*device.UserDevice, error) {
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository not configured")
+	}
+	rec, err := s.deviceRepo.FindDevice(ctx, userID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("device not found")
+		}
+		return nil, err
+	}
+	if !rec.IsActive || !rec.IsTrusted {
+		return nil, errors.New("device not allowed")
+	}
+	return rec, nil
 }

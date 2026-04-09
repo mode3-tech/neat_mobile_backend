@@ -180,6 +180,20 @@ func (r *DeviceRepository) ActivateAndTrustDevice(ctx context.Context, userID, d
 	return nil
 }
 
+func (r *DeviceRepository) DeactivateDevice(ctx context.Context, userID, deviceID string) error {
+	result := r.db.WithContext(ctx).
+		Model(&UserDevice{}).
+		Where("user_id = ? AND device_id = ?", userID, deviceID).
+		Update("is_active", false)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (r *DeviceRepository) RefreshPendingSession(ctx context.Context, id, otpRef string, expiresAt, now time.Time) error {
 	return r.db.WithContext(ctx).
 		Model(&models.PendingDeviceSession{}).

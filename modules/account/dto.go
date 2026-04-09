@@ -7,6 +7,7 @@ type AccountSummaryResponse struct {
 
 type AccountSummary struct {
 	FullName         string       `json:"full_name"`
+	BankName         string       `json:"bank_name"`
 	AccountNumber    string       `json:"account_number"`
 	AvailableBalance int64        `json:"available_balance"`
 	WalletID         string       `json:"wallet_id"`
