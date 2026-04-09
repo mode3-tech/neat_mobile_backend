@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -44,5 +45,57 @@ func (h *Handler) ListSignedUsers(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
 	default:
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+func (h *Handler) GetUserTransactions(c *gin.Context) {
+	var query UserTransactionQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query params"})
+		return
+	}
+
+	ctx, cancel := withTimeout(c)
+	defer cancel()
+
+	resp, err := h.service.GetUserTransactions(ctx, query.MobileUserID, query.Limit, query.Page)
+	if err != nil {
+		if isDBError(err) {
+			if err.Error() == "missing user id" {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "db lookup error"})
+			return
+		}
+		if isUnprocessableEntityError(err) {
+			c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func isUnprocessableEntityError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "missing user id":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDBError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	if strings.Contains(msg, "SQL") {
+		return true
+	}
+	switch msg {
+	case "an error occured when trying to fetch user transactions":
+		return true
+	default:
+		return false
 	}
 }

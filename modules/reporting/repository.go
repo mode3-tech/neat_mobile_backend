@@ -106,3 +106,53 @@ func (r *Repository) ListSignedUsers(ctx context.Context, limit, offset int) ([]
 
 	return rows, total, nil
 }
+
+func (r *Repository) GetTransactionsWithMobileUserID(ctx context.Context, mobileUserID string, limit, offset int) ([]UserTransaction, int64, error) {
+	var total int64
+	var transactions []UserTransaction
+
+	base := r.db.WithContext(ctx).
+		Table("wallet_transactions wt").
+		Joins("JOIN wallet_users wu ON wu.id = wt.mobile_user_id").
+		Where("wu.id = ?", mobileUserID)
+
+	countStart := time.Now()
+	if err := base.Count(&total).Error; err != nil {
+		r.logQuery("GetTransactionsWithMobileUserID.count", countStart, "", err)
+		return nil, 0, err
+	}
+	r.logQuery("GetTransactionsWithMobileUserID.count", countStart, fmt.Sprintf("total=%d", total), nil)
+
+	if total == 0 {
+		return []UserTransaction{}, 0, nil
+	}
+
+	listStart := time.Now()
+	err := base.
+		Select(`
+			wt.mobile_user_id,
+			wt.type,
+			wt.amount,
+			wt.charges,
+			wt.vat,
+			wt.balance_before,
+			wt.balance_after,
+			wt.reference         AS transaction_reference,
+			wt.narration,
+			wt.counterparty_name    AS recipient_name,
+			wt.counterparty_account AS recipient_account,
+			wt.counterparty_bank    AS recipient_bank,
+			wt.status,
+			wt.created_at
+		`).
+		Order("wt.created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Scan(&transactions).Error
+	r.logQuery("GetTransactionsWithMobileUserID.list", listStart, fmt.Sprintf("limit=%d page=%d rows=%d", limit, offset, len(transactions)), err)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return transactions, total, nil
+}

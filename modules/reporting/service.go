@@ -2,7 +2,9 @@ package reporting
 
 import (
 	"context"
+	"errors"
 	"math"
+	"strings"
 )
 
 const (
@@ -40,7 +42,7 @@ func (s *Service) ListSignedUsers(ctx context.Context, page, limit int) (*ListSi
 	users := make([]SignedUserItem, 0, len(rows))
 	for _, r := range rows {
 		item := SignedUserItem{
-			ID:             r.ID,
+			MobileUserID:   r.ID,
 			FirstName:      r.FirstName,
 			LastName:       r.LastName,
 			MiddleName:     r.MiddleName,
@@ -76,5 +78,38 @@ func (s *Service) ListSignedUsers(ctx context.Context, page, limit int) (*ListSi
 		Page:       page,
 		Limit:      limit,
 		TotalPages: totalPages,
+	}, nil
+}
+
+func (s *Service) GetUserTransactions(ctx context.Context, mobileUserID string, limit, page int) (*UserTransactionResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("missing user id")
+	}
+	if page < 1 {
+		page = defaultPage
+	}
+	if limit < 1 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	offset := (page - 1) * limit
+
+	transactions, total, err := s.repo.GetTransactionsWithMobileUserID(ctx, mobileUserID, limit, offset)
+	if err != nil {
+		return nil, errors.New("an error occured when trying to fetch user transactions")
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	return &UserTransactionResponse{
+		Transactions: transactions,
+		Total:        total,
+		Page:         page,
+		Limit:        limit,
+		TotalPages:   totalPages,
 	}, nil
 }
