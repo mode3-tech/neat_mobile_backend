@@ -83,8 +83,8 @@ type BVNValidationResponse struct {
 }
 
 type NINValidationRequest struct {
-	BVNValidationID string `json:"bvn_validation_id" binding:"required"`
-	NIN             string `json:"nin" binding:"required"`
+	BVNVerificationID string `json:"bvn_verification_id" binding:"required"`
+	NIN               string `json:"nin" binding:"required"`
 }
 
 type NINValidationResponse struct {

@@ -451,7 +451,7 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 		return
 	}
 
-	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.BVNValidationID, req.NIN)
+	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.BVNVerificationID, req.NIN)
 	if err != nil {
 		if isBadRequestNINError(err) {
 			switch err.Error() {
