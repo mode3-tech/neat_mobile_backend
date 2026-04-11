@@ -58,7 +58,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	apiV1 := api.Group("/v1")
 	internalV1 := r.Group("/internal/v1")
 
-	r.GET("/health", func(c *gin.Context) {
+	r.HEAD("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 

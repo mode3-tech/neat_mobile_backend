@@ -1,5 +1,7 @@
 package account
 
+import "time"
+
 type AccountSummaryResponse struct {
 	Status bool           `json:"status"`
 	Data   AccountSummary `json:"data"`
@@ -7,6 +9,11 @@ type AccountSummaryResponse struct {
 
 type AccountSummary struct {
 	FullName         string       `json:"full_name"`
+	Email            string       `json:"email,omitempty"`
+	PhoneNumber      string       `json:"phone_number"`
+	DOB              time.Time    `json:"dob"`
+	Address          string       `json:"address"`
+	BVN              string       `json:"bvn"`
 	BankName         string       `json:"bank_name"`
 	AccountNumber    string       `json:"account_number"`
 	AvailableBalance int64        `json:"available_balance"`
@@ -22,4 +29,10 @@ type ActiveLoan struct {
 	TotalRepayment   float64 `json:"total_repayment"`
 	MonthlyRepayment float64 `json:"monthly_repayment"`
 	NextDueDate      string  `json:"next_due_date"`
+}
+
+type AccountStatementsRequest struct {
+	Format   ReportFormat `json:"format" binding:"required"`
+	DateFrom time.Time    `json:"date_from" binding:"required"`
+	DateTo   time.Time    `json:"date_to" binding:"required"`
 }

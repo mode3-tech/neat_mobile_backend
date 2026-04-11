@@ -77,3 +77,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 		ActiveLoans:      activeLoans,
 	}, nil
 }
+
+func AccountStatementRequest(ctx context.Context, mobileUserID string) {
+
+}
