@@ -37,7 +37,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	r.Use(middleware.RequestContextLogger())
 	r.Use(gin.Recovery())
 
-	r.GET("/health", func(c *gin.Context) {
+	r.HEAD("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
