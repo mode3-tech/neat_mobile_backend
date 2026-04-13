@@ -24,6 +24,7 @@ type AccountSummaryRow struct {
 	Phone            string
 	BVN              string
 	BankName         string
+	Address          string
 	AccountNumber    string
 	AvailableBalance int64
 	BookedBalance    int64

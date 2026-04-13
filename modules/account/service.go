@@ -73,9 +73,11 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	return &AccountSummary{
 		FullName:         strings.TrimSpace(accountInfo.FirstName + " " + accountInfo.LastName),
 		BankName:         accountInfo.BankName,
+		BVN:              accountInfo.BVN,
+		Address:          accountInfo.Address,
+		PhoneNumber:      accountInfo.Phone,
 		AccountNumber:    accountInfo.AccountNumber,
 		AvailableBalance: accountInfo.AvailableBalance,
-		WalletID:         accountInfo.InternalWalletID,
 		LoanBalance:      loanBalance,
 		ActiveLoans:      activeLoans,
 	}, nil

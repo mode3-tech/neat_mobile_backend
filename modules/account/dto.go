@@ -17,7 +17,6 @@ type AccountSummary struct {
 	BankName         string       `json:"bank_name"`
 	AccountNumber    string       `json:"account_number"`
 	AvailableBalance int64        `json:"available_balance"`
-	WalletID         string       `json:"wallet_id"`
 	LoanBalance      float64      `json:"loan_balance"`
 	ActiveLoans      []ActiveLoan `json:"active_loans"`
 }

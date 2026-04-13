@@ -45,11 +45,11 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_users.email,
 			wallet_users.phone, 
 			wallet_bvn_records.bvn,
-			wallet_bvn_records.full_home_address,
+			wallet_bvn_records.full_home_address AS address,
 			wallet_customer_wallets.account_number,
 			wallet_customer_wallets.available_balance, 
 			wallet_customer_wallets.booked_balance,
-			wallet_customer_wallets.internal_wallet_id`).
+			wallet_customer_wallets.bank_name`).
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
 		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
