@@ -111,9 +111,19 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) 
 		return nil, errors.New("bvn verification record not found")
 	}
 
+	err = s.repo.MarkValidationRecordUsed(ctx, req.BVNVerificationID)
+	if err != nil {
+		return nil, errors.New("failed to mark bvn verification record as used")
+	}
+
 	ninRecord, err := s.repo.GetValidationRow(ctx, req.NINVerificationID)
 	if err != nil || ninRecord.VerifiedDOB == nil {
 		return nil, errors.New("nin verification record not found")
+	}
+
+	err = s.repo.MarkValidationRecordUsed(ctx, req.NINVerificationID)
+	if err != nil {
+		return nil, errors.New("failed to mark nin verification record as used")
 	}
 
 	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
@@ -253,7 +263,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) 
 	}, nil
 }
 
-func (s *Service) ValidateNIN(ctx context.Context, ninVerificationID, nin string) (*ninInfo, error) {
+func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
 	if nin == "" || len(nin) < 11 || len(nin) > 11 {
 		return nil, errors.New("invalid nin")
 	}
@@ -268,14 +278,18 @@ func (s *Service) ValidateNIN(ctx context.Context, ninVerificationID, nin string
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
 
-	row, err := s.repo.GetValidationRow(ctx, ninVerificationID)
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("nin verification not found")
-	}
+	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("bvn verification not found")
+		}
 		return nil, err
+	}
+
+	err = s.repo.MarkValidationRecordUsed(ctx, row.ID)
+	if err != nil {
+		return nil, errors.New("failed to mark nin verification record as used")
 	}
 
 	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
@@ -354,6 +368,10 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		return nil, errors.New("phone verification record not found")
 	}
 
+	if err := s.repo.MarkValidationRecordUsed(ctx, phoneRecord.ID); err != nil {
+		return nil, errors.New("failed to mark phone verification record as used")
+	}
+
 	normalizedNumber, err := NormalizeNigerianNumber(req.PhoneNumber)
 	if err != nil {
 		return nil, errors.New(err.Error())
@@ -376,9 +394,17 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		return nil, errors.New("bvn verification record not found")
 	}
 
+	if err := s.repo.MarkValidationRecordUsed(ctx, bvnRecord.ID); err != nil {
+		return nil, errors.New("failed to mark bvn verification record as used")
+	}
+
 	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
 	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil {
 		return nil, errors.New("nin verification record not found")
+	}
+
+	if err := s.repo.MarkValidationRecordUsed(ctx, ninRecord.ID); err != nil {
+		return nil, errors.New("failed to mark nin verification record as used")
 	}
 
 	if req.Email != "" {
@@ -392,6 +418,10 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		}
 
 		isEmailVerified = true
+
+		if err := s.repo.MarkValidationRecordUsed(ctx, emailRecord.ID); err != nil {
+			return nil, errors.New("failed to mark email verification record as used")
+		}
 	}
 
 	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
@@ -1025,6 +1055,137 @@ func randomToken(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
+func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, deviceID string) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return errors.New("device id is required")
+	}
+
+	if s.otpManager == nil {
+		return errors.New("otp manager not configured")
+	}
+
+	if _, err := s.deviceRepo.FindDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("no record of device found")
+		}
+		return err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, mobileUserID)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	if err != nil {
+		return errors.New("invalid phone number on account")
+	}
+
+	_, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+		Purpose:     authotp.PurposePinReset,
+		Channel:     authotp.ChannelSMS,
+		Destination: phone,
+		UserID:      mobileUserID,
+		TTL:         10 * time.Minute,
+		MaxAttempts: 5,
+		MaxResends:  3,
+	})
+	return err
+}
+
+func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ResetTransactionPinRequest) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return errors.New("device id is required")
+	}
+
+	otpCode := strings.TrimSpace(req.OTPCode)
+	if otpCode == "" {
+		return errors.New("otp code is required")
+	}
+
+	if err := validators.ValidatePin(req.NewPin); err != nil {
+		return err
+	}
+
+	if req.NewPin != req.ConfirmNewPin {
+		return errors.New("new pin and confirm new pin do not match")
+	}
+
+	if s.tx == nil {
+		return errors.New("transaction manager not configured")
+	}
+
+	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		otpRepo := authotp.NewOTPRepository(txDB)
+
+		if _, err := s.deviceRepo.FindDevice(ctx, mobileUserID, deviceID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("invalid device id")
+			}
+			return err
+		}
+
+		var user models.User
+		if err := txDB.WithContext(ctx).
+			Table("wallet_users").
+			Select("id, phone").
+			Where("id = ?", mobileUserID).
+			First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("user not found")
+			}
+			return err
+		}
+
+		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
+		if err != nil {
+			return errors.New("invalid phone number on account")
+		}
+
+		activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, authotp.PurposePinReset)
+		if err != nil {
+			return err
+		}
+		if activeOTP == nil {
+			return errors.New("invalid otp")
+		}
+
+		maxAttempts := activeOTP.MaxAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 5
+		}
+		if activeOTP.AttemptCount >= maxAttempts {
+			return errors.New("invalid otp")
+		}
+
+		hashedOTP, err := authotp.HashOTP(s.otpPepper, authotp.PurposePinReset, normalizedPhone, otpCode)
+		if err != nil {
+			return errors.New("invalid otp")
+		}
+
+		if !authotp.HashEqualHex(hashedOTP, activeOTP.OTPHash) {
+			if err := otpRepo.IncrementAttempt(ctx, activeOTP.ID); err != nil {
+				return err
+			}
+			return errors.New("invalid otp")
+		}
+
+		now := time.Now().UTC()
+		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
+			return err
+		}
+
+		hashedPin, err := HashPassword(req.NewPin)
+		if err != nil {
+			return err
+		}
+
+		return s.repo.UpdateUserPin(ctx, mobileUserID, hashedPin)
+	})
+}
+
 func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) error {
 	isValidAccessToken := s.jwtSigner.ValidAccessToken(accessToken)
 	isValidRefreshToken := s.jwtSigner.ValidRefreshToken(refreshToken)
@@ -1580,8 +1741,11 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 			return errors.New("invalid reset code")
 		}
 
-		providedResetCodeHash := sha256.Sum256([]byte(resetCode))
-		if !authotp.HashEqualHex(hex.EncodeToString(providedResetCodeHash[:]), activeOTP.OTPHash) {
+		hashedCode, err := authotp.HashOTP(s.otpPepper, authotp.PurposePasswordReset, normalizedPhone, resetCode)
+		if err != nil {
+			return errors.New("invalid reset code")
+		}
+		if !authotp.HashEqualHex(hashedCode, activeOTP.OTPHash) {
 			if err := otpRepo.IncrementAttempt(ctx, activeOTP.ID); err != nil {
 				return err
 			}

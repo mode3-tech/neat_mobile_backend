@@ -13,6 +13,7 @@ import (
 
 type Store interface {
 	UpsertToken(ctx context.Context, row *models.PushToken) error
+	IsNotificationsEnabled(ctx context.Context, userID string) (bool, error)
 	DeleteTokenByUserAndDevice(ctx context.Context, userID, deviceID string) error
 	DeleteTokenByValue(ctx context.Context, token string) error
 	ListTokensByUserID(ctx context.Context, userID string) ([]models.PushToken, error)
@@ -32,6 +33,24 @@ type Repository struct {
 
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) IsNotificationsEnabled(ctx context.Context, userID string) (bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, errors.New("user id is required")
+	}
+
+	var user models.User
+	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("notifications_enabled").Where("id = ?", userID).First(&user).Error; err != nil {
+		return false, err
+	}
+
+	if user.NotificationsEnabled == nil {
+		return false, nil
+	}
+
+	return *user.NotificationsEnabled, nil
 }
 
 func (r *Repository) UpsertToken(ctx context.Context, row *models.PushToken) error {

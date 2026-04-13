@@ -8,6 +8,7 @@ const (
 	PurposeLogin         Purpose = "login"
 	PurposeSignup        Purpose = "signup"
 	PurposePasswordReset Purpose = "password_reset"
+	PurposePinReset      Purpose = "pin_reset"
 )
 
 const (

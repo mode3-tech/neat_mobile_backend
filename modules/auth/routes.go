@@ -21,7 +21,9 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.POST("/password/forgot", handler.ForgotPassword)
 		auth.POST("/password/reset", handler.ResetPassword)
 
-		// Protected route
+		// Protected routes
 		auth.POST("/logout", authGuard, handler.Logout)
+		auth.POST("/pin/forgot", authGuard, handler.ForgotTransactionPin)
+		auth.POST("/pin/reset", authGuard, handler.ResetTransactionPin)
 	}
 }

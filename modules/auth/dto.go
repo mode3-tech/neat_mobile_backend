@@ -54,6 +54,12 @@ type VerifyDeviceResponse struct {
 	ActionToken  string `json:"action_token,omitempty"`
 }
 
+type ResetTransactionPinRequest struct {
+	OTPCode       string `json:"otp_code" binding:"required,len=6,numeric"`
+	NewPin        string `json:"new_pin" binding:"required"`
+	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
+}
+
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }

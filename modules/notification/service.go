@@ -234,58 +234,67 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 		return err
 	}
 
-	tokens, err := s.repo.ListTokensByUserID(ctx, userID)
+	notificationsEnabled, err := s.repo.IsNotificationsEnabled(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if len(tokens) == 0 {
-		return nil
-	}
 
-	messages := make([]ExpoPushMessage, 0, len(tokens))
-	for _, token := range tokens {
-		messages = append(messages, ExpoPushMessage{
-			To:        token.ExpoPushToken,
-			Title:     title,
-			Body:      body,
-			Data:      req.Data,
-			Sound:     sound,
-			ChannelID: channelID,
-		})
-	}
-
-	tickets, err := s.sender.Send(ctx, messages)
-	if err != nil {
-		return err
-	}
-	ticketRows := make([]models.NotificationTicket, 0, len(tickets))
-
-	for i, ticket := range tickets {
-		if i >= len(tokens) {
-			break
+	if notificationsEnabled {
+		// proceed to send push notification
+		tokens, err := s.repo.ListTokensByUserID(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if len(tokens) == 0 {
+			return nil
 		}
 
-		if isDeviceNotRegistered(ticket) {
-			if delErr := s.repo.DeleteTokenByValue(ctx, tokens[i].ExpoPushToken); delErr != nil {
-				log.Printf("notification: failed to delete unregistered push token for user %s: %v", userID, delErr)
-			}
-			continue
-		}
-
-		if strings.EqualFold(strings.TrimSpace(ticket.Status), "ok") && strings.TrimSpace(ticket.ID) != "" {
-			ticketRows = append(ticketRows, models.NotificationTicket{
-				ID:             uuid.NewString(),
-				NotificationID: notification.ID,
-				UserID:         userID,
-				ExpoPushToken:  tokens[i].ExpoPushToken,
-				ExpoTicketID:   strings.TrimSpace(ticket.ID),
+		messages := make([]ExpoPushMessage, 0, len(tokens))
+		for _, token := range tokens {
+			messages = append(messages, ExpoPushMessage{
+				To:        token.ExpoPushToken,
+				Title:     title,
+				Body:      body,
+				Data:      req.Data,
+				Sound:     sound,
+				ChannelID: channelID,
 			})
 		}
+
+		tickets, err := s.sender.Send(ctx, messages)
+		if err != nil {
+			return err
+		}
+		ticketRows := make([]models.NotificationTicket, 0, len(tickets))
+
+		for i, ticket := range tickets {
+			if i >= len(tokens) {
+				break
+			}
+
+			if isDeviceNotRegistered(ticket) {
+				if delErr := s.repo.DeleteTokenByValue(ctx, tokens[i].ExpoPushToken); delErr != nil {
+					log.Printf("notification: failed to delete unregistered push token for user %s: %v", userID, delErr)
+				}
+				continue
+			}
+
+			if strings.EqualFold(strings.TrimSpace(ticket.Status), "ok") && strings.TrimSpace(ticket.ID) != "" {
+				ticketRows = append(ticketRows, models.NotificationTicket{
+					ID:             uuid.NewString(),
+					NotificationID: notification.ID,
+					UserID:         userID,
+					ExpoPushToken:  tokens[i].ExpoPushToken,
+					ExpoTicketID:   strings.TrimSpace(ticket.ID),
+				})
+			}
+		}
+
+		if err := s.repo.CreateNotificationTickets(ctx, ticketRows); err != nil {
+			log.Printf("notification: failed to persist expo ticket rows for notification %s: %v", notification.ID, err)
+		}
 	}
 
-	if err := s.repo.CreateNotificationTickets(ctx, ticketRows); err != nil {
-		log.Printf("notification: failed to persist expo ticket rows for notification %s: %v", notification.ID, err)
-	}
 	return nil
 }
 

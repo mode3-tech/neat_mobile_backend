@@ -135,14 +135,23 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 	})
 }
 
-func (r *Repository) GetValidationRow(ctx context.Context, id string) (*models.VerificationRecord, error) {
+func (r *Repository) GetValidationRow(ctx context.Context, verificationID string) (*models.VerificationRecord, error) {
 	var record models.VerificationRecord
-	err := r.db.WithContext(ctx).Table("wallet_verification_records").Select("verified_name, verified_dob, verified_phone, verified_id").Where("id = ? AND status = ?", id, models.VerificationStatusVerified).First(&record).Error
+	err := r.db.WithContext(ctx).Table("wallet_verification_records").
+		Select("verified_name, verified_dob, verified_phone, verified_id").
+		Where("id = ? AND status = ? AND used_at = NULL", verificationID, models.VerificationStatusVerified).
+		First(&record).Error
 
 	if err != nil {
 		return nil, err
 	}
 	return &record, nil
+}
+
+func (r *Repository) MarkValidationRecordUsed(ctx context.Context, verificationID string) error {
+	return r.db.WithContext(ctx).Table("wallet_verification_records").
+		Where("id = ?", verificationID).
+		Update("used_at", time.Now().UTC()).Error
 }
 
 func (r *Repository) CreateBVNRecord(ctx context.Context, record *models.BVNRecord) error {
@@ -236,6 +245,10 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models
 		return nil, err
 	}
 	return user, nil
+}
+
+func (r *Repository) UpdateUserPin(ctx context.Context, userID, newPinHash string) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Update("pin_hash", newPinHash).Error
 }
 
 func (r *Repository) UpdateCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {

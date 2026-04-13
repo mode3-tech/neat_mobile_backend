@@ -737,6 +737,102 @@ func isOTPForgotPasswordError(err error) bool {
 	return false
 }
 
+func (h *Handler) ForgotTransactionPin(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	if err := h.service.ForgotTransactionPin(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isForgotPinBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isForgotPinUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP has been sent to your phone"})
+}
+
+func isForgotPinBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required", "invalid phone number on account":
+		return true
+	}
+	return false
+}
+
+func isForgotPinUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func (h *Handler) ResetTransactionPin(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var req ResetTransactionPinRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if err := h.service.ResetTransactionPin(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
+		if isResetPinBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isResetPinUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "transaction pin reset successfully"})
+}
+
+func isResetPinBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required",
+		"otp code is required",
+		"transaction pin must be exactly 4 digits long",
+		"transaction pin must contain only digits",
+		"new pin and confirm new pin do not match":
+		return true
+	}
+	return false
+}
+
+func isResetPinUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "invalid device id", "invalid otp", "user not found":
+		return true
+	}
+	return false
+}
+
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 
