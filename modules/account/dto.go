@@ -31,10 +31,22 @@ type ActiveLoan struct {
 	NextDueDate      string  `json:"next_due_date"`
 }
 
-type AccountStatementsRequest struct {
+type AccountStatementRequest struct {
 	Format   ReportFormat `json:"format" binding:"required"`
 	DateFrom time.Time    `json:"date_from" binding:"required"`
 	DateTo   time.Time    `json:"date_to" binding:"required"`
+}
+
+type AccountStatementResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	JobID   string `json:"job_id,omitempty"`
+}
+
+type StatementJobStatusResponse struct {
+	Status      bool   `json:"status"`
+	JobStatus   string `json:"job_status"`
+	DownloadURL string `json:"download_url,omitempty"`
 }
 
 type UpdateProfileRequest struct {

@@ -7,5 +7,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	{
 		account.GET("/summary", handler.GetAccountSummary)
 		account.PATCH("/profile", handler.UpdateProfile)
+		account.POST("/statement", handler.GetAccountStatement)
+		account.GET("/statement/:job_id/status", handler.GetStatementJobStatus)
 	}
 }

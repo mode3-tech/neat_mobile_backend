@@ -2613,6 +2613,108 @@
         }
       }
     },
+    "/account/statement": {
+      "post": {
+        "tags": ["Account"],
+        "summary": "Request account statement",
+        "description": "Queues an account statement generation job for the given date range and format. Returns a job ID immediately. The statement is generated in the background and the user is notified via push when ready.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AccountStatementRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Statement job queued successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AccountStatementResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to queue statement job",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/statement/{job_id}": {
+      "get": {
+        "tags": ["Account"],
+        "summary": "Poll statement job status",
+        "description": "Returns the current status of a statement generation job. When status is `ready`, a short-lived download URL (15 minutes) is included in the response. Poll this endpoint after requesting a statement.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The job ID returned from POST /account/statement."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status returned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatementJobStatusResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or does not belong to the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/wallet/banks": {
       "get": {
         "tags": ["Wallet"],
@@ -4687,6 +4789,31 @@
         "properties": {
           "status": { "type": "boolean", "example": true },
           "message": { "type": "string", "example": "Profile successfully updated" }
+        }
+      },
+      "AccountStatementRequest": {
+        "type": "object",
+        "required": ["format", "date_from", "date_to"],
+        "properties": {
+          "format": { "type": "string", "enum": ["csv", "pdf"], "description": "File format for the generated statement.", "example": "csv" },
+          "date_from": { "type": "string", "format": "date-time", "description": "Start of the statement period (inclusive).", "example": "2025-01-01T00:00:00Z" },
+          "date_to": { "type": "string", "format": "date-time", "description": "End of the statement period (inclusive).", "example": "2025-12-31T23:59:59Z" }
+        }
+      },
+      "AccountStatementResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Account statement request is being processed" },
+          "job_id": { "type": "string", "description": "Use this ID to poll for the statement status.", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" }
+        }
+      },
+      "StatementJobStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "job_status": { "type": "string", "enum": ["pending", "processing", "ready", "failed"], "description": "Current state of the statement generation job.", "example": "ready" },
+          "download_url": { "type": "string", "description": "Presigned download URL. Only present when job_status is `ready`. Expires in 15 minutes.", "example": "https://s3.us-west-004.backblazeb2.com/..." }
         }
       },
       "Bank": {

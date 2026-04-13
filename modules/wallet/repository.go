@@ -112,20 +112,30 @@ func (r *Repository) UpdateTransactionProviderRef(ctx context.Context, txID, pro
 
 func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, providerRef string, status transaction.TransactionStatus, walletID string, totalDebit int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
+		var wallet CustomerWallet
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").
+			Where("wallet_id = ?", walletID).
+			First(&wallet).Error; err != nil {
+			return err
+		}
+
 		if err := tx.Model(&transaction.Transaction{}).
 			Where("id = ?", txID).
 			Updates(map[string]interface{}{
 				"provider_reference": providerRef,
 				"status":             status,
+				"balance_before":     wallet.AvailableBalance,
+				"balance_after":      wallet.AvailableBalance - totalDebit,
 			}).Error; err != nil {
 			return err
 		}
-
 		return tx.Model(&CustomerWallet{}).
 			Where("wallet_id = ?", walletID).
 			Updates(map[string]interface{}{
 				"booked_balance":    gorm.Expr("booked_balance - ?", totalDebit),
 				"available_balance": gorm.Expr("available_balance - ?", totalDebit),
+				"updated_at":        time.Now(),
 			}).Error
 	})
 }
@@ -149,13 +159,31 @@ func (r *Repository) GetWalletByAccountNumber(ctx context.Context, accountNumber
 	return &w, nil
 }
 
-func (r *Repository) CreditWalletBalance(ctx context.Context, walletID string, amount int64) error {
-	return r.db.WithContext(ctx).Model(&CustomerWallet{}).
-		Where("wallet_id = ?", walletID).
-		Updates(map[string]interface{}{
-			"booked_balance":    gorm.Expr("booked_balance + ?", amount),
-			"available_balance": gorm.Expr("available_balance + ?", amount),
-		}).Error
+func (r *Repository) CreditWalletAtomically(ctx context.Context, tx *transaction.Transaction, amount int64) error {
+	return r.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
+
+		var wallet CustomerWallet
+		if err := db.Set("gorm:query_option", "FOR UPDATE").
+			Where("wallet_id = ?", tx.WalletID).
+			First(&wallet).Error; err != nil {
+			return err
+		}
+
+		tx.BalanceBefore = wallet.AvailableBalance
+		tx.BalanceAfter = wallet.AvailableBalance + amount
+
+		if err := db.Create(tx).Error; err != nil {
+			return err
+		}
+
+		return db.Model(&CustomerWallet{}).
+			Where("wallet_id = ?", tx.WalletID).
+			Updates(map[string]interface{}{
+				"booked_balance":    gorm.Expr("booked_balance + ?", amount),
+				"available_balance": gorm.Expr("available_balance + ?", amount),
+				"updated_at":        time.Now(),
+			}).Error
+	})
 }
 
 func (r *Repository) CreateExpectedDeposit(ctx context.Context, expectedDeposit *ExpectedDeposit) error {

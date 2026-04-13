@@ -41,6 +41,64 @@ func (h *Handler) GetAccountSummary(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetAccountStatement(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	if strings.TrimSpace(deviceID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		return
+	}
+
+	var req AccountStatementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	jobID, err := h.service.RequestAccountStatement(c.Request.Context(), mobileUserID, deviceID, req)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to request account statement"})
+		return
+	}
+
+	c.JSON(http.StatusOK, AccountStatementResponse{
+		Status:  true,
+		Message: "Account statement request is being processed",
+		JobID:   jobID,
+	})
+}
+
+func (h *Handler) GetStatementJobStatus(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	jobID := strings.TrimSpace(c.Param("job_id"))
+	if jobID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "job_id is required"})
+		return
+	}
+
+	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, jobID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, StatementJobStatusResponse{
+		Status:      true,
+		JobStatus:   string(job.Status),
+		DownloadURL: downloadURL,
+	})
+}
+
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
 	if strings.TrimSpace(mobileUserID) == "" {

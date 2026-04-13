@@ -376,12 +376,8 @@ func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCred
 		Type:                transaction.TransactionTypeCredit,
 	}
 
-	if err := s.repo.AddTransaction(ctx, transfer); err != nil {
-		return fmt.Errorf("failed to save credit transfer: %w", err)
-	}
-
-	if err := s.repo.CreditWalletBalance(ctx, wallet.WalletID, amountKobo); err != nil {
-		return fmt.Errorf("failed to update wallet balance: %w", err)
+	if err := s.repo.CreditWalletAtomically(ctx, transfer, amountKobo); err != nil {
+		return fmt.Errorf("failed to credit wallet: %w", err)
 	}
 
 	return nil

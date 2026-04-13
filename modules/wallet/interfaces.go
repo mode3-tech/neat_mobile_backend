@@ -1,6 +1,9 @@
 package wallet
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type BankResponse struct {
 	Status bool   `json:"status"`
@@ -22,4 +25,8 @@ type ProvidusService interface {
 	FetchBanks(ctx context.Context) ([]Bank, error)
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 	InitiateTransfer(ctx context.Context, customerID string, req *TransferRequest) (*TransferResponse, error)
+}
+
+type UploadService interface {
+	Upload(ctx context.Context, body io.Reader, filename string) (string, error)
 }

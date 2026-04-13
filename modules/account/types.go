@@ -3,9 +3,10 @@ package account
 type ReportStatus string
 
 const (
-	ReportStatusPending ReportStatus = "pending"
-	ReportStatusReady   ReportStatus = "ready"
-	ReportStatusFailed  ReportStatus = "failed"
+	ReportStatusPending    ReportStatus = "pending"
+	ReportStatusProcessing ReportStatus = "processing"
+	ReportStatusReady      ReportStatus = "ready"
+	ReportStatusFailed     ReportStatus = "failed"
 )
 
 type ReportFormat string

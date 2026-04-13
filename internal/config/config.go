@@ -29,6 +29,10 @@ type Config struct {
 	ProvidusSecretKey          string
 	ProvidusBaseURL            string
 	ProvidusWebhookSecret      string
+	B2KeyID                    string
+	B2AppKey                   string
+	B2StatementBucketName      string
+	B2StatementEndpoint        string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -63,6 +67,10 @@ func Load() Config {
 		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
+		B2KeyID:                    getEnv("B2_KEY_ID", ""),
+		B2AppKey:                   getEnv("B2_APP_KEY", ""),
+		B2StatementBucketName:      getEnv("B2_STATEMENT_BUCKET_NAME", ""),
+		B2StatementEndpoint:        getEnv("B2_STATEMENT_ENDPOINT", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

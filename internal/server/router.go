@@ -16,6 +16,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
@@ -25,6 +26,8 @@ import (
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/providus"
+	"neat_mobile_app_backend/providers/push"
+	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	"neat_mobile_app_backend/providers/sms"
 	"net/http"
 	"strings"
@@ -64,6 +67,18 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	if cfg.JWTSecret == "" {
 		return nil, nil, errors.New("jwt secret can't be empty")
+	}
+
+	s3bucketConfig := s3bucket.BackblazeConfig{
+		KeyID:      cfg.B2KeyID,
+		AppKey:     cfg.B2AppKey,
+		BucketName: cfg.B2StatementBucketName,
+		Endpoint:   cfg.B2StatementEndpoint,
+	}
+
+	s3bucketClient, err := s3bucket.NewBackblazeClient(s3bucketConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create S3 bucket client: %w", err)
 	}
 
 	smsApiKey := cfg.TermiiApiKey
@@ -150,10 +165,18 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusWebhookSecret))
 
+	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
+	notificationRepo := notification.NewRepository(db)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
+
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, loanService)
+	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
+
+	c.AddFunc("@every 30s", func() {
+		accountService.ProcessPendingStatementJobs(context.Background())
+	})
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)

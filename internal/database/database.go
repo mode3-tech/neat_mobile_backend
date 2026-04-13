@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"neat_mobile_app_backend/models"
+	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
@@ -133,6 +134,7 @@ func Migrate(db *gorm.DB) error {
 		&transaction.Transaction{},
 		&wallet.Beneficiary{},
 		&wallet.ExpectedDeposit{},
+		&account.AccountReportJob{},
 	); err != nil {
 		return err
 	}
