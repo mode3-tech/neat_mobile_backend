@@ -1164,6 +1164,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /account/profile:
+    patch:
+      tags:
+        - Account
+      summary: Update profile
+      description: Updates the authenticated user's email and/or address. Both fields are optional; only supplied fields are updated.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateProfileResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized or missing device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /wallet/banks:
     get:
       tags:
@@ -2210,6 +2256,27 @@ components:
           example: true
         data:
           $ref: "#/components/schemas/AccountSummary"
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: New email address for the user.
+          example: john.doe@example.com
+        address:
+          type: string
+          description: New physical address for the user.
+          example: "12 Lagos Street, Abuja"
+    UpdateProfileResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Profile successfully updated
     DevHealthResponse:
       type: object
       properties:

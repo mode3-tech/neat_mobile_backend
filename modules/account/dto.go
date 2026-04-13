@@ -36,3 +36,13 @@ type AccountStatementsRequest struct {
 	DateFrom time.Time    `json:"date_from" binding:"required"`
 	DateTo   time.Time    `json:"date_to" binding:"required"`
 }
+
+type UpdateProfileRequest struct {
+	Email   *string `json:"email" binding:"omitempty,email"`
+	Address *string `json:"address"`
+}
+
+type UpdateProfileResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+}

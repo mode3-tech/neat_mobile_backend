@@ -6,5 +6,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	account := rg.Group("/account", authGuard)
 	{
 		account.GET("/summary", handler.GetAccountSummary)
+		account.PATCH("/profile", handler.UpdateProfile)
 	}
 }

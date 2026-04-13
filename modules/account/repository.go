@@ -5,7 +5,6 @@ import (
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/transaction"
-	"neat_mobile_app_backend/modules/wallet"
 	"time"
 
 	"gorm.io/gorm"
@@ -28,33 +27,48 @@ func (r *Repository) GetDevice(ctx context.Context, mobileUserID, deviceID strin
 	return &d, nil
 }
 
-func (r *Repository) GetUser(ctx context.Context, userID string) (*models.User, error) {
-	var user models.User
-	err := r.db.WithContext(ctx).
-		Select("id", "first_name", "last_name", "email", "phone").
-		Where("id = ?", userID).
-		First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string) (*AccountSummaryRow, error) {
+	var row AccountSummaryRow
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Select(`wallet_users.id, 
+			wallet_users.first_name,
+			wallet_users.last_name,
+			wallet_users.email,
+			wallet_users.phone, 
+			wallet_bvn_records.bvn,
+			wallet_bvn_records.full_home_address,
+			wallet_customer_wallets.account_number,
+			wallet_customer_wallets.available_balance, 
+			wallet_customer_wallets.booked_balance,
+			wallet_customer_wallets.internal_wallet_id`).
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
+		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
+		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
+	return &row, err
 }
 
-func (r *Repository) GetCustomerWallet(ctx context.Context, mobileUserID string) (*wallet.CustomerWallet, error) {
-	var w wallet.CustomerWallet
-	err := r.db.WithContext(ctx).
-		Select("bank_name", "account_number", "available_balance", "booked_balance", "internal_wallet_id").
-		Where("mobile_user_id = ?", mobileUserID).
-		First(&w).Error
-	if err != nil {
-		return nil, err
+func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, req UpdateProfileRequest) error {
+	updates := map[string]any{}
+
+	if req.Address != nil {
+		updates["email"] = *req.Address
 	}
-	return &w, nil
+
+	if req.Email != nil {
+		updates["address"] = *req.Email
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", mobileUserID).
+		Updates(updates).Error
 }
 
 func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID string, walletID string, from, to time.Time) ([]transaction.Transaction, error) {
 	var transactions []transaction.Transaction
 
-	err := r.db.WithContext(ctx).Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).Order("created_at DESC").Find(&transactions).Error
+	err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).Order("created_at DESC").
+		Find(&transactions).Error
 	return transactions, err
 }

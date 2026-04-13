@@ -32,14 +32,9 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
-	user, err := s.repo.GetUser(ctx, mobileUserID)
+	accountInfo, err := s.repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch user: %w", err)
-	}
-
-	customerWallet, err := s.repo.GetCustomerWallet(ctx, mobileUserID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch wallet: %w", err)
+		return nil, err
 	}
 
 	var loanBalance float64
@@ -68,11 +63,11 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	}
 
 	return &AccountSummary{
-		FullName:         strings.TrimSpace(user.FirstName + " " + user.LastName),
-		BankName:         customerWallet.BankName,
-		AccountNumber:    customerWallet.AccountNumber,
-		AvailableBalance: customerWallet.AvailableBalance,
-		WalletID:         customerWallet.InternalWalletID,
+		FullName:         strings.TrimSpace(accountInfo.FirstName + " " + accountInfo.LastName),
+		BankName:         accountInfo.BankName,
+		AccountNumber:    accountInfo.AccountNumber,
+		AvailableBalance: accountInfo.AvailableBalance,
+		WalletID:         accountInfo.InternalWalletID,
 		LoanBalance:      loanBalance,
 		ActiveLoans:      activeLoans,
 	}, nil
@@ -80,4 +75,16 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 
 func AccountStatementRequest(ctx context.Context, mobileUserID string) {
 
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return errors.New("user id is missing")
+	}
+
+	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
+		return err
+	}
+
+	return nil
 }
