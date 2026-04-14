@@ -1,81 +1,75 @@
 package s3bucket
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/kurin/blazer/b2"
 )
 
 type BackblazeConfig struct {
 	KeyID      string `json:"key_id" binding:"required"`
 	AppKey     string `json:"app_key" binding:"required"`
 	BucketName string `json:"bucket_name" binding:"required"`
-	Endpoint   string `json:"endpoint" binding:"required"`
 }
 
 type BackblazeClient struct {
-	s3      *s3.Client
-	presign *s3.PresignClient
-	bucket  string
+	client *b2.Client
+	bucket *b2.Bucket
 }
 
-func NewBackblazeClient(cfg BackblazeConfig) (*BackblazeClient, error) {
-	creds := credentials.NewStaticCredentialsProvider(cfg.KeyID, cfg.AppKey, "")
-
-	awsCfg, err := config.LoadDefaultConfig(
-		context.Background(),
-		config.WithCredentialsProvider(creds),
-		config.WithRegion("auto"),
-	)
-
+func NewBackblazeClient(ctx context.Context, cfg BackblazeConfig) (*BackblazeClient, error) {
+	client, err := b2.NewClient(ctx, cfg.KeyID, cfg.AppKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create B2 client: %w", err)
 	}
 
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfg.Endpoint)
-		o.UsePathStyle = true
-	})
+	bucket, err := client.Bucket(ctx, cfg.BucketName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bucket '%s': %w", cfg.BucketName, err)
+	}
 
 	return &BackblazeClient{
-		s3:      client,
-		presign: s3.NewPresignClient(client),
-		bucket:  cfg.BucketName,
+		client: client,
+		bucket: bucket,
 	}, nil
 }
 
-func (b *BackblazeClient) Upload(ctx context.Context, key string, body io.Reader, contentType string) error {
-	data, err := io.ReadAll(body)
-	if err != nil {
+func (b *BackblazeClient) Upload(ctx context.Context, key string, body io.ReadSeeker, contentType string) error {
+	if _, err := body.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 
-	_, err = b.s3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:        aws.String(b.bucket),
-		Key:           aws.String(key),
-		Body:          bytes.NewReader(data),
-		ContentType:   aws.String(contentType),
-		ContentLength: aws.Int64(int64(len(data))),
+	obj := b.bucket.Object(key)
+	w := obj.NewWriter(ctx)
+	w.ConcurrentUploads = 1
+	w.WithAttrs(&b2.Attrs{
+		ContentType: contentType,
 	})
 
-	return err
+	if _, err := io.Copy(w, body); err != nil {
+		w.Close()
+		return fmt.Errorf("failed to upload to B2: %w", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to finalize upload: %w", err)
+	}
+
+	return nil
+}
+
+func (b *BackblazeClient) FileURL(key string) string {
+	return fmt.Sprintf("%s/file/%s/%s", b.bucket.BaseURL(), b.bucket.Name(), key)
 }
 
 func (b *BackblazeClient) PresignURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	req, err := b.presign.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(b.bucket),
-		Key:    aws.String(key),
-	}, s3.WithPresignExpires(ttl))
-
+	obj := b.bucket.Object(key)
+	url, err := obj.AuthURL(ctx, ttl, "")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate auth URL: %w", err)
 	}
-
-	return req.URL, nil
+	return url.String(), nil
 }

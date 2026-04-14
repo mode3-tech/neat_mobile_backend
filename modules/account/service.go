@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"log"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
@@ -87,40 +88,50 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 
 func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, deviceID string, req AccountStatementRequest) (string, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
+		log.Printf("mobile user ID is required")
 		return "", errors.New("mobile user ID is required")
 	}
 
 	if strings.TrimSpace(deviceID) == "" {
+		log.Printf("device ID is required")
 		return "", errors.New("device ID is required")
 	}
 
 	if req.DateFrom.IsZero() {
+		log.Printf("date_from is required")
 		return "", errors.New("date_from is required")
 	}
 	if req.DateTo.IsZero() {
+		log.Printf("date_to is required")
 		return "", errors.New("date_to is required")
 	}
 	now := time.Now().UTC()
 	if req.DateFrom.After(now) {
+		log.Printf("date_from cannot be in the future: %v", req.DateFrom)
 		return "", errors.New("date_from cannot be in the future")
 	}
-	if req.DateTo.After(now) {
-		return "", errors.New("date_to cannot be in the future")
-	}
+	// if req.DateTo.After(now) {
+	// 	log.Printf("date_to cannot be in the future: %v", req.DateTo)
+	// 	return "", errors.New("date_to cannot be in the future")
+	// }
 	if !req.DateFrom.Before(req.DateTo) {
+		log.Printf("invalid date range for account statement request: %v to %v", req.DateFrom, req.DateTo)
 		return "", errors.New("date_from must be before date_to")
 	}
 	if req.DateTo.Sub(req.DateFrom) > 365*24*time.Hour {
+		log.Printf("date range for account statement request exceeds 365 days: %v to %v", req.DateFrom, req.DateTo)
 		return "", errors.New("date range cannot exceed 365 days")
 	}
 
 	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
+		log.Printf("failed to verify device for account statement request: %v", err)
 		return "", fmt.Errorf("failed to verify device: %w", err)
 	}
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
+		log.Printf("failed to retrieve user for account statement request: %v", err)
 		return "", fmt.Errorf("failed to retrieve user: %w", err)
 	}
 
@@ -135,6 +146,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		Format:       req.Format,
 	})
 	if err != nil {
+		log.Printf("failed to create account report job: %v", err)
 		return "", fmt.Errorf("failed to create account report job: %w", err)
 	}
 
@@ -155,7 +167,9 @@ func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
 			continue
 		}
 
-		if err := s.processAccountStatementRequest(ctx, job.ID, job.WalletID, job.MobileUserID, AccountStatementRequest{
+		filePath := fmt.Sprintf("statements/%s.csv", job.ID)
+
+		if err := s.processAccountStatementRequest(ctx, filePath, job.WalletID, job.MobileUserID, AccountStatementRequest{
 			DateFrom: *job.DateFrom,
 			DateTo:   *job.DateTo,
 			Format:   job.Format,
@@ -164,7 +178,7 @@ func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
 			continue
 		}
 
-		s.repo.MarkJobReady(ctx, job.ID, job.FilePath)
+		s.repo.MarkJobReady(ctx, job.ID, filePath)
 
 		s.notifier.SendToUser(
 			ctx,
@@ -192,7 +206,7 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID
 	}
 
 	var downloadURL string
-	if job.Status != ReportStatusReady && job.FilePath != "" {
+	if job.Status == ReportStatusReady && job.FilePath != "" {
 		downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, 15*time.Minute)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to generate download link for account statement: %w", err)
@@ -202,18 +216,6 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID
 	return job, downloadURL, nil
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("user id is missing")
-	}
-
-	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Service) processAccountStatementRequest(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -221,9 +223,10 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	}
 
 	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM so Excel opens the file with correct encoding
 	w := csv.NewWriter(&buf)
 
-	w.Write([]string{"Time", "Date", "Description", "Debit", "Credit", "Balance After(₦)", "Transasction Reference"})
+	w.Write([]string{"Time", "Date", "Description", "Debit (NGN)", "Credit (NGN)", "Balance Before (NGN)", "Balance After (NGN)", "Transaction Reference"})
 
 	for _, tx := range transactions {
 		debit, credit := "", ""
@@ -235,11 +238,12 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 		}
 
 		w.Write([]string{
-			tx.CreatedAt.Format("2006-01-02 15:04:05"),
-			tx.CreatedAt.Format("2006-01-02"),
+			tx.CreatedAt.Format("Jan 02 2006 15:04:05"),
+			tx.CreatedAt.Format("Jan 02 2006"),
 			tx.Description,
 			debit,
 			credit,
+			fmt.Sprintf("%.2f", float64(tx.BalanceBefore)/100),
 			fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100),
 			tx.Reference,
 		})
@@ -252,6 +256,18 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 
 	if err := s.b2.Upload(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
 		return fmt.Errorf("failed to upload account statement to storage: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return errors.New("user id is missing")
+	}
+
+	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
+		return err
 	}
 
 	return nil

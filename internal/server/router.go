@@ -46,8 +46,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, err
 	}
 
-	if err := database.Migrate(db); err != nil {
-		return nil, nil, err
+	if cfg.RunMigrations {
+		if err := database.Migrate(db); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	r := gin.New()
@@ -73,10 +75,9 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		KeyID:      cfg.B2KeyID,
 		AppKey:     cfg.B2AppKey,
 		BucketName: cfg.B2StatementBucketName,
-		Endpoint:   cfg.B2StatementEndpoint,
 	}
 
-	s3bucketClient, err := s3bucket.NewBackblazeClient(s3bucketConfig)
+	s3bucketClient, err := s3bucket.NewBackblazeClient(context.Background(), s3bucketConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create S3 bucket client: %w", err)
 	}

@@ -28,5 +28,5 @@ type ProvidusService interface {
 }
 
 type UploadService interface {
-	Upload(ctx context.Context, body io.Reader, filename string) (string, error)
+	Upload(ctx context.Context, body io.ReadSeeker, filename string) (string, error)
 }
