@@ -60,6 +60,20 @@ type ResetTransactionPinRequest struct {
 	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
 }
 
+type ChangeTransactionPinRequest struct {
+	OTPCode       string `json:"otp_code" binding:"required,len=6,numeric"`
+	CurrentPin    string `json:"current_pin" binding:"required"`
+	NewPin        string `json:"new_pin" binding:"required"`
+	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
+}
+
+type ChangePasswordRequest struct {
+	OTPCode            string `json:"otp_code" binding:"required,len=6,numeric"`
+	CurrentPassword    string `json:"current_password" binding:"required"`
+	NewPassword        string `json:"new_password" binding:"required"`
+	ConfirmNewPassword string `json:"confirm_new_password" binding:"required"`
+}
+
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }

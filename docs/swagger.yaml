@@ -400,7 +400,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/validate-bvn:
+  /auth/validate/bvn:
     post:
       tags:
         - Auth
@@ -443,7 +443,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/validate-nin:
+  /auth/validate/nin:
     post:
       tags:
         - Auth
@@ -530,8 +530,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/password/resetshow:
-    post:
+  /auth/password/reset:
+    patch:
       tags:
         - Auth
       summary: Reset password with OTP
@@ -570,6 +570,300 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Password reset failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/forgot:
+    post:
+      tags:
+        - Auth
+      summary: Request transaction PIN reset OTP
+      description: Sends a transaction PIN reset OTP to the account phone number for a recognized device. Uses the authenticated user's identity from the Bearer token.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: PIN reset OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id is required or invalid phone number on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/reset:
+    patch:
+      tags:
+        - Auth
+      summary: Reset transaction PIN with OTP
+      description: Verifies a PIN reset OTP and updates the user's transaction PIN.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetTransactionPinRequest"
+      responses:
+        "200":
+          description: Transaction PIN reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id required, OTP code required, pin validation failed, or pins don't match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid device id, invalid OTP, or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/change/request:
+    post:
+      tags:
+        - Auth
+      summary: Request transaction PIN change OTP
+      description: Sends a transaction PIN change OTP to the account phone number. Requires the device to be active and allowed.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: PIN change OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id required or invalid phone number on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found, user not found, or device not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/change:
+    patch:
+      tags:
+        - Auth
+      summary: Change transaction PIN with OTP
+      description: Verifies a PIN change OTP and replaces the user's current transaction PIN with a new one.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeTransactionPinRequest"
+      responses:
+        "200":
+          description: Transaction PIN changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id required, OTP code required, pin validation failed, current pin wrong, or pins don't match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found, device not allowed, invalid OTP, or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/password/change/request:
+    post:
+      tags:
+        - Auth
+      summary: Request password change OTP
+      description: Sends a password change OTP to the account phone number. Requires the device to be active.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Password change OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id required or invalid phone number on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/password/change:
+    patch:
+      tags:
+        - Auth
+      summary: Change password with OTP
+      description: Verifies a password change OTP and replaces the user's current password with a new one.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Device id required, OTP code required, password validation failed, current password wrong, or passwords don't match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid device id, invalid OTP, or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -3524,6 +3818,70 @@ components:
           type: boolean
           description: True if there are additional pages of transactions available.
           example: true
+    ResetTransactionPinRequest:
+      type: object
+      required:
+        - otp_code
+        - new_pin
+        - confirm_new_pin
+      properties:
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        new_pin:
+          type: string
+          example: "4321"
+        confirm_new_pin:
+          type: string
+          example: "4321"
+    ChangeTransactionPinRequest:
+      type: object
+      required:
+        - otp_code
+        - current_pin
+        - new_pin
+        - confirm_new_pin
+      properties:
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        current_pin:
+          type: string
+          example: "1234"
+        new_pin:
+          type: string
+          example: "4321"
+        confirm_new_pin:
+          type: string
+          example: "4321"
+    ChangePasswordRequest:
+      type: object
+      required:
+        - otp_code
+        - current_password
+        - new_password
+        - confirm_new_password
+      properties:
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        current_password:
+          type: string
+          example: OldP@ssword1
+        new_password:
+          type: string
+          minLength: 8
+          example: NewP@ssword1
+        confirm_new_password:
+          type: string
+          minLength: 8
+          example: NewP@ssword1
     ProvidusCreditPayload:
       type: object
       properties:

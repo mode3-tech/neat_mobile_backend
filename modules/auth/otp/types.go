@@ -5,10 +5,12 @@ type Channel string
 type Provider string
 
 const (
-	PurposeLogin         Purpose = "login"
-	PurposeSignup        Purpose = "signup"
-	PurposePasswordReset Purpose = "password_reset"
-	PurposePinReset      Purpose = "pin_reset"
+	PurposeLogin          Purpose = "login"
+	PurposeSignup         Purpose = "signup"
+	PurposePasswordReset  Purpose = "password_reset"
+	PurposePasswordChange Purpose = "password_change"
+	PurposePinReset       Purpose = "pin_reset"
+	PurposePinChange      Purpose = "pin_change"
 )
 
 const (

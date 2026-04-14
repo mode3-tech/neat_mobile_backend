@@ -47,7 +47,9 @@ func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.
 func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
 	var u models.User
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id", "email", "phone").Where("id = ?", userID).First(&u).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").
+		Where("id = ?", userID).
+		First(&u).Error; err != nil {
 		return nil, err
 	}
 
@@ -249,6 +251,10 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models
 
 func (r *Repository) UpdateUserPin(ctx context.Context, userID, newPinHash string) error {
 	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Update("pin_hash", newPinHash).Error
+}
+
+func (r *Repository) UpdateUserPassword(ctx context.Context, userID, newPasswordHash string) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND password IS NOT NULL", userID).Update("password", newPasswordHash).Error
 }
 
 func (r *Repository) UpdateCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {

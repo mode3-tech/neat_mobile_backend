@@ -75,6 +75,10 @@ func (s *stubStore) MarkNotificationTicketReceipt(_ context.Context, _ string, _
 	return nil
 }
 
+func (s *stubStore) IsNotificationsEnabled(ctx context.Context, userID string) (bool, error) {
+	return true, nil
+}
+
 type stubSender struct {
 	tickets []ExpoPushTicket
 	err     error

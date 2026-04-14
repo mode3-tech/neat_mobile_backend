@@ -833,6 +833,102 @@ func isResetPinUnauthorizedError(err error) bool {
 	return false
 }
 
+func (h *Handler) RequestPasswordChange(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	if err := h.service.RequestPasswordChange(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isRequestPasswordChangeBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isRequestPasswordChangeUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP has been sent to your phone"})
+}
+
+func isRequestPasswordChangeBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required", "invalid phone number on account":
+		return true
+	}
+	return false
+}
+
+func isRequestPasswordChangeUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func (h *Handler) ChangePassword(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if err := h.service.ChangePassword(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
+		if isChangePasswordBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isChangePasswordUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
+}
+
+func isChangePasswordBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required",
+		"otp code is required",
+		"password length should be at least 8 characters long",
+		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+		"new password and confirm new password do not match":
+		return true
+	}
+	return false
+}
+
+func isChangePasswordUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "invalid device id", "invalid otp", "user not found":
+		return true
+	}
+	return false
+}
+
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 
@@ -881,5 +977,102 @@ func isUnauthorizedResetPasswordError(err error) bool {
 		return true
 	}
 
+	return false
+}
+
+func (h *Handler) RequestTransactionPinChange(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	if err := h.service.RequestTransactionPinChange(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isRequestTransactionPinChangeBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isRequestTransactionPinChangeUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP has been sent to your phone"})
+}
+
+func isRequestTransactionPinChangeBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required", "invalid phone number on account":
+		return true
+	}
+	return false
+}
+
+func isRequestTransactionPinChangeUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func (h *Handler) ChangeTransactionPin(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var req ChangeTransactionPinRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if err := h.service.ChangeTransactionPin(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
+		if isChangeTransactionPinBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isChangeTransactionPinUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "transaction pin successfully changed"})
+}
+
+func isChangeTransactionPinBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required",
+		"otp code is required",
+		"transaction pin must be exactly 4 digits long",
+		"transaction pin must contain only digits",
+		"new pin and confirm new pin do not match",
+		"invalid current pin":
+		return true
+	}
+	return false
+}
+
+func isChangeTransactionPinUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device not found", "device not allowed", "invalid otp", "user not found":
+		return true
+	}
 	return false
 }
