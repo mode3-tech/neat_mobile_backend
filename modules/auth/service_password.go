@@ -93,7 +93,7 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 		return err
 	}
 
-	if err := s.validateCurrentPassword(ctx, user, req.CurrentPassword); err != nil {
+	if err := s.validateCurrentPassword(user, req.CurrentPassword); err != nil {
 		return err
 	}
 
@@ -308,7 +308,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	})
 }
 
-func (s *Service) validateCurrentPassword(ctx context.Context, user *models.User, currentPassword string) error {
+func (s *Service) validateCurrentPassword(user *models.User, currentPassword string) error {
 	if user == nil {
 		return errors.New("user not found")
 	}
