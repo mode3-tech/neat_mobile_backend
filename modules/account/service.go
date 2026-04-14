@@ -11,6 +11,8 @@ import (
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -103,6 +105,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 	}
 
 	job, err := s.repo.CreateAccountReportJob(ctx, &AccountReportJob{
+		ID:           uuid.NewString(),
 		MobileUserID: mobileUserID,
 		WalletID:     user.WalletID,
 		Type:         "account_statement",
