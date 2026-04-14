@@ -94,6 +94,26 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		return "", errors.New("device ID is required")
 	}
 
+	if req.DateFrom.IsZero() {
+		return "", errors.New("date_from is required")
+	}
+	if req.DateTo.IsZero() {
+		return "", errors.New("date_to is required")
+	}
+	now := time.Now().UTC()
+	if req.DateFrom.After(now) {
+		return "", errors.New("date_from cannot be in the future")
+	}
+	if req.DateTo.After(now) {
+		return "", errors.New("date_to cannot be in the future")
+	}
+	if !req.DateFrom.Before(req.DateTo) {
+		return "", errors.New("date_from must be before date_to")
+	}
+	if req.DateTo.Sub(req.DateFrom) > 365*24*time.Hour {
+		return "", errors.New("date range cannot exceed 365 days")
+	}
+
 	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to verify device: %w", err)

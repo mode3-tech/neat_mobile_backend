@@ -1,6 +1,7 @@
 package s3bucket
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"time"
@@ -50,11 +51,17 @@ func NewBackblazeClient(cfg BackblazeConfig) (*BackblazeClient, error) {
 }
 
 func (b *BackblazeClient) Upload(ctx context.Context, key string, body io.Reader, contentType string) error {
-	_, err := b.s3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(b.bucket),
-		Key:         aws.String(key),
-		Body:        body,
-		ContentType: aws.String(contentType),
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.s3.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(b.bucket),
+		Key:           aws.String(key),
+		Body:          bytes.NewReader(data),
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(int64(len(data))),
 	})
 
 	return err
