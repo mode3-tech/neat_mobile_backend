@@ -12,6 +12,7 @@ import (
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/push"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -62,14 +63,32 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notification.RegisterInternalRoutes(internalV1, notificationHandler, internalAuth)
 
 	c := cron.New(cron.WithLocation(time.UTC))
+
+	var mu sync.Mutex
+	var running bool
+
 	c.AddFunc("@every 5m", func() {
+		mu.Lock()
+		if running {
+			mu.Unlock()
+			log.Print("previous notification receipt poll is still running; skipping this run")
+			return
+		}
+		defer func() {
+			running = false
+			mu.Unlock()
+		}()
+		running = true
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if err := notificationService.ProcessPendingReceipts(ctx); err != nil {
 			log.Printf("receipt poll: %v", err)
 		}
 	})
-	c.Start()
+
+	go func() {
+		c.Start()
+	}()
 
 	stopCron := func() { <-c.Stop().Done() }
 	return r, stopCron, nil

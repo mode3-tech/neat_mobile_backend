@@ -31,6 +31,7 @@ import (
 	"neat_mobile_app_backend/providers/sms"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -131,15 +132,36 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	c := cron.New(cron.WithLocation(time.UTC))
 
+	var mu sync.Mutex
+	var running bool
+
+	var stmtMu sync.Mutex
+	var stmtRunning bool
+
 	c.AddFunc("@every 10m", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		mu.Lock()
+		if running {
+			mu.Unlock()
+			return
+		}
+		running = true
+		mu.Unlock()
+
+		defer func() {
+			mu.Lock()
+			running = false
+			mu.Unlock()
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 		if err := authService.SyncPendingCBACustomers(ctx); err != nil {
 			log.Printf("cba sync sweep: %v", err)
 		}
 	})
 
-	c.Start()
+	go func() {
+		c.Start()
+	}()
 
 	stopCron := func() {
 		<-c.Stop().Done()
@@ -176,7 +198,23 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
 
 	c.AddFunc("@every 30s", func() {
-		accountService.ProcessPendingStatementJobs(context.Background())
+		stmtMu.Lock()
+		if stmtRunning {
+			stmtMu.Unlock()
+			return
+		}
+		stmtRunning = true
+		stmtMu.Unlock()
+
+		defer func() {
+			stmtMu.Lock()
+			stmtRunning = false
+			stmtMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		accountService.ProcessPendingStatementJobs(ctx)
 	})
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
