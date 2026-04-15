@@ -3,22 +3,18 @@ package account
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
-	apptemplates "neat_mobile_app_backend/templates"
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
+	"github.com/go-pdf/fpdf"
 	"github.com/google/uuid"
 )
 
@@ -309,23 +305,6 @@ func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID s
 	return nil
 }
 
-type statementTemplateData struct {
-	AccountName   string
-	AccountNumber string
-	StartDate     string
-	EndDate       string
-	Transactions  []statementRow
-}
-
-type statementRow struct {
-	Date        string
-	Description string
-	Reference   string
-	Debit       string
-	Credit      string
-	Balance     string
-}
-
 func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -337,7 +316,62 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 		return fmt.Errorf("failed to retrieve account info for PDF: %w", err)
 	}
 
-	rows := make([]statementRow, 0, len(transactions))
+	pdf := fpdf.New("L", "mm", "A4", "")
+	pdf.SetMargins(10, 10, 10)
+	pdf.AddPage()
+
+	// header band
+	pdf.SetFillColor(31, 78, 121)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Arial", "B", 16)
+	pdf.CellFormat(277, 12, "ACCOUNT STATEMENT", "", 1, "C", true, 0, "")
+	pdf.Ln(4)
+
+	// account info
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(45, 6, "Name:", "", 0, "L", false, 0, "")
+	pdf.SetFont("Arial", "B", 10)
+	pdf.CellFormat(0, 6, strings.TrimSpace(account.FirstName+" "+account.LastName), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(45, 6, "Account Number:", "", 0, "L", false, 0, "")
+	pdf.SetFont("Arial", "B", 10)
+	pdf.CellFormat(0, 6, account.AccountNumber, "", 1, "L", false, 0, "")
+
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(45, 6, "Period:", "", 0, "L", false, 0, "")
+	pdf.SetFont("Arial", "B", 10)
+	pdf.CellFormat(0, 6, req.DateFrom.Format("Jan 02, 2006")+" - "+req.DateTo.Format("Jan 02, 2006"), "", 1, "L", false, 0, "")
+	pdf.Ln(5)
+
+	// table columns
+	type col struct {
+		label string
+		width float64
+		align string
+	}
+	cols := []col{
+		{"Date", 38, "L"},
+		{"Description", 80, "L"},
+		{"Reference", 55, "L"},
+		{"Debit (NGN)", 30, "R"},
+		{"Credit (NGN)", 30, "R"},
+		{"Balance (NGN)", 34, "R"},
+	}
+
+	// table header
+	pdf.SetFillColor(31, 78, 121)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Arial", "B", 9)
+	for _, c := range cols {
+		pdf.CellFormat(c.width, 8, c.label, "1", 0, c.align, true, 0, "")
+	}
+	pdf.Ln(-1)
+
+	// table rows
+	pdf.SetFont("Arial", "", 8)
+	fill := false
 	for _, tx := range transactions {
 		debit, credit := "", ""
 		amount := fmt.Sprintf("%.2f", float64(tx.Amount)/100)
@@ -346,62 +380,47 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 		} else {
 			credit = amount
 		}
-		rows = append(rows, statementRow{
-			Date:        tx.CreatedAt.Format("Jan 02, 2006 15:04"),
-			Description: tx.Description,
-			Reference:   tx.Reference,
-			Debit:       debit,
-			Credit:      credit,
-			Balance:     fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100),
-		})
+
+		if fill {
+			pdf.SetFillColor(235, 242, 250)
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+		pdf.SetTextColor(0, 0, 0)
+
+		rowVals := []struct {
+			val   string
+			width float64
+			align string
+		}{
+			{tx.CreatedAt.Format("Jan 02 2006 15:04"), cols[0].width, cols[0].align},
+			{tx.Description, cols[1].width, cols[1].align},
+			{tx.Reference, cols[2].width, cols[2].align},
+			{debit, cols[3].width, cols[3].align},
+			{credit, cols[4].width, cols[4].align},
+			{fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100), cols[5].width, cols[5].align},
+		}
+		for _, cell := range rowVals {
+			pdf.CellFormat(cell.width, 7, cell.val, "B", 0, cell.align, fill, 0, "")
+		}
+		pdf.Ln(-1)
+		fill = !fill
 	}
 
-	tmpl, err := template.ParseFS(apptemplates.FS, "account_statement.html")
-	if err != nil {
-		return fmt.Errorf("failed to parse statement template: %w", err)
-	}
+	// footer
+	pdf.Ln(6)
+	pdf.SetTextColor(120, 120, 120)
+	pdf.SetFont("Arial", "I", 8)
+	pdf.CellFormat(0, 6, "System generated statement — no signature required.", "", 0, "C", false, 0, "")
 
 	var buf bytes.Buffer
-	if err = tmpl.Execute(&buf, statementTemplateData{
-		AccountName:   strings.TrimSpace(account.FirstName + " " + account.LastName),
-		AccountNumber: account.AccountNumber,
-		StartDate:     req.DateFrom.Format("Jan 02, 2006"),
-		EndDate:       req.DateTo.Format("Jan 02, 2006"),
-		Transactions:  rows,
-	}); err != nil {
-		return fmt.Errorf("failed to render statement template: %w", err)
+	if err := pdf.Output(&buf); err != nil {
+		return fmt.Errorf("failed to generate PDF: %w", err)
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
-	url := "data:text/html;base64," + encoded
+	log.Printf("generatePDF: size=%d bytes for key=%s", buf.Len(), key)
 
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, chromedp.DefaultExecAllocatorOptions[:]...)
-	defer cancelAlloc()
-	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
-	defer cancelBrowser()
-
-	var pdfBuf []byte
-
-	if err = chromedp.Run(browserCtx,
-		chromedp.Navigate(url),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			buf, _, err := page.PrintToPDF().WithPrintBackground(true).Do(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to generate PDF: %w", err)
-			}
-			pdfBuf = buf
-			return nil
-		}),
-	); err != nil {
-		return fmt.Errorf("failed to create PDF with chromedp: %w", err)
-	}
-
-	log.Printf("generatePDF: pdfBuf size=%d bytes for key=%s", len(pdfBuf), key)
-	if len(pdfBuf) == 0 {
-		return fmt.Errorf("chromedp produced empty PDF buffer for key=%s", key)
-	}
-
-	if err := s.b2.Upload(ctx, key, bytes.NewReader(pdfBuf), "application/pdf"); err != nil {
+	if err := s.b2.Upload(ctx, key, bytes.NewReader(buf.Bytes()), "application/pdf"); err != nil {
 		return fmt.Errorf("failed to upload account statement PDF to storage: %w", err)
 	}
 
