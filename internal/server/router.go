@@ -135,9 +135,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	var mu sync.Mutex
 	var running bool
 
-	var stmtMu sync.Mutex
-	var stmtRunning bool
-
 	c.AddFunc("@every 10m", func() {
 		mu.Lock()
 		if running {
@@ -196,26 +193,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
-
-	c.AddFunc("@every 30s", func() {
-		stmtMu.Lock()
-		if stmtRunning {
-			stmtMu.Unlock()
-			return
-		}
-		stmtRunning = true
-		stmtMu.Unlock()
-
-		defer func() {
-			stmtMu.Lock()
-			stmtRunning = false
-			stmtMu.Unlock()
-		}()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		accountService.ProcessPendingStatementJobs(ctx)
-	})
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
