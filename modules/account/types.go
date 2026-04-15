@@ -1,5 +1,7 @@
 package account
 
+import "time"
+
 type ReportStatus string
 
 const (
@@ -20,6 +22,7 @@ type AccountSummaryRow struct {
 	ID               string
 	FirstName        string
 	LastName         string
+	DOB              time.Time
 	Email            string
 	Phone            string
 	BVN              string

@@ -90,7 +90,7 @@ func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResu
 		var smsMsg string
 		switch in.Purpose {
 		case PurposePasswordReset:
-			smsMsg = fmt.Sprintf("Your password reset code is %s. It expires in %d minutes. Do not share this code with anyone.", code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("Your password reset OTP is %s. It expires in %d minutes. Do not share this OTP with anyone.", code, int(ttl.Minutes()))
 		case PurposeLogin:
 			smsMsg = fmt.Sprintf("Your login OTP is %s. It expires in %d minutes. Do not share this code with anyone.", code, int(ttl.Minutes()))
 		default:

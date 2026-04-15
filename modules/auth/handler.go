@@ -686,55 +686,81 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
 	}
 
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
 	if err := h.service.ForgotPassword(c.Request.Context(), req, deviceID); err != nil {
-		if isNoUserForgotPasswordError(err) {
-			switch err.Error() {
-			case "no account exists under this phone number":
-				h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-				return
-			default:
-				h.respondError(c, http.StatusUnauthorized, "no account exists under this phone number", err)
-				return
-			}
+		if isForgotPasswordBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
 		}
-		if isOTPForgotPasswordError(err) {
-			switch err.Error() {
-			case "error occured while saving otp":
-				h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
-				return
-			}
+		if isForgotPasswordUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
 		}
-
+		if isForgotPasswordRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Otp has been sent your phone as sms"})
-
+	c.JSON(http.StatusOK, gin.H{"message": "OTP has been sent to your phone"})
 }
 
-func isNoUserForgotPasswordError(err error) bool {
+func isForgotPasswordBadRequestError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "no account exists under this phone number":
-		return true
-	case "no record of device found":
+	case "device id is required", "phone is required", "invalid Nigerian number":
 		return true
 	}
 	return false
 }
 
-func isOTPForgotPasswordError(err error) bool {
+func isForgotPasswordUnauthorizedError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "error occured while saving otp":
+	case "no account exists under this phone number", "device not found", "device not allowed":
 		return true
 	}
 	return false
+}
+
+func isForgotPasswordRateLimitedError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "too many requests"
+}
+
+func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
+	var req ForgotPasswordRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	deviceID := c.Request.Header.Get("X-Device-ID")
+
+	if err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req, deviceID); err != nil {
+		if isForgotPasswordBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isForgotPasswordUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		if isForgotPasswordRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
 }
 
 func (h *Handler) ForgotTransactionPin(c *gin.Context) {
@@ -778,6 +804,57 @@ func isForgotPinUnauthorizedError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func (h *Handler) ResendForgotTransactionPinOTP(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	if err := h.service.ResendForgotTransactionPinOTP(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isResendForgotPinBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isResendForgotPinUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		if isResendForgotPinRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
+}
+
+func isResendForgotPinBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required":
+		return true
+	}
+	return false
+}
+
+func isResendForgotPinUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func isResendForgotPinRateLimitedError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "too many requests"
 }
 
 func (h *Handler) ResetTransactionPin(c *gin.Context) {
@@ -876,6 +953,58 @@ func isRequestPasswordChangeUnauthorizedError(err error) bool {
 	return false
 }
 
+func (h *Handler) ResendPasswordChangeOTP(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	if err := h.service.ResendPasswordChangeOTP(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isResendPasswordChangeOTPBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isResendPasswordChangeOTPUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+
+		if isResendPasswordChangeOTPRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
+}
+
+func isResendPasswordChangeOTPBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required":
+		return true
+	}
+	return false
+}
+
+func isResendPasswordChangeOTPUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func isResendPasswordChangeOTPRateLimitedError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "too many requests"
+}
+
 func (h *Handler) ChangePassword(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
 	if strings.TrimSpace(mobileUserID) == "" {
@@ -961,9 +1090,12 @@ func isBadRequestResetPasswordError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
 	case "device id is required",
-		"reset code is required",
+		"phone is required",
+		"otp code is required",
 		"password length should be at least 8 characters long",
-		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character":
+		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+		"new password and confirm new password do not match",
+		"invalid Nigerian number":
 		return true
 	}
 
@@ -973,7 +1105,7 @@ func isBadRequestResetPasswordError(err error) bool {
 func isUnauthorizedResetPasswordError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "invalid device id", "invalid reset code", "no account exists under this phone number":
+	case "device not found", "device not allowed", "invalid otp", "no account exists under this phone number":
 		return true
 	}
 
@@ -1021,6 +1153,57 @@ func isRequestTransactionPinChangeUnauthorizedError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func (h *Handler) ResendRequestTransactionPinChangeOTP(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	if err := h.service.ResendTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		if isResendRequestTransactionPinChangeBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isResendRequestTransactionPinChangeUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+
+		if isResendRequestTransactionPinChangeRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
+}
+
+func isResendRequestTransactionPinChangeBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required":
+		return true
+	}
+	return false
+}
+
+func isResendRequestTransactionPinChangeUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "no record of device found", "user not found":
+		return true
+	}
+	return false
+}
+
+func isResendRequestTransactionPinChangeRateLimitedError(err error) bool {
+	return strings.TrimSpace(err.Error()) == "too many requests"
 }
 
 func (h *Handler) ChangeTransactionPin(c *gin.Context) {

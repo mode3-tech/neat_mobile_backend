@@ -19,15 +19,19 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.POST("/validate/bvn", handler.VerifyBVN)
 		auth.POST("/validate/nin", handler.VerifyNIN)
 		auth.POST("/password/forgot", handler.ForgotPassword)
+		auth.POST("/password/forgot/resend", handler.ResendForgotPasswordOTP)
 		auth.PATCH("/password/reset", handler.ResetPassword)
 
 		// Protected routes
 		auth.POST("/logout", authGuard, handler.Logout)
 		auth.POST("/pin/forgot", authGuard, handler.ForgotTransactionPin)
+		auth.POST("/pin/forgot/resend", authGuard, handler.ResendForgotTransactionPinOTP)
 		auth.PATCH("/pin/reset", authGuard, handler.ResetTransactionPin)
 		auth.POST("/pin/change/request", authGuard, handler.RequestTransactionPinChange)
+		auth.POST("/pin/change/resend", authGuard, handler.ResendRequestTransactionPinChangeOTP)
 		auth.PATCH("/pin/change", authGuard, handler.ChangeTransactionPin)
 		auth.POST("/password/change/request", authGuard, handler.RequestPasswordChange)
+		auth.POST("/password/change/resend", authGuard, handler.ResendPasswordChangeOTP)
 		auth.PATCH("/password/change", authGuard, handler.ChangePassword)
 	}
 }

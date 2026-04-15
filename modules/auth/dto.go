@@ -125,8 +125,10 @@ type ForgotPasswordRequest struct {
 }
 
 type ResetPasswordRequest struct {
-	ResetCode string `json:"reset_code" binding:"required"`
-	Password  string `json:"password" binding:"password"`
+	Phone              string `json:"phone" binding:"required"`
+	OTPCode            string `json:"otp_code" binding:"required,len=6,numeric"`
+	NewPassword        string `json:"new_password" binding:"required"`
+	ConfirmNewPassword string `json:"confirm_new_password" binding:"required"`
 }
 
 type ResendNewDeviceOTPRequest struct {
