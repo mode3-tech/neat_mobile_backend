@@ -3,17 +3,22 @@ package account
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
+	apptemplates "neat_mobile_app_backend/templates"
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	"github.com/google/uuid"
 )
 
@@ -136,7 +141,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		return "", fmt.Errorf("failed to retrieve user: %w", err)
 	}
 
-	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.csv", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"))
+	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.%s", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"), req.Format)
 
 	job, err := s.repo.CreateAccountReportJob(ctx, &AccountReportJob{
 		ID:           uuid.NewString(),
@@ -227,6 +232,39 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID
 }
 
 func (s *Service) processAccountStatementRequest(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
+	format := strings.TrimSpace(string(req.Format))
+
+	switch format {
+	case "csv":
+		{
+			if err := s.generateCSV(ctx, key, walletID, mobileUserID, req); err != nil {
+				return fmt.Errorf("failed to generate account statement CSV: %w", err)
+			}
+			return nil
+		}
+	case "pdf":
+		if err := s.generatePDF(ctx, key, walletID, mobileUserID, req); err != nil {
+			return fmt.Errorf("failed to generate account statement PDF: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported account statement format: %s", format)
+	}
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return errors.New("user id is missing")
+	}
+
+	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve transactions: %w", err)
@@ -271,13 +309,100 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	return nil
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("user id is missing")
+type statementTemplateData struct {
+	AccountName   string
+	AccountNumber string
+	StartDate     string
+	EndDate       string
+	Transactions  []statementRow
+}
+
+type statementRow struct {
+	Date        string
+	Description string
+	Reference   string
+	Debit       string
+	Credit      string
+	Balance     string
+}
+
+func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
+	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve transactions: %w", err)
 	}
 
-	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
-		return err
+	account, err := s.repo.GetAccountSummary(ctx, mobileUserID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve account info for PDF: %w", err)
+	}
+
+	rows := make([]statementRow, 0, len(transactions))
+	for _, tx := range transactions {
+		debit, credit := "", ""
+		amount := fmt.Sprintf("%.2f", float64(tx.Amount)/100)
+		if tx.Type == transaction.TransactionTypeDebit {
+			debit = amount
+		} else {
+			credit = amount
+		}
+		rows = append(rows, statementRow{
+			Date:        tx.CreatedAt.Format("Jan 02, 2006 15:04"),
+			Description: tx.Description,
+			Reference:   tx.Reference,
+			Debit:       debit,
+			Credit:      credit,
+			Balance:     fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100),
+		})
+	}
+
+	tmpl, err := template.ParseFS(apptemplates.FS, "account_statement.html")
+	if err != nil {
+		return fmt.Errorf("failed to parse statement template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err = tmpl.Execute(&buf, statementTemplateData{
+		AccountName:   strings.TrimSpace(account.FirstName + " " + account.LastName),
+		AccountNumber: account.AccountNumber,
+		StartDate:     req.DateFrom.Format("Jan 02, 2006"),
+		EndDate:       req.DateTo.Format("Jan 02, 2006"),
+		Transactions:  rows,
+	}); err != nil {
+		return fmt.Errorf("failed to render statement template: %w", err)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+	url := "data:text/html;base64," + encoded
+
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, chromedp.DefaultExecAllocatorOptions[:]...)
+	defer cancelAlloc()
+	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
+	defer cancelBrowser()
+
+	var pdfBuf []byte
+
+	if err = chromedp.Run(browserCtx,
+		chromedp.Navigate(url),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			buf, _, err := page.PrintToPDF().WithPrintBackground(true).Do(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to generate PDF: %w", err)
+			}
+			pdfBuf = buf
+			return nil
+		}),
+	); err != nil {
+		return fmt.Errorf("failed to create PDF with chromedp: %w", err)
+	}
+
+	log.Printf("generatePDF: pdfBuf size=%d bytes for key=%s", len(pdfBuf), key)
+	if len(pdfBuf) == 0 {
+		return fmt.Errorf("chromedp produced empty PDF buffer for key=%s", key)
+	}
+
+	if err := s.b2.Upload(ctx, key, bytes.NewReader(pdfBuf), "application/pdf"); err != nil {
+		return fmt.Errorf("failed to upload account statement PDF to storage: %w", err)
 	}
 
 	return nil

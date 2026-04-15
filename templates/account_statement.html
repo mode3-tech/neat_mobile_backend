@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Statement</title>
+
+    <style>
+      @page {
+        size: A4;
+        margin: 20mm;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        color: #222;
+      }
+
+      /* HEADER */
+      .header {
+        text-align: center;
+        border-bottom: 2px solid #1f4e79;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 20px;
+        color: #1f4e79;
+      }
+
+      /* WATERMARK */
+      .watermark {
+        position: fixed;
+        top: 40%;
+        left: 20%;
+        font-size: 80px;
+        color: rgba(31, 78, 121, 0.08);
+        transform: rotate(-30deg);
+        z-index: -1;
+      }
+
+      /* INFO BOX */
+      .info {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin-bottom: 15px;
+      }
+
+      /* TABLE */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th {
+        background: #1f4e79;
+        color: white;
+        padding: 8px;
+      }
+
+      td {
+        border-bottom: 1px solid #eee;
+        padding: 8px;
+      }
+
+      /* PAGE BREAK */
+      .page-break {
+        page-break-after: always;
+      }
+
+      /* BALANCE COLORS */
+      .credit {
+        color: green;
+        font-weight: bold;
+      }
+      .debit {
+        color: red;
+        font-weight: bold;
+      }
+
+      /* FOOTER */
+      .footer {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 10px;
+        color: #777;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="watermark">CONFIDENTIAL</div>
+
+    <div class="header">
+      <h1>ACCOUNT STATEMENT</h1>
+      <p>Your Company Ltd</p>
+    </div>
+
+    <div class="info">
+      <p><b>Name:</b> {{.AccountName}}</p>
+      <p><b>Account:</b> {{.AccountNumber}}</p>
+      <p><b>Period:</b> {{.StartDate}} - {{.EndDate}}</p>
+    </div>
+
+    <h3>Transactions</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Description</th>
+          <th>Ref</th>
+          <th>Debit</th>
+          <th>Credit</th>
+          <th>Balance</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {{range .Transactions}}
+        <tr>
+          <td>{{.Date}}</td>
+          <td>{{.Description}}</td>
+          <td>{{.Reference}}</td>
+          <td class="debit">{{.Debit}}</td>
+          <td class="credit">{{.Credit}}</td>
+          <td>{{.Balance}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      System generated statement — no signature required.
+    </div>
+  </body>
+</html>

@@ -205,7 +205,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	url := p.BaseURL + "/transfer/bank"
 
 	payload := map[string]any{
-		"amount":        transferInfo.Amount,
+		"amount":        float64(transferInfo.Amount) / 100,
 		"sortCode":      transferInfo.SortCode,
 		"narration":     transferInfo.Narration,
 		"accountNumber": transferInfo.AccountNumber,

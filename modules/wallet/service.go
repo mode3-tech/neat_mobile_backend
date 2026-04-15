@@ -115,9 +115,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 
 	_ = s.repo.ResetPinAttempts(ctx, mobileUserID)
 
-	if amount := req.Amount; amount <= 0 {
+	if req.Amount <= 0 {
 		return nil, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidTransferRequest)
 	}
+	req.Amount = req.Amount * 100 // convert Naira → kobo for storage and downstream use
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	accountName := ""
 	if req.AccountName != nil {
