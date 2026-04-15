@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -110,6 +111,51 @@ func (r *Repository) GetPendingAccountReportJobs(ctx context.Context) ([]Account
 		Order("created_at ASC").
 		Find(&jobs).Error
 	return jobs, err
+}
+
+func (r *Repository) ClaimPendingAccountReportJobs(ctx context.Context, limit int) ([]AccountReportJob, error) {
+	if limit <= 0 {
+		return []AccountReportJob{}, nil
+	}
+
+	var jobs []AccountReportJob
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("status = ?", ReportStatusPending).
+			Order("created_at ASC").
+			Limit(limit).
+			Find(&jobs).Error; err != nil {
+			return err
+		}
+
+		if len(jobs) == 0 {
+			return nil
+		}
+
+		ids := make([]string, 0, len(jobs))
+		for i := range jobs {
+			ids = append(ids, jobs[i].ID)
+		}
+
+		if err := tx.
+			Model(&AccountReportJob{}).
+			Where("id IN ?", ids).
+			Update("status", ReportStatusProcessing).Error; err != nil {
+			return err
+		}
+
+		for i := range jobs {
+			jobs[i].Status = ReportStatusProcessing
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
 }
 
 func (r *Repository) MarkJobProcessing(ctx context.Context, jobID string) error {

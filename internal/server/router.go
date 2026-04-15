@@ -156,14 +156,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	})
 
-	go func() {
-		c.Start()
-	}()
-
-	stopCron := func() {
-		<-c.Stop().Done()
-	}
-
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
 	loanHandler := loanproduct.NewHandler(loanService)
@@ -194,6 +186,65 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
 
+	const statementWorkerCount = 4
+
+	statementJobQueue := make(chan account.AccountReportJob, statementWorkerCount)
+	var statementWorkerWG sync.WaitGroup
+	for workerID := 1; workerID <= statementWorkerCount; workerID++ {
+		statementWorkerWG.Add(1)
+		go func(id int) {
+			defer statementWorkerWG.Done()
+			for job := range statementJobQueue {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				accountService.ProcessStatementJob(ctx, job)
+				cancel()
+			}
+		}(workerID)
+	}
+
+	var stmtDispatchMu sync.Mutex
+	var stmtDispatchRunning bool
+
+	c.AddFunc("@every 30s", func() {
+		stmtDispatchMu.Lock()
+		if stmtDispatchRunning {
+			stmtDispatchMu.Unlock()
+			return
+		}
+		stmtDispatchRunning = true
+		stmtDispatchMu.Unlock()
+
+		defer func() {
+			stmtDispatchMu.Lock()
+			stmtDispatchRunning = false
+			stmtDispatchMu.Unlock()
+		}()
+
+		queueSlots := cap(statementJobQueue) - len(statementJobQueue)
+		if queueSlots <= 0 {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		jobs, err := accountService.ClaimPendingStatementJobs(ctx, queueSlots)
+		if err != nil {
+			log.Printf("statement job dispatch: %v", err)
+			return
+		}
+
+		for _, job := range jobs {
+			statementJobQueue <- job
+		}
+	})
+
+	stopCron := func() {
+		<-c.Stop().Done()
+		close(statementJobQueue)
+		statementWorkerWG.Wait()
+	}
+
 	internalLoanRepo := loanproduct.NewInternalRepository(db)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
 	internalLoanHandler := loanproduct.NewInternalHandler(internalLoanService)
@@ -207,6 +258,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	reportingService := reporting.NewService(reportingRepo)
 	reportingHandler := reporting.NewHandler(reportingService)
 	reporting.RegisterInternalRoutes(internalV1, reportingHandler, internalAuth)
+
+	go func() {
+		c.Start()
+	}()
 
 	return r, stopCron, nil
 }

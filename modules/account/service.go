@@ -160,42 +160,44 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 }
 
 func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
-	jobs, err := s.repo.GetPendingAccountReportJobs(ctx)
+	jobs, err := s.repo.ClaimPendingAccountReportJobs(ctx, 1)
 	if err != nil {
 		return
 	}
 
 	for _, job := range jobs {
-
-		if err := s.repo.MarkJobProcessing(ctx, job.ID); err != nil {
-			fmt.Printf("failed to mark account report job %s as processing: %v\n", job.ID, err)
-			continue
-		}
-
-		if err := s.processAccountStatementRequest(ctx, job.FilePath, job.WalletID, job.MobileUserID, AccountStatementRequest{
-			DateFrom: *job.DateFrom,
-			DateTo:   *job.DateTo,
-			Format:   job.Format,
-		}); err != nil {
-			s.repo.MarkJobFailed(ctx, job.ID, err.Error())
-			continue
-		}
-
-		s.repo.MarkJobReady(ctx, job.ID)
-
-		s.notifier.SendToUser(
-			ctx,
-			job.MobileUserID,
-			"Your statement is ready",
-			"transaction",
-			fmt.Sprintf("Your account statement for the period %s to %s is ready for download.",
-				job.DateFrom.Format("2006-01-02"),
-				job.DateTo.Format("2006-01-02")),
-			map[string]any{
-				"job_id": job.ID,
-			},
-		)
+		s.ProcessStatementJob(ctx, job)
 	}
+}
+
+func (s *Service) ClaimPendingStatementJobs(ctx context.Context, limit int) ([]AccountReportJob, error) {
+	return s.repo.ClaimPendingAccountReportJobs(ctx, limit)
+}
+
+func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob) {
+	if err := s.processAccountStatementRequest(ctx, job.FilePath, job.WalletID, job.MobileUserID, AccountStatementRequest{
+		DateFrom: *job.DateFrom,
+		DateTo:   *job.DateTo,
+		Format:   job.Format,
+	}); err != nil {
+		s.repo.MarkJobFailed(ctx, job.ID, err.Error())
+		return
+	}
+
+	s.repo.MarkJobReady(ctx, job.ID)
+
+	s.notifier.SendToUser(
+		ctx,
+		job.MobileUserID,
+		"Your statement is ready",
+		"transaction",
+		fmt.Sprintf("Your account statement for the period %s to %s is ready for download.",
+			job.DateFrom.Format("2006-01-02"),
+			job.DateTo.Format("2006-01-02")),
+		map[string]any{
+			"job_id": job.ID,
+		},
+	)
 }
 
 func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID string) (*AccountReportJob, string, error) {
