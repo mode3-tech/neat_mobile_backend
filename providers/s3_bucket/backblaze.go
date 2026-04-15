@@ -65,8 +65,8 @@ func (b *BackblazeClient) FileURL(key string) string {
 	return fmt.Sprintf("%s/file/%s/%s", b.bucket.BaseURL(), b.bucket.Name(), key)
 }
 
-func (b *BackblazeClient) PresignURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	obj := b.bucket.Object(key)
+func (b *BackblazeClient) PresignURL(ctx context.Context, filePath string, ttl time.Duration) (string, error) {
+	obj := b.bucket.Object(filePath)
 	url, err := obj.AuthURL(ctx, ttl, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate auth URL: %w", err)

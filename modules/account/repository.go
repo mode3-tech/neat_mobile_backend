@@ -129,12 +129,21 @@ func (r *Repository) MarkJobFailed(ctx context.Context, jobID string, errMsg str
 		}).Error
 }
 
-func (r *Repository) MarkJobReady(ctx context.Context, jobID, filePath string) error {
+func (r *Repository) MarkJobReady(ctx context.Context, jobID string) error {
 	return r.db.WithContext(ctx).
 		Model(&AccountReportJob{}).
 		Where("id = ?", jobID).
 		Updates(map[string]any{
-			"status":    ReportStatusReady,
-			"file_path": filePath,
+			"status": ReportStatusReady,
+		}).Error
+}
+
+func (r *Repository) SaveDownloadURL(ctx context.Context, jobID, url string, expiresAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&AccountReportJob{}).
+		Where("id = ?", jobID).
+		Updates(map[string]any{
+			"download_url":   url,
+			"url_expires_at": expiresAt,
 		}).Error
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
@@ -135,12 +136,15 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		return "", fmt.Errorf("failed to retrieve user: %w", err)
 	}
 
+	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.csv", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"))
+
 	job, err := s.repo.CreateAccountReportJob(ctx, &AccountReportJob{
 		ID:           uuid.NewString(),
 		MobileUserID: mobileUserID,
 		WalletID:     user.WalletID,
 		Type:         "account_statement",
-		Status:       "pending",
+		FilePath:     filePath,
+		Status:       ReportStatusPending,
 		DateFrom:     &req.DateFrom,
 		DateTo:       &req.DateTo,
 		Format:       req.Format,
@@ -167,9 +171,7 @@ func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
 			continue
 		}
 
-		filePath := fmt.Sprintf("statements/%s.csv", job.ID)
-
-		if err := s.processAccountStatementRequest(ctx, filePath, job.WalletID, job.MobileUserID, AccountStatementRequest{
+		if err := s.processAccountStatementRequest(ctx, job.FilePath, job.WalletID, job.MobileUserID, AccountStatementRequest{
 			DateFrom: *job.DateFrom,
 			DateTo:   *job.DateTo,
 			Format:   job.Format,
@@ -178,7 +180,7 @@ func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
 			continue
 		}
 
-		s.repo.MarkJobReady(ctx, job.ID, filePath)
+		s.repo.MarkJobReady(ctx, job.ID)
 
 		s.notifier.SendToUser(
 			ctx,
@@ -207,12 +209,20 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID
 
 	var downloadURL string
 	if job.Status == ReportStatusReady && job.FilePath != "" {
-		downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, 15*time.Minute)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to generate download link for account statement: %w", err)
+		if job.DownloadURL == "" || job.URLExpiresAt == nil || time.Until(*job.URLExpiresAt) < 5*time.Minute {
+			expiry := 15 * time.Minute
+			downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, expiry)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to generate download link for account statement: %w", err)
+			}
+			expiresAt := time.Now().Add(expiry)
+			if err := s.repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
+				return nil, "", fmt.Errorf("failed to save download URL for account statement: %w", err)
+			}
+		} else {
+			downloadURL = job.DownloadURL
 		}
 	}
-
 	return job, downloadURL, nil
 }
 
