@@ -27,7 +27,7 @@ func (r *VerificationRepo) GetVerificationByID(ctx context.Context, id string) (
 	var rec models.VerificationRecord
 	result := r.db.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("id = ? AND status = ?", id, models.VerificationStatusPending).
+		Where("id = ?", id).
 		Limit(1).
 		Find(&rec)
 	if result.Error != nil {

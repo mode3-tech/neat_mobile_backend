@@ -59,6 +59,10 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	now := time.Now().UTC()
 	expiresAt := now.Add(15 * time.Minute)
 	maskedNIN := MaskSub(nin)
+	normalizedPhoneNumber, err := NormalizeNigerianNumber(resp.Data.TelephoneNo)
+	if err != nil {
+		return nil, err
+	}
 
 	record := &models.VerificationRecord{
 		ID:            verificationID,
@@ -72,7 +76,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		UpdatedAt:     now,
 		VerifiedID:    &nin,
 		VerifiedName:  &fullName,
-		VerifiedPhone: &resp.Data.TelephoneNo,
+		VerifiedPhone: &normalizedPhoneNumber,
 		VerifiedDOB:   &resp.Data.BirthDate,
 		VerifiedEmail: &resp.Data.Email,
 	}
@@ -178,7 +182,11 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		record.VerifiedName = &fullName
 	}
 	if phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber); phone != "" {
-		record.VerifiedPhone = &phone
+		normalizedPhoneNumber, err := NormalizeNigerianNumber(phone)
+		if err != nil {
+			return nil, err
+		}
+		record.VerifiedPhone = &normalizedPhoneNumber
 	}
 	if email := strings.TrimSpace(bvnDetails.Data.Details.Email); email != "" {
 		record.VerifiedEmail = &email
@@ -291,7 +299,11 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		record.VerifiedName = &fullName
 	}
 	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
-		record.VerifiedPhone = &phone
+		normalizedPhoneNumber, err := NormalizeNigerianNumber(phone)
+		if err != nil {
+			return nil, err
+		}
+		record.VerifiedPhone = &normalizedPhoneNumber
 	}
 	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
 		record.VerifiedEmail = &email

@@ -511,15 +511,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/ForgotPasswordResponse"
         "400":
-          description: Invalid request body
+          description: Invalid request body, phone required, or invalid phone number
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Account not found for phone number or device not recognized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests
           content:
             application/json:
               schema:
@@ -555,9 +561,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/ResendForgotPasswordOTPResponse"
         "400":
-          description: Invalid request body
+          description: Invalid request body, phone required, or invalid phone number
           content:
             application/json:
               schema:
@@ -580,12 +586,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/password/forgot/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify password reset OTP
+      description: Verifies the password reset OTP using the `otp_id` returned from the forgot step. Returns a `verification_id` (valid for 15 minutes) to be passed to the reset step.
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyForgotPasswordOTPRequest"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyForgotPasswordOTPResponse"
+        "400":
+          description: Invalid request body, device id required, otp id required, or otp code required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/password/reset:
     patch:
       tags:
         - Auth
-      summary: Reset password with OTP
-      description: Verifies a password reset OTP, marks it as used, and updates the user's password hash.
+      summary: Reset password with verification ID
+      description: Consumes the `verification_id` obtained from the verify step and updates the user's password. The verification_id expires 15 minutes after the OTP was verified.
       parameters:
         - in: header
           name: X-Device-ID
@@ -607,13 +657,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
         "400":
-          description: Invalid request body, missing reset code, or invalid password format
+          description: Invalid request body, phone required, verification id required, or invalid password format
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid device id, reset code, or user context
+          description: Device not found, device not allowed, invalid verification id, verification id expired, or no account exists under this phone number
           content:
             application/json:
               schema:
@@ -987,7 +1037,7 @@ paths:
       tags:
         - Auth
       summary: Request password change OTP
-      description: Sends a password change OTP to the account phone number. Requires the device to be active.
+      description: Sends a password change OTP to the account phone number. Returns an `otp_id` to be passed to the verify step. Requires the device to be active.
       parameters:
         - in: header
           name: Authorization
@@ -1009,7 +1059,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/RequestChangePasswordResponse"
         "400":
           description: Device id required or invalid phone number on account
           content:
@@ -1028,12 +1078,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/password/change/resend:
+    post:
+      tags:
+        - Auth
+      summary: Resend password change OTP
+      description: Resends the password change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResendPasswordChangeOTPResponse"
+        "400":
+          description: Device id is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/password/change/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify password change OTP
+      description: Verifies the password change OTP using the `otp_id` returned from the request step. Returns a `verification_id` (valid for 15 minutes) to be passed to the change step.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPasswordChangeOTPRequest"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyPasswordChangeOTPResponse"
+        "400":
+          description: Invalid request body, device id required, otp id required, or otp code required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found, device not allowed, user not found, or invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/password/change:
     patch:
       tags:
         - Auth
-      summary: Change password with OTP
-      description: Verifies a password change OTP and replaces the user's current password with a new one.
+      summary: Change password with verification ID
+      description: Consumes the `verification_id` obtained from the verify step and replaces the user's current password. The verification_id expires 15 minutes after the OTP was verified.
       parameters:
         - in: header
           name: Authorization
@@ -1063,13 +1217,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
         "400":
-          description: Device id required, OTP code required, password validation failed, current password wrong, or passwords don't match
+          description: Device id required, verification id required, password validation failed, or passwords don't match
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid device id, invalid OTP, or user not found
+          description: Device not found, device not allowed, user not found, invalid current password, invalid verification id, or verification id expired
           content:
             application/json:
               schema:
@@ -3087,18 +3241,122 @@ components:
         phone:
           type: string
           example: "08012345678"
-    ResetPasswordRequest:
+    ForgotPasswordResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP has been sent to your phone
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    ResendForgotPasswordOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP resent successfully
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    VerifyForgotPasswordOTPRequest:
       type: object
       required:
-        - reset_code
-        - password
+        - otp_id
+        - otp_code
       properties:
-        reset_code:
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        otp_code:
           type: string
           minLength: 6
           maxLength: 6
           example: "123456"
-        password:
+    VerifyForgotPasswordOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP verified successfully
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    RequestChangePasswordResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been sent to your phone
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    ResendPasswordChangeOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP resent successfully
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    VerifyPasswordChangeOTPRequest:
+      type: object
+      required:
+        - otp_id
+        - otp_code
+      properties:
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+    VerifyPasswordChangeOTPResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP verified successfully
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    ResetPasswordRequest:
+      type: object
+      required:
+        - phone
+        - verification_id
+        - new_password
+        - confirm_new_password
+      properties:
+        phone:
+          type: string
+          example: "08012345678"
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        new_password:
+          type: string
+          minLength: 8
+          example: NewStrongP@ss1
+        confirm_new_password:
           type: string
           minLength: 8
           example: NewStrongP@ss1
@@ -4127,16 +4385,15 @@ components:
     ChangePasswordRequest:
       type: object
       required:
-        - otp_code
+        - verification_id
         - current_password
         - new_password
         - confirm_new_password
       properties:
-        otp_code:
+        verification_id:
           type: string
-          minLength: 6
-          maxLength: 6
-          example: "123456"
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         current_password:
           type: string
           example: OldP@ssword1

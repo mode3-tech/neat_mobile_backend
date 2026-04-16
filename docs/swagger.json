@@ -819,13 +819,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/ForgotPasswordResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request body",
+            "description": "Invalid request body, phone required, or invalid phone number",
             "content": {
               "application/json": {
                 "schema": {
@@ -836,6 +836,16 @@
           },
           "401": {
             "description": "Account not found for phone number or device not recognized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
             "content": {
               "application/json": {
                 "schema": {
@@ -891,13 +901,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/ResendForgotPasswordOTPResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request body",
+            "description": "Invalid request body, phone required, or invalid phone number",
             "content": {
               "application/json": {
                 "schema": {
@@ -928,6 +938,78 @@
           },
           "500": {
             "description": "Failed to resend password reset OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password/forgot/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify password reset OTP",
+        "description": "Verifies the password reset OTP using the `otp_id` returned from the forgot step. Returns a `verification_id` (valid for 15 minutes) to be passed to the reset step.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyForgotPasswordOTPRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verified successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyForgotPasswordOTPResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body, device id required, otp id required, or otp code required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {

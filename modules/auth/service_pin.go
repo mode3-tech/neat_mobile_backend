@@ -14,31 +14,31 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, deviceID string) error {
+func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, deviceID string) (*ForgotTransactionPinResponse, error) {
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
-		return errors.New("device id is required")
+		return nil, errors.New("device id is required")
 	}
 
 	if s.otpManager == nil {
-		return errors.New("otp manager not configured")
+		return nil, errors.New("otp manager not configured")
 	}
 
 	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
+		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
-		return errors.New("user not found")
+		return nil, errors.New("user not found")
 	}
 
 	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
-		return errors.New("invalid phone number on account")
+		return nil, errors.New("invalid phone number on account")
 	}
 
-	_, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
 		Purpose:     authotp.PurposePinReset,
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
@@ -47,18 +47,73 @@ func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, device
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
-	return err
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &ForgotTransactionPinResponse{
+		Status:  "success",
+		Message: "OTP has been sent to your phone",
+		OTPID:   result.OTPID,
+	}, err
+}
+
+func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserID, deviceID string, req VerifyForgotTransactionPinOTPRequest) (*VerifyForgotTransactionPinOTPResponse, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user is required")
+	}
+
+	if strings.TrimSpace(req.OTPID) == "" {
+		return nil, errors.New("otp id is required")
+	}
+
+	if strings.TrimSpace(req.OTPCode) == "" {
+		return nil, errors.New("otp code is required")
+	}
+
+	if s.otpManager == nil {
+		return nil, errors.New("otp manager not configured")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
+		Purpose: authotp.PurposePinChange,
+		OTPID:   strings.TrimSpace(req.OTPID),
+		Code:    strings.TrimSpace(req.OTPCode),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.New("otp verification failed")
+	}
+
+	return &VerifyForgotTransactionPinOTPResponse{
+		Status:         "succes",
+		Message:        "OTP verified successfully",
+		VerificationID: result.VerificationID,
+	}, nil
 }
 
 func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ResetTransactionPinRequest) error {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
+	if strings.TrimSpace(deviceID) == "" {
 		return errors.New("device id is required")
 	}
 
-	otpCode := strings.TrimSpace(req.OTPCode)
-	if otpCode == "" {
-		return errors.New("otp code is required")
+	if strings.TrimSpace(mobileUserID) == "" {
+		return errors.New("mobile user id is required")
+	}
+
+	if strings.TrimSpace(req.VerificationID) == "" {
+		return errors.New("verification id is required")
 	}
 
 	if err := validators.ValidatePin(req.NewPin); err != nil {
@@ -69,62 +124,54 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceI
 		return errors.New("new pin and confirm new pin do not match")
 	}
 
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, mobileUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+
 	if s.tx == nil {
 		return errors.New("transaction manager not configured")
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		otpRepo := authotp.NewOTPRepository(txDB)
+		verRepo := verification.NewVerification(txDB)
 		serviceRepo := NewRespository(txDB)
-
-		if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-			return err
-		}
-
-		user, err := s.repo.GetUserByID(ctx, mobileUserID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("user not found")
-			}
-			return err
-		}
 
 		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return errors.New("invalid phone number on account")
 		}
-
-		activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, authotp.PurposePinReset)
+		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err
 		}
-		if activeOTP == nil {
-			return errors.New("invalid otp")
+
+		if rec == nil {
+			return errors.New("invalid verification id")
 		}
 
-		maxAttempts := activeOTP.MaxAttempts
-		if maxAttempts <= 0 {
-			maxAttempts = 5
-		}
-		if activeOTP.AttemptCount >= maxAttempts {
-			return errors.New("invalid otp")
+		if rec.Status != models.VerificationStatusVerified {
+			return errors.New("invalid verification id")
 		}
 
-		hashedOTP, err := authotp.HashOTP(s.otpPepper, authotp.PurposePinReset, normalizedPhone, otpCode)
-		if err != nil {
-			return errors.New("invalid otp")
-		}
-
-		if !authotp.HashEqualHex(hashedOTP, activeOTP.OTPHash) {
-			if err := otpRepo.IncrementAttempt(ctx, activeOTP.ID); err != nil {
-				return err
-			}
-			return errors.New("invalid otp")
+		if rec.VerifiedPhone == nil || rec.VerifiedPhone != &normalizedPhone {
+			return errors.New("invalid verification id")
 		}
 
 		now := time.Now().UTC()
-		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
-			return err
+		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
+			return errors.New("verification id has expired")
+		}
+
+		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
+			return errors.New("invalid verification id")
 		}
 
 		hashedPin, err := HashPassword(req.NewPin)
@@ -311,7 +358,7 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		verRepo := verification.NewVerification(txDB)
-
+		serviceRepo := NewRespository(txDB)
 		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err
@@ -346,7 +393,7 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 			return err
 		}
 
-		return s.repo.UpdateUserPin(ctx, mobileUserID, hashedPin)
+		return serviceRepo.UpdateUserPin(ctx, mobileUserID, hashedPin)
 	})
 }
 

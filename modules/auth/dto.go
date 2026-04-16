@@ -54,10 +54,27 @@ type VerifyDeviceRequest struct {
 	DeviceID  string `json:"device_id" binding:"required"`
 }
 
+type ForgotTransactionPinResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
+type VerifyForgotTransactionPinOTPRequest struct {
+	OTPID   string `json:"otp_id" binding:"required"`
+	OTPCode string `json:"otp_code" binding:"required"`
+}
+
+type VerifyForgotTransactionPinOTPResponse struct {
+	Status         string `json:"status"`
+	Message        string `json:"message"`
+	VerificationID string `json:"verification_id"`
+}
+
 type ResetTransactionPinRequest struct {
-	OTPCode       string `json:"otp_code" binding:"required,len=6,numeric"`
-	NewPin        string `json:"new_pin" binding:"required"`
-	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
+	VerificationID string `json:"verification_id" binding:"required"`
+	NewPin         string `json:"new_pin" binding:"required"`
+	ConfirmNewPin  string `json:"confirm_new_pin" binding:"required"`
 }
 
 type RequestTransactionPinChangeResponse struct {
@@ -87,8 +104,25 @@ type ChangeTransactionPinRequest struct {
 	ConfirmNewPin  string `json:"confirm_new_pin" binding:"required"`
 }
 
+type RequestChangePasswordResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
+type VerifyPasswordChangeOTPRequest struct {
+	OTPID   string `json:"otp_id" binding:"required"`
+	OTPCode string `json:"otp_code" binding:"required"`
+}
+
+type VerifyPasswordChangeOTPResponse struct {
+	Status         string `json:"status"`
+	Message        string `json:"message"`
+	VerificationID string `json:"verification_id"`
+}
+
 type ChangePasswordRequest struct {
-	OTPCode            string `json:"otp_code" binding:"required,len=6,numeric"`
+	VerificationID     string `json:"verification_id" binding:"required"`
 	CurrentPassword    string `json:"current_password" binding:"required"`
 	NewPassword        string `json:"new_password" binding:"required"`
 	ConfirmNewPassword string `json:"confirm_new_password" binding:"required"`
@@ -144,11 +178,36 @@ type ForgotPasswordRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }
 
+type ForgotPasswordResponse struct {
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
+type ResendForgotPasswordOTPResponse struct {
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
+type VerifyForgotPasswordOTPRequest struct {
+	OTPID   string `json:"otp_id" binding:"required"`
+	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
+}
+
+type VerifyForgotPasswordOTPResponse struct {
+	Message        string `json:"message"`
+	VerificationID string `json:"verification_id"`
+}
+
 type ResetPasswordRequest struct {
 	Phone              string `json:"phone" binding:"required"`
-	OTPCode            string `json:"otp_code" binding:"required,len=6,numeric"`
+	VerificationID     string `json:"verification_id" binding:"required"`
 	NewPassword        string `json:"new_password" binding:"required"`
 	ConfirmNewPassword string `json:"confirm_new_password" binding:"required"`
+}
+
+type ResendPasswordChangeOTPResponse struct {
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
 }
 
 type ResendNewDeviceOTPRequest struct {

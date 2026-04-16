@@ -20,6 +20,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.POST("/validate/nin", handler.VerifyNIN)
 		auth.POST("/password/forgot", handler.ForgotPassword)
 		auth.POST("/password/forgot/resend", handler.ResendForgotPasswordOTP)
+		auth.POST("/password/forgot/verify", handler.VerifyForgotPasswordOTP)
 		auth.PATCH("/password/reset", handler.ResetPassword)
 
 		// Protected routes
@@ -33,6 +34,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.PATCH("/pin/change", authGuard, handler.ChangeTransactionPin)
 		auth.POST("/password/change/request", authGuard, handler.RequestPasswordChange)
 		auth.POST("/password/change/resend", authGuard, handler.ResendPasswordChangeOTP)
+		auth.POST("/password/change/verify", authGuard, handler.VerifyPasswordChangeOTP)
 		auth.PATCH("/password/change", authGuard, handler.ChangePassword)
 	}
 }
