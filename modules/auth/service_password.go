@@ -380,7 +380,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		verRepo := verification.NewVerification(txDB)
-
+		serviceRepo := NewRespository(txDB)
 		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err
@@ -406,15 +406,8 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 			return errors.New("invalid verification id")
 		}
 
-		result := txDB.WithContext(ctx).
-			Model(&models.User{}).
-			Where("id = ?", user.ID).
-			Update("password_hash", hashedPassword)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return errors.New("no account exists under this phone number")
+		if err := serviceRepo.UpdateUserPassword(ctx, user.ID, hashedPassword); err != nil {
+			return err
 		}
 
 		return nil
