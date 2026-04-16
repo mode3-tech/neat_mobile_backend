@@ -8,17 +8,18 @@ type AccountSummaryResponse struct {
 }
 
 type AccountSummary struct {
-	FullName         string       `json:"full_name"`
-	Email            string       `json:"email,omitempty"`
-	PhoneNumber      string       `json:"phone_number"`
-	DOB              time.Time    `json:"dob"`
-	Address          string       `json:"address"`
-	BVN              string       `json:"bvn"`
-	BankName         string       `json:"bank_name"`
-	AccountNumber    string       `json:"account_number"`
-	AvailableBalance int64        `json:"available_balance"`
-	LoanBalance      float64      `json:"loan_balance"`
-	ActiveLoans      []ActiveLoan `json:"active_loans"`
+	FullName               string       `json:"full_name"`
+	Email                  string       `json:"email,omitempty"`
+	PhoneNumber            string       `json:"phone_number"`
+	DOB                    time.Time    `json:"dob"`
+	Address                string       `json:"address"`
+	BVN                    string       `json:"bvn"`
+	BankName               string       `json:"bank_name"`
+	AccountNumber          string       `json:"account_number"`
+	AvailableBalance       int64        `json:"available_balance"`
+	LoanBalance            float64      `json:"loan_balance"`
+	ActiveLoans            []ActiveLoan `json:"active_loans"`
+	IsNotificationsEnabled bool         `json:"is_notifications_enabled"`
 }
 
 type ActiveLoan struct {

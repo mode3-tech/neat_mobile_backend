@@ -43,6 +43,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 		Select(`wallet_users.id, 
 			wallet_users.first_name,
 			wallet_users.last_name,
+			wallet_users.is_notifications_enabled,
 			wallet_users.email,
 			wallet_users.dob,
 			wallet_users.phone, 

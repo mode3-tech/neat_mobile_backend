@@ -19,17 +19,18 @@ const (
 )
 
 type AccountSummaryRow struct {
-	ID               string
-	FirstName        string
-	LastName         string
-	DOB              time.Time
-	Email            string
-	Phone            string
-	BVN              string
-	BankName         string
-	Address          string
-	AccountNumber    string
-	AvailableBalance int64
-	BookedBalance    int64
-	InternalWalletID string
+	ID                     string
+	FirstName              string
+	LastName               string
+	DOB                    time.Time
+	Email                  string
+	Phone                  string
+	BVN                    string
+	BankName               string
+	Address                string
+	AccountNumber          string
+	AvailableBalance       int64
+	BookedBalance          int64
+	InternalWalletID       string
+	IsNotificationsEnabled bool
 }
