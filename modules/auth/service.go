@@ -37,7 +37,7 @@ type Service struct {
 	cbaCustomerUpdater CBACustomerUpdater
 	verification       *verification.VerificationRepo
 	tx                 *tx.Transactor
-	deviceRepo         *device.DeviceRepository
+	deviceRepo         *device.Repository
 	smsSender          notify.SMSSender
 	otpPepper          string
 	jwtSigner          JWTSigner
@@ -57,7 +57,7 @@ func NewService(
 	cbaCustomerUpdater CBACustomerUpdater,
 	verification *verification.VerificationRepo,
 	tx *tx.Transactor,
-	deviceRepo *device.DeviceRepository,
+	deviceRepo *device.Repository,
 	smsSender notify.SMSSender,
 	otpPepper string,
 	jwtSigner JWTSigner,

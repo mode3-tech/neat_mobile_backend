@@ -27,6 +27,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.POST("/logout", authGuard, handler.Logout)
 		auth.POST("/pin/forgot", authGuard, handler.ForgotTransactionPin)
 		auth.POST("/pin/forgot/resend", authGuard, handler.ResendForgotTransactionPinOTP)
+		auth.POST("/pin/forgot/verify", authGuard, handler.VerifyForgotTransactionPinOTP)
 		auth.PATCH("/pin/reset", authGuard, handler.ResetTransactionPin)
 		auth.POST("/pin/change/request", authGuard, handler.RequestTransactionPinChange)
 		auth.POST("/pin/change/resend", authGuard, handler.ResendRequestTransactionPinChangeOTP)

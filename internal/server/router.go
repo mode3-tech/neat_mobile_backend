@@ -102,7 +102,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Print("CBA provider source is not fully configured; defaulting BVN validation to Tendar-first fallback")
 	}
 	transactor := tx.NewTransactor(db)
-	deviceRepo := device.NewDeviceRepository(db)
+	deviceRepo := device.NewRepository(db)
 
 	authRepo := auth.NewRespository(db)
 	verificationRepo := verification.NewVerification(db)

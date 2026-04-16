@@ -10,19 +10,19 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type DeviceRepository struct {
+type Repository struct {
 	db *gorm.DB
 }
 
-func NewDeviceRepository(db *gorm.DB) *DeviceRepository {
-	return &DeviceRepository{db: db}
+func NewRepository(db *gorm.DB) *Repository {
+	return &Repository{db: db}
 }
 
-func (r *DeviceRepository) Save(ctx context.Context, device *UserDevice) error {
+func (r *Repository) Save(ctx context.Context, device *UserDevice) error {
 	return r.db.WithContext(ctx).Create(device).Error
 }
 
-func (r *DeviceRepository) FindDevice(ctx context.Context, userID, deviceID string) (*UserDevice, error) {
+func (r *Repository) FindDevice(ctx context.Context, userID, deviceID string) (*UserDevice, error) {
 	var device UserDevice
 	if err := r.db.WithContext(ctx).Model(&UserDevice{}).Select("*").Where("user_id = ? AND device_id = ?", userID, deviceID).First(&device).Error; err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (r *DeviceRepository) FindDevice(ctx context.Context, userID, deviceID stri
 	return &device, nil
 }
 
-func (r *DeviceRepository) CreateChallenge(ctx context.Context, ch *DeviceChallenge) error {
+func (r *Repository) CreateChallenge(ctx context.Context, ch *DeviceChallenge) error {
 	now := time.Now().UTC()
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -55,7 +55,7 @@ func (r *DeviceRepository) CreateChallenge(ctx context.Context, ch *DeviceChalle
 	})
 }
 
-func (r *DeviceRepository) GetChallengeByHash(ctx context.Context, challengeHash string) (*DeviceChallenge, error) {
+func (r *Repository) GetChallengeByHash(ctx context.Context, challengeHash string) (*DeviceChallenge, error) {
 	var challenge DeviceChallenge
 	if err := r.db.WithContext(ctx).Model(&DeviceChallenge{}).Select("*").Where("challenge_hash = ?", challengeHash).First(&challenge).Error; err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (r *DeviceRepository) GetChallengeByHash(ctx context.Context, challengeHash
 	return &challenge, nil
 }
 
-func (r *DeviceRepository) MarkChallengeUsed(ctx context.Context, id string, now time.Time) (bool, error) {
+func (r *Repository) MarkChallengeUsed(ctx context.Context, id string, now time.Time) (bool, error) {
 	result := r.db.WithContext(ctx).
 		Model(&DeviceChallenge{}).
 		Where("id = ? AND used_at IS NULL", id).
@@ -79,18 +79,18 @@ func (r *DeviceRepository) MarkChallengeUsed(ctx context.Context, id string, now
 	return result.RowsAffected == 1, nil
 }
 
-func (r *DeviceRepository) UpdateLastUsed(ctx context.Context, userID, deviceID string, now time.Time) error {
+func (r *Repository) UpdateLastUsed(ctx context.Context, userID, deviceID string, now time.Time) error {
 	return r.db.WithContext(ctx).
 		Model(&UserDevice{}).
 		Where("user_id = ? AND device_id = ?", userID, deviceID).
 		Update("last_used_at", now).Error
 }
 
-func (r *DeviceRepository) CreatePendingSession(ctx context.Context, session *models.PendingDeviceSession) error {
+func (r *Repository) CreatePendingSession(ctx context.Context, session *models.PendingDeviceSession) error {
 	return r.db.WithContext(ctx).Create(session).Error
 }
 
-func (r *DeviceRepository) GetPendingSessionByHash(ctx context.Context, tokenHash string) (*models.PendingDeviceSession, error) {
+func (r *Repository) GetPendingSessionByHash(ctx context.Context, tokenHash string) (*models.PendingDeviceSession, error) {
 	var session models.PendingDeviceSession
 	if err := r.db.WithContext(ctx).
 		Model(&models.PendingDeviceSession{}).
@@ -103,7 +103,7 @@ func (r *DeviceRepository) GetPendingSessionByHash(ctx context.Context, tokenHas
 	return &session, nil
 }
 
-func (r *DeviceRepository) MarkPendingSessionUsed(ctx context.Context, id string, now time.Time) (bool, error) {
+func (r *Repository) MarkPendingSessionUsed(ctx context.Context, id string, now time.Time) (bool, error) {
 	result := r.db.WithContext(ctx).
 		Model(&models.PendingDeviceSession{}).
 		Where("id = ? AND used_at IS NULL", id).
@@ -118,7 +118,7 @@ func (r *DeviceRepository) MarkPendingSessionUsed(ctx context.Context, id string
 	return result.RowsAffected == 1, nil
 }
 
-func (r *DeviceRepository) UpsertDevicePublicKey(ctx context.Context, device *UserDevice) error {
+func (r *Repository) UpsertDevicePublicKey(ctx context.Context, device *UserDevice) error {
 	if device == nil {
 		return gorm.ErrInvalidData
 	}
@@ -155,7 +155,7 @@ func (r *DeviceRepository) UpsertDevicePublicKey(ctx context.Context, device *Us
 		Create(&safeInsert).Error
 }
 
-func (r *DeviceRepository) ActivateAndTrustDevice(ctx context.Context, userID, deviceID string, now time.Time, ip string) error {
+func (r *Repository) ActivateAndTrustDevice(ctx context.Context, userID, deviceID string, now time.Time, ip string) error {
 	updates := map[string]any{
 		"is_trusted":   true,
 		"is_active":    true,
@@ -180,7 +180,7 @@ func (r *DeviceRepository) ActivateAndTrustDevice(ctx context.Context, userID, d
 	return nil
 }
 
-func (r *DeviceRepository) DeactivateDevice(ctx context.Context, userID, deviceID string) error {
+func (r *Repository) DeactivateDevice(ctx context.Context, userID, deviceID string) error {
 	result := r.db.WithContext(ctx).
 		Model(&UserDevice{}).
 		Where("user_id = ? AND device_id = ?", userID, deviceID).
@@ -194,7 +194,7 @@ func (r *DeviceRepository) DeactivateDevice(ctx context.Context, userID, deviceI
 	return nil
 }
 
-func (r *DeviceRepository) RefreshPendingSession(ctx context.Context, id, otpRef string, expiresAt, now time.Time) error {
+func (r *Repository) RefreshPendingSession(ctx context.Context, id, otpRef string, expiresAt, now time.Time) error {
 	return r.db.WithContext(ctx).
 		Model(&models.PendingDeviceSession{}).
 		Where("id = ? AND used_at IS NULL", id).

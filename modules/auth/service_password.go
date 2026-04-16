@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, deviceID string) (*RequestChangePasswordResponse, error) {
 	if strings.TrimSpace(deviceID) == "" {
 		return nil, errors.New("device id is required")
@@ -285,10 +284,6 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 		return nil, err
 	}
 
-	if _, err := s.verifyUserDevice(ctx, user.ID, deviceID); err != nil {
-		return nil, err
-	}
-
 	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
 		Purpose:     authotp.PurposePasswordReset,
 		Channel:     authotp.ChannelSMS,
@@ -371,10 +366,6 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 
 	user, normalizedPhone, err := s.resolvePasswordResetTarget(ctx, req.Phone)
 	if err != nil {
-		return err
-	}
-
-	if _, err := s.verifyUserDevice(ctx, user.ID, deviceID); err != nil {
 		return err
 	}
 

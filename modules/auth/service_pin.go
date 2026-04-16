@@ -85,7 +85,7 @@ func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserI
 	}
 
 	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
-		Purpose: authotp.PurposePinChange,
+		Purpose: authotp.PurposePinReset,
 		OTPID:   strings.TrimSpace(req.OTPID),
 		Code:    strings.TrimSpace(req.OTPCode),
 	})
@@ -97,7 +97,7 @@ func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserI
 	}
 
 	return &VerifyForgotTransactionPinOTPResponse{
-		Status:         "succes",
+		Status:         "success",
 		Message:        "OTP verified successfully",
 		VerificationID: result.VerificationID,
 	}, nil

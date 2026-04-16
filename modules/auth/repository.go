@@ -274,9 +274,21 @@ func (r *Repository) GetUsersWithoutCoreCustomerID(ctx context.Context, limit in
 	return rows, err
 }
 
-func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string, isEnabled bool) error {
-	return r.db.WithContext(ctx).
+func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string) (bool, error) {
+	if err := r.db.WithContext(ctx).
 		Model(models.User{}).
-		Where("id = ? AND is_biometrics_enabled != ?", mobileUserID, isEnabled).
-		Update("is_biometrics_enabled", isEnabled).Error
+		Where("id = ?", mobileUserID).
+		Update("is_biometrics_enabled", gorm.Expr("NOT is_biometrics_enabled")).Error; err != nil {
+		return false, err
+	}
+
+	var user models.User
+	if err := r.db.WithContext(ctx).
+		Select("is_biometrics_enabled").
+		Where("id = ?", mobileUserID).
+		First(&user).Error; err != nil {
+		return false, err
+	}
+
+	return *user.IsBiometricsEnabled, nil
 }

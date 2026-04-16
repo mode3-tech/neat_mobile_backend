@@ -72,7 +72,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) 
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		authRepo := NewRespository(txDB)
-		deviceRepo := device.NewDeviceRepository(txDB)
+		deviceRepo := device.NewRepository(txDB)
 		walletRepo := wallet.NewRepository(txDB)
 
 		_, txErr := s.createUser(ctx, authRepo, req, mobileUserID, internalWalletID)

@@ -14,14 +14,14 @@ import (
 )
 
 type DeviceService struct {
-	repo DeviceRepository
+	repo Repository
 }
 
 const challengeTTL = 5 * time.Minute
 
 var ErrDeviceNotEligible = errors.New("device not eligible for challenge")
 
-func NewDeviceService(repo DeviceRepository) *DeviceService {
+func NewDeviceService(repo Repository) *DeviceService {
 	return &DeviceService{repo: repo}
 }
 

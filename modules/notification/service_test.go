@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"neat_mobile_app_backend/models"
+	"neat_mobile_app_backend/modules/device"
 	"testing"
 	"time"
 )
@@ -77,6 +78,18 @@ func (s *stubStore) MarkNotificationTicketReceipt(_ context.Context, _ string, _
 
 func (s *stubStore) IsNotificationsEnabled(ctx context.Context, userID string) (bool, error) {
 	return true, nil
+}
+
+func (s *stubStore) TogglePushNotifications(ctx context.Context, mobileUserID string) (bool, error) {
+	return true, nil
+}
+
+func (s *stubStore) IsVerifiedDevice(ctx context.Context, mobileUserID string, deviceID string) bool {
+	return true
+}
+
+func (s *stubStore) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
+	return nil, nil
 }
 
 type stubSender struct {

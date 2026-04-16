@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"neat_mobile_app_backend/models"
+	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
 
@@ -25,6 +26,9 @@ type Store interface {
 	CreateNotificationTickets(ctx context.Context, rows []models.NotificationTicket) error
 	ListPendingNotificationTickets(ctx context.Context, limit int) ([]models.NotificationTicket, error)
 	MarkNotificationTicketReceipt(ctx context.Context, expoTicketID string, receiptStatus, receiptMessage, receiptError *string, checkedAt time.Time) error
+	TogglePushNotifications(ctx context.Context, mobileUserID string) (bool, error)
+	IsVerifiedDevice(ctx context.Context, mobileUserID string, deviceID string) bool
+	FindDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }
 
 type Repository struct {
@@ -35,22 +39,22 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) IsNotificationsEnabled(ctx context.Context, userID string) (bool, error) {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
+func (r *Repository) IsNotificationsEnabled(ctx context.Context, mobileUserID string) (bool, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
 		return false, errors.New("user id is required")
 	}
 
 	var user models.User
-	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("notifications_enabled").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("notifications_enabled").Where("id = ?", mobileUserID).First(&user).Error; err != nil {
 		return false, err
 	}
 
-	if user.NotificationsEnabled == nil {
+	if user.IsNotificationsEnabled == nil {
 		return false, nil
 	}
 
-	return *user.NotificationsEnabled, nil
+	return *user.IsNotificationsEnabled, nil
 }
 
 func (r *Repository) UpsertToken(ctx context.Context, row *models.PushToken) error {
@@ -301,4 +305,44 @@ func trimmedStringPtr(value *string) *string {
 	}
 
 	return &trimmed
+}
+
+func (r *Repository) TogglePushNotifications(ctx context.Context, mobileUserID string) (bool, error) {
+	if err := r.db.WithContext(ctx).
+		Model(models.User{}).
+		Where("id = ?", mobileUserID).
+		Update("is_notifications_enabled", gorm.Expr("NOT is_notifications_enabled")).Error; err != nil {
+		return false, err
+	}
+
+	var user models.User
+	if err := r.db.WithContext(ctx).
+		Select("is_notifications_enabled").
+		Where("id = ?", mobileUserID).
+		First(&user).Error; err != nil {
+		return false, err
+	}
+
+	return *user.IsNotificationsEnabled, nil
+}
+
+func (r *Repository) IsVerifiedDevice(ctx context.Context, mobileUserID string, deviceID string) bool {
+	err := r.db.WithContext(ctx).
+		Model(device.UserDevice{}).
+		Where("user_id = ? AND device_id = ? AND is_trusted = ? AND is_active = ?", mobileUserID, deviceID, true, true).Error
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func (r *Repository) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
+	var result device.UserDevice
+	if err := r.db.WithContext(ctx).
+		Model(&device.UserDevice{}).
+		Select("*").Where("user_id = ? AND device_id = ?", mobileUserID, deviceID).
+		First(&result).Error; err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

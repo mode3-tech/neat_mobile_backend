@@ -679,7 +679,7 @@ paths:
       tags:
         - Auth
       summary: Request transaction PIN reset OTP
-      description: Sends a transaction PIN reset OTP to the account phone number for a recognized device. Uses the authenticated user's identity from the Bearer token.
+      description: Sends a transaction PIN reset OTP to the account phone number. Returns an `otp_id` to be passed to the verify step.
       parameters:
         - in: header
           name: Authorization
@@ -701,7 +701,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/ForgotTransactionPinResponse"
         "400":
           description: Device id is required or invalid phone number on account
           content:
@@ -772,12 +772,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/forgot/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify transaction PIN reset OTP
+      description: Verifies the PIN reset OTP using the `otp_id` returned from the forgot step. Returns a `verification_id` (valid for 15 minutes) to be passed to the reset step.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyForgotTransactionPinOTPRequest"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyForgotTransactionPinOTPResponse"
+        "400":
+          description: Invalid request body, device id required, otp id required, or otp code required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found, device not allowed, user not found, or invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/pin/reset:
     patch:
       tags:
         - Auth
-      summary: Reset transaction PIN with OTP
-      description: Verifies a PIN reset OTP and updates the user's transaction PIN.
+      summary: Reset transaction PIN with verification ID
+      description: Consumes the `verification_id` obtained from the verify step and updates the user's transaction PIN. The verification_id expires 15 minutes after the OTP was verified.
       parameters:
         - in: header
           name: Authorization
@@ -807,13 +859,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
         "400":
-          description: Device id required, OTP code required, pin validation failed, or pins don't match
+          description: Device id required, verification id required, pin validation failed, or pins don't match
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid device id, invalid OTP, or user not found
+          description: Device not found, device not allowed, user not found, invalid verification id, or verification id expired
           content:
             application/json:
               schema:
@@ -4757,18 +4809,58 @@ components:
           type: boolean
           description: True if there are additional pages of transactions available.
           example: true
-    ResetTransactionPinRequest:
+    ForgotTransactionPinResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been sent to your phone
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    VerifyForgotTransactionPinOTPRequest:
       type: object
       required:
+        - otp_id
         - otp_code
-        - new_pin
-        - confirm_new_pin
       properties:
+        otp_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         otp_code:
           type: string
           minLength: 6
           maxLength: 6
           example: "123456"
+    VerifyForgotTransactionPinOTPResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP verified successfully
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    ResetTransactionPinRequest:
+      type: object
+      required:
+        - verification_id
+        - new_pin
+        - confirm_new_pin
+      properties:
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         new_pin:
           type: string
           example: "4321"

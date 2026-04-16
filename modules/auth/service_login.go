@@ -100,7 +100,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 	var authObj *VerifiedDeviceResponse
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		deviceRepo := device.NewDeviceRepository(txDB)
+		deviceRepo := device.NewRepository(txDB)
 		otpRepo := authotp.NewOTPRepository(txDB)
 		authRepo := NewRespository(txDB)
 
@@ -227,7 +227,7 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 
 	var sessionToken string
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		deviceRepo := device.NewDeviceRepository(txDB)
+		deviceRepo := device.NewRepository(txDB)
 		token, err := s.createPendingDeviceSession(ctx, deviceRepo, userID, deviceID, ip, otpResult.OTPID)
 		if err != nil {
 			return err
@@ -245,7 +245,7 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 	}, nil
 }
 
-func (s *Service) createPendingDeviceSession(ctx context.Context, deviceRepo *device.DeviceRepository, userID, deviceID, ip, otpRef string) (string, error) {
+func (s *Service) createPendingDeviceSession(ctx context.Context, deviceRepo *device.Repository, userID, deviceID, ip, otpRef string) (string, error) {
 	repo := deviceRepo
 	if repo == nil {
 		repo = s.deviceRepo
@@ -374,7 +374,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		deviceRepo := device.NewDeviceRepository(txDB)
+		deviceRepo := device.NewRepository(txDB)
 		authRepo := NewRespository(txDB)
 
 		sum := sha256.Sum256([]byte(req.SessionToken))
@@ -415,7 +415,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 	})
 }
 
-func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID string, req ToggleBiometricsRequest) (*ToggleBiometricsResponse, error) {
+func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID string) (*ToggleBiometricsResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
@@ -428,28 +428,24 @@ func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID s
 		return nil, err
 	}
 
-	if req.IsEnabled != true || req.IsEnabled != false {
-		return nil, errors.New("is_enabled must be true or false")
-	}
-
-	if err := s.repo.ToggleBiometrics(ctx, mobileUserID, req.IsEnabled); err != nil {
+	enabled, err := s.repo.ToggleBiometrics(ctx, mobileUserID)
+	if err != nil {
 		return nil, errors.New("unable to toggle biometrics")
 	}
 
 	var message string
 
-	switch req.IsEnabled {
+	switch enabled {
 	case true:
 		message = "biometrics has been disabled"
 	case false:
 		message = "biometrics has been enabled"
-	default:
-		return nil, errors.New("is_enabled should be true or false")
 	}
 
 	return &ToggleBiometricsResponse{
-		Status:  "success",
-		Message: message,
+		Status:    "success",
+		Message:   message,
+		IsEnabled: enabled,
 	}, nil
 }
 

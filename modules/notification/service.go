@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/models"
+	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -395,4 +397,53 @@ func (s *Service) MarkAllNotificationsRead(ctx context.Context, userID string) (
 	}
 
 	return s.repo.MarkAllNotificationsRead(ctx, userID)
+}
+
+func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID, deviceID string) (*TogglePushNotificationsResponse, error) {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	enabled, err := s.repo.TogglePushNotifications(ctx, mobileUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	var message string
+
+	switch enabled {
+	case true:
+		message = "push notifications has been enabled"
+	case false:
+		message = "push notifications has been disabled"
+	}
+
+	return &TogglePushNotificationsResponse{
+		Status:    "success",
+		Message:   message,
+		IsEnabled: enabled,
+	}, nil
+
+}
+
+func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
+	rec, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("device not found")
+		}
+		return nil, err
+	}
+	if !rec.IsActive || !rec.IsTrusted {
+		return nil, errors.New("device not allowed")
+	}
+	return rec, nil
 }

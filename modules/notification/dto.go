@@ -52,3 +52,9 @@ type ListNotificationsResponse struct {
 	Total         int64                 `json:"total"`
 	HasNext       bool                  `json:"has_next"`
 }
+
+type TogglePushNotificationsResponse struct {
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	IsEnabled bool   `json:"is_enabled"`
+}

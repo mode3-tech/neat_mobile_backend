@@ -866,11 +866,38 @@ func (h *Handler) VerifyForgotTransactionPinOTP(c *gin.Context) {
 	}
 
 	resp, err := h.service.VerifyForgotTransactionPinOTP(c.Request.Context(), mobileUserID, deviceID, req)
-
 	if err != nil {
+		if isVerifyForgotTransactionPinOTPBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isVerifyForgotTransactionPinOTPUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func isVerifyForgotTransactionPinOTPBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required", "otp id is required", "otp code is required":
+		return true
+	}
+	return false
+}
+
+func isVerifyForgotTransactionPinOTPUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device not found", "device not allowed", "user not found", "invalid otp":
+		return true
+	}
+	return false
 }
 
 func (h *Handler) ResendForgotTransactionPinOTP(c *gin.Context) {
@@ -1445,13 +1472,7 @@ func (h *Handler) ToggleBiometrics(c *gin.Context) {
 
 	deviceID := c.GetHeader("X-Device-ID")
 
-	var req ToggleBiometricsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
-		return
-	}
-
-	resp, err := h.service.ToggleBiometrics(c.Request.Context(), mobileUserID, deviceID, req)
+	resp, err := h.service.ToggleBiometrics(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
 		if isBadRequestToggleBiometricsError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
