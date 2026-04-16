@@ -35,6 +35,13 @@ type LoginResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type VerifiedDeviceResponse struct {
+	Status              string `json:"status"`
+	IsBiometricsEnabled bool   `json:"is_biometrics_enabled"`
+	AccessToken         string `json:"access_token"`
+	RefreshToken        string `json:"refresh_token"`
+}
+
 type LoginInitResponse struct {
 	Status       string `json:"status"`
 	Challenge    string `json:"challenge,omitempty"`
@@ -45,13 +52,6 @@ type VerifyDeviceRequest struct {
 	Challenge string `json:"challenge" binding:"required"`
 	Signature string `json:"signature" binding:"required"`
 	DeviceID  string `json:"device_id" binding:"required"`
-}
-
-type VerifyDeviceResponse struct {
-	Status       string `json:"status"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ActionToken  string `json:"action_token,omitempty"`
 }
 
 type ResetTransactionPinRequest struct {

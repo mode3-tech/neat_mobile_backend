@@ -779,7 +779,7 @@ paths:
       tags:
         - Auth
       summary: Request transaction PIN change OTP
-      description: Sends a transaction PIN change OTP to the account phone number. Requires the device to be active and allowed.
+      description: Sends a transaction PIN change OTP to the account phone number. Returns an `otp_id` to be passed to the verify step. Requires the device to be active and allowed.
       parameters:
         - in: header
           name: Authorization
@@ -801,7 +801,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/RequestTransactionPinChangeResponse"
         "400":
           description: Device id required or invalid phone number on account
           content:
@@ -810,6 +810,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Device not found, user not found, or device not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests
           content:
             application/json:
               schema:
@@ -825,7 +831,7 @@ paths:
       tags:
         - Auth
       summary: Resend transaction PIN change OTP
-      description: Resends the transaction PIN change OTP to the authenticated user's phone number.
+      description: Resends the transaction PIN change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.
       parameters:
         - in: header
           name: Authorization
@@ -847,7 +853,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/ResendTransactionPinChangeOTPResponse"
         "400":
           description: Device id is required
           content:
@@ -872,12 +878,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/pin/change/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify transaction PIN change OTP
+      description: Verifies the PIN change OTP using the `otp_id` returned from the request step. Returns a `verification_id` (valid for 15 minutes) to be passed to the change step.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyTransactionPinChangeOTPRequest"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyTransactionPinChangeOTPResponse"
+        "400":
+          description: Invalid request body, device id required, otp id required, or otp code required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Device not found, device not allowed, user not found, or invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/pin/change:
     patch:
       tags:
         - Auth
-      summary: Change transaction PIN with OTP
-      description: Verifies a PIN change OTP and replaces the user's current transaction PIN with a new one.
+      summary: Change transaction PIN
+      description: Replaces the user's current transaction PIN with a new one using a `verification_id` obtained from the verify step. The verification_id expires 15 minutes after the OTP was verified.
       parameters:
         - in: header
           name: Authorization
@@ -907,13 +965,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
         "400":
-          description: Device id required, OTP code required, pin validation failed, current pin wrong, or pins don't match
+          description: Device id required, verification id required, pin validation failed, current pin wrong, or pins don't match
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Device not found, device not allowed, invalid OTP, or user not found
+          description: Device not found, device not allowed, invalid verification id, verification id expired, or user not found
           content:
             application/json:
               schema:
@@ -2961,6 +3019,10 @@ components:
         refresh_token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+        is_biometrics_enabled:
+          type: boolean
+          description: Whether biometric authentication is enabled for this user.
+          example: true
         action_token:
           type: string
           description: Reserved for short-lived sensitive actions.
@@ -3990,19 +4052,69 @@ components:
         confirm_new_pin:
           type: string
           example: "4321"
-    ChangeTransactionPinRequest:
+    RequestTransactionPinChangeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP has been sent to your phone
+        otp_id:
+          type: string
+          format: uuid
+          description: OTP record identifier to be passed to the verify step.
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    ResendTransactionPinChangeOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP resent successfully
+        otp_id:
+          type: string
+          format: uuid
+          description: OTP record identifier (same as from the original request step).
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    VerifyTransactionPinChangeOTPRequest:
       type: object
       required:
+        - otp_id
         - otp_code
-        - current_pin
-        - new_pin
-        - confirm_new_pin
       properties:
+        otp_id:
+          type: string
+          format: uuid
+          description: OTP record identifier returned from the request step.
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         otp_code:
           type: string
           minLength: 6
           maxLength: 6
+          description: 6-digit OTP sent to the user's phone.
           example: "123456"
+    VerifyTransactionPinChangeOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP verified successfully
+        verification_id:
+          type: string
+          format: uuid
+          description: Verification identifier (valid for 15 minutes) to be passed to the change step.
+          example: "f9e8d7c6-b5a4-3210-fedc-ba9876543210"
+    ChangeTransactionPinRequest:
+      type: object
+      required:
+        - verification_id
+        - current_pin
+        - new_pin
+        - confirm_new_pin
+      properties:
+        verification_id:
+          type: string
+          format: uuid
+          description: Verification identifier returned from the verify step. Valid for 15 minutes and single-use.
+          example: "f9e8d7c6-b5a4-3210-fedc-ba9876543210"
         current_pin:
           type: string
           example: "1234"

@@ -224,7 +224,7 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 
 	ip := c.ClientIP()
 
-	authObj, err := h.service.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
+	resp, err := h.service.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
 	if err != nil {
 		if isBadRequestVerifyDeviceError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
@@ -239,15 +239,16 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 		return
 	}
 
-	if authObj == nil || authObj.AccessToken == "" || authObj.RefreshToken == "" {
+	if resp == nil || resp.AccessToken == "" || resp.RefreshToken == "" {
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty verify-device response"))
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifyDeviceResponse{
-		Status:       "success",
-		AccessToken:  authObj.AccessToken,
-		RefreshToken: authObj.RefreshToken,
+	c.JSON(http.StatusOK, VerifiedDeviceResponse{
+		Status:              "success",
+		AccessToken:         resp.AccessToken,
+		RefreshToken:        resp.RefreshToken,
+		IsBiometricsEnabled: resp.IsBiometricsEnabled,
 	})
 }
 
@@ -609,7 +610,7 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifyDeviceResponse{
+	c.JSON(http.StatusOK, VerifiedDeviceResponse{
 		Status:       "success",
 		AccessToken:  authObj.AccessToken,
 		RefreshToken: authObj.RefreshToken,

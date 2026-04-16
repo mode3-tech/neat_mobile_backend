@@ -70,7 +70,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}, nil
 }
 
-func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceResquest) (*AuthObject, error) {
+func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceResquest) (*VerifiedDeviceResponse, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
 	}
@@ -97,7 +97,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 		return nil, errors.New("public key is required")
 	}
 
-	var authObj *AuthObject
+	var authObj *VerifiedDeviceResponse
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewDeviceRepository(txDB)
@@ -279,7 +279,7 @@ func (s *Service) createPendingDeviceSession(ctx context.Context, deviceRepo *de
 	return sessionToken, nil
 }
 
-func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signature, deviceID, ip string) (*VerifiedDeviceResponse, error) {
 	challenge = strings.TrimSpace(challenge)
 	if challenge == "" {
 		return nil, errors.New("challenge is required")
@@ -339,7 +339,17 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 		return nil, err
 	}
 
-	return s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip)
+	resp, err := s.issueSessionTokens(ctx, storedChallenge.UserID, deviceRecord.DeviceID, ip)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, storedChallenge.UserID)
+	if err == nil && user.IsBiometricsEnabled != nil {
+		resp.IsBiometricsEnabled = *user.IsBiometricsEnabled
+	}
+
+	return resp, nil
 }
 
 func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTPRequest) error {
@@ -405,11 +415,11 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 	})
 }
 
-func (s *Service) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*VerifiedDeviceResponse, error) {
 	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
 }
 
-func (s *Service) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*AuthObject, error) {
+func (s *Service) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*VerifiedDeviceResponse, error) {
 	if repo == nil {
 		return nil, errors.New("auth repository not configured")
 	}
@@ -460,7 +470,7 @@ func (s *Service) issueSessionTokensWithRepo(ctx context.Context, repo *Reposito
 		return nil, err
 	}
 
-	return &AuthObject{
+	return &VerifiedDeviceResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
