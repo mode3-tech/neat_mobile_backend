@@ -3,7 +3,7 @@
   "info": {
     "title": "Neat Mobile App Backend API",
     "version": "1.0.0",
-    "description": "HTTP API for authentication, OTP verification, device trust, identity validation,\npassword reset, and loan product workflows.\n"
+    "description": "HTTP API for authentication, OTP verification, device trust, identity validation,\npassword reset, loan product workflows, and wallet/bank lookup.\n"
   },
   "servers": [
     {
@@ -681,16 +681,6 @@
               }
             }
           },
-          "500": {
-            "description": "CBA lookup, provider, or internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "503": {
             "description": "Upstream service unavailable",
             "content": {
@@ -703,6 +693,16 @@
           },
           "504": {
             "description": "Upstream service timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "CBA lookup, provider, or internal error",
             "content": {
               "application/json": {
                 "schema": {
@@ -752,16 +752,6 @@
               }
             }
           },
-          "500": {
-            "description": "Provider or internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "503": {
             "description": "Upstream service unavailable",
             "content": {
@@ -774,6 +764,16 @@
           },
           "504": {
             "description": "Upstream service timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or internal error",
             "content": {
               "application/json": {
                 "schema": {
@@ -1026,8 +1026,8 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Reset password with OTP",
-        "description": "Verifies a password reset OTP, marks it as used, and updates the user's password hash.",
+        "summary": "Reset password with verification ID",
+        "description": "Consumes the `verification_id` obtained from the verify step and updates the user's password. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
           {
             "in": "header",
@@ -1061,7 +1061,7 @@
             }
           },
           "400": {
-            "description": "Invalid request body, missing reset code, or invalid password format",
+            "description": "Invalid request body, phone required, verification id required, or invalid password format",
             "content": {
               "application/json": {
                 "schema": {
@@ -1071,7 +1071,7 @@
             }
           },
           "401": {
-            "description": "Invalid device id, reset code, or user context",
+            "description": "Device not found, device not allowed, invalid verification id, verification id expired, or no account exists under this phone number",
             "content": {
               "application/json": {
                 "schema": {
@@ -1691,7 +1691,7 @@
           "Auth"
         ],
         "summary": "Request password change OTP",
-        "description": "Sends a password change OTP to the account phone number. Requires the device to be active.",
+        "description": "Sends a password change OTP to the account phone number. Returns an `otp_id` to be passed to the verify step. Requires the device to be active.",
         "parameters": [
           {
             "in": "header",
@@ -1723,7 +1723,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/RequestChangePasswordResponse"
                 }
               }
             }
@@ -1761,13 +1761,185 @@
         }
       }
     },
+    "/auth/password/change/resend": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Resend password change OTP",
+        "description": "Resends the password change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OTP resent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendPasswordChangeOTPResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Device id is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Device not found or user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password/change/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify password change OTP",
+        "description": "Verifies the password change OTP using the `otp_id` returned from the request step. Returns a `verification_id` (valid for 15 minutes) to be passed to the change step.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyPasswordChangeOTPRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verified successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyPasswordChangeOTPResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body, device id required, otp id required, or otp code required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Device not found, device not allowed, user not found, or invalid OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/password/change": {
       "patch": {
         "tags": [
           "Auth"
         ],
-        "summary": "Change password with OTP",
-        "description": "Verifies a password change OTP and replaces the user's current password with a new one.",
+        "summary": "Change password with verification ID",
+        "description": "Consumes the `verification_id` obtained from the verify step and replaces the user's current password. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
           {
             "in": "header",
@@ -1815,7 +1987,7 @@
             }
           },
           "400": {
-            "description": "Device id required, OTP code required, password validation failed, current password wrong, or passwords don't match",
+            "description": "Device id required, verification id required, password validation failed, or passwords don't match",
             "content": {
               "application/json": {
                 "schema": {
@@ -1825,7 +1997,103 @@
             }
           },
           "401": {
-            "description": "Invalid device id, invalid OTP, or user not found",
+            "description": "Device not found, device not allowed, user not found, invalid current password, invalid verification id, or verification id expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/biometrics/toggle": {
+      "patch": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Toggle biometric authentication for the current device",
+        "description": "Enable or disable biometric authentication for the authenticated user's current device.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Registered device identifier for the account."
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleBiometricsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Biometrics toggle processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToggleBiometricsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or device id required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid access token, device not found, device not allowed, or user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable biometric toggle request",
             "content": {
               "application/json": {
                 "schema": {
@@ -1895,16 +2163,6 @@
               }
             }
           },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "502": {
             "description": "SMS delivery failed",
             "content": {
@@ -1917,6 +2175,16 @@
           },
           "503": {
             "description": "SMS service not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -2108,16 +2376,6 @@
               }
             }
           },
-          "500": {
-            "description": "Loan application failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "502": {
             "description": "Core-banking lookup failed",
             "content": {
@@ -2130,6 +2388,16 @@
           },
           "503": {
             "description": "Core-banking integration is unavailable or not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Loan application failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2649,29 +2917,6 @@
         ],
         "parameters": [
           {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            },
-            "description": "Page number for the embryo loan application summary list."
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 10
-            },
-            "description": "Number of embryo loan application summaries to return per page."
-          },
-          {
             "in": "header",
             "name": "X-Timestamp",
             "required": true,
@@ -2744,6 +2989,1082 @@
           },
           "503": {
             "description": "Push sender is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reporting/users": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "List signed users",
+        "description": "Returns a paginated list of signed users for internal reporting. This endpoint is served under `/internal/v1` and is protected by HMAC headers.",
+        "servers": [
+          {
+            "url": "/internal/v1"
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number for signed users listing."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Number of users to return per page."
+          },
+          {
+            "in": "header",
+            "name": "X-Timestamp",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "RFC3339 timestamp used in the HMAC signing string."
+          },
+          {
+            "in": "header",
+            "name": "X-Signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Lowercase hex HMAC-SHA256 signature of `METHOD + \"\\n\" + PATH + \"\\n\" + TIMESTAMP + \"\\n\" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed users fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSignedUsersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pagination parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid internal HMAC headers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal auth is not configured or the fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reporting/user/transaction": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get user transaction history",
+        "description": "Returns transactions for a specific mobile user id for internal reporting. This endpoint is served under `/internal/v1` and is protected by HMAC headers.",
+        "servers": [
+          {
+            "url": "/internal/v1"
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "mobile_user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Wallet user id to look up transactions for."
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number for transaction history."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Number of transactions to return per page."
+          },
+          {
+            "in": "header",
+            "name": "X-Timestamp",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "RFC3339 timestamp used in the HMAC signing string."
+          },
+          {
+            "in": "header",
+            "name": "X-Signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Lowercase hex HMAC-SHA256 signature of `METHOD + \"\\n\" + PATH + \"\\n\" + TIMESTAMP + \"\\n\" + SHA256_HEX_OF_BODY` using `CBA_WEBHOOK_SECRET`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User transactions fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserTransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid internal HMAC headers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal auth is not configured or the fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/summary": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Get account summary",
+        "description": "Returns the authenticated user's full name, account number, available balance, total loan balance, and a list of active loans with repayment details.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account summary fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch account summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/profile": {
+      "patch": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Update profile",
+        "description": "Updates the authenticated user's email and/or address. Both fields are optional; only supplied fields are updated.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/statement": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Request account statement",
+        "description": "Generates an account statement for the authenticated user for the requested date range and format.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountStatementRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account statement request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountStatementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or pagination dates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to create account statement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/statement/{job_id}/status": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Get account statement job status",
+        "description": "Returns the status and download URL for a previously requested account statement job.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Statement generation job identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account statement job status fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementJobStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid job id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Statement job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch statement job status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/banks": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "List supported banks",
+        "description": "Returns the list of banks supported for transfers, sourced from Providus.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Banks fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch banks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/bank/details": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "Get bank account details",
+        "description": "Resolves an account number and bank code to the account holder's name and bank details via Providus.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "account_number",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bank account number to resolve."
+          },
+          {
+            "in": "query",
+            "name": "bank_code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bank code for the account's institution."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account details fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankDetailsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch bank details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/transfer": {
+      "post": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "Initiate a bank transfer",
+        "description": "Initiates a transfer from the authenticated user's wallet to the specified bank account via Providus.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transfer initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized, missing device ID, or wrong transaction PIN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Transaction PIN locked after too many failed attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to initiate transfer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/beneficiary": {
+      "post": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "Add a beneficiary",
+        "description": "Saves a bank account as a beneficiary for future transfers on the given wallet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBeneficiaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Beneficiary added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddBeneficiaryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to add beneficiary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/beneficiaries": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "List beneficiaries",
+        "description": "Returns all saved beneficiaries for the given wallet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Wallet ID to fetch beneficiaries for."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Beneficiaries fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchBeneficiariesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch beneficiaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transaction/recent": {
+      "get": {
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Fetch recent transactions",
+        "description": "Returns the most recent transactions for the authenticated user's wallet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent transactions fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchRecentTransactionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transaction/all": {
+      "get": {
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Fetch all transactions (paginated)",
+        "description": "Returns all transactions for the authenticated user's wallet, grouped by\nmonth and paginated via a cursor. Pass the `next_cursor` from the previous\nresponse as the `cursor` query parameter to fetch the next page. Omit\n`cursor` on the first request.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 20
+            },
+            "description": "Number of transactions to return per page."
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-04-01T00:00:00Z"
+            },
+            "description": "RFC3339 timestamp cursor from the previous page's `next_cursor`. Omit on the first request."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transactions fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedTransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/providus/credit": {
+      "post": {
+        "tags": [
+          "Webhook"
+        ],
+        "summary": "Providus credit notification",
+        "description": "Receives inbound credit notifications from Providus when money lands on a\nuser's virtual account. Protected by a shared secret sent in the\n`X-Notification-Secret` header. Always returns 200 \u2014 errors are logged\ninternally and do not trigger Providus retries.\n",
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Notification-Secret",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Shared secret configured with Providus to authenticate inbound webhook calls."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvidusCreditPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid notification secret",
             "content": {
               "application/json": {
                 "schema": {
@@ -3428,640 +4749,6 @@
           }
         }
       }
-    },
-    "/account/summary": {
-      "get": {
-        "tags": ["Account"],
-        "summary": "Get account summary",
-        "description": "Returns the authenticated user's full name, account number, available balance, total loan balance, and a list of active loans with repayment details.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account summary fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/AccountSummaryResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch account summary",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/account/profile": {
-      "patch": {
-        "tags": ["Account"],
-        "summary": "Update profile",
-        "description": "Updates the authenticated user's email and/or address. Both fields are optional; only supplied fields are updated.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/UpdateProfileRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Profile updated successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/UpdateProfileResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/account/statement": {
-      "post": {
-        "tags": ["Account"],
-        "summary": "Request account statement",
-        "description": "Queues an account statement generation job for the given date range and format. Returns a job ID immediately. The statement is generated in the background and the user is notified via push when ready.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/AccountStatementRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Statement job queued successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/AccountStatementResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to queue statement job",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/account/statement/{job_id}": {
-      "get": {
-        "tags": ["Account"],
-        "summary": "Poll statement job status",
-        "description": "Returns the current status of a statement generation job. When status is `ready`, a short-lived download URL (15 minutes) is included in the response. Poll this endpoint after requesting a statement.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "job_id",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "The job ID returned from POST /account/statement."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Job status returned",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/StatementJobStatusResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "404": {
-            "description": "Job not found or does not belong to the authenticated user",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/wallet/banks": {
-      "get": {
-        "tags": ["Wallet"],
-        "summary": "List supported banks",
-        "description": "Returns the list of banks supported for transfers, sourced from Providus.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Banks fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/BankListResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch banks",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/wallet/bank/details": {
-      "get": {
-        "tags": ["Wallet"],
-        "summary": "Get bank account details",
-        "description": "Resolves an account number and bank code to the account holder's name and bank details via Providus.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          },
-          {
-            "in": "query",
-            "name": "account_number",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Bank account number to resolve."
-          },
-          {
-            "in": "query",
-            "name": "bank_code",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Bank code for the account's institution."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Bank account details fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/BankDetailsResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid query parameters",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch bank details",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/wallet/transfer": {
-      "post": {
-        "tags": ["Wallet"],
-        "summary": "Initiate a bank transfer",
-        "description": "Initiates a transfer from the authenticated user's wallet to the specified bank account via Providus.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/TransferRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Transfer initiated successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TransferResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized, missing device ID, or wrong transaction PIN",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "429": {
-            "description": "Transaction PIN locked after too many failed attempts",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to initiate transfer",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/wallet/beneficiaries": {
-      "post": {
-        "tags": ["Wallet"],
-        "summary": "Add a beneficiary",
-        "description": "Saves a bank account as a beneficiary for future transfers on the given wallet.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/AddBeneficiaryRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Beneficiary added successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/AddBeneficiaryResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to add beneficiary",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": ["Wallet"],
-        "summary": "List beneficiaries",
-        "description": "Returns all saved beneficiaries for the given wallet.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Device-ID",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Stable device installation identifier from the mobile app."
-          },
-          {
-            "in": "query",
-            "name": "wallet_id",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Wallet ID to fetch beneficiaries for."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Beneficiaries fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/FetchBeneficiariesResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid query parameters",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or missing device ID",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch beneficiaries",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/transaction/recent": {
-      "get": {
-        "tags": ["Transaction"],
-        "summary": "Fetch recent transactions",
-        "description": "Returns the most recent transactions for the authenticated user's wallet.",
-        "security": [{ "bearerAuth": [] }],
-        "responses": {
-          "200": {
-            "description": "Recent transactions fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/FetchRecentTransactionsResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or invalid token",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch transactions",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/transaction/all": {
-      "get": {
-        "tags": ["Transaction"],
-        "summary": "Fetch all transactions (paginated)",
-        "description": "Returns all transactions for the authenticated user's wallet, grouped by month and paginated via a cursor. Pass the `next_cursor` from the previous response as the `cursor` query parameter to fetch the next page. Omit `cursor` on the first request.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "limit",
-            "required": true,
-            "schema": { "type": "integer", "example": 20 },
-            "description": "Number of transactions to return per page."
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": { "type": "string", "format": "date-time", "example": "2026-04-01T00:00:00Z" },
-            "description": "RFC3339 timestamp cursor from the previous page's `next_cursor`. Omit on the first request."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Transactions fetched successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PagedTransactionResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid query parameters",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized or invalid token",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch transactions",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/webhooks/providus/credit": {
-      "post": {
-        "tags": ["Webhook"],
-        "summary": "Providus credit notification",
-        "description": "Receives inbound credit notifications from Providus when money lands on a user's virtual account. Protected by a shared secret in the X-Notification-Secret header. Always returns 200.",
-        "servers": [{ "url": "/" }],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Notification-Secret",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "Shared secret configured with Providus to authenticate inbound webhook calls."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProvidusCreditPayload" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Notification acknowledged",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": { "type": "boolean", "example": true }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid notification secret",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -4073,6 +4760,647 @@
       }
     },
     "schemas": {
+      "Bank": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "058"
+          },
+          "name": {
+            "type": "string",
+            "example": "Guaranty Trust Bank"
+          }
+        }
+      },
+      "BankListResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "banks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Bank"
+            }
+          }
+        }
+      },
+      "BankDetails": {
+        "type": "object",
+        "properties": {
+          "bankCode": {
+            "type": "string",
+            "example": "058"
+          },
+          "accountName": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "accountNumber": {
+            "type": "string",
+            "example": "0123456789"
+          }
+        }
+      },
+      "BankDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "account": {
+            "$ref": "#/components/schemas/BankDetails"
+          }
+        }
+      },
+      "TransferRequest": {
+        "type": "object",
+        "required": [
+          "amount",
+          "sort_code",
+          "account_number",
+          "transaction_pin"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Transfer amount in the smallest currency unit (e.g. kobo).",
+            "example": 5000
+          },
+          "sort_code": {
+            "type": "string",
+            "description": "Bank sort code / routing code.",
+            "example": "058"
+          },
+          "account_number": {
+            "type": "string",
+            "description": "Destination bank account number.",
+            "example": "0123456789"
+          },
+          "narration": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Optional transfer narration.",
+            "example": "Payment for services"
+          },
+          "account_name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Optional destination account name.",
+            "example": "John Doe"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional arbitrary key-value metadata."
+          },
+          "transaction_pin": {
+            "type": "string",
+            "description": "User's 4-digit transaction PIN to authorize the transfer.",
+            "example": "1234"
+          }
+        }
+      },
+      "TransferResult": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "format": "double",
+            "example": 50.0
+          },
+          "charges": {
+            "type": "number",
+            "format": "double",
+            "example": 1.5
+          },
+          "vat": {
+            "type": "number",
+            "format": "double",
+            "example": 0.11
+          },
+          "reference": {
+            "type": "string",
+            "example": "TXN-20240101-001"
+          },
+          "total": {
+            "type": "number",
+            "format": "double",
+            "example": 51.61
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sessionId": {
+            "type": "string",
+            "example": "SESSION-20240101-001"
+          },
+          "destination": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "transactionReference": {
+            "type": "string",
+            "example": "REF-20240101-001"
+          },
+          "description": {
+            "type": "string",
+            "example": "Transfer to John Doe"
+          }
+        }
+      },
+      "TransferResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Transfer initiated successfully"
+          },
+          "transfer": {
+            "$ref": "#/components/schemas/TransferResult"
+          }
+        }
+      },
+      "Beneficiary": {
+        "type": "object",
+        "properties": {
+          "ID": {
+            "type": "string",
+            "example": "3f7e2c1a-4b5d-4e6f-8a9b-0c1d2e3f4a5b"
+          },
+          "MobileUserID": {
+            "type": "string",
+            "example": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "WalletID": {
+            "type": "string",
+            "example": "WLT-001"
+          },
+          "BankCode": {
+            "type": "string",
+            "example": "058"
+          },
+          "AccountNumber": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "AccountName": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "CreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "UpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "AddBeneficiaryRequest": {
+        "type": "object",
+        "required": [
+          "bank_code",
+          "account_number",
+          "account_name"
+        ],
+        "properties": {
+          "bank_code": {
+            "type": "string",
+            "example": "058"
+          },
+          "account_number": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "account_name": {
+            "type": "string",
+            "example": "John Doe"
+          }
+        }
+      },
+      "AddBeneficiaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Beneficiary added successfully"
+          },
+          "beneficiary": {
+            "$ref": "#/components/schemas/Beneficiary"
+          }
+        }
+      },
+      "FetchBeneficiariesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Beneficiaries fetched successfully"
+          },
+          "beneficiaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Beneficiary"
+            }
+          }
+        }
+      },
+      "ActiveLoan": {
+        "type": "object",
+        "properties": {
+          "loan_id": {
+            "type": "string",
+            "example": "LN-001"
+          },
+          "loan_number": {
+            "type": "string",
+            "example": "20240001"
+          },
+          "loan_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Original principal amount of the loan.",
+            "example": 50000.0
+          },
+          "total_repayment": {
+            "type": "number",
+            "format": "double",
+            "description": "Total outstanding balance remaining to be repaid.",
+            "example": 45000.0
+          },
+          "monthly_repayment": {
+            "type": "number",
+            "format": "double",
+            "description": "Amount due on the next repayment date.",
+            "example": 5000.0
+          },
+          "next_due_date": {
+            "type": "string",
+            "example": "2026-05-01"
+          }
+        }
+      },
+      "AccountSummary": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "account_number": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "available_balance": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Available wallet balance in the smallest currency unit (e.g. kobo).",
+            "example": 250000
+          },
+          "loan_balance": {
+            "type": "number",
+            "format": "double",
+            "description": "Sum of outstanding balances across all active loans.",
+            "example": 45000.0
+          },
+          "active_loans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveLoan"
+            }
+          }
+        }
+      },
+      "AccountSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AccountSummary"
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "New email address for the user.",
+            "example": "john.doe@example.com"
+          },
+          "address": {
+            "type": "string",
+            "description": "New physical address for the user.",
+            "example": "12 Lagos Street, Abuja"
+          }
+        }
+      },
+      "UpdateProfileResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Profile successfully updated"
+          }
+        }
+      },
+      "AccountStatementRequest": {
+        "type": "object",
+        "required": [
+          "format",
+          "date_from",
+          "date_to"
+        ],
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "pdf"
+            ],
+            "example": "pdf"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-01T00:00:00Z"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-31T23:59:59Z"
+          }
+        }
+      },
+      "AccountStatementResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Statement request accepted"
+          },
+          "job_id": {
+            "type": "string",
+            "example": "9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f"
+          }
+        }
+      },
+      "StatementJobStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
+          "job_status": {
+            "type": "string",
+            "example": "ready"
+          },
+          "download_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://storage.example.com/statements/9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f.pdf"
+          }
+        }
+      },
+      "SignedUserItem": {
+        "type": "object",
+        "properties": {
+          "mobile_user_id": {
+            "type": "string",
+            "example": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "first_name": {
+            "type": "string",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "middle_name": {
+            "type": "string",
+            "example": "Michael"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john.doe@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "example": "08012345678"
+          },
+          "bvn": {
+            "type": "string",
+            "example": "12345678901"
+          },
+          "core_customer_id": {
+            "type": "string",
+            "example": "CUST-001"
+          },
+          "customer_status": {
+            "type": "string",
+            "example": "approved"
+          },
+          "username": {
+            "type": "string",
+            "example": "johndoe"
+          },
+          "verified": {
+            "$ref": "#/components/schemas/VerifiedFlags"
+          },
+          "latest_loan": {
+            "$ref": "#/components/schemas/LatestLoanSummary"
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-01T12:00:00Z"
+          }
+        }
+      },
+      "VerifiedFlags": {
+        "type": "object",
+        "properties": {
+          "bvn": {
+            "type": "boolean",
+            "example": true
+          },
+          "nin": {
+            "type": "boolean",
+            "example": true
+          },
+          "phone": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "LatestLoanSummary": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "embryo"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-31T15:00:00Z"
+          }
+        }
+      },
+      "ListSignedUsersResponse": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedUserItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 120
+          },
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total_pages": {
+            "type": "integer",
+            "example": 6
+          }
+        }
+      },
+      "UserTransaction": {
+        "type": "object",
+        "properties": {
+          "mobile_user_id": {
+            "type": "string",
+            "example": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "type": {
+            "type": "string",
+            "example": "debit"
+          },
+          "amount": {
+            "type": "integer",
+            "example": 2000
+          },
+          "charges": {
+            "type": "integer",
+            "example": 50
+          },
+          "vat": {
+            "type": "integer",
+            "example": 9
+          },
+          "balance_before": {
+            "type": "integer",
+            "example": 10000
+          },
+          "balance_after": {
+            "type": "integer",
+            "example": 7950
+          },
+          "transaction_reference": {
+            "type": "string",
+            "example": "TXN-20260101-001"
+          },
+          "narration": {
+            "type": "string",
+            "nullable": true,
+            "example": "Loan repayment"
+          },
+          "recipient_name": {
+            "type": "string",
+            "example": "Jane Smith"
+          },
+          "recipient_account": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "recipient_bank": {
+            "type": "string",
+            "example": "Guaranty Trust Bank"
+          },
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-01T12:00:00Z"
+          }
+        }
+      },
+      "UserTransactionResponse": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserTransaction"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 40
+          },
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total_pages": {
+            "type": "integer",
+            "example": 2
+          }
+        }
+      },
       "DevHealthResponse": {
         "type": "object",
         "properties": {
@@ -4488,20 +5816,162 @@
           }
         }
       },
-      "ResetPasswordRequest": {
+      "ForgotPasswordResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "OTP has been sent to your phone"
+          },
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "ResendForgotPasswordOTPResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "OTP resent successfully"
+          },
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "VerifyForgotPasswordOTPRequest": {
         "type": "object",
         "required": [
-          "reset_code",
-          "password"
+          "otp_id",
+          "otp_code"
         ],
         "properties": {
-          "reset_code": {
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "otp_code": {
             "type": "string",
             "minLength": 6,
             "maxLength": 6,
             "example": "123456"
+          }
+        }
+      },
+      "VerifyForgotPasswordOTPResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "OTP verified successfully"
           },
-          "password": {
+          "verification_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "RequestChangePasswordResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been sent to your phone"
+          },
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "ResendPasswordChangeOTPResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "OTP resent successfully"
+          },
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "VerifyPasswordChangeOTPRequest": {
+        "type": "object",
+        "required": [
+          "otp_id",
+          "otp_code"
+        ],
+        "properties": {
+          "otp_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "otp_code": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "example": "123456"
+          }
+        }
+      },
+      "VerifyPasswordChangeOTPResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP verified successfully"
+          },
+          "verification_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "phone",
+          "verification_id",
+          "new_password",
+          "confirm_new_password"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "example": "08012345678"
+          },
+          "verification_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "example": "NewStrongP@ss1"
+          },
+          "confirm_new_password": {
             "type": "string",
             "minLength": 8,
             "example": "NewStrongP@ss1"
@@ -5655,220 +7125,46 @@
           }
         }
       },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string",
-            "example": "invalid request body"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "Correlation identifier included in responses for request tracing.",
-            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
-          }
-        }
-      },
-      "ActiveLoan": {
-        "type": "object",
-        "properties": {
-          "loan_id": { "type": "string", "example": "LN-001" },
-          "loan_number": { "type": "string", "example": "20240001" },
-          "loan_amount": { "type": "number", "format": "double", "description": "Original principal amount of the loan.", "example": 50000.00 },
-          "total_repayment": { "type": "number", "format": "double", "description": "Total outstanding balance remaining to be repaid.", "example": 45000.00 },
-          "monthly_repayment": { "type": "number", "format": "double", "description": "Amount due on the next repayment date.", "example": 5000.00 },
-          "next_due_date": { "type": "string", "example": "2026-05-01" }
-        }
-      },
-      "AccountSummary": {
-        "type": "object",
-        "properties": {
-          "full_name": { "type": "string", "example": "John Doe" },
-          "account_number": { "type": "string", "example": "0123456789" },
-          "available_balance": { "type": "integer", "format": "int64", "description": "Available wallet balance in the smallest currency unit (e.g. kobo).", "example": 250000 },
-          "loan_balance": { "type": "number", "format": "double", "description": "Sum of outstanding balances across all active loans.", "example": 45000.00 },
-          "active_loans": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ActiveLoan" }
-          }
-        }
-      },
-      "AccountSummaryResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "data": { "$ref": "#/components/schemas/AccountSummary" }
-        }
-      },
-      "UpdateProfileRequest": {
-        "type": "object",
-        "properties": {
-          "email": { "type": "string", "format": "email", "description": "New email address for the user.", "example": "john.doe@example.com" },
-          "address": { "type": "string", "description": "New physical address for the user.", "example": "12 Lagos Street, Abuja" }
-        }
-      },
-      "UpdateProfileResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "message": { "type": "string", "example": "Profile successfully updated" }
-        }
-      },
-      "AccountStatementRequest": {
-        "type": "object",
-        "required": ["format", "date_from", "date_to"],
-        "properties": {
-          "format": { "type": "string", "enum": ["csv", "pdf"], "description": "File format for the generated statement.", "example": "csv" },
-          "date_from": { "type": "string", "format": "date-time", "description": "Start of the statement period (inclusive).", "example": "2025-01-01T00:00:00Z" },
-          "date_to": { "type": "string", "format": "date-time", "description": "End of the statement period (inclusive).", "example": "2025-12-31T23:59:59Z" }
-        }
-      },
-      "AccountStatementResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "message": { "type": "string", "example": "Account statement request is being processed" },
-          "job_id": { "type": "string", "description": "Use this ID to poll for the statement status.", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" }
-        }
-      },
-      "StatementJobStatusResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "job_status": { "type": "string", "enum": ["pending", "processing", "ready", "failed"], "description": "Current state of the statement generation job.", "example": "ready" },
-          "download_url": { "type": "string", "description": "Presigned download URL. Only present when job_status is `ready`. Expires in 15 minutes.", "example": "https://s3.us-west-004.backblazeb2.com/..." }
-        }
-      },
-      "Bank": {
-        "type": "object",
-        "properties": {
-          "code": { "type": "string", "example": "058" },
-          "name": { "type": "string", "example": "Guaranty Trust Bank" }
-        }
-      },
-      "BankListResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "banks": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Bank" }
-          }
-        }
-      },
-      "BankDetails": {
-        "type": "object",
-        "properties": {
-          "bankCode": { "type": "string", "example": "058" },
-          "accountName": { "type": "string", "example": "John Doe" },
-          "accountNumber": { "type": "string", "example": "0123456789" }
-        }
-      },
-      "BankDetailsResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "account": { "$ref": "#/components/schemas/BankDetails" }
-        }
-      },
-      "TransferRequest": {
-        "type": "object",
-        "required": ["amount", "sortCode", "accountNumber", "transaction_pin"],
-        "properties": {
-          "amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Transfer amount in the smallest currency unit (e.g. kobo).",
-            "example": 5000
-          },
-          "sortCode": { "type": "string", "description": "Bank sort code / routing code.", "example": "058" },
-          "accountNumber": { "type": "string", "description": "Destination bank account number.", "example": "0123456789" },
-          "narration": { "type": "string", "maxLength": 255, "description": "Optional transfer narration.", "example": "Payment for services" },
-          "accountName": { "type": "string", "maxLength": 255, "description": "Optional destination account name.", "example": "John Doe" },
-          "metadata": { "type": "object", "additionalProperties": true, "description": "Optional arbitrary key-value metadata." },
-          "transaction_pin": { "type": "string", "description": "User's 4-digit transaction PIN to authorize the transfer.", "example": "1234" }
-        }
-      },
-      "TransferResult": {
-        "type": "object",
-        "properties": {
-          "amount": { "type": "number", "format": "double", "example": 50.00 },
-          "charges": { "type": "number", "format": "double", "example": 1.50 },
-          "vat": { "type": "number", "format": "double", "example": 0.11 },
-          "reference": { "type": "string", "example": "TXN-20240101-001" },
-          "total": { "type": "number", "format": "double", "example": 51.61 },
-          "metadata": { "type": "object", "additionalProperties": true },
-          "sessionId": { "type": "string", "example": "SESSION-20240101-001" },
-          "destination": { "type": "string", "example": "0123456789" },
-          "transactionReference": { "type": "string", "example": "REF-20240101-001" },
-          "description": { "type": "string", "example": "Transfer to John Doe" }
-        }
-      },
-      "TransferResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "message": { "type": "string", "example": "Transfer initiated successfully" },
-          "transfer": { "$ref": "#/components/schemas/TransferResult" }
-        }
-      },
-      "Beneficiary": {
-        "type": "object",
-        "properties": {
-          "ID": { "type": "string", "example": "3f7e2c1a-4b5d-4e6f-8a9b-0c1d2e3f4a5b" },
-          "MobileUserID": { "type": "string", "example": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d" },
-          "WalletID": { "type": "string", "example": "WLT-001" },
-          "BankCode": { "type": "string", "example": "058" },
-          "AccountNumber": { "type": "string", "example": "0123456789" },
-          "AccountName": { "type": "string", "example": "John Doe" },
-          "CreatedAt": { "type": "string", "format": "date-time" },
-          "UpdatedAt": { "type": "string", "format": "date-time", "nullable": true }
-        }
-      },
-      "AddBeneficiaryRequest": {
-        "type": "object",
-        "required": ["bank_code", "account_number", "account_name", "wallet_id"],
-        "properties": {
-          "bank_code": { "type": "string", "example": "058" },
-          "account_number": { "type": "string", "example": "0123456789" },
-          "account_name": { "type": "string", "example": "John Doe" },
-          "wallet_id": { "type": "string", "example": "WLT-001" }
-        }
-      },
-      "AddBeneficiaryResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "message": { "type": "string", "example": "Beneficiary added successfully" },
-          "beneficiary": { "$ref": "#/components/schemas/Beneficiary" }
-        }
-      },
-      "FetchBeneficiariesResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "boolean", "example": true },
-          "message": { "type": "string", "example": "Beneficiaries fetched successfully" },
-          "beneficiaries": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Beneficiary" }
-          }
-        }
-      },
       "TransactionItem": {
         "type": "object",
-        "required": ["id", "type", "description", "date", "status", "amount"],
+        "required": [
+          "id",
+          "type",
+          "description",
+          "date",
+          "status",
+          "amount"
+        ],
         "properties": {
-          "id": { "type": "string", "example": "3f7a1c2e-d84b-4f90-a3c1-2e5b6d8f0a1c" },
+          "id": {
+            "type": "string",
+            "example": "3f7a1c2e-d84b-4f90-a3c1-2e5b6d8f0a1c"
+          },
           "type": {
             "type": "string",
-            "enum": ["credit", "debit"],
+            "enum": [
+              "credit",
+              "debit"
+            ],
             "example": "credit"
           },
-          "description": { "type": "string", "example": "Transfer from John Doe" },
-          "date": { "type": "string", "format": "date-time", "example": "2026-04-03T14:22:00+01:00" },
+          "description": {
+            "type": "string",
+            "example": "Transfer from John Doe"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-03T14:22:00+01:00"
+          },
           "status": {
             "type": "string",
-            "enum": ["pending", "successful", "failed", "reversed"],
+            "enum": [
+              "pending",
+              "successful",
+              "failed",
+              "reversed"
+            ],
             "example": "successful"
           },
           "amount": {
@@ -5882,10 +7178,15 @@
       "FetchRecentTransactionsResponse": {
         "type": "object",
         "properties": {
-          "status": { "type": "boolean", "example": true },
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
           "transactions": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TransactionItem" }
+            "items": {
+              "$ref": "#/components/schemas/TransactionItem"
+            }
           }
         }
       },
@@ -5900,18 +7201,25 @@
           },
           "transactions": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TransactionItem" }
+            "items": {
+              "$ref": "#/components/schemas/TransactionItem"
+            }
           }
         }
       },
       "PagedTransactionResponse": {
         "type": "object",
         "properties": {
-          "status": { "type": "boolean", "example": true },
+          "status": {
+            "type": "boolean",
+            "example": true
+          },
           "sections": {
             "type": "array",
             "description": "Transactions grouped by month, ordered newest-first.",
-            "items": { "$ref": "#/components/schemas/TransactionSection" }
+            "items": {
+              "$ref": "#/components/schemas/TransactionSection"
+            }
           },
           "next_cursor": {
             "type": "string",
@@ -6049,17 +7357,16 @@
       "ChangePasswordRequest": {
         "type": "object",
         "required": [
-          "otp_code",
+          "verification_id",
           "current_password",
           "new_password",
           "confirm_new_password"
         ],
         "properties": {
-          "otp_code": {
+          "verification_id": {
             "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "example": "123456"
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           },
           "current_password": {
             "type": "string",
@@ -6077,23 +7384,110 @@
           }
         }
       },
+      "ToggleBiometricsRequest": {
+        "type": "object",
+        "required": [
+          "is_enabled"
+        ],
+        "properties": {
+          "is_enabled": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether biometric authentication should be enabled for the current device."
+          }
+        }
+      },
+      "ToggleBiometricsResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success",
+            "description": "Operation status."
+          },
+          "message": {
+            "type": "string",
+            "example": "Biometrics have been enabled successfully."
+          }
+        }
+      },
       "ProvidusCreditPayload": {
         "type": "object",
         "properties": {
-          "accountNumber": { "type": "string", "example": "1234567890" },
-          "transactionAmount": { "type": "string", "example": "5000.00" },
-          "settledAmount": { "type": "string", "example": "5000.00" },
-          "currency": { "type": "string", "example": "NGN" },
-          "tranType": { "type": "string", "example": "C" },
-          "tranRemarks": { "type": "string", "example": "Transfer from John Doe" },
-          "tranDate": { "type": "string", "example": "2026-04-03T14:22:00" },
-          "sessionId": { "type": "string", "example": "090405240115103012345678901234" },
-          "tranId": { "type": "string", "example": "FT26094123456" },
-          "initiationTranRef": { "type": "string", "example": "NXG20260403142200" },
-          "originatorAccountName": { "type": "string", "example": "JOHN DOE" },
-          "originatorAccountNumber": { "type": "string", "example": "0123456789" },
-          "beneficiaryAccountName": { "type": "string", "example": "JANE DOE" },
-          "beneficiaryAccountNumber": { "type": "string", "example": "1234567890" }
+          "accountNumber": {
+            "type": "string",
+            "example": "1234567890"
+          },
+          "transactionAmount": {
+            "type": "string",
+            "example": "5000.00"
+          },
+          "settledAmount": {
+            "type": "string",
+            "example": "5000.00"
+          },
+          "currency": {
+            "type": "string",
+            "example": "NGN"
+          },
+          "tranType": {
+            "type": "string",
+            "example": "C"
+          },
+          "tranRemarks": {
+            "type": "string",
+            "example": "Transfer from John Doe"
+          },
+          "tranDate": {
+            "type": "string",
+            "example": "2026-04-03T14:22:00"
+          },
+          "sessionId": {
+            "type": "string",
+            "example": "090405240115103012345678901234"
+          },
+          "tranId": {
+            "type": "string",
+            "example": "FT26094123456"
+          },
+          "initiationTranRef": {
+            "type": "string",
+            "example": "NXG20260403142200"
+          },
+          "originatorAccountName": {
+            "type": "string",
+            "example": "JOHN DOE"
+          },
+          "originatorAccountNumber": {
+            "type": "string",
+            "example": "0123456789"
+          },
+          "beneficiaryAccountName": {
+            "type": "string",
+            "example": "JANE DOE"
+          },
+          "beneficiaryAccountNumber": {
+            "type": "string",
+            "example": "1234567890"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "invalid request body"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Correlation identifier included in responses for request tracing.",
+            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
+          }
         }
       }
     }

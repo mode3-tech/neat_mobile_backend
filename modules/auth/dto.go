@@ -279,3 +279,12 @@ type CBAWalletUpdate struct {
 	Bank          string `json:"bank"`
 	BankCode      string `json:"bank_code"`
 }
+
+type ToggleBiometricsRequest struct {
+	IsEnabled bool `json:"is_enabled" binding:"required"`
+}
+
+type ToggleBiometricsResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}

@@ -273,3 +273,10 @@ func (r *Repository) GetUsersWithoutCoreCustomerID(ctx context.Context, limit in
 		Scan(&rows).Error
 	return rows, err
 }
+
+func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string, isEnabled bool) error {
+	return r.db.WithContext(ctx).
+		Model(models.User{}).
+		Where("id = ? AND is_biometrics_enabled != ?", mobileUserID, isEnabled).
+		Update("is_biometrics_enabled", isEnabled).Error
+}

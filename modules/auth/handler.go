@@ -1435,3 +1435,80 @@ func isChangeTransactionPinUnauthorizedError(err error) bool {
 	}
 	return false
 }
+
+func (h *Handler) ToggleBiometrics(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if mobileUserID == "" {
+		h.respondError(c, http.StatusUnauthorized, "invalid access token", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var req ToggleBiometricsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	resp, err := h.service.ToggleBiometrics(c.Request.Context(), mobileUserID, deviceID, req)
+	if err != nil {
+		if isBadRequestToggleBiometricsError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isUnprocessableEntityBiometricsError(err) {
+			h.respondError(c, http.StatusUnprocessableEntity, err.Error(), err)
+			return
+		}
+		if isUnauthorizedToggleBiometricsError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		if isInternalServerBiometricsError(err) {
+			h.respondError(c, http.StatusInternalServerError, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func isBadRequestToggleBiometricsError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "is_enabled must be true or false":
+		return true
+	}
+	return false
+}
+
+func isUnauthorizedToggleBiometricsError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "device is not allowed", "device not found", "device id is required", "mobile user id is required":
+		return true
+	}
+
+	return false
+}
+
+func isUnprocessableEntityBiometricsError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "is_enabled should be true or false":
+		return true
+	}
+	return false
+}
+
+func isInternalServerBiometricsError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "unable to toggle biometrics":
+		return true
+	}
+	return false
+}

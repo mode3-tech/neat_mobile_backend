@@ -415,6 +415,44 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 	})
 }
 
+func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID string, req ToggleBiometricsRequest) (*ToggleBiometricsResponse, error) {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	if req.IsEnabled != true || req.IsEnabled != false {
+		return nil, errors.New("is_enabled must be true or false")
+	}
+
+	if err := s.repo.ToggleBiometrics(ctx, mobileUserID, req.IsEnabled); err != nil {
+		return nil, errors.New("unable to toggle biometrics")
+	}
+
+	var message string
+
+	switch req.IsEnabled {
+	case true:
+		message = "biometrics has been disabled"
+	case false:
+		message = "biometrics has been enabled"
+	default:
+		return nil, errors.New("is_enabled should be true or false")
+	}
+
+	return &ToggleBiometricsResponse{
+		Status:  "success",
+		Message: message,
+	}, nil
+}
+
 func (s *Service) issueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*VerifiedDeviceResponse, error) {
 	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
 }
