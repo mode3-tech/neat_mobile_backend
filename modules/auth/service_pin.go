@@ -6,6 +6,7 @@ import (
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
+	"neat_mobile_app_backend/modules/auth/verification"
 	"strings"
 	"time"
 
@@ -47,45 +48,6 @@ func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, device
 		MaxResends:  3,
 	})
 	return err
-}
-
-func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserID, deviceID string) error {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return errors.New("device id is required")
-	}
-
-	if s.otpManager == nil {
-		return errors.New("otp manager not configured")
-	}
-
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
-	}
-
-	user, err := s.repo.GetUserByID(ctx, mobileUserID)
-	if err != nil {
-		return errors.New("user not found")
-	}
-
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
-	if err != nil {
-		return errors.New("invalid phone number on account")
-	}
-
-	if _, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
-		Purpose:     authotp.PurposePinReset,
-		Channel:     authotp.ChannelSMS,
-		Destination: phone,
-		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
-		MaxAttempts: 5,
-		MaxResends:  3,
-	}); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ResetTransactionPinRequest) error {
@@ -174,52 +136,10 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceI
 	})
 }
 
-func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID, deviceID string) error {
-	if strings.TrimSpace(deviceID) == "" {
+func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserID, deviceID string) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
 		return errors.New("device id is required")
-	}
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("mobile user id is required")
-	}
-
-	if s.otpManager == nil {
-		return errors.New("otp manager not configured")
-	}
-
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
-	}
-
-	user, err := s.repo.GetUserByID(ctx, mobileUserID)
-	if err != nil {
-		return errors.New("user not found")
-	}
-
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
-	if err != nil {
-		return errors.New("invalid phone number on account")
-	}
-
-	_, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
-		Purpose:     authotp.PurposePinChange,
-		Channel:     authotp.ChannelSMS,
-		Destination: phone,
-		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
-		MaxAttempts: 5,
-		MaxResends:  3,
-	})
-	return err
-}
-
-func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserID, deviceID string) error {
-	if strings.TrimSpace(deviceID) == "" {
-		return errors.New("device id is required")
-	}
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("mobile user id is required")
 	}
 
 	if s.otpManager == nil {
@@ -241,7 +161,7 @@ func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserI
 	}
 
 	if _, err = s.otpManager.Issue(ctx, authotp.IssueOTPInput{
-		Purpose:     authotp.PurposePinChange,
+		Purpose:     authotp.PurposePinReset,
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
@@ -255,6 +175,95 @@ func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserI
 	return nil
 }
 
+func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID, deviceID string) (*RequestTransactionPinChangeResponse, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	if s.otpManager == nil {
+		return nil, errors.New("otp manager not configured")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, mobileUserID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	if err != nil {
+		return nil, errors.New("invalid phone number on account")
+	}
+
+	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+		Purpose:     authotp.PurposePinChange,
+		Channel:     authotp.ChannelSMS,
+		Destination: phone,
+		UserID:      mobileUserID,
+		TTL:         10 * time.Minute,
+		MaxAttempts: 5,
+		MaxResends:  3,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &RequestTransactionPinChangeResponse{
+		Message: "OTP has been sent to your phone",
+		OTPID:   result.OTPID,
+	}, nil
+}
+
+func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserID, deviceID string, req VerifyTransactionPinChangeOTPRequest) (*VerifyTransactionPinChangeOTPResponse, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	if strings.TrimSpace(req.OTPID) == "" {
+		return nil, errors.New("otp id is required")
+	}
+
+	if strings.TrimSpace(req.OTPCode) == "" {
+		return nil, errors.New("otp code is required")
+	}
+
+	if s.otpManager == nil {
+		return nil, errors.New("otp manager not configured")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
+		Purpose: authotp.PurposePinChange,
+		OTPID:   strings.TrimSpace(req.OTPID),
+		Code:    strings.TrimSpace(req.OTPCode),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.New("otp verification failed")
+	}
+
+	return &VerifyTransactionPinChangeOTPResponse{
+		Message:        "OTP verified successfully",
+		VerificationID: result.VerificationID,
+	}, nil
+}
+
 func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ChangeTransactionPinRequest) error {
 	if strings.TrimSpace(deviceID) == "" {
 		return errors.New("device id is required")
@@ -264,9 +273,8 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 		return errors.New("mobile user id is required")
 	}
 
-	otpCode := strings.TrimSpace(req.OTPCode)
-	if otpCode == "" {
-		return errors.New("otp code is required")
+	if strings.TrimSpace(req.VerificationID) == "" {
+		return errors.New("verification id is required")
 	}
 
 	if err := validators.ValidatePin(req.NewPin); err != nil {
@@ -275,6 +283,10 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 
 	if err := validators.ValidatePin(req.ConfirmNewPin); err != nil {
 		return err
+	}
+
+	if req.NewPin != req.ConfirmNewPin {
+		return errors.New("new pin and confirm new pin do not match")
 	}
 
 	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
@@ -293,57 +305,40 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 		return err
 	}
 
-	if req.NewPin != req.ConfirmNewPin {
-		return errors.New("new pin and confirm new pin do not match")
-	}
-
-	if s.otpManager == nil {
-		return errors.New("otp manager not configured")
-	}
-
 	if s.tx == nil {
 		return errors.New("transaction manager not configured")
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		otpRepo := authotp.NewOTPRepository(txDB)
+		verRepo := verification.NewVerification(txDB)
+
+		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
+		if err != nil {
+			return err
+		}
+		if rec == nil {
+			return errors.New("invalid verification id")
+		}
+
+		if rec.Status != models.VerificationStatusVerified {
+			return errors.New("invalid verification id")
+		}
 
 		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return errors.New("invalid phone number on account")
 		}
-
-		activeOTP, err := otpRepo.GetActiveOTP(ctx, normalizedPhone, authotp.PurposePinChange)
-		if err != nil {
-			return err
-		}
-		if activeOTP == nil {
-			return errors.New("invalid otp")
-		}
-
-		maxAttempts := activeOTP.MaxAttempts
-		if maxAttempts <= 0 {
-			maxAttempts = 5
-		}
-		if activeOTP.AttemptCount >= maxAttempts {
-			return errors.New("invalid otp")
-		}
-
-		hashedOTP, err := authotp.HashOTP(s.otpPepper, authotp.PurposePinChange, normalizedPhone, req.OTPCode)
-		if err != nil {
-			return errors.New("invalid otp")
-		}
-
-		if !authotp.HashEqualHex(hashedOTP, activeOTP.OTPHash) {
-			if err := otpRepo.IncrementAttempt(ctx, activeOTP.ID); err != nil {
-				return err
-			}
-			return errors.New("invalid otp")
+		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
+			return errors.New("invalid verification id")
 		}
 
 		now := time.Now().UTC()
-		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
-			return err
+		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
+			return errors.New("verification id has expired")
+		}
+
+		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
+			return errors.New("invalid verification id")
 		}
 
 		hashedPin, err := HashPassword(req.NewPin)
@@ -353,6 +348,52 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 
 		return s.repo.UpdateUserPin(ctx, mobileUserID, hashedPin)
 	})
+}
+
+func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserID, deviceID string) (*ResendTransactionPinChangeOTPResponse, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	if s.otpManager == nil {
+		return nil, errors.New("otp manager not configured")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, mobileUserID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	if err != nil {
+		return nil, errors.New("invalid phone number on account")
+	}
+
+	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
+		Purpose:     authotp.PurposePinChange,
+		Channel:     authotp.ChannelSMS,
+		Destination: phone,
+		UserID:      mobileUserID,
+		TTL:         10 * time.Minute,
+		MaxAttempts: 5,
+		MaxResends:  3,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ResendTransactionPinChangeOTPResponse{
+		Message: "OTP resent successfully",
+		OTPID:   result.OTPID,
+	}, nil
 }
 
 func (s *Service) validateCurrentTransactionPin(user *models.User, currentTransactionPin string) error {

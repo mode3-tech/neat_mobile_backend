@@ -1121,7 +1121,8 @@ func (h *Handler) RequestTransactionPinChange(c *gin.Context) {
 
 	deviceID := c.GetHeader("X-Device-ID")
 
-	if err := h.service.RequestTransactionPinChange(c.Request.Context(), mobileUserID, deviceID); err != nil {
+	resp, err := h.service.RequestTransactionPinChange(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
 		if isRequestTransactionPinChangeBadRequestError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
@@ -1130,11 +1131,15 @@ func (h *Handler) RequestTransactionPinChange(c *gin.Context) {
 			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
 			return
 		}
+		if isResendRequestTransactionPinChangeRateLimitedError(err) {
+			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
+			return
+		}
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "OTP has been sent to your phone"})
+	c.JSON(http.StatusOK, resp)
 }
 
 func isRequestTransactionPinChangeBadRequestError(err error) bool {
@@ -1163,7 +1168,8 @@ func (h *Handler) ResendRequestTransactionPinChangeOTP(c *gin.Context) {
 	}
 
 	deviceID := c.GetHeader("X-Device-ID")
-	if err := h.service.ResendTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID); err != nil {
+	resp, err := h.service.ResendTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
 		if isResendRequestTransactionPinChangeBadRequestError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
@@ -1172,16 +1178,14 @@ func (h *Handler) ResendRequestTransactionPinChangeOTP(c *gin.Context) {
 			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
 			return
 		}
-
 		if isResendRequestTransactionPinChangeRateLimitedError(err) {
 			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
 			return
 		}
-
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
+	c.JSON(http.StatusOK, resp)
 }
 
 func isResendRequestTransactionPinChangeBadRequestError(err error) bool {
@@ -1204,6 +1208,56 @@ func isResendRequestTransactionPinChangeUnauthorizedError(err error) bool {
 
 func isResendRequestTransactionPinChangeRateLimitedError(err error) bool {
 	return strings.TrimSpace(err.Error()) == "too many requests"
+}
+
+func (h *Handler) VerifyTransactionPinChangeOTP(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if strings.TrimSpace(mobileUserID) == "" {
+		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var req VerifyTransactionPinChangeOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	resp, err := h.service.VerifyTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID, req)
+	if err != nil {
+		if isVerifyTransactionPinChangeOTPBadRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isVerifyTransactionPinChangeOTPUnauthorizedError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func isVerifyTransactionPinChangeOTPBadRequestError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device id is required", "otp id is required", "otp code is required":
+		return true
+	}
+	return false
+}
+
+func isVerifyTransactionPinChangeOTPUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device not found", "device not allowed", "user not found", "invalid otp":
+		return true
+	}
+	return false
 }
 
 func (h *Handler) ChangeTransactionPin(c *gin.Context) {
@@ -1241,7 +1295,7 @@ func isChangeTransactionPinBadRequestError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
 	case "device id is required",
-		"otp code is required",
+		"verification id is required",
 		"transaction pin must be exactly 4 digits long",
 		"transaction pin must contain only digits",
 		"new pin and confirm new pin do not match",
@@ -1254,7 +1308,8 @@ func isChangeTransactionPinBadRequestError(err error) bool {
 func isChangeTransactionPinUnauthorizedError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "device not found", "device not allowed", "invalid otp", "user not found":
+	case "device not found", "device not allowed", "user not found",
+		"invalid verification id", "verification id has expired":
 		return true
 	}
 	return false

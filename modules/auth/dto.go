@@ -60,11 +60,31 @@ type ResetTransactionPinRequest struct {
 	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
 }
 
+type RequestTransactionPinChangeResponse struct {
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
+type VerifyTransactionPinChangeOTPRequest struct {
+	OTPID   string `json:"otp_id" binding:"required"`
+	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
+}
+
+type VerifyTransactionPinChangeOTPResponse struct {
+	Message        string `json:"message"`
+	VerificationID string `json:"verification_id"`
+}
+
+type ResendTransactionPinChangeOTPResponse struct {
+	Message string `json:"message"`
+	OTPID   string `json:"otp_id"`
+}
+
 type ChangeTransactionPinRequest struct {
-	OTPCode       string `json:"otp_code" binding:"required,len=6,numeric"`
-	CurrentPin    string `json:"current_pin" binding:"required"`
-	NewPin        string `json:"new_pin" binding:"required"`
-	ConfirmNewPin string `json:"confirm_new_pin" binding:"required"`
+	VerificationID string `json:"verification_id" binding:"required"`
+	CurrentPin     string `json:"current_pin" binding:"required"`
+	NewPin         string `json:"new_pin" binding:"required"`
+	ConfirmNewPin  string `json:"confirm_new_pin" binding:"required"`
 }
 
 type ChangePasswordRequest struct {

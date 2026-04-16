@@ -29,6 +29,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.PATCH("/pin/reset", authGuard, handler.ResetTransactionPin)
 		auth.POST("/pin/change/request", authGuard, handler.RequestTransactionPinChange)
 		auth.POST("/pin/change/resend", authGuard, handler.ResendRequestTransactionPinChangeOTP)
+		auth.POST("/pin/change/verify", authGuard, handler.VerifyTransactionPinChangeOTP)
 		auth.PATCH("/pin/change", authGuard, handler.ChangeTransactionPin)
 		auth.POST("/password/change/request", authGuard, handler.RequestPasswordChange)
 		auth.POST("/password/change/resend", authGuard, handler.ResendPasswordChangeOTP)
