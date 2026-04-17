@@ -12,6 +12,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	notifications.PATCH("/:id/read", handler.MarkNotificationRead)
 	notifications.POST("/token", handler.RegisterToken)
 	notifications.DELETE("/token", handler.DeleteToken)
+	notifications.POST("/toggle", handler.TogglePushNotification)
 }
 
 func RegisterInternalRoutes(rg *gin.RouterGroup, handler *Handler, internalAuth gin.HandlerFunc) {

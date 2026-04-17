@@ -222,6 +222,36 @@ func (h *Handler) MarkAllNotificationsRead(c *gin.Context) {
 	})
 }
 
+func (h *Handler) TogglePushNotification(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	resp, err := h.service.TogglePushNotifications(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
+		if isBadRequestError(err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if isUnauthorizedError(err) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func isBadRequestError(err error) bool {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
@@ -234,6 +264,16 @@ func isBadRequestError(err error) bool {
 		"body is required",
 		"notification id is required",
 		"notification type is invalid":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnauthorizedError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "device not found", "device not allowed":
 		return true
 	default:
 		return false

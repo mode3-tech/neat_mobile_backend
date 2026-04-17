@@ -2989,6 +2989,73 @@
         }
       }
     },
+    "/notifications/toggle": {
+      "post": {
+        "tags": [
+          "Notification"
+        ],
+        "summary": "Toggle push notifications",
+        "description": "Toggles push notifications on or off for the authenticated user. Returns the updated enabled state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Push notifications toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TogglePushNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token or device ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Something went wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/notifications/send": {
       "post": {
         "tags": [
@@ -7104,6 +7171,23 @@
           "promo"
         ],
         "example": "loan"
+      },
+      "TogglePushNotificationsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Push notifications enabled"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "example": true
+          }
+        }
       },
       "RegisterPushTokenRequest": {
         "type": "object",
