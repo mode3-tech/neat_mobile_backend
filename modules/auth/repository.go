@@ -26,7 +26,7 @@ func NewRespository(db *gorm.DB) *Repository {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var u models.User
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password,created_at").Where("email = ?", email).First(&u).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password_hash,created_at").Where("email = ?", email).First(&u).Error; err != nil {
 		return nil, err
 	}
 
@@ -35,7 +35,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.
 
 func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.User, error) {
 	var u models.User
-	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password,created_at").Where("phone = ?", phone).First(&u).Error
+	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password_hash,created_at").Where("phone = ?", phone).First(&u).Error
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (r *Repository) UpdateUserPin(ctx context.Context, userID, newPinHash strin
 }
 
 func (r *Repository) UpdateUserPassword(ctx context.Context, userID, newPasswordHash string) error {
-	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND password IS NOT NULL", userID).Update("password_hash", newPasswordHash).Error
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND password_hash IS NOT NULL", userID).Update("password_hash", newPasswordHash).Error
 }
 
 func (r *Repository) UpdateCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {
