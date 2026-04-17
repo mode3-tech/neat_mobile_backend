@@ -73,7 +73,7 @@ func TestRepository_GetUserByEmail_Success(t *testing.T) {
 	if user.ID != "user-1" {
 		t.Fatalf("unexpected user ID: got %q", user.ID)
 	}
-	if user.Email != email {
+	if user.Email != &email {
 		t.Fatalf("unexpected user email: got %q", user.Email)
 	}
 	if user.PasswordHash != "hashed-password" {

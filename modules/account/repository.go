@@ -63,11 +63,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, req
 	updates := map[string]any{}
 
 	if req.Address != nil {
-		updates["email"] = *req.Address
+		updates["address"] = *req.Address
 	}
 
 	if req.Email != nil {
-		updates["address"] = *req.Email
+		updates["email"] = *req.Email
 	}
 
 	return r.db.WithContext(ctx).
@@ -80,7 +80,8 @@ func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID 
 	var transactions []transaction.Transaction
 
 	err := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).Order("created_at DESC").
+		Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).
+		Order("created_at DESC").
 		Find(&transactions).Error
 	return transactions, err
 }
@@ -194,4 +195,29 @@ func (r *Repository) SaveDownloadURL(ctx context.Context, jobID, url string, exp
 			"download_url":   url,
 			"url_expires_at": expiresAt,
 		}).Error
+}
+
+func (r *Repository) GetLastestAccountStatement(ctx context.Context, mobileUserID string) (*AccountReportJob, error) {
+	var job AccountReportJob
+	if err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND status = ?", mobileUserID, ReportStatusReady).
+		Order("created_at DESC").
+		First(&job).Error; err != nil {
+		return nil, err
+	}
+
+	return &job, nil
+}
+
+func (r *Repository) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
+	var userDevice device.UserDevice
+
+	if err := r.db.WithContext(ctx).
+		Model(&device.UserDevice{}).
+		Select("*").
+		Where("user_id = ? AND device_id = ?", mobileUserID, deviceID).
+		First(&userDevice).Error; err != nil {
+		return nil, err
+	}
+	return &userDevice, nil
 }

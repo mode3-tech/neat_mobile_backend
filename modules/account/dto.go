@@ -58,3 +58,9 @@ type UpdateProfileResponse struct {
 	Status  bool   `json:"status"`
 	Message string `json:"message"`
 }
+
+type GetLatestAccountStatementResponse struct {
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+	DownloadURL string `json:"download_url"`
+}

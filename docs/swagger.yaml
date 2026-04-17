@@ -2195,6 +2195,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /account/statement/latest:
+    get:
+      tags:
+        - Account
+      summary: Get latest account statement
+      description: Returns the download URL for the most recently completed account statement for the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      responses:
+        "200":
+          description: Latest account statement fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetLatestAccountStatementResponse"
+        "401":
+          description: Unauthorized or device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to generate download link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /wallet/banks:
     get:
       tags:
@@ -3213,6 +3253,26 @@ components:
         full_name:
           type: string
           example: John Doe
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        phone_number:
+          type: string
+          example: "+2348012345678"
+        dob:
+          type: string
+          format: date-time
+          example: "1990-01-01T00:00:00Z"
+        address:
+          type: string
+          example: 12 Lagos Street, Abuja
+        bvn:
+          type: string
+          example: "12345678901"
+        bank_name:
+          type: string
+          example: Providus Bank
         account_number:
           type: string
           example: "0123456789"
@@ -3230,6 +3290,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActiveLoan"
+        is_notifications_enabled:
+          type: boolean
+          example: true
     AccountSummaryResponse:
       type: object
       properties:
@@ -3305,6 +3368,19 @@ components:
           type: string
           format: uri
           example: https://storage.example.com/statements/9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f.pdf
+    GetLatestAccountStatementResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: latest account statement fetched with download url
+        download_url:
+          type: string
+          format: uri
+          example: https://storage.example.com/statements/John_Doe_20260101_to_20260331.pdf
     SignedUserItem:
       type: object
       properties:

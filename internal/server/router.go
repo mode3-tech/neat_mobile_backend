@@ -182,7 +182,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
 
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService)
+	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService, cfg.PDFShiftAPIKey)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
 

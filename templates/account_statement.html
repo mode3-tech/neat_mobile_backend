@@ -10,14 +10,9 @@
       rel="stylesheet"
     />
     <style>
-      @font-face {
-        font-family: general-sans;
-        src: url(/general-sans-font/GeneralSans-Light.woff);
-      }
-
       @page {
         size: A4;
-        margin: 20mm;
+        margin: 10mm;
       }
 
       * {
@@ -27,10 +22,9 @@
       }
 
       body {
-        font-family: Inter, general-sans, sans-serif;
+        font-family: Inter, sans-serif;
         font-size: 12px;
         color: #0e0c22;
-        padding-inline: 52px;
       }
 
       /* HEADER */
@@ -196,6 +190,7 @@
       </thead>
 
       <tbody>
+        {{range .Transactions}}
         <tr>
           <td>{{.Date}}</td>
           <td>{{.Description}}</td>
@@ -204,6 +199,13 @@
           <td class="credit">{{.Credit}}</td>
           <td>{{.Balance}}</td>
         </tr>
+        {{else}}
+        <tr>
+          <td colspan="6" style="text-align: center; color: #999">
+            No transactions in this period
+          </td>
+        </tr>
+        {{end}}
       </tbody>
     </table>
 

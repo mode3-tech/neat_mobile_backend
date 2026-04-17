@@ -71,6 +71,59 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Swap back address/email values corrupted by the UpdateProfile column swap bug.
+	if err := db.Exec(`
+		UPDATE wallet_users
+		SET email = address, address = email
+		WHERE email NOT LIKE '%@%' AND email != '' AND address IS NOT NULL AND address != '';
+	`).Error; err != nil {
+		return err
+	}
+
+	// Copy notifications_enabled → is_notifications_enabled, then drop the old column.
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+				  AND column_name = 'notifications_enabled'
+			) THEN
+				UPDATE wallet_users
+				SET is_notifications_enabled = notifications_enabled
+				WHERE is_notifications_enabled IS NULL AND notifications_enabled IS NOT NULL;
+
+				ALTER TABLE wallet_users DROP COLUMN notifications_enabled;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	// Copy password → password_hash for existing rows, then drop the old column.
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_users'
+				  AND column_name = 'password'
+			) THEN
+				UPDATE wallet_users
+				SET password_hash = password
+				WHERE (password_hash IS NULL OR password_hash = '') AND password IS NOT NULL;
+
+				ALTER TABLE wallet_users DROP COLUMN password;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
 	// Ensure pin_hash exists as nullable before AutoMigrate touches it.
 	if err := db.Exec(`
 		DO $$

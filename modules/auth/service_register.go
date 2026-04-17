@@ -293,7 +293,7 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		ID:                  mobileUserID,
 		WalletID:            internalWalletID,
 		Phone:               normalizedPhone,
-		Email:               req.Email,
+		Email:               &req.Email,
 		FirstName:           firstName,
 		LastName:            lastName,
 		MiddleName:          &middleName,

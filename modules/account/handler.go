@@ -80,14 +80,31 @@ func (h *Handler) GetStatementJobStatus(c *gin.Context) {
 		return
 	}
 
+	deviceID := c.GetHeader("X-Device-ID")
+
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "job_id is required"})
 		return
 	}
 
-	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, jobID)
+	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, deviceID, jobID)
 	if err != nil {
+		if isUnauthorizedGetStatementJobStatusError(err) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if isInternalServerGetStatementJobStatusError(err) {
+			if err.Error() == "job not found" {
+				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve account report"})
+			return
+		}
+		if isBadRequestGetStatementJobStatusError(err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return
 	}
@@ -97,6 +114,36 @@ func (h *Handler) GetStatementJobStatus(c *gin.Context) {
 		JobStatus:   string(job.Status),
 		DownloadURL: downloadURL,
 	})
+}
+
+func isUnauthorizedGetStatementJobStatusError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "mobile user id is required", "device id is required":
+		return true
+	}
+	return false
+}
+
+func isInternalServerGetStatementJobStatusError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "job not found":
+		return true
+	}
+	if strings.HasPrefix(msg, "failed to retrieve account report job: ") {
+		return true
+	}
+	return false
+}
+
+func isBadRequestGetStatementJobStatusError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "job id is required":
+		return true
+	}
+	return false
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
@@ -131,4 +178,51 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		Status:  true,
 		Message: "Profile successfully updated",
 	})
+}
+
+func (h *Handler) GetLatestAccountStatement(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	resp, err := h.service.GetLatestAccountStatement(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
+		if isUnauthorizedGetLatestAccountStatementError(err) {
+			if err.Error() == "device not found" {
+				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		if isInternalServerGetLatestAccountStatementError(err) {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": strings.SplitN(err.Error(), ":", 2)[0]})
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func isUnauthorizedGetLatestAccountStatementError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "mobile user id or device id is missing", "device not found":
+		return true
+	}
+	return false
+}
+
+func isInternalServerGetLatestAccountStatementError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	if strings.HasPrefix(msg, "failed to generate download link for account statement: ") || strings.HasPrefix(msg, "failed to save download URL for account statement: ") {
+		return true
+	}
+	return false
 }

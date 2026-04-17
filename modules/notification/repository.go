@@ -46,7 +46,7 @@ func (r *Repository) IsNotificationsEnabled(ctx context.Context, mobileUserID st
 	}
 
 	var user models.User
-	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("notifications_enabled").Where("id = ?", mobileUserID).First(&user).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("is_notifications_enabled").Where("id = ?", mobileUserID).First(&user).Error; err != nil {
 		return false, err
 	}
 

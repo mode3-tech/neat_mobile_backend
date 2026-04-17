@@ -32,6 +32,7 @@ type Config struct {
 	B2KeyID                    string
 	B2AppKey                   string
 	B2StatementBucketName      string
+	PDFShiftAPIKey             string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -71,6 +72,7 @@ func Load() Config {
 		B2KeyID:                    getEnv("B2_KEY_ID", ""),
 		B2AppKey:                   getEnv("B2_APP_KEY", ""),
 		B2StatementBucketName:      getEnv("B2_STATEMENT_BUCKET", ""),
+		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

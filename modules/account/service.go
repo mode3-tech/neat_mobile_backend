@@ -4,29 +4,35 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
+	"io"
 	"log"
 	"neat_mobile_app_backend/modules/auth"
+	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/go-pdf/fpdf"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Service struct {
-	repo         *Repository
-	loanProvider LoanProvider
-	b2           *s3bucket.BackblazeClient
-	notifier     *notification.Service
+	repo           *Repository
+	loanProvider   LoanProvider
+	b2             *s3bucket.BackblazeClient
+	notifier       *notification.Service
+	pdfShiftAPIKey string
 }
 
-func NewService(repo *Repository, loanProvider LoanProvider, b2 *s3bucket.BackblazeClient, notifier *notification.Service) *Service {
-	return &Service{repo: repo, loanProvider: loanProvider, b2: b2, notifier: notifier}
+func NewService(repo *Repository, loanProvider LoanProvider, b2 *s3bucket.BackblazeClient, notifier *notification.Service, pdfShiftAPIKey string) *Service {
+	return &Service{repo: repo, loanProvider: loanProvider, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey}
 }
 
 func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID string) (*AccountSummary, error) {
@@ -202,7 +208,19 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 	)
 }
 
-func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID string) (*AccountReportJob, string, error) {
+func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, deviceID, jobID string) (*AccountReportJob, string, error) {
+	if strings.TrimSpace(mobileUserID) == "" {
+		return nil, "", errors.New("mobile user id is required")
+	}
+
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, "", errors.New("device id is required")
+	}
+
+	if strings.TrimSpace(jobID) == "" {
+		return nil, "", errors.New("job id is required")
+	}
+
 	job, err := s.repo.GetAccountReportJob(ctx, jobID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to retrieve account report job: %w", err)
@@ -229,6 +247,46 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID
 		}
 	}
 	return job, downloadURL, nil
+}
+
+func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID, deviceID string) (*GetLatestAccountStatementResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	deviceID = strings.TrimSpace(deviceID)
+	if mobileUserID == "" || deviceID == "" {
+		return nil, errors.New("mobile user id or device id is missing")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	job, err := s.repo.GetLastestAccountStatement(ctx, mobileUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	var downloadURL string
+	if job.Status == ReportStatusReady && job.FilePath != "" {
+		if job.DownloadURL == "" || job.URLExpiresAt == nil || time.Until(*job.URLExpiresAt) < 5*time.Minute {
+			expiry := 15 * time.Minute
+			downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, expiry)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate download link for account statement: %w", err)
+			}
+			expiresAt := time.Now().Add(expiry)
+			if err := s.repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
+				return nil, fmt.Errorf("failed to save download URL for account statement: %w", err)
+			}
+		} else {
+			downloadURL = job.DownloadURL
+		}
+	}
+
+	return &GetLatestAccountStatementResponse{
+		Status:      "success",
+		Message:     "latest account statement fetched with download url",
+		DownloadURL: downloadURL,
+	}, nil
 }
 
 func (s *Service) processAccountStatementRequest(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
@@ -309,7 +367,34 @@ func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID s
 	return nil
 }
 
+type statementTxRow struct {
+	Date        string
+	Description string
+	Reference   string
+	Debit       string
+	Credit      string
+	Balance     string
+}
+
+type statementTemplateData struct {
+	TodayDate        string
+	StartDate        string
+	EndDate          string
+	AccountName      string
+	Address          string
+	AccountNumber    string
+	OpeningBalance   string
+	TotalWithdrawals string
+	TotalLodgement   string
+	ClosingBalance   string
+	Transactions     []statementTxRow
+}
+
 func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
+	if s.pdfShiftAPIKey == "" {
+		return errors.New("PDF generation is not configured")
+	}
+
 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve transactions: %w", err)
@@ -320,113 +405,127 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 		return fmt.Errorf("failed to retrieve account info for PDF: %w", err)
 	}
 
-	pdf := fpdf.New("L", "mm", "A4", "")
-	pdf.SetMargins(10, 10, 10)
-	pdf.AddPage()
-
-	// header band
-	pdf.SetFillColor(31, 78, 121)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont("Arial", "B", 16)
-	pdf.CellFormat(277, 12, "ACCOUNT STATEMENT", "", 1, "C", true, 0, "")
-	pdf.Ln(4)
-
-	// account info
-	pdf.SetTextColor(0, 0, 0)
-	pdf.SetFont("Arial", "", 10)
-	pdf.CellFormat(45, 6, "Name:", "", 0, "L", false, 0, "")
-	pdf.SetFont("Arial", "B", 10)
-	pdf.CellFormat(0, 6, strings.TrimSpace(account.FirstName+" "+account.LastName), "", 1, "L", false, 0, "")
-
-	pdf.SetFont("Arial", "", 10)
-	pdf.CellFormat(45, 6, "Account Number:", "", 0, "L", false, 0, "")
-	pdf.SetFont("Arial", "B", 10)
-	pdf.CellFormat(0, 6, account.AccountNumber, "", 1, "L", false, 0, "")
-
-	pdf.SetFont("Arial", "", 10)
-	pdf.CellFormat(45, 6, "Period:", "", 0, "L", false, 0, "")
-	pdf.SetFont("Arial", "B", 10)
-	pdf.CellFormat(0, 6, req.DateFrom.Format("Jan 02, 2006")+" - "+req.DateTo.Format("Jan 02, 2006"), "", 1, "L", false, 0, "")
-	pdf.Ln(5)
-
-	// table columns
-	type col struct {
-		label string
-		width float64
-		align string
-	}
-	cols := []col{
-		{"Date", 38, "L"},
-		{"Description", 80, "L"},
-		{"Reference", 55, "L"},
-		{"Debit (NGN)", 30, "R"},
-		{"Credit (NGN)", 30, "R"},
-		{"Balance (NGN)", 34, "R"},
+	// compute summary figures
+	var totalDebits, totalCredits int64
+	for _, tx := range transactions {
+		if tx.Type == transaction.TransactionTypeDebit {
+			totalDebits += tx.Amount
+		} else {
+			totalCredits += tx.Amount
+		}
 	}
 
-	// table header
-	pdf.SetFillColor(31, 78, 121)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont("Arial", "B", 9)
-	for _, c := range cols {
-		pdf.CellFormat(c.width, 8, c.label, "1", 0, c.align, true, 0, "")
+	formatAmount := func(kobo int64) string {
+		return fmt.Sprintf("%.2f", float64(kobo)/100)
 	}
-	pdf.Ln(-1)
 
-	// table rows
-	pdf.SetFont("Arial", "", 8)
-	fill := false
+	var openingBalance, closingBalance int64
+	if len(transactions) > 0 {
+		first := transactions[0]
+		if first.Type == transaction.TransactionTypeDebit {
+			openingBalance = first.BalanceAfter + first.Amount
+		} else {
+			openingBalance = first.BalanceAfter - first.Amount
+		}
+		closingBalance = transactions[len(transactions)-1].BalanceAfter
+	}
+
+	// build transaction rows
+	rows := make([]statementTxRow, 0, len(transactions))
 	for _, tx := range transactions {
 		debit, credit := "", ""
-		amount := fmt.Sprintf("%.2f", float64(tx.Amount)/100)
+		amount := formatAmount(tx.Amount)
 		if tx.Type == transaction.TransactionTypeDebit {
 			debit = amount
 		} else {
 			credit = amount
 		}
-
-		if fill {
-			pdf.SetFillColor(235, 242, 250)
-		} else {
-			pdf.SetFillColor(255, 255, 255)
-		}
-		pdf.SetTextColor(0, 0, 0)
-
-		rowVals := []struct {
-			val   string
-			width float64
-			align string
-		}{
-			{tx.CreatedAt.Format("Jan 02 2006 15:04"), cols[0].width, cols[0].align},
-			{tx.Description, cols[1].width, cols[1].align},
-			{tx.Reference, cols[2].width, cols[2].align},
-			{debit, cols[3].width, cols[3].align},
-			{credit, cols[4].width, cols[4].align},
-			{fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100), cols[5].width, cols[5].align},
-		}
-		for _, cell := range rowVals {
-			pdf.CellFormat(cell.width, 7, cell.val, "B", 0, cell.align, fill, 0, "")
-		}
-		pdf.Ln(-1)
-		fill = !fill
+		rows = append(rows, statementTxRow{
+			Date:        tx.CreatedAt.Format("02 Jan 2006 15:04"),
+			Description: tx.Description,
+			Reference:   tx.Reference,
+			Debit:       debit,
+			Credit:      credit,
+			Balance:     formatAmount(tx.BalanceAfter),
+		})
 	}
 
-	// footer
-	pdf.Ln(6)
-	pdf.SetTextColor(120, 120, 120)
-	pdf.SetFont("Arial", "I", 8)
-	pdf.CellFormat(0, 6, "System generated statement — no signature required.", "", 0, "C", false, 0, "")
-
-	var buf bytes.Buffer
-	if err := pdf.Output(&buf); err != nil {
-		return fmt.Errorf("failed to generate PDF: %w", err)
+	data := statementTemplateData{
+		TodayDate:        time.Now().Format("02 Jan 2006"),
+		StartDate:        req.DateFrom.Format("02 Jan 2006"),
+		EndDate:          req.DateTo.Format("02 Jan 2006"),
+		AccountName:      strings.TrimSpace(account.FirstName + " " + account.LastName),
+		Address:          account.Address,
+		AccountNumber:    account.AccountNumber,
+		OpeningBalance:   formatAmount(openingBalance),
+		TotalWithdrawals: formatAmount(totalDebits),
+		TotalLodgement:   formatAmount(totalCredits),
+		ClosingBalance:   formatAmount(closingBalance),
+		Transactions:     rows,
 	}
 
-	log.Printf("generatePDF: size=%d bytes for key=%s", buf.Len(), key)
+	// render HTML template
+	tmpl, err := template.ParseFiles("templates/account_statement.html")
+	if err != nil {
+		return fmt.Errorf("failed to parse statement template: %w", err)
+	}
 
-	if err := s.b2.Upload(ctx, key, bytes.NewReader(buf.Bytes()), "application/pdf"); err != nil {
+	var htmlBuf bytes.Buffer
+	if err := tmpl.Execute(&htmlBuf, data); err != nil {
+		return fmt.Errorf("failed to render statement template: %w", err)
+	}
+
+	// call PDFShift API
+	payload, err := json.Marshal(map[string]any{
+		"source":           htmlBuf.String(),
+		"format":           "A4",
+		"margin":           "20mm",
+		"wait_for_network": true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build PDF request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.pdfshift.io/v3/convert/pdf", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create PDF request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.SetBasicAuth("api", s.pdfShiftAPIKey)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("PDF API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("PDF API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	pdfBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read PDF response: %w", err)
+	}
+
+	log.Printf("generatePDF: size=%d bytes for key=%s", len(pdfBytes), key)
+
+	if err := s.b2.Upload(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
 		return fmt.Errorf("failed to upload account statement PDF to storage: %w", err)
 	}
 
 	return nil
+}
+
+func (s *Service) verifyUserDevice(ctx context.Context, mobileUser, deviceID string) (*device.UserDevice, error) {
+	device, err := s.repo.FindDevice(ctx, mobileUser, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("device not found")
+		}
+		return nil, err
+	}
+
+	return device, nil
 }

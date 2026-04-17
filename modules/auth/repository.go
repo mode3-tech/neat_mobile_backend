@@ -254,7 +254,7 @@ func (r *Repository) UpdateUserPin(ctx context.Context, userID, newPinHash strin
 }
 
 func (r *Repository) UpdateUserPassword(ctx context.Context, userID, newPasswordHash string) error {
-	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND password IS NOT NULL", userID).Update("password", newPasswordHash).Error
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ? AND password IS NOT NULL", userID).Update("password_hash", newPasswordHash).Error
 }
 
 func (r *Repository) UpdateCoreCustomerID(ctx context.Context, userID, coreCustomerID string) error {

@@ -18,9 +18,9 @@ type User struct {
 	LastName                     string          `gorm:"column:last_name;not null"`
 	Address                      *string         `gorm:"column:address"`
 	MiddleName                   *string         `gorm:"column:middle_name"`
-	Email                        string          `gorm:"column:email;unique;not null"`
+	Email                        *string         `gorm:"column:email;unique"`
 	Phone                        string          `gorm:"column:phone;unique;index;not null"`
-	PasswordHash                 string          `gorm:"column:password;not null"`
+	PasswordHash                 string          `gorm:"column:password_hash"`
 	PinHash                      string          `gorm:"column:pin_hash;not null"`
 	FailedTransactionPinAttempts int             `gorm:"column:failed_transaction_pin_attempts;not null;default:0"`
 	TransactionPinLockedUntil    *time.Time      `gorm:"column:transaction_pin_locked_until"`
