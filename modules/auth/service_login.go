@@ -437,9 +437,9 @@ func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID s
 
 	switch enabled {
 	case true:
-		message = "biometrics has been disabled"
-	case false:
 		message = "biometrics has been enabled"
+	case false:
+		message = "biometrics has been disabled"
 	}
 
 	return &ToggleBiometricsResponse{
