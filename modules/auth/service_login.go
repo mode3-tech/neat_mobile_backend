@@ -288,6 +288,12 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 			return err
 		}
 		sessionToken = token
+
+		authRepo := NewRespository(txDB)
+		if err := authRepo.DeactiveOlderDevices(ctx, userID, deviceID); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
