@@ -34,8 +34,8 @@ type User struct {
 	IsPhoneVerified              bool            `gorm:"is_phone_verified;not null"`
 	IsBvnVerified                bool            `gorm:"is_bvn_verified;not null"`
 	IsNinVerified                bool            `gorm:"is_nin_verified;not null"`
-	IsBiometricsEnabled          *bool           `gorm:"is_biometrics_enabled"`
-	IsNotificationsEnabled       *bool           `gorm:"is_notifications_enabled"`
+	IsBiometricsEnabled          bool            `gorm:"is_biometrics_enabled"`
+	IsNotificationsEnabled       bool            `gorm:"is_notifications_enabled"`
 	CreatedAt                    time.Time       `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt                    *time.Time      `gorm:"column:updated_at;autoUpdateTime"`
 }

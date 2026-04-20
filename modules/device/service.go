@@ -43,7 +43,7 @@ func (s *DeviceService) BindDevice(ctx context.Context, userID string, req *Devi
 	return s.repo.Save(ctx, device)
 }
 
-func (s *DeviceService) CreateChallenge(ctx context.Context, userID, deviceID string) (string, error) {
+func (s *DeviceService) CreateChallenge(ctx context.Context, userID, deviceID string, ttl time.Duration) (string, error) {
 	device, err := s.repo.FindDevice(ctx, userID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -64,13 +64,17 @@ func (s *DeviceService) CreateChallenge(ctx context.Context, userID, deviceID st
 	sum := sha256.Sum256([]byte(rawChallenge))
 	challengeHash := hex.EncodeToString(sum[:])
 
+	if ttl == 0 {
+		ttl = challengeTTL
+	}
+
 	now := time.Now().UTC()
 	row := &DeviceChallenge{
 		ID:            uuid.NewString(),
 		UserID:        userID,
 		DeviceID:      deviceID,
 		ChallengeHash: challengeHash,
-		ExpiresAt:     now.Add(challengeTTL),
+		ExpiresAt:     now.Add(ttl),
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		UsedAt:        nil,

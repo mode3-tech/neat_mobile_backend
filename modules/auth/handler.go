@@ -1533,3 +1533,52 @@ func isInternalServerBiometricsError(err error) bool {
 	}
 	return false
 }
+
+func (h *Handler) ChallengeRequest(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if mobileUserID == "" {
+		h.respondError(c, http.StatusUnauthorized, "invalid access token", nil)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	if deviceID == "" {
+		h.respondError(c, http.StatusBadRequest, "device id is required", nil)
+		return
+	}
+
+	resp, err := h.service.CreateChallenge(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
+		if isBadRequestChallengeRequestError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isUnauthorizedChallengeRequestError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func isBadRequestChallengeRequestError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "device id is required":
+		return true
+	}
+	return false
+}
+
+func isUnauthorizedChallengeRequestError(err error) bool {
+	msg := err.Error()
+	switch msg {
+	case "device not found", "device not allowed", "mobile user id is required":
+		return true
+	}
+	return false
+}

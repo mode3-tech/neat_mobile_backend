@@ -1344,6 +1344,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/challenge/request:
+    post:
+      tags:
+        - Auth
+      summary: Request a biometric challenge
+      description: Generates a new cryptographic challenge for the authenticated user's device to sign for biometric login.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: "Bearer access token. Example: `Bearer <access_token>`."
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Registered device identifier for the account.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Challenge generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChallengeRequestResponse"
+        "400":
+          description: Device ID is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid access token, device not found, or device not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/otp/request:
     post:
       tags:
@@ -5112,6 +5158,30 @@ components:
         message:
           type: string
           example: Biometrics have been enabled successfully.
+    ChallengeRequestResponse:
+      type: object
+      required:
+        - status
+        - message
+        - challenge
+        - expires_at
+      properties:
+        status:
+          type: string
+          example: success
+          description: Operation status.
+        message:
+          type: string
+          example: Challenge generated successfully.
+        challenge:
+          type: string
+          example: "a1b2c3d4e5f6..."
+          description: Cryptographic challenge string to be signed by the device.
+        expires_at:
+          type: string
+          format: date-time
+          example: "2026-04-20T12:00:00Z"
+          description: Timestamp when the challenge expires.
     ProvidusCreditPayload:
       type: object
       properties:

@@ -1,5 +1,7 @@
 package auth
 
+import "time"
+
 type DeviceRegisteration struct {
 	DeviceID    string `json:"device_id" binding:"required"`
 	PublicKey   string `json:"public_key" binding:"required"`
@@ -21,7 +23,7 @@ type RegisterRequest struct {
 	NINVerificationID     string              `json:"nin_verification_id" binding:"required"`
 	PhoneVerificationID   string              `json:"phone_verification_id" binding:"required"`
 	EmailVerificationID   string              `json:"email_verification_id"`
-	IsBiometricsEnabled   *bool               `json:"is_biometrics_enabled" binding:"required"`
+	IsBiometricsEnabled   bool                `json:"is_biometrics_enabled" binding:"required"`
 	Device                DeviceRegisteration `json:"device" binding:"required"`
 }
 
@@ -284,4 +286,11 @@ type ToggleBiometricsResponse struct {
 	Status    string `json:"status"`
 	Message   string `json:"message"`
 	IsEnabled bool   `json:"is_enabled"`
+}
+
+type ChallengeRequestResponse struct {
+	Status    string    `json:"status"`
+	Message   string    `json:"message"`
+	Challenge string    `json:"challenge"`
+	ExpiresAt time.Time `json:"expires_at"`
 }

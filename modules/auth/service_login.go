@@ -59,7 +59,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}
 
 	deviceService := device.NewDeviceService(*s.deviceRepo)
-	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID)
+	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +67,36 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	return &LoginInitObject{
 		Status:    LoginStatusChallengeRequired,
 		Challenge: challenge,
+	}, nil
+}
+
+func (s *Service) CreateChallenge(ctx context.Context, mobileUserID, deviceID string) (*ChallengeRequestResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	_, err := s.verifyUserDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	deviceService := device.NewDeviceService(*s.deviceRepo)
+	challenge, err := deviceService.CreateChallenge(ctx, mobileUserID, deviceID, 60*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChallengeRequestResponse{
+		Status:    LoginStatusChallengeRequired,
+		Message:   "challenge created successfully",
+		Challenge: challenge,
+		ExpiresAt: time.Now().UTC().Add(60 * time.Second),
 	}, nil
 }
 
@@ -345,8 +375,8 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 	}
 
 	user, err := s.repo.GetUserByID(ctx, storedChallenge.UserID)
-	if err == nil && user.IsBiometricsEnabled != nil {
-		resp.IsBiometricsEnabled = *user.IsBiometricsEnabled
+	if err == nil {
+		resp.IsBiometricsEnabled = user.IsBiometricsEnabled
 	}
 
 	return resp, nil

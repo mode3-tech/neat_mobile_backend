@@ -290,5 +290,5 @@ func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string) 
 		return false, err
 	}
 
-	return *user.IsBiometricsEnabled, nil
+	return user.IsBiometricsEnabled, nil
 }

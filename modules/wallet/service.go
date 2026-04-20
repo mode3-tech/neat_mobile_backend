@@ -331,6 +331,8 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 
 }
 
+func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string) {}
+
 func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
 	if strings.TrimSpace(payload.TranType) != "C" {
 		return fmt.Errorf("unexpected tranType: %s", payload.TranType)

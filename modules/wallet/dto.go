@@ -125,3 +125,84 @@ type TransactionObj struct {
 	Narration string    `json:"narration" binding:"required"`
 	CreatedAt time.Time `json:"created_at" binding:"required"`
 }
+
+type BulkTransferResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	Data    struct {
+		All      []TransferResult `json:"all"`
+		Rejected []TransferResult `json:"rejected"`
+		Accepted []TransferResult `json:"accepted"`
+	} `json:"data"`
+}
+
+// type BulkTransferResult struct {
+// 	Amount      int64  `json:"amount"`
+// 	VAT         int64  `json:"vat"`
+// 	SortCode    string `json:"sort_code"`
+// 	Reference   string `json:"reference"`
+// 	Narration   string `json:"narration"`
+// 	AccountName string `json:"account_name"`
+// 	Fee
+// }
+
+//             {
+//                 "amount": 500,
+//                 "vat": 0.7875,
+//                 "sortCode": "000013",
+//                 "reference": "l9gdbqe7FmX06KjuZt0r0seAJ69nHykXTHvM",
+//                 "narration": "Just kidding",
+//                 "accountName": "Obagunwa Emmanuel",
+//                 "fee": 10.5,
+//                 "accountNumber": "0167421242",
+//                 "total": 511.2875
+//             },
+//             {
+//                 "amount": 250,
+//                 "vat": 0.7875,
+//                 "sortCode": "000013",
+//                 "reference": "MBg5hvkWlSMXyCTsjtYw3MIBSmWMMp77CfAu",
+//                 "narration": "Just kidding",
+//                 "accountName": "Obagunwa Emmanuel",
+//                 "fee": 10.5,
+//                 "accountNumber": "0167421242",
+//                 "total": 261.2875
+//             }
+//         ],
+//         "rejected": [],
+//         "accepted": [
+//             {
+//                 "amount": 500,
+//                 "vat": 0.7875,
+//                 "bankName": "GTBANK PLC",
+//                 "sortCode": "000013",
+//                 "metadata": {
+//                     "sessionId": "187923755680432213004147647494",
+//                     "transactionReference": "8828075379951199"
+//                 },
+//                 "reference": "l9gdbqe7FmX06KjuZt0r0seAJ69nHykXTHvM",
+//                 "narration": "Just kidding",
+//                 "accountName": "Obagunwa Emmanuel",
+//                 "fee": 10.5,
+//                 "accountNumber": "0167421242",
+//                 "total": 511.2875
+//             },
+//             {
+//                 "amount": 250,
+//                 "vat": 0.7875,
+//                 "bankName": "GTBANK PLC",
+//                 "sortCode": "000013",
+//                 "metadata": {
+//                     "sessionId": "026545050219349897184258832943",
+//                     "transactionReference": "8341434570354439"
+//                 },
+//                 "reference": "MBg5hvkWlSMXyCTsjtYw3MIBSmWMMp77CfAu",
+//                 "narration": "Just kidding",
+//                 "accountName": "Obagunwa Emmanuel",
+//                 "fee": 10.5,
+//                 "accountNumber": "0167421242",
+//                 "total": 261.2875
+//             }
+//         ]
+//     }
+// }

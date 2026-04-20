@@ -50,11 +50,7 @@ func (r *Repository) IsNotificationsEnabled(ctx context.Context, mobileUserID st
 		return false, err
 	}
 
-	if user.IsNotificationsEnabled == nil {
-		return false, nil
-	}
-
-	return *user.IsNotificationsEnabled, nil
+	return user.IsNotificationsEnabled, nil
 }
 
 func (r *Repository) UpsertToken(ctx context.Context, row *models.PushToken) error {
@@ -323,7 +319,7 @@ func (r *Repository) TogglePushNotifications(ctx context.Context, mobileUserID s
 		return false, err
 	}
 
-	return *user.IsNotificationsEnabled, nil
+	return user.IsNotificationsEnabled, nil
 }
 
 func (r *Repository) IsVerifiedDevice(ctx context.Context, mobileUserID string, deviceID string) bool {
