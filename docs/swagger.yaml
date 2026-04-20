@@ -1349,22 +1349,26 @@ paths:
       tags:
         - Auth
       summary: Request a biometric challenge
-      description: Generates a new cryptographic challenge for the authenticated user's device to sign for biometric login.
+      description: Generates a new cryptographic challenge for the authenticated user's device to sign for biometric login. Authenticated via refresh token — no access token required.
       parameters:
-        - in: header
-          name: Authorization
-          required: true
-          schema:
-            type: string
-          description: "Bearer access token. Example: `Bearer <access_token>`."
         - in: header
           name: X-Device-ID
           required: true
           schema:
             type: string
-          description: Registered device identifier for the account.
-      security:
-        - bearerAuth: []
+          description: Registered device identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  description: Valid refresh token from a prior session.
       responses:
         "200":
           description: Challenge generated successfully
@@ -1373,13 +1377,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChallengeRequestResponse"
         "400":
-          description: Device ID is required
+          description: Missing or invalid request body
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid access token, device not found, or device not allowed
+          description: Invalid, expired, or revoked refresh token, or device not authorized
           content:
             application/json:
               schema:
@@ -2459,6 +2463,73 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /wallet/transfer/bulk:
+    post:
+      tags:
+        - Wallet
+      summary: Initiate a bulk bank transfer
+      description: Initiates multiple transfers from the authenticated user's wallet to specified bank accounts via Providus. Returns all, accepted, and rejected results.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                $ref: "#/components/schemas/TransferRequest"
+      responses:
+        "200":
+          description: Bulk transfer initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkTransferResponse"
+        "400":
+          description: Invalid request body, empty transfer list, or one or more transfer entries are invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized, missing device ID, wrong transaction PIN, or device verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Transaction PIN locked after too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Transfer service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to initiate bulk transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /wallet/beneficiary:
     post:
       tags:
@@ -3238,6 +3309,61 @@ components:
           example: Transfer initiated successfully
         transfer:
           $ref: "#/components/schemas/TransferResult"
+    BulkTransferResult:
+      type: object
+      properties:
+        amount:
+          type: integer
+          description: Transfer amount in the smallest currency unit (e.g. kobo).
+          example: 50000
+        vat:
+          type: integer
+          example: 25
+        sort_code:
+          type: string
+          example: "058"
+        reference:
+          type: string
+          example: TRF-20260420-001
+        narration:
+          type: string
+          example: Payment for services
+        accoun_name:
+          type: string
+          example: John Doe
+        fee:
+          type: integer
+          example: 50
+        accoun_number:
+          type: string
+          example: "0123456789"
+        total:
+          type: integer
+          example: 50075
+    BulkTransferResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Bulk transfer initiated successfully
+        data:
+          type: object
+          properties:
+            all:
+              type: array
+              items:
+                $ref: "#/components/schemas/BulkTransferResult"
+            accepted:
+              type: array
+              items:
+                $ref: "#/components/schemas/BulkTransferResult"
+            rejected:
+              type: array
+              items:
+                $ref: "#/components/schemas/BulkTransferResult"
     Beneficiary:
       type: object
       properties:

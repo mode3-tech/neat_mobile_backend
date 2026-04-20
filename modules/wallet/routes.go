@@ -10,6 +10,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		wallet.POST("/transfer", handler.InitiateTransfer)
 		wallet.POST("/beneficiary", handler.AddBeneficiary)
 		wallet.GET("/beneficiaries", handler.GetBeneficiaries)
+		wallet.POST("/transfer/bulk", handler.InitiateBulkTransfer)
 	}
 }
 

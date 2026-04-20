@@ -139,6 +139,10 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+type ChallengeRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 type SMSOTPRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }

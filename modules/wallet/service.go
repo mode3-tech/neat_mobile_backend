@@ -202,6 +202,63 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 
 }
 
+func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string, req []TransferRequest) (*BulkTransferResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if s.providusService == nil {
+		return nil, errors.New("transfer service is not configured")
+	}
+
+	resp, err := s.providusService.InitiateBulkTransfer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp == nil {
+		return nil, errors.New("transfer service returned no response body")
+	}
+
+	toResults := func(src []ProvidusBatchTransferResult) []BulkTransferResult {
+		out := make([]BulkTransferResult, len(src))
+		for i, r := range src {
+			out[i] = BulkTransferResult{
+				Amount:        r.Amount,
+				VAT:           r.VAT,
+				SortCode:      r.SortCode,
+				Reference:     r.Reference,
+				Narration:     r.Narration,
+				AccountName:   r.AccountName,
+				Fee:           r.Fee,
+				AccountNumber: r.AccountNumber,
+				Total:         r.Total,
+			}
+		}
+		return out
+	}
+
+	return &BulkTransferResponse{
+		Status:  "success",
+		Message: resp.Message,
+		Data: struct {
+			All      []BulkTransferResult `json:"all"`
+			Rejected []BulkTransferResult `json:"rejected"`
+			Accepted []BulkTransferResult `json:"accepted"`
+		}{
+			All:      toResults(resp.Data.All),
+			Rejected: toResults(resp.Data.Rejected),
+			Accepted: toResults(resp.Data.Accepted),
+		},
+	}, nil
+}
+
 func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID string, req *AddBeneficiaryRequest) (*Beneficiary, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
@@ -331,7 +388,6 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 
 }
 
-func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string) {}
 
 func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
 	if strings.TrimSpace(payload.TranType) != "C" {

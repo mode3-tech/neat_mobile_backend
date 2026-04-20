@@ -1535,20 +1535,19 @@ func isInternalServerBiometricsError(err error) bool {
 }
 
 func (h *Handler) ChallengeRequest(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if mobileUserID == "" {
-		h.respondError(c, http.StatusUnauthorized, "invalid access token", nil)
-		return
-	}
-
 	deviceID := c.GetHeader("X-Device-ID")
-
-	if deviceID == "" {
+	if strings.TrimSpace(deviceID) == "" {
 		h.respondError(c, http.StatusBadRequest, "device id is required", nil)
 		return
 	}
 
-	resp, err := h.service.CreateChallenge(c.Request.Context(), mobileUserID, deviceID)
+	var req ChallengeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "refresh_token is required", err)
+		return
+	}
+
+	resp, err := h.service.CreateChallenge(c.Request.Context(), req.RefreshToken, deviceID)
 	if err != nil {
 		if isBadRequestChallengeRequestError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)

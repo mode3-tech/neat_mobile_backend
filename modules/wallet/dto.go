@@ -127,24 +127,48 @@ type TransactionObj struct {
 }
 
 type BulkTransferResponse struct {
-	Status  bool   `json:"status"`
+	Status  string `json:"status"`
 	Message string `json:"message"`
 	Data    struct {
-		All      []TransferResult `json:"all"`
-		Rejected []TransferResult `json:"rejected"`
-		Accepted []TransferResult `json:"accepted"`
+		All      []BulkTransferResult `json:"all"`
+		Rejected []BulkTransferResult `json:"rejected"`
+		Accepted []BulkTransferResult `json:"accepted"`
 	} `json:"data"`
 }
 
-// type BulkTransferResult struct {
-// 	Amount      int64  `json:"amount"`
-// 	VAT         int64  `json:"vat"`
-// 	SortCode    string `json:"sort_code"`
-// 	Reference   string `json:"reference"`
-// 	Narration   string `json:"narration"`
-// 	AccountName string `json:"account_name"`
-// 	Fee
-// }
+type ProvidusBatchTransferResponse struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+	Data    struct {
+		All      []ProvidusBatchTransferResult `json:"all"`
+		Rejected []ProvidusBatchTransferResult `json:"rejected"`
+		Accepted []ProvidusBatchTransferResult `json:"accepted"`
+	} `json:"data"`
+}
+
+type ProvidusBatchTransferResult struct {
+	Amount        int64  `json:"amount"`
+	VAT           int64  `json:"vat"`
+	SortCode      string `json:"sortCode"`
+	Reference     string `json:"reference"`
+	Narration     string `json:"narration"`
+	AccountName   string `json:"accountName"`
+	Fee           int64  `json:"fee"`
+	AccountNumber string `json:"accountNumber"`
+	Total         int64  `json:"total"`
+}
+
+type BulkTransferResult struct {
+	Amount        int64  `json:"amount"`
+	VAT           int64  `json:"vat"`
+	SortCode      string `json:"sort_code"`
+	Reference     string `json:"reference"`
+	Narration     string `json:"narration"`
+	AccountName   string `json:"accoun_name"`
+	Fee           int64  `json:"fee"`
+	AccountNumber string `json:"accoun_number"`
+	Total         int64  `json:"total"`
+}
 
 //             {
 //                 "amount": 500,

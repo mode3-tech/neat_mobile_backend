@@ -25,6 +25,7 @@ type ProvidusService interface {
 	FetchBanks(ctx context.Context) ([]Bank, error)
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 	InitiateTransfer(ctx context.Context, customerID string, req *TransferRequest) (*TransferResponse, error)
+	InitiateBulkTransfer(ctx context.Context, req []TransferRequest) (*ProvidusBatchTransferResponse, error)
 }
 
 type UploadService interface {

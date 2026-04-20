@@ -292,3 +292,7 @@ func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string) 
 
 	return user.IsBiometricsEnabled, nil
 }
+
+func (r *Repository) DeactiveOlderDevices(ctx context.Context, mobileUserID string) error {
+	return nil
+}

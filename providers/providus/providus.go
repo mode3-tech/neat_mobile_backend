@@ -249,3 +249,67 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	return &result, nil
 }
+
+func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.TransferRequest) (*wallet.ProvidusBatchTransferResponse, error) {
+	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+		return nil, errors.New("providus service not configured")
+	}
+
+	url := p.BaseURL + "/transfer/bank/batch"
+
+	type transferItem struct {
+		Amount        float64        `json:"amount"`
+		SortCode      string         `json:"sortCode"`
+		Narration     *string        `json:"narration,omitempty"`
+		AccountNumber string         `json:"accountNumber"`
+		AccountName   *string        `json:"accountName,omitempty"`
+		Metadata      map[string]any `json:"metadata,omitempty"`
+	}
+
+	payload := make([]transferItem, 0, len(req))
+	for _, trfReq := range req {
+		payload = append(payload, transferItem{
+			Amount:        float64(trfReq.Amount) / 100,
+			SortCode:      trfReq.SortCode,
+			Narration:     trfReq.Narration,
+			AccountNumber: trfReq.AccountNumber,
+			AccountName:   trfReq.AccountName,
+			Metadata:      trfReq.Metadata,
+		})
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("providus bulk transfer request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if len(respBody) == 0 {
+			return nil, fmt.Errorf("providus bulk transfer failed with status: %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("providus bulk transfer failed: %s", extractErrorMessage(respBody))
+	}
+
+	var result wallet.ProvidusBatchTransferResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode providus bulk transfer response: %w", err)
+	}
+
+	return &result, nil
+}

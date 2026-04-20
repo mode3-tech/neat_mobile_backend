@@ -70,18 +70,43 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}, nil
 }
 
-func (s *Service) CreateChallenge(ctx context.Context, mobileUserID, deviceID string) (*ChallengeRequestResponse, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user id is required")
-	}
-
+func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID string) (*ChallengeRequestResponse, error) {
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
 		return nil, errors.New("device id is required")
 	}
 
-	_, err := s.verifyUserDevice(ctx, mobileUserID, deviceID)
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	sub, _, jti, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
+	if err != nil {
+		return nil, errors.New("device not allowed")
+	}
+
+	tokenRow, err := s.repo.GetRefreshTokenWithJTI(ctx, jti)
+	if err != nil {
+		return nil, errors.New("device not allowed")
+	}
+
+	receivedHash := sha256.Sum256([]byte(refreshToken))
+	if tokenRow.TokenHash != hex.EncodeToString(receivedHash[:]) {
+		return nil, errors.New("device not allowed")
+	}
+
+	if tokenRow.RevokedAt != nil {
+		return nil, errors.New("device not allowed")
+	}
+
+	if time.Now().UTC().After(tokenRow.ExpiresAt) {
+		return nil, errors.New("device not allowed")
+	}
+
+	mobileUserID := sub
+
+	_, err = s.verifyUserDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		return nil, err
 	}
