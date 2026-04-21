@@ -180,6 +180,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
+	notificationHadler := notification.NewHandler(notificationService)
+	notification.RegisterRoutes(apiV1, notificationHadler, authGuard)
 
 	accountRepo := account.NewRepository(db)
 	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService, cfg.PDFShiftAPIKey)
