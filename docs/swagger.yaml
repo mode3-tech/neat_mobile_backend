@@ -2159,7 +2159,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: "#/components/schemas/UpdateProfileRequest"
       responses:
@@ -3505,6 +3505,10 @@ components:
         is_notifications_enabled:
           type: boolean
           example: true
+        profile_picture:
+          type: string
+          description: URL of the user's profile picture.
+          example: "https://f000.backblazeb2.com/file/public-assets/profile-pictures/user123/avatar.jpg"
     AccountSummaryResponse:
       type: object
       properties:
@@ -3516,6 +3520,10 @@ components:
     UpdateProfileRequest:
       type: object
       properties:
+        profile_picture:
+          type: string
+          format: binary
+          description: Profile picture image file (optional).
         email:
           type: string
           format: email

@@ -73,9 +73,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	s3bucketConfig := s3bucket.BackblazeConfig{
-		KeyID:      cfg.B2KeyID,
-		AppKey:     cfg.B2AppKey,
-		BucketName: cfg.B2StatementBucketName,
+		KeyID:                  cfg.B2KeyID,
+		AppKey:                 cfg.B2AppKey,
+		DocsBucketName:         cfg.B2DocumentsBucketName,
+		PublicAssetsBucketName: cfg.B2AssetsBucketName,
 	}
 
 	s3bucketClient, err := s3bucket.NewBackblazeClient(context.Background(), s3bucketConfig)
@@ -180,8 +181,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
-	notificationHadler := notification.NewHandler(notificationService)
-	notification.RegisterRoutes(apiV1, notificationHadler, authGuard)
+	notificationHandler := notification.NewHandler(notificationService)
+	notification.RegisterRoutes(apiV1, notificationHandler, authGuard)
 
 	accountRepo := account.NewRepository(db)
 	accountService := account.NewService(accountRepo, loanService, s3bucketClient, notificationService, cfg.PDFShiftAPIKey)

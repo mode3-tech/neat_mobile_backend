@@ -7,6 +7,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/neatsave"
 	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
 	"time"
@@ -188,6 +189,9 @@ func Migrate(db *gorm.DB) error {
 		&wallet.Beneficiary{},
 		&wallet.ExpectedDeposit{},
 		&account.AccountReportJob{},
+		&neatsave.SavingsGoal{},
+		&neatsave.AutoSaveRule{},
+		&neatsave.SavingsActivity{},
 	); err != nil {
 		return err
 	}

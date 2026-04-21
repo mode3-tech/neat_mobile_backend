@@ -52,7 +52,7 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 			Date:        t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			Reference:   t.Reference,
 			Status:      t.Status,
-			Amount:      t.Amount,
+			Amount:      t.Amount / 100,
 		}
 	}
 
@@ -126,7 +126,7 @@ func groupByMonth(txs []Transaction) []TransactionSection {
 			Reference:   t.Reference,
 			Date:        t.CreatedAt.Format(time.RFC3339),
 			Status:      t.Status,
-			Amount:      t.Amount,
+			Amount:      t.Amount / 100,
 		})
 	}
 

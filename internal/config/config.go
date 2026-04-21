@@ -31,7 +31,8 @@ type Config struct {
 	ProvidusWebhookSecret      string
 	B2KeyID                    string
 	B2AppKey                   string
-	B2StatementBucketName      string
+	B2DocumentsBucketName      string
+	B2AssetsBucketName         string
 	PDFShiftAPIKey             string
 
 	LoginRateLimitIPMaxAttempts    int
@@ -71,7 +72,8 @@ func Load() Config {
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
 		B2KeyID:                    getEnv("B2_KEY_ID", ""),
 		B2AppKey:                   getEnv("B2_APP_KEY", ""),
-		B2StatementBucketName:      getEnv("B2_STATEMENT_BUCKET", ""),
+		B2DocumentsBucketName:      getEnv("B2_DOCUMENTS_BUCKET", ""),
+		B2AssetsBucketName:         getEnv("B2_ASSETS_BUCKET", ""),
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),

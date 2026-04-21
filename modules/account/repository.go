@@ -43,6 +43,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 		Select(`wallet_users.id, 
 			wallet_users.first_name,
 			wallet_users.last_name,
+			wallet_users.profile_picture,
 			wallet_users.is_notifications_enabled,
 			wallet_users.email,
 			wallet_users.dob,
@@ -59,15 +60,19 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 	return &row, err
 }
 
-func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, req UpdateProfileRequest) error {
+func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, data UpdateProfileData) error {
 	updates := map[string]any{}
 
-	if req.Address != nil {
-		updates["address"] = *req.Address
+	if data.Address != nil {
+		updates["address"] = *data.Address
 	}
 
-	if req.Email != nil {
-		updates["email"] = *req.Email
+	if data.Email != nil {
+		updates["email"] = *data.Email
+	}
+
+	if data.ProfilePictureURL != nil {
+		updates["profile_picture"] = *data.ProfilePictureURL
 	}
 
 	return r.db.WithContext(ctx).

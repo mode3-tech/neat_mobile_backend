@@ -20,6 +20,7 @@ const (
 
 type AccountSummaryRow struct {
 	ID                     string
+	ProfilePicture         string
 	FirstName              string
 	LastName               string
 	DOB                    time.Time
@@ -33,4 +34,10 @@ type AccountSummaryRow struct {
 	BookedBalance          int64
 	InternalWalletID       string
 	IsNotificationsEnabled bool
+}
+
+type UpdateProfileData struct {
+	ProfilePictureURL *string
+	Email             *string
+	Address           *string
 }

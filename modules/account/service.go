@@ -10,11 +10,11 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"mime/multipart"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
-	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	"net/http"
 	"strings"
 	"time"
@@ -26,12 +26,12 @@ import (
 type Service struct {
 	repo           *Repository
 	loanProvider   LoanProvider
-	b2             *s3bucket.BackblazeClient
+	b2             UploadService
 	notifier       *notification.Service
 	pdfShiftAPIKey string
 }
 
-func NewService(repo *Repository, loanProvider LoanProvider, b2 *s3bucket.BackblazeClient, notifier *notification.Service, pdfShiftAPIKey string) *Service {
+func NewService(repo *Repository, loanProvider LoanProvider, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string) *Service {
 	return &Service{repo: repo, loanProvider: loanProvider, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey}
 }
 
@@ -86,6 +86,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 		BankName:               accountInfo.BankName,
 		BVN:                    accountInfo.BVN,
 		DOB:                    accountInfo.DOB,
+		ProfilePicture:         accountInfo.ProfilePicture,
 		Address:                accountInfo.Address,
 		PhoneNumber:            accountInfo.Phone,
 		AccountNumber:          accountInfo.AccountNumber,
@@ -310,12 +311,18 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	}
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, req UpdateProfileRequest) error {
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID, profilePictureURL string, req UpdateProfileRequest) error {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return errors.New("user id is missing")
 	}
 
-	if err := s.repo.UpdateProfile(ctx, mobileUserID, req); err != nil {
+	data := UpdateProfileData{
+		ProfilePictureURL: &profilePictureURL,
+		Address:           req.Address,
+		Email:             req.Email,
+	}
+
+	if err := s.repo.UpdateProfile(ctx, mobileUserID, data); err != nil {
 		return err
 	}
 
@@ -360,7 +367,7 @@ func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID s
 		return fmt.Errorf("failed to write transactions to csv: %w", err)
 	}
 
-	if err := s.b2.Upload(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
+	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
 		return fmt.Errorf("failed to upload account statement to storage: %w", err)
 	}
 
@@ -511,7 +518,7 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 
 	log.Printf("generatePDF: size=%d bytes for key=%s", len(pdfBytes), key)
 
-	if err := s.b2.Upload(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
+	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
 		return fmt.Errorf("failed to upload account statement PDF to storage: %w", err)
 	}
 
@@ -528,4 +535,14 @@ func (s *Service) verifyUserDevice(ctx context.Context, mobileUser, deviceID str
 	}
 
 	return device, nil
+}
+
+func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File, header multipart.FileHeader, mobileUserID string) (string, error) {
+	key := fmt.Sprintf("profile-pictures/%s/%s", mobileUserID, header.Filename)
+	if err := s.b2.UploadProfilePicture(ctx, key, file, header.Header.Get("Content-Type")); err != nil {
+		return "", err
+	}
+
+	url := s.b2.FileURL(key)
+	return url, nil
 }

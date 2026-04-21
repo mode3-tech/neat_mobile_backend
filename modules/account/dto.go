@@ -11,6 +11,7 @@ type AccountSummary struct {
 	FullName               string       `json:"full_name"`
 	Email                  string       `json:"email,omitempty"`
 	PhoneNumber            string       `json:"phone_number"`
+	ProfilePicture         string       `json:"profile_picture"`
 	DOB                    time.Time    `json:"dob"`
 	Address                string       `json:"address"`
 	BVN                    string       `json:"bvn"`

@@ -153,19 +153,47 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	var req UpdateProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
 	deviceID := c.GetHeader("X-Device-ID")
 	if strings.TrimSpace(deviceID) == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
 		return
 	}
 
-	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("profile_picture")
+	if err != nil && err != http.ErrMissingFile {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid image file"})
+		return
+	}
+
+	var url string
+
+	if file != nil {
+		defer file.Close()
+
+		contentType := header.Header.Get("Content-Type")
+		if contentType != "image/jpeg" || contentType != "image/png" || contentType != "image/webp" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "only jpeg, png and webp allowed"})
+			return
+		}
+
+		if header.Size > 5<<20 {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "image larger than 8MB"})
+			return
+		}
+		url, err = h.service.uploadProfilePicture(c.Request.Context(), file, *header, mobileUserID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured while uploading profile picture"})
+			return
+		}
+	}
+
+	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, url, req); err != nil {
 		if err.Error() == "user id is missing" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return

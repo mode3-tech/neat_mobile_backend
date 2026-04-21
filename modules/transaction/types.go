@@ -22,6 +22,9 @@ const (
 	TransactionSourceDebit            TransactionSource = "debit"
 	TransactionSourceCredit           TransactionSource = "credit"
 	TransactionSourceLoanDisbursement TransactionSource = "loan_disbursement"
+	TransactionSourceAutoSave         TransactionSource = "auto_save"
+	TransactionSourceLoanRepayment    TransactionSource = "loan_repayment"
+	TransactionSourceCard             TransactionSource = "card"
 )
 
 type TransactionCategory string

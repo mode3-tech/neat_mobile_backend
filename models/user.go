@@ -14,6 +14,7 @@ const (
 type User struct {
 	ID                           string          `gorm:"column:id;primaryKey;index"`
 	WalletID                     string          `gorm:"column:wallet_id;uniqueIndex;not null"`
+	ProfilePicture               *string         `gorm:"column:profile_picture"`
 	FirstName                    string          `gorm:"column:first_name;not null"`
 	LastName                     string          `gorm:"column:last_name;not null"`
 	Address                      *string         `gorm:"column:address"`

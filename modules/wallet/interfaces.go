@@ -2,7 +2,6 @@ package wallet
 
 import (
 	"context"
-	"io"
 )
 
 type BankResponse struct {
@@ -26,8 +25,4 @@ type ProvidusService interface {
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 	InitiateTransfer(ctx context.Context, customerID string, req *TransferRequest) (*TransferResponse, error)
 	InitiateBulkTransfer(ctx context.Context, req []TransferRequest) (*ProvidusBatchTransferResponse, error)
-}
-
-type UploadService interface {
-	Upload(ctx context.Context, body io.ReadSeeker, filename string) (string, error)
 }
