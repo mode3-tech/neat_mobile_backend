@@ -16,6 +16,7 @@ import (
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/modules/neatsave"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
@@ -265,6 +266,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	go func() {
 		c.Start()
 	}()
+
+	neatsaveRepo := neatsave.NewRepository(db)
+	neatsaveService := neatsave.NewService(neatsaveRepo)
+	neatsaveHandler := neatsave.NewHandler(neatsaveService)
+	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
 
 	return r, stopCron, nil
 }

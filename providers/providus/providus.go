@@ -250,7 +250,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	return &result, nil
 }
 
-func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.TransferRequest) (*wallet.ProvidusBatchTransferResponse, error) {
+func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.BulkTransferRecipientInfo) (*wallet.ProvidusBatchTransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}

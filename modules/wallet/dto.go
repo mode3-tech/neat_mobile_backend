@@ -126,6 +126,20 @@ type TransactionObj struct {
 	CreatedAt time.Time `json:"created_at" binding:"required"`
 }
 
+type BulkTransferRecipientInfo struct {
+	Amount        int64          `json:"amount" binding:"required,gt=0"`
+	SortCode      string         `json:"sort_code" binding:"required"`
+	Narration     *string        `json:"narration" binding:"omitempty,max=255"`
+	AccountNumber string         `json:"account_number" binding:"required"`
+	AccountName   *string        `json:"account_name" binding:"required,max=255"`
+	Metadata      map[string]any `json:"metadata" binding:"omitempty"`
+}
+
+type BulkTransferRequest struct {
+	RecipientInfo  []BulkTransferRecipientInfo `json:"recipient_info" binding:"required"`
+	TransactionPin string                      `json:"transaction_pin" binding:"required"`
+}
+
 type BulkTransferResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
@@ -169,64 +183,3 @@ type BulkTransferResult struct {
 	AccountNumber string `json:"accoun_number"`
 	Total         int64  `json:"total"`
 }
-
-//             {
-//                 "amount": 500,
-//                 "vat": 0.7875,
-//                 "sortCode": "000013",
-//                 "reference": "l9gdbqe7FmX06KjuZt0r0seAJ69nHykXTHvM",
-//                 "narration": "Just kidding",
-//                 "accountName": "Obagunwa Emmanuel",
-//                 "fee": 10.5,
-//                 "accountNumber": "0167421242",
-//                 "total": 511.2875
-//             },
-//             {
-//                 "amount": 250,
-//                 "vat": 0.7875,
-//                 "sortCode": "000013",
-//                 "reference": "MBg5hvkWlSMXyCTsjtYw3MIBSmWMMp77CfAu",
-//                 "narration": "Just kidding",
-//                 "accountName": "Obagunwa Emmanuel",
-//                 "fee": 10.5,
-//                 "accountNumber": "0167421242",
-//                 "total": 261.2875
-//             }
-//         ],
-//         "rejected": [],
-//         "accepted": [
-//             {
-//                 "amount": 500,
-//                 "vat": 0.7875,
-//                 "bankName": "GTBANK PLC",
-//                 "sortCode": "000013",
-//                 "metadata": {
-//                     "sessionId": "187923755680432213004147647494",
-//                     "transactionReference": "8828075379951199"
-//                 },
-//                 "reference": "l9gdbqe7FmX06KjuZt0r0seAJ69nHykXTHvM",
-//                 "narration": "Just kidding",
-//                 "accountName": "Obagunwa Emmanuel",
-//                 "fee": 10.5,
-//                 "accountNumber": "0167421242",
-//                 "total": 511.2875
-//             },
-//             {
-//                 "amount": 250,
-//                 "vat": 0.7875,
-//                 "bankName": "GTBANK PLC",
-//                 "sortCode": "000013",
-//                 "metadata": {
-//                     "sessionId": "026545050219349897184258832943",
-//                     "transactionReference": "8341434570354439"
-//                 },
-//                 "reference": "MBg5hvkWlSMXyCTsjtYw3MIBSmWMMp77CfAu",
-//                 "narration": "Just kidding",
-//                 "accountName": "Obagunwa Emmanuel",
-//                 "fee": 10.5,
-//                 "accountNumber": "0167421242",
-//                 "total": 261.2875
-//             }
-//         ]
-//     }
-// }

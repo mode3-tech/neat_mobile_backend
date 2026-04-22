@@ -29,6 +29,16 @@ func (r *Repository) FindDevice(ctx context.Context, mobileUserID, deviceID stri
 	return &userDevice, nil
 }
 
-func (r *Repository) CreateGoal(ctx context.Context, savingsGoal *SavingsGoal) error {
-	return r.db.WithContext(ctx).Create(&savingsGoal).Error
+func (r *Repository) CreateGoalWithRules(ctx context.Context, savingsGoal *SavingsGoal, rules *AutoSaveRule) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(savingsGoal).Error; err != nil {
+			return err
+		}
+		if rules != nil {
+			if err := tx.Create(rules).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

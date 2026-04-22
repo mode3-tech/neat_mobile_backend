@@ -236,18 +236,13 @@ func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
 		return
 	}
 
-	var req []TransferRequest
+	var req BulkTransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	if len(req) == 0 {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "At least one transfer is required"})
-		return
-	}
-
-	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, deviceID, req)
+	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
 		h.handleBulkTransferError(c, err)
 		return

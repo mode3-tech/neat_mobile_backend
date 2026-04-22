@@ -29,6 +29,8 @@ tags:
     description: Internal CBA integration endpoints protected by HMAC headers
   - name: Dev Signer
     description: Development-only signer helper endpoints for Postman/device simulation
+  - name: NeatSave
+    description: Savings goal and auto-save rule endpoints
 paths:
   /auth/register:
     post:
@@ -2483,10 +2485,7 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              minItems: 1
-              items:
-                $ref: "#/components/schemas/TransferRequest"
+              $ref: "#/components/schemas/BulkTransferRequest"
       responses:
         "200":
           description: Bulk transfer initiated successfully
@@ -3176,6 +3175,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /savings/create/goal:
+    post:
+      tags:
+        - NeatSave
+      summary: Create a savings goal
+      description: Creates a new savings goal for the authenticated user. If `auto_save` is true, an auto-save rule is created atomically with the goal.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoalRequest"
+      responses:
+        "200":
+          description: Savings goal created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateGoalResponse"
+        "400":
+          description: Invalid request body or goal name is empty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized, missing device ID, device not found, or device not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Target amount too low or target date is not in the future
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to create savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -3183,6 +3234,56 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    CreateGoalRequest:
+      type: object
+      required:
+        - name
+        - target_amount
+        - target_date
+        - savings_type
+      properties:
+        name:
+          type: string
+          example: Emergency Fund
+        target_amount:
+          type: integer
+          description: Target savings amount in kobo (minimum 5000, i.e. NGN 50)
+          example: 500000
+        target_date:
+          type: string
+          format: date-time
+          description: Must be a future date
+          example: "2026-12-31T00:00:00Z"
+        savings_type:
+          type: string
+          enum: [flexible, locked]
+          example: flexible
+        auto_save:
+          type: boolean
+          default: false
+          example: true
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+          description: Required when auto_save is true
+          example: weekly
+        auto_save_amount:
+          type: integer
+          description: Amount to auto-save per cycle in kobo. Required when auto_save is true
+          example: 10000
+        preferred_time:
+          type: string
+          description: Time of day for the auto-save trigger (HH:MM). Defaults to 08:00 if omitted
+          example: "08:00"
+    CreateGoalResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: savings goal creation was successful
     Bank:
       type: object
       properties:
@@ -3309,6 +3410,49 @@ components:
           example: Transfer initiated successfully
         transfer:
           $ref: "#/components/schemas/TransferResult"
+    BulkTransferRequest:
+      type: object
+      required:
+        - recipient_info
+        - transaction_pin
+      properties:
+        recipient_info:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/BulkTransferRecipientInfo"
+        transaction_pin:
+          type: string
+          example: "1234"
+    BulkTransferRecipientInfo:
+      type: object
+      required:
+        - amount
+        - sort_code
+        - account_number
+        - account_name
+      properties:
+        amount:
+          type: integer
+          description: Transfer amount in Naira (not kobo)
+          example: 5000
+        sort_code:
+          type: string
+          example: "058"
+        narration:
+          type: string
+          maxLength: 255
+          example: "Payment for services"
+        account_number:
+          type: string
+          example: "0123456789"
+        account_name:
+          type: string
+          maxLength: 255
+          example: "John Doe"
+        metadata:
+          type: object
+          additionalProperties: true
     BulkTransferResult:
       type: object
       properties:

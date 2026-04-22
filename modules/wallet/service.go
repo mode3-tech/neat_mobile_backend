@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -64,11 +63,6 @@ func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode,
 	return s.providusService.FetchBankDetails(ctx, accountNumber, bankCode)
 }
 
-const (
-	maxPinAttempts  = 5
-	pinLockDuration = 30 * time.Minute
-)
-
 func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID string, req *TransferRequest) (*TransferResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
@@ -93,27 +87,9 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
-	user, err := s.repo.GetUserForPinVerification(ctx, mobileUserID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	if err := s.verifyTransactionPin(ctx, mobileUserID, req.TransactionPin); err != nil {
+		return nil, err
 	}
-
-	if user.TransactionPinLockedUntil != nil && user.TransactionPinLockedUntil.After(time.Now().UTC()) {
-		return nil, ErrTransactionPinLocked
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PinHash), []byte(req.TransactionPin)); err != nil {
-		newAttempts := user.FailedTransactionPinAttempts + 1
-		if newAttempts >= maxPinAttempts {
-			_ = s.repo.LockTransactionPin(ctx, mobileUserID, time.Now().UTC().Add(pinLockDuration))
-			return nil, ErrTransactionPinLocked
-		} else {
-			_ = s.repo.IncrementFailedPinAttempts(ctx, mobileUserID)
-		}
-		return nil, fmt.Errorf("%w: you have %d attempt(s) left", ErrWrongTransactionPin, maxPinAttempts-newAttempts)
-	}
-
-	_ = s.repo.ResetPinAttempts(ctx, mobileUserID)
 
 	if req.Amount <= 0 {
 		return nil, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidTransferRequest)
@@ -202,24 +178,40 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 
 }
 
-func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string, req []TransferRequest) (*BulkTransferResponse, error) {
+func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	if mobileUserID == "" {
-		return nil, errors.New("mobile user id is required")
+		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
 	}
 
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
-		return nil, errors.New("device id is required")
+		return nil, fmt.Errorf("%w: device ID is required", ErrInvalidTransferRequest)
+	}
+
+	if req == nil || len(req.RecipientInfo) == 0 {
+		return nil, fmt.Errorf("%w: at least one recipient is required", ErrInvalidTransferRequest)
 	}
 
 	if s.providusService == nil {
 		return nil, errors.New("transfer service is not configured")
 	}
 
-	resp, err := s.providusService.InitiateBulkTransfer(ctx, req)
+	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("%w: device not found", ErrDeviceVerificationFailed)
+		}
+		return nil, fmt.Errorf("failed to verify device: %w", err)
+	}
+
+	if err := s.verifyTransactionPin(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
+	}
+
+	resp, err := s.providusService.InitiateBulkTransfer(ctx, req.RecipientInfo)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
 	}
 
 	if resp == nil {
@@ -387,7 +379,6 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 	}, nil
 
 }
-
 
 func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
 	if strings.TrimSpace(payload.TranType) != "C" {
