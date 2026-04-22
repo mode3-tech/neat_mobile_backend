@@ -14,7 +14,7 @@ const (
 type ReportFormat string
 
 const (
-	ReportFormatCSV ReportFormat = "csv"
+	ReportFormatCSV ReportFormat = "xlsx"
 	ReportFormatPDF ReportFormat = "pdf"
 )
 

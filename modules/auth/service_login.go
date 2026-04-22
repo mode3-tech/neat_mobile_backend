@@ -242,6 +242,13 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			return err
 		}
 
+		user, err := authRepo.GetUserByID(ctx, pendingSession.UserID)
+		if err != nil {
+			return err
+		}
+
+		authObj.IsBiometricsEnabled = user.IsBiometricsEnabled
+
 		return nil
 	})
 	if err != nil {

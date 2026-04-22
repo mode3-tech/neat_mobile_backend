@@ -611,9 +611,10 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, VerifiedDeviceResponse{
-		Status:       "success",
-		AccessToken:  authObj.AccessToken,
-		RefreshToken: authObj.RefreshToken,
+		Status:              "success",
+		AccessToken:         authObj.AccessToken,
+		RefreshToken:        authObj.RefreshToken,
+		IsBiometricsEnabled: authObj.IsBiometricsEnabled,
 	})
 }
 

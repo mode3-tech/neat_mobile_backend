@@ -3,7 +3,6 @@ package account
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -295,13 +294,6 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	format := strings.TrimSpace(string(req.Format))
 
 	switch format {
-	case "csv":
-		{
-			if err := s.generateCSV(ctx, key, walletID, mobileUserID, req); err != nil {
-				return fmt.Errorf("failed to generate account statement CSV: %w", err)
-			}
-			return nil
-		}
 	case "pdf":
 		if err := s.generatePDF(ctx, key, walletID, mobileUserID, req); err != nil {
 			return fmt.Errorf("failed to generate account statement PDF: %w", err)
@@ -335,50 +327,50 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID, pro
 	return nil
 }
 
-func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
-	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve transactions: %w", err)
-	}
+// func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
+// 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to retrieve transactions: %w", err)
+// 	}
 
-	var buf bytes.Buffer
-	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM so Excel opens the file with correct encoding
-	w := csv.NewWriter(&buf)
+// 	var buf bytes.Buffer
+// 	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM so Excel opens the file with correct encoding
+// 	w := csv.NewWriter(&buf)
 
-	w.Write([]string{"Time", "Date", "Description", "Debit (NGN)", "Credit (NGN)", "Balance Before (NGN)", "Balance After (NGN)", "Transaction Reference"})
+// 	w.Write([]string{"Time", "Date", "Description", "Debit (NGN)", "Credit (NGN)", "Balance Before (NGN)", "Balance After (NGN)", "Transaction Reference"})
 
-	for _, tx := range transactions {
-		debit, credit := "", ""
-		amount := fmt.Sprintf("%.2f", float64(tx.Amount)/100)
-		if tx.Type == transaction.TransactionTypeDebit {
-			debit = amount
-		} else {
-			credit = amount
-		}
+// 	for _, tx := range transactions {
+// 		debit, credit := "", ""
+// 		amount := fmt.Sprintf("%.2f", float64(tx.Amount)/100)
+// 		if tx.Type == transaction.TransactionTypeDebit {
+// 			debit = amount
+// 		} else {
+// 			credit = amount
+// 		}
 
-		w.Write([]string{
-			tx.CreatedAt.Format("Jan 02 2006 15:04:05"),
-			tx.CreatedAt.Format("Jan 02 2006"),
-			tx.Description,
-			debit,
-			credit,
-			fmt.Sprintf("%.2f", float64(tx.BalanceBefore)/100),
-			fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100),
-			tx.Reference,
-		})
-	}
-	w.Flush()
+// 		w.Write([]string{
+// 			tx.CreatedAt.Format("Jan 02 2006 15:04:05"),
+// 			tx.CreatedAt.Format("Jan 02 2006"),
+// 			tx.Description,
+// 			debit,
+// 			credit,
+// 			fmt.Sprintf("%.2f", float64(tx.BalanceBefore)/100),
+// 			fmt.Sprintf("%.2f", float64(tx.BalanceAfter)/100),
+// 			tx.Reference,
+// 		})
+// 	}
+// 	w.Flush()
 
-	if err := w.Error(); err != nil {
-		return fmt.Errorf("failed to write transactions to csv: %w", err)
-	}
+// 	if err := w.Error(); err != nil {
+// 		return fmt.Errorf("failed to write transactions to csv: %w", err)
+// 	}
 
-	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
-		return fmt.Errorf("failed to upload account statement to storage: %w", err)
-	}
+// 	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
+// 		return fmt.Errorf("failed to upload account statement to storage: %w", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
