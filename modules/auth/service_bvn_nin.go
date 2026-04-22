@@ -37,7 +37,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("bvn verification not found")
+			return nil, errors.New("bvn verification record not found")
 		}
 		return nil, err
 	}

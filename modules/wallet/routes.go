@@ -12,6 +12,12 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		wallet.GET("/beneficiaries", handler.GetBeneficiaries)
 		wallet.POST("/transfer/bulk", handler.InitiateBulkTransfer)
 	}
+
+	{
+		walletTest := rg.Group("/wallet/test")
+
+		walletTest.POST("", handler.Test)
+	}
 }
 
 func RegisterWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth gin.HandlerFunc) {

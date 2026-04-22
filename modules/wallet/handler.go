@@ -271,3 +271,14 @@ func (h *Handler) handleBulkTransferError(c *gin.Context, err error) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate bulk transfer"})
 	}
 }
+
+func (h *Handler) Test(c *gin.Context) {
+
+	rslt, err := parseCSV(c.Request.Body)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, rslt)
+}

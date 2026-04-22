@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -306,6 +307,11 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 			return fmt.Errorf("failed to generate account statement PDF: %w", err)
 		}
 		return nil
+	case "xlsx":
+		if err := s.generateXLSX(ctx, key, walletID, mobileUserID, req); err != nil {
+			return fmt.Errorf("failed to generate account statement XLSX: %w", err)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported account statement format: %s", format)
 	}
@@ -369,6 +375,133 @@ func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID s
 
 	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
 		return fmt.Errorf("failed to upload account statement to storage: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
+	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve transactions: %w", err)
+	}
+
+	account, err := s.repo.GetAccountSummary(ctx, mobileUserID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve account info: %w", err)
+	}
+
+	var totalDebits, totalCredits int64
+	for _, tx := range transactions {
+		if tx.Type == transaction.TransactionTypeDebit {
+			totalDebits += tx.Amount
+		} else {
+			totalCredits += tx.Amount
+		}
+	}
+
+	var openingBalance, closingBalance int64
+	if len(transactions) > 0 {
+		first := transactions[0]
+		if first.Type == transaction.TransactionTypeDebit {
+			openingBalance = first.BalanceAfter + first.Amount
+		} else {
+			openingBalance = first.BalanceAfter - first.Amount
+		}
+		closingBalance = transactions[len(transactions)-1].BalanceAfter
+	}
+
+	formatAmount := func(kobo int64) string {
+		return fmt.Sprintf("%.2f", float64(kobo)/100)
+	}
+
+	f := excelize.NewFile()
+	sheet := "Statement"
+	f.SetSheetName("Sheet1", sheet)
+
+	labelStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"1F4E79"}, Pattern: 1},
+		Alignment: &excelize.Alignment{Horizontal: "center"},
+	})
+	debitStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Color: "C00000"}})
+	creditStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Color: "375623"}})
+
+	summaryRows := [][]interface{}{
+		{"Account Name", account.FirstName + " " + account.LastName},
+		{"Account Number", account.AccountNumber},
+		{"Period", req.DateFrom.Format("2 Jan 2006") + " – " + req.DateTo.Format("2 Jan 2006")},
+		{"Opening Balance (NGN)", formatAmount(openingBalance)},
+		{"Total Deposits (NGN)", formatAmount(totalCredits)},
+		{"Total Withdrawals (NGN)", formatAmount(totalDebits)},
+		{"Closing Balance (NGN)", formatAmount(closingBalance)},
+		{"Generated", time.Now().Format("2 Jan 2006 15:04:05")},
+	}
+	for i, row := range summaryRows {
+		rowNum := i + 1
+		labelCell, _ := excelize.CoordinatesToCellName(1, rowNum)
+		f.SetCellValue(sheet, labelCell, row[0])
+		f.SetCellStyle(sheet, labelCell, labelCell, labelStyle)
+		valCell, _ := excelize.CoordinatesToCellName(2, rowNum)
+		f.SetCellValue(sheet, valCell, row[1])
+	}
+
+	headerRow := len(summaryRows) + 2
+	headers := []string{"Date", "Time", "Description", "Reference", "Debit (NGN)", "Credit (NGN)", "Balance Before (NGN)", "Balance After (NGN)"}
+	for col, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(col+1, headerRow)
+		f.SetCellValue(sheet, cell, h)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+	}
+
+	for i, tx := range transactions {
+		row := headerRow + 1 + i
+		debit, credit := "", ""
+		amount := formatAmount(tx.Amount)
+		if tx.Type == transaction.TransactionTypeDebit {
+			debit = amount
+		} else {
+			credit = amount
+		}
+
+		values := []interface{}{
+			tx.CreatedAt.Format("Jan 02 2006"),
+			tx.CreatedAt.Format("15:04:05"),
+			tx.Description,
+			tx.Reference,
+			debit,
+			credit,
+			formatAmount(tx.BalanceBefore),
+			formatAmount(tx.BalanceAfter),
+		}
+		for col, v := range values {
+			cell, _ := excelize.CoordinatesToCellName(col+1, row)
+			f.SetCellValue(sheet, cell, v)
+		}
+
+		debitCell, _ := excelize.CoordinatesToCellName(5, row)
+		creditCell, _ := excelize.CoordinatesToCellName(6, row)
+		if debit != "" {
+			f.SetCellStyle(sheet, debitCell, debitCell, debitStyle)
+		}
+		if credit != "" {
+			f.SetCellStyle(sheet, creditCell, creditCell, creditStyle)
+		}
+	}
+
+	colWidths := map[string]float64{"A": 14, "B": 12, "C": 36, "D": 36, "E": 16, "F": 16, "G": 22, "H": 22}
+	for col, width := range colWidths {
+		f.SetColWidth(sheet, col, col, width)
+	}
+
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
+		return fmt.Errorf("failed to write xlsx: %w", err)
+	}
+
+	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+		return fmt.Errorf("failed to upload xlsx to storage: %w", err)
 	}
 
 	return nil

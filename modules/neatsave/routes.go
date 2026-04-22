@@ -6,6 +6,8 @@ func RegisterRoutes(rg *gin.RouterGroup, authGuard gin.HandlerFunc, handler *Han
 	savings := rg.Group("/savings", authGuard)
 
 	{
-		savings.POST("/create/goal", handler.CreateGoal)
+		savings.POST("/goal/create", handler.CreateGoal)
+		savings.GET("/goals", handler.GetUserGoals)
+		savings.GET("/goals/summary", handler.GetGoalSummary)
 	}
 }

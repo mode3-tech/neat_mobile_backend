@@ -1,5 +1,20 @@
 package neatsave
 
+import "time"
+
+type GoalWithLastDeposit struct {
+	SavingsGoal
+	LastDeposit *time.Time `json:"last_deposit"`
+}
+
+type GoalSummary struct {
+	Name         string     `json:"name"`
+	StartDate    time.Time  `json:"start_date"`
+	TargetAmount int64      `json:"target_amount"`
+	TotalSavings int64      `json:"total_savings"`
+	LastDeposit  *time.Time `json:"last_deposit"`
+}
+
 type NeatSaveMode string
 
 const (

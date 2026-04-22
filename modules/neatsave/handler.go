@@ -32,65 +32,68 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 
 	resp, err := h.service.CreateGoal(c.Request.Context(), mobileUserID, deviceID, req)
 	if err != nil {
-		if isUnauthorizedError(err) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
-		}
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if isUnprocessableEntityError(err) {
-			c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-			return
-		}
-		if isInternalServerError(err) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		handleNeatSaveError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, resp)
 }
 
-func isUnauthorizedError(err error) bool {
+func (h *Handler) GetUserGoals(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	resp, err := h.service.GetUserGoals(c.Request.Context(), mobileUserID, deviceID)
+	if err != nil {
+		handleNeatSaveError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) GetGoalSummary(c *gin.Context) {
+	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+
+	var query GetGoalSummaryQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query"})
+		return
+	}
+
+	resp, err := h.service.GetGoalSummary(c.Request.Context(), mobileUserID, deviceID, query.GoalID)
+	if err != nil {
+		handleNeatSaveError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func handleNeatSaveError(c *gin.Context, err error) {
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
 	case "device id is required", "mobile user id is required", "device not found", "device not allowed":
-		return true
-	default:
-		return false
-	}
-}
-
-func isBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 	case "goal's name can not be empty":
-		return true
-	default:
-		return false
-	}
-}
-
-func isUnprocessableEntityError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case "target amount and auto save amount can not be less that NGN 50", "target date must be in the future":
-		return true
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+	case "error creating savings goal", "error fetching user goals":
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	default:
-		return false
-	}
-}
-
-func isInternalServerError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "error creating savings goal":
-		return true
-	default:
-		return false
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+		return
 	}
 }

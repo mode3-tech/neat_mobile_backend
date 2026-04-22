@@ -13,7 +13,7 @@ func New(cfg config.Config) (*http.Server, func(), error) {
 	}
 
 	return &http.Server{
-		Addr:              ":" + cfg.NotificationPort,
+		Addr:              ":" + cfg.Port,
 		Handler:           router,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

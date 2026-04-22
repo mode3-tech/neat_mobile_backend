@@ -103,7 +103,72 @@ func nextRunDate(frequency AutoSaveFrequency) time.Time {
 	}
 }
 
-// func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID string)
+func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID string) (*GetUserSavingsResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	_, err := s.verifyUserDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.repository.GetUserGoals(ctx, mobileUserID)
+	if err != nil {
+		return nil, errors.New("error fetching user goals")
+	}
+
+	var goals []UserGoalInfo
+
+	for _, goal := range result {
+		goals = append(goals, UserGoalInfo{
+			GoalID:      goal.ID,
+			StartDate:   goal.CreatedAt,
+			Name:        goal.Name,
+			LastDeposit: goal.LastDeposit,
+		})
+	}
+
+	return &GetUserSavingsResponse{
+		Status:  "success",
+		Message: "User's goals fetched successfully",
+		Goals:   goals,
+	}, nil
+}
+
+func (s *Service) GetGoalSummary(ctx context.Context, mobileUserID, deviceID, goalID string) (*GetGoalSummaryResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	goalID = strings.TrimSpace(goalID)
+	if goalID == "" {
+		return nil, errors.New("goal id is required")
+	}
+
+	result, err := s.repository.GetGoalSummary(ctx, mobileUserID, goalID)
+	if err != nil {
+		return nil, errors.New("error fetching goal summary")
+	}
+
+	return &GetGoalSummaryResponse{
+		Status:  "success",
+		Message: "Goal summary fetched successfully",
+		Summary: *result,
+	}, nil
+}
 
 func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
 	userDevice, err := s.repository.FindDevice(ctx, mobileUserID, deviceID)

@@ -5246,6 +5246,107 @@
           }
         }
       }
+    },
+    "/savings/goals": {
+      "get": {
+        "tags": ["NeatSave"],
+        "summary": "List user savings goals",
+        "description": "Returns all savings goals for the authenticated user, each including the timestamp of the last deposit.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goals fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetUserSavingsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized, missing device ID, device not found, or device not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch goals",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/savings/goals/summary": {
+      "get": {
+        "tags": ["NeatSave"],
+        "summary": "Get goal summary",
+        "description": "Returns the title, start date, target amount, total savings, and last deposit for a specific goal.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "goal_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "ID of the savings goal to summarise."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goal summary fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetGoalSummaryResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid goal_id query parameter",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized, missing device ID, device not found, or device not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch goal summary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5257,6 +5358,44 @@
       }
     },
     "schemas": {
+      "GetUserSavingsResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "User's goals fetched successfully" },
+          "goals": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserGoalInfo" }
+          }
+        }
+      },
+      "UserGoalInfo": {
+        "type": "object",
+        "properties": {
+          "goal_id": { "type": "string", "example": "3f7b1c2a-..." },
+          "name": { "type": "string", "example": "Emergency Fund" },
+          "start_date": { "type": "string", "format": "date-time" },
+          "last_deposit": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "GetGoalSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "Goal summary fetched successfully" },
+          "summary": { "$ref": "#/components/schemas/GoalSummary" }
+        }
+      },
+      "GoalSummary": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "example": "Emergency Fund" },
+          "start_date": { "type": "string", "format": "date-time" },
+          "target_amount": { "type": "integer", "description": "Target amount in kobo", "example": 500000 },
+          "total_savings": { "type": "integer", "description": "Current total saved in kobo", "example": 120000 },
+          "last_deposit": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
       "CreateGoalRequest": {
         "type": "object",
         "required": ["name", "target_amount", "target_date", "savings_type"],
