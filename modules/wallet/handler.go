@@ -237,9 +237,42 @@ func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
 	}
 
 	var req BulkTransferRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
+
+	if strings.Contains(c.ContentType(), "multipart/form-data") {
+		pin := c.PostForm("transaction_pin")
+		if strings.TrimSpace(pin) == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "transaction_pin is required"})
+			return
+		}
+
+		fileHeader, err := c.FormFile("recipients_excel")
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "recipients_excel file is required"})
+			return
+		}
+
+		file, err := fileHeader.Open()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to read uploaded file"})
+			return
+		}
+		defer file.Close()
+
+		recipients, err := parseExcel(file)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		req = BulkTransferRequest{
+			RecipientInfo:  recipients,
+			TransactionPin: pin,
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
 	}
 
 	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
@@ -270,15 +303,4 @@ func (h *Handler) handleBulkTransferError(c *gin.Context, err error) {
 		log.Printf("Error initiating bulk transfer: %v", err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate bulk transfer"})
 	}
-}
-
-func (h *Handler) Test(c *gin.Context) {
-
-	rslt, err := parseCSV(c.Request.Body)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, rslt)
 }
