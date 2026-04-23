@@ -69,6 +69,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	if cfg.JWTSecret == "" {
 		return nil, nil, errors.New("jwt secret can't be empty")
 	}

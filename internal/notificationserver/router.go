@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/push"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +40,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	r.Use(gin.Recovery())
 
 	r.HEAD("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	api := r.Group("/api")
