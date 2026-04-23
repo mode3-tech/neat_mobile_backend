@@ -20,6 +20,7 @@ import (
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
+	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -168,7 +169,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
 
 	walletRepo := wallet.NewRepository(db)
-	walletService := wallet.NewService(walletRepo, providusWalletService)
+	walletPinVerifier := pinverifier.New(walletRepo)
+	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier)
 	walletHandler := wallet.NewHandler(walletService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
 
@@ -272,7 +274,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}()
 
 	neatsaveRepo := neatsave.NewRepository(db)
-	neatsaveService := neatsave.NewService(neatsaveRepo)
+	neatsavePinVerifier := pinverifier.New(neatsaveRepo)
+	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
 

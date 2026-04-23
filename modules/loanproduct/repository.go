@@ -129,3 +129,28 @@ func (r *Repository) GetLoanApplicationsWithUserID(ctx context.Context, userID s
 
 	return &loanApplication, nil
 }
+
+const loanSummaryBaseQuery = `
+SELECT
+    lp.name                             AS loan_product_type,
+    COALESCE(l.amount, 0)               AS loan_amount,
+    COALESCE(l.amount_to_be_paid, 0)    AS total_repayment,
+    COALESCE(l.installment, 0)          AS periodic_repayment,
+    CONCAT(l.loan_term, ' ', CASE LOWER(lp.repayment_frequency)
+        WHEN 'weekly'  THEN 'Weeks'
+        WHEN 'monthly' THEN 'months'
+        ELSE lp.repayment_frequency
+    END)                                AS loan_duration,
+    COALESCE(lp.interest_rate, 0)       AS interest_rate
+FROM loan_loan l
+JOIN loan_loanproduct lp ON lp.id = l.product_id
+`
+
+func (r *Repository) GetLoanSummary(ctx context.Context, loanID string) (*LoanSummaryRow, error) {
+	var summary LoanSummaryRow
+	err := r.db.WithContext(ctx).Raw(loanSummaryBaseQuery+" WHERE l.id = ?", loanID).Scan(&summary).Error
+	if err != nil {
+		return nil, err
+	}
+	return &summary, nil
+}

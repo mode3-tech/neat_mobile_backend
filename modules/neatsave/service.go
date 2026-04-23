@@ -3,6 +3,7 @@ package neatsave
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
@@ -12,11 +13,12 @@ import (
 )
 
 type Service struct {
-	repository *Repository
+	repository  *Repository
+	pinVerifier *pinverifier.Verifier
 }
 
-func NewService(repository *Repository) *Service {
-	return &Service{repository: repository}
+func NewService(repository *Repository, pinVerifier *pinverifier.Verifier) *Service {
+	return &Service{repository: repository, pinVerifier: pinVerifier}
 }
 
 func (s *Service) CreateGoal(ctx context.Context, mobileUserID, deviceID string, req CreateGoalRequest) (*CreateGoalResponse, error) {
@@ -170,6 +172,28 @@ func (s *Service) GetGoalSummary(ctx context.Context, mobileUserID, deviceID, go
 	}, nil
 }
 
+func (s *Service) DepositFromWallet(ctx context.Context, mobileUserID, deviceID string, req DepositFromWalletRequest) (*DepositFromWalletResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
+		return nil, err
+	}
+
+	return nil, errors.New("not implemented")
+}
+
 func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
 	userDevice, err := s.repository.FindDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
@@ -184,3 +208,4 @@ func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 	}
 	return userDevice, nil
 }
+

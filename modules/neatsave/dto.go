@@ -44,3 +44,14 @@ type GetGoalSummaryResponse struct {
 	Message string      `json:"message"`
 	Summary GoalSummary `json:"summary"`
 }
+
+type DepositFromWalletRequest struct {
+	GoalID         string `json:"goal_id" binding:"required"`
+	Amount         int64  `json:"amount" binding:"required,gt=0"`
+	TransactionPin string `json:"transaction_pin" binding:"required"`
+}
+
+type DepositFromWalletResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}

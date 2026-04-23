@@ -123,3 +123,12 @@ type LoanRepayment struct {
 	DefaultedDate        *time.Time `json:"defaulted_date"`
 	Status               string     `json:"status"`
 }
+
+type LoanSummaryRow struct {
+	LoanProductType   string  `json:"loan_product_type"   gorm:"column:loan_product_type"`
+	LoanAmount        float64 `json:"loan_amount"         gorm:"column:loan_amount"`
+	TotalRepayment    float64 `json:"total_repayment"     gorm:"column:total_repayment"`
+	PeriodicRepayment float64 `json:"periodic_repayment"  gorm:"column:periodic_repayment"`
+	LoanDuration      string  `json:"loan_duration"       gorm:"column:loan_duration"`
+	InterestRate      float64 `json:"interest_rate"       gorm:"column:interest_rate"`
+}

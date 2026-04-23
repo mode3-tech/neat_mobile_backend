@@ -361,7 +361,7 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	repayments, err := h.service.GetLoanRepayments(c.Request.Context(), loanID)
+	summary, err := h.service.GetLoanRepayments(c.Request.Context(), loanID)
 
 	if err != nil {
 		if isBadRequestGetRepaymentScheduleError(err) {
@@ -369,16 +369,11 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 			return
 		}
 
-		if isServiceUnavailableErrorLoanRepaymentError(err) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured"})
-			return
-		}
-
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "loan repayments fetched", "repayments": repayments})
+	c.JSON(http.StatusOK, gin.H{"message": "loan summary fetched", "summary": summary})
 
 }
 
@@ -393,13 +388,3 @@ func isBadRequestGetRepaymentScheduleError(err error) bool {
 	}
 }
 
-func isServiceUnavailableErrorLoanRepaymentError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-
-	switch msg {
-	case "core loan finder is  not configured":
-		return true
-	default:
-		return false
-	}
-}

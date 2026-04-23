@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/transaction"
 	"strconv"
 	"strings"
@@ -17,10 +18,11 @@ import (
 type Service struct {
 	repo            *Repository
 	providusService ProvidusService
+	pinVerifier     *pinverifier.Verifier
 }
 
-func NewService(repo *Repository, providusService ProvidusService) *Service {
-	return &Service{repo: repo, providusService: providusService}
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier) *Service {
+	return &Service{repo: repo, providusService: providusService, pinVerifier: pinVerifier}
 }
 
 func (s *Service) FetchBanks(ctx context.Context, mobileUserID, deviceID string) ([]Bank, error) {
@@ -87,7 +89,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
-	if err := s.verifyTransactionPin(ctx, mobileUserID, req.TransactionPin); err != nil {
+	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
 	}
 
@@ -205,7 +207,7 @@ func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, device
 		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
-	if err := s.verifyTransactionPin(ctx, mobileUserID, req.TransactionPin); err != nil {
+	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
 	}
 

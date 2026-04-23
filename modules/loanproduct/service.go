@@ -372,18 +372,14 @@ func (s *Service) GetAllLoans(ctx context.Context, userID string) ([]CoreCustome
 
 }
 
-func (s *Service) GetLoanRepayments(ctx context.Context, loanID string) (*[]LoanRepayment, error) {
+func (s *Service) GetLoanRepayments(ctx context.Context, loanID string) (*LoanSummaryRow, error) {
 	loanID = strings.TrimSpace(loanID)
 
 	if loanID == "" {
 		return nil, errors.New("invalid loan id")
 	}
 
-	if s.coreLoanFinder == nil {
-		return nil, errors.New("core loan finder is  not configured")
-	}
-
-	return s.coreLoanFinder.GetLoanRepayments(ctx, loanID)
+	return s.repo.GetLoanSummary(ctx, loanID)
 }
 
 func (s *Service) getCoreCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error) {
