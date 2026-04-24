@@ -1,7 +1,5 @@
 package loanproduct
 
-import "time"
-
 type LoanRequest struct {
 	LoanProductType   LoanType `json:"loan_product_type" binding:"required"`
 	BusinessAddress   string   `json:"business_address" binding:"required"`
@@ -31,18 +29,6 @@ type ApplyForLoanResponse struct {
 	Summary        LoanSummaryResponse `json:"summary"`
 }
 
-type AllLoansResponse struct {
-	LoanID             string     `json:"loan_id"`
-	LoanNumber         string     `json:"loan_number"`
-	PrincipalAmount    int64      `json:"principal_amount"`
-	DisbursedAmount    int64      `json:"disbursed_amount"`
-	OutstandingAmount  int64      `json:"outstanding_amount"`
-	OutstandingDefault int64      `json:"oustanding_default"`
-	Status             string     `json:"status"`
-	NextDueDate        *time.Time `json:"next_due_date"`
-	NextDueAmount      int64      `json:"next_due_amount"`
-}
-
 type ManualRepaymentRequest struct {
 	LoanID         string `json:"loan_id" binding:"loan_id"`
 	Amount         int64  `json:"amount"`
@@ -58,4 +44,16 @@ type LoanRepaymentResponse struct {
 	Status    string        `json:"status"`
 	Message   string        `json:"message"`
 	Repayment LoanRepayment `json:"repayment"`
+}
+
+type AllLoansResponse struct {
+	Status  string                 `json:"status"`
+	Message string                 `json:"message"`
+	Loans   []CoreCustomerLoanItem `json:"loans"`
+}
+
+type ActiveLoansResponse struct {
+	Status  string           `json:"status"`
+	Message string           `json:"message"`
+	Loans   []ActiveLoanItem `json:"loans"`
 }

@@ -362,7 +362,7 @@ func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 	return nil
 }
 
-func (s *Service) GetAllLoans(ctx context.Context, userID, deviceID string) ([]CoreCustomerLoanItem, error) {
+func (s *Service) GetAllLoans(ctx context.Context, userID, deviceID string) (*AllLoansResponse, error) {
 	userID = strings.TrimSpace(userID)
 
 	if userID == "" {
@@ -387,14 +387,50 @@ func (s *Service) GetAllLoans(ctx context.Context, userID, deviceID string) ([]C
 		return nil, errors.New("user has not existing loan")
 	}
 
-	loans, err := s.getCoreCustomerLoans(ctx, *user.CoreCustomerID)
-
+	allLoans, err := s.repo.ListLoansByCustomerID(ctx, *user.CoreCustomerID)
 	if err != nil {
-		return nil, errors.New(err.Error())
+		return nil, err
 	}
 
-	return loans, nil
+	return &AllLoansResponse{
+		Status:  "success",
+		Message: "All loans fetched successfully",
+		Loans:   allLoans,
+	}, nil
+}
 
+func (s *Service) GetActiveLoans(ctx context.Context, userID, deviceID string) (*ActiveLoansResponse, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("invalid user id")
+	}
+
+	if err := s.verifyUserDevice(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("no user found")
+		}
+		return nil, err
+	}
+
+	if user == nil || user.CoreCustomerID == nil {
+		return nil, errors.New("user has not active loans yet")
+	}
+
+	activeLoans, err := s.repo.ListActiveLoansByCustomerID(ctx, *user.CoreCustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ActiveLoansResponse{
+		Status:  "success",
+		Message: "Active loan(s) fetched successfully",
+		Loans:   activeLoans,
+	}, nil
 }
 
 func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanID string) (*LoanRepaymentResponse, error) {

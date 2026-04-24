@@ -287,7 +287,7 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 		return
 	}
 
-	loans, err := h.service.GetAllLoans(c.Request.Context(), userID, deviceID)
+	resp, err := h.service.GetAllLoans(c.Request.Context(), userID, deviceID)
 
 	if err != nil {
 		_ = c.Error(err)
@@ -302,16 +302,11 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 			return
 		}
 
-		if isServiceUnavailableGetAllLoansError(err) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
-			return
-		}
-
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "all loans fetched successfully", "loans": loans})
+	c.JSON(http.StatusOK, resp)
 }
 
 func isBadRequestGetAllLoansError(err error) bool {
@@ -319,17 +314,6 @@ func isBadRequestGetAllLoansError(err error) bool {
 
 	switch msg {
 	case "invalid user id":
-		return true
-	default:
-		return false
-	}
-}
-
-func isServiceUnavailableGetAllLoansError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-
-	switch msg {
-	case "core loan finder is not configured":
 		return true
 	default:
 		return false
@@ -356,6 +340,40 @@ func (h *Handler) GetLoanWithID(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query parameter"})
 		return
 	}
+}
+
+func (h *Handler) GetActiveLoans(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing X-Device-ID header"})
+		return
+	}
+
+	resp, err := h.service.GetActiveLoans(c.Request.Context(), userID, deviceID)
+	if err != nil {
+		_ = c.Error(err)
+
+		msg := strings.TrimSpace(err.Error())
+		switch msg {
+		case "invalid user id":
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		case "no user found", "user has not active loans yet":
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": msg})
+		case "device not found", "device not allowed":
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		default:
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handler) GetRepaymentSchedule(c *gin.Context) {

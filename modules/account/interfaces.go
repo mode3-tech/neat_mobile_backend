@@ -8,7 +8,7 @@ import (
 )
 
 type LoanProvider interface {
-	GetAllLoans(ctx context.Context, userID, deviceID string) ([]loanproduct.CoreCustomerLoanItem, error)
+	GetAllLoans(ctx context.Context, userID, deviceID string) (*loanproduct.AllLoansResponse, error)
 }
 
 type UploadService interface {

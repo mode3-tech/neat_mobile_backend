@@ -179,6 +179,76 @@ func (r *Repository) ResetPinAttempts(ctx context.Context, userID string) error 
 		}).Error
 }
 
+const activeLoansQuery = `
+SELECT
+    l.id::text                                                                AS loan_id,
+    COALESCE(l.amount, 0)                                                     AS loan_amount,
+    COALESCE(l.amount_to_be_paid - COALESCE(l.actual_money_collected, 0), 0) AS balance_remaining,
+    COALESCE(l.installment, 0)                                                AS periodic_payment,
+    CONCAT(l.loan_term, ' ', CASE LOWER(lp.repayment_frequency)
+        WHEN 'weekly'  THEN 'Weeks'
+        WHEN 'monthly' THEN 'months'
+        ELSE lp.repayment_frequency
+    END)                                                                      AS tenure,
+    COALESCE(lp.interest_rate, 0)                                             AS interest_rate
+FROM loan_loan l
+JOIN loan_loanproduct lp ON lp.id = l.product_id
+`
+
+func (r *Repository) ListActiveLoansByCustomerID(ctx context.Context, coreCustomerID string) ([]ActiveLoanItem, error) {
+	var loans []ActiveLoanItem
+	err := r.db.WithContext(ctx).
+		Raw(activeLoansQuery+`
+			WHERE l.customer_id = (SELECT user_id FROM account_customer_info WHERE id = ?)
+			  AND l.status = 'Active'
+			ORDER BY l.id DESC
+		`, coreCustomerID).
+		Scan(&loans).Error
+	if err != nil {
+		return nil, err
+	}
+	return loans, nil
+}
+
+const loansBaseQuery = `
+SELECT
+    l.id::text                                                                AS loan_id,
+    COALESCE(l.ref_no, '')                                                    AS loan_number,
+    COALESCE(l.amount, 0)                                                     AS principal_amount,
+    CASE
+        WHEN l.disburse_date IS NOT NULL OR l.status IN ('Active', 'Paid', 'Disbursed')
+            THEN COALESCE(l.amount, 0)
+        ELSE 0
+    END                                                                       AS disbursed_amount,
+    COALESCE(l.amount_to_be_paid - COALESCE(l.actual_money_collected, 0), 0) AS outstanding_balance,
+    COALESCE(l.status, '')                                                    AS status,
+    COALESCE(next_due.expected_to_be_paid_date::date::text, '')               AS next_due_date,
+    COALESCE(next_due.amount, 0)                                              AS next_due_amount
+FROM loan_loan l
+LEFT JOIN LATERAL (
+    SELECT lr.expected_to_be_paid_date, lr.amount
+    FROM loan_loan_repayment lr
+    WHERE lr.loan_id = l.id
+      AND lr.paid IS NOT TRUE
+    ORDER BY lr.expected_to_be_paid_date ASC, lr.id ASC
+    LIMIT 1
+) next_due ON TRUE
+`
+
+func (r *Repository) ListLoansByCustomerID(ctx context.Context, coreCustomerID string) ([]CoreCustomerLoanItem, error) {
+	var loans []CoreCustomerLoanItem
+	err := r.db.WithContext(ctx).
+		Raw(loansBaseQuery+`
+			WHERE l.customer_id = (SELECT user_id FROM account_customer_info WHERE id = ?)
+			ORDER BY l.id DESC
+		`, coreCustomerID).
+		Scan(&loans).Error
+	if err != nil {
+		return nil, err
+	}
+	return loans, nil
+}
+
 const loanSummaryBaseQuery = `
 SELECT
     lp.name                             AS loan_product_type,

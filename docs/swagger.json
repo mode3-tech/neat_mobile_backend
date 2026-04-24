@@ -2584,10 +2584,19 @@
           "Loan"
         ],
         "summary": "List customer loans",
-        "description": "Returns the authenticated user's loan list from core banking.",
+        "description": "Returns all loans for the authenticated user.",
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Device identifier for the authenticated session."
           }
         ],
         "responses": {
@@ -2602,7 +2611,7 @@
             }
           },
           "400": {
-            "description": "Invalid user context",
+            "description": "Missing X-Device-ID header or invalid user context",
             "content": {
               "application/json": {
                 "schema": {
@@ -2612,7 +2621,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid access token",
+            "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
                 "schema": {
@@ -2632,12 +2641,71 @@
             }
           },
           "500": {
-            "description": "Core-banking lookup failed or integration is unavailable",
+            "description": "Unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loan/loans/active": {
+      "get": {
+        "tags": ["Loan"],
+        "summary": "List active loans",
+        "description": "Returns the authenticated user's active loans directly from the database.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Device identifier for the authenticated session."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active loans fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ActiveLoanListResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Device-ID header or invalid user context",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token, or unrecognised device",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -7321,16 +7389,74 @@
           }
         }
       },
+      "ActiveLoanItem": {
+        "type": "object",
+        "properties": {
+          "loan_id": {
+            "type": "string",
+            "example": "42"
+          },
+          "loan_amount": {
+            "type": "number",
+            "format": "double",
+            "example": 100000.00
+          },
+          "balance_remaining": {
+            "type": "number",
+            "format": "double",
+            "example": 57500.00
+          },
+          "periodic_payment": {
+            "type": "number",
+            "format": "double",
+            "example": 28750.00
+          },
+          "tenure": {
+            "type": "string",
+            "example": "4 Weeks"
+          },
+          "interest_rate": {
+            "type": "number",
+            "format": "double",
+            "example": 15.0
+          }
+        }
+      },
+      "ActiveLoanListResponse": {
+        "type": "object",
+        "required": ["status", "message", "loans"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Active loan(s) fetched successfully"
+          },
+          "loans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveLoanItem"
+            }
+          }
+        }
+      },
       "LoanListResponse": {
         "type": "object",
         "required": [
+          "status",
           "message",
           "loans"
         ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
-            "example": "all loans fetched successfully"
+            "example": "All loans fetched successfully"
           },
           "loans": {
             "type": "array",

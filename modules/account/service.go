@@ -59,9 +59,9 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	var loanBalance float64
 	var activeLoans []ActiveLoan
 
-	loans, err := s.loanProvider.GetAllLoans(ctx, mobileUserID, deviceID)
+	resp, err := s.loanProvider.GetAllLoans(ctx, mobileUserID, deviceID)
 	if err == nil {
-		for _, loan := range loans {
+		for _, loan := range resp.Loans {
 			loanBalance += loan.OutstandingBalance
 			if strings.ToLower(loan.Status) != "active" {
 				continue

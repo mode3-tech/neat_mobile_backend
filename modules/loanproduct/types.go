@@ -63,14 +63,14 @@ type CoreCustomerMatchData struct {
 }
 
 type CoreCustomerLoanItem struct {
-	LoanID             string  `json:"loan_id"`
-	LoanNumber         string  `json:"loan_number"`
-	PrincipalAmount    float64 `json:"principal_amount"`
-	DisbursedAmount    float64 `json:"disbursed_amount"`
-	OutstandingBalance float64 `json:"outstanding_balance"`
-	Status             string  `json:"status"`
-	NextDueDate        string  `json:"next_due_date"`
-	NextDueAmount      float64 `json:"next_due_amount"`
+	LoanID             string  `json:"loan_id"             gorm:"column:loan_id"`
+	LoanNumber         string  `json:"loan_number"         gorm:"column:loan_number"`
+	PrincipalAmount    float64 `json:"principal_amount"    gorm:"column:principal_amount"`
+	DisbursedAmount    float64 `json:"disbursed_amount"    gorm:"column:disbursed_amount"`
+	OutstandingBalance float64 `json:"outstanding_balance" gorm:"column:outstanding_balance"`
+	Status             string  `json:"status"              gorm:"column:status"`
+	NextDueDate        string  `json:"next_due_date"       gorm:"column:next_due_date"`
+	NextDueAmount      float64 `json:"next_due_amount"     gorm:"column:next_due_amount"`
 }
 
 type CoreLoanDetail struct {
@@ -118,6 +118,15 @@ type LoanRepayment struct {
 	AmountPaid        float64 `json:"amount_paid"         gorm:"column:amount_paid"`
 	YetToPay          float64 `json:"yet_to_pay"          gorm:"column:yet_to_pay"`
 	InterestRate      float64 `json:"interest_rate"       gorm:"column:interest_rate"`
+}
+
+type ActiveLoanItem struct {
+	LoanID           string  `json:"loan_id"            gorm:"column:loan_id"`
+	LoanAmount       float64 `json:"loan_amount"        gorm:"column:loan_amount"`
+	BalanceRemaining float64 `json:"balance_remaining"  gorm:"column:balance_remaining"`
+	PeriodicPayment  float64 `json:"periodic_payment"   gorm:"column:periodic_payment"`
+	Tenure           string  `json:"tenure"             gorm:"column:tenure"`
+	InterestRate     float64 `json:"interest_rate"      gorm:"column:interest_rate"`
 }
 
 type RepaymentRequest struct {
