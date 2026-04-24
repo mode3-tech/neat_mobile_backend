@@ -7366,6 +7366,16 @@
             "type": "string",
             "example": "4 Weeks"
           },
+          "amount_paid": {
+            "type": "number",
+            "format": "double",
+            "example": 57500.00
+          },
+          "yet_to_pay": {
+            "type": "number",
+            "format": "double",
+            "example": 57500.00
+          },
           "interest_rate": {
             "type": "number",
             "format": "double",

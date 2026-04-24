@@ -115,6 +115,8 @@ type LoanRepayment struct {
 	TotalRepayment    float64 `json:"total_repayment"     gorm:"column:total_repayment"`
 	PeriodicRepayment float64 `json:"periodic_repayment"  gorm:"column:periodic_repayment"`
 	LoanDuration      string  `json:"loan_duration"       gorm:"column:loan_duration"`
+	AmountPaid        float64 `json:"amount_paid"         gorm:"column:amount_paid"`
+	YetToPay          float64 `json:"yet_to_pay"          gorm:"column:yet_to_pay"`
 	InterestRate      float64 `json:"interest_rate"       gorm:"column:interest_rate"`
 }
 

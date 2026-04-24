@@ -185,6 +185,8 @@ SELECT
     COALESCE(l.amount, 0)               AS loan_amount,
     COALESCE(l.amount_to_be_paid, 0)    AS total_repayment,
     COALESCE(l.installment, 0)          AS periodic_repayment,
+	COALESCE(l.actual_money_collected, 0) AS amount_paid,
+	COALESCE(l.amount_to_be_paid, 0) - COALESCE(l.actual_money_collected, 0) AS yet_to_pay,
     CONCAT(l.loan_term, ' ', CASE LOWER(lp.repayment_frequency)
         WHEN 'weekly'  THEN 'Weeks'
         WHEN 'monthly' THEN 'months'
