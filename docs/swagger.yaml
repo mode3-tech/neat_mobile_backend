@@ -4816,49 +4816,18 @@ components:
         loan_id:
           type: string
           example: "1001"
-        loan_number:
-          type: string
-          example: LN-1001
-        principal_amount:
-          type: number
-          format: double
-          example: 250000
-        disbursed_amount:
-          type: number
-          format: double
-          example: 250000
-        outstanding_balance:
-          type: number
-          format: double
-          example: 180000
-        status:
-          type: string
-          example: active
-        next_due_date:
-          type: string
-          example: "2026-04-01"
-        next_due_amount:
-          type: number
-          format: double
-          example: 12500
-    ActiveLoanItem:
-      type: object
-      properties:
-        loan_id:
-          type: string
-          example: "42"
         loan_amount:
           type: number
           format: double
-          example: 100000.00
+          example: 250000.00
         balance_remaining:
           type: number
           format: double
-          example: 57500.00
+          example: 180000.00
         periodic_payment:
           type: number
           format: double
-          example: 28750.00
+          example: 62500.00
         tenure:
           type: string
           example: "4 Weeks"
@@ -4866,6 +4835,23 @@ components:
           type: number
           format: double
           example: 15.0
+    ActiveLoanItem:
+      type: object
+      properties:
+        loan_id:
+          type: string
+          example: "42"
+        outstanding_balance:
+          type: number
+          format: double
+          example: 57500.00
+        next_payment:
+          type: number
+          format: double
+          example: 28750.00
+        due_date:
+          type: string
+          example: "2026-05-01"
     ActiveLoanListResponse:
       type: object
       required:

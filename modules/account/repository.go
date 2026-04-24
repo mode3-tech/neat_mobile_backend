@@ -40,24 +40,59 @@ func (r *Repository) GetUser(ctx context.Context, mobileUserID string) (*models.
 func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string) (*AccountSummaryRow, error) {
 	var row AccountSummaryRow
 	err := r.db.WithContext(ctx).Model(&models.User{}).
-		Select(`wallet_users.id, 
+		Select(`wallet_users.id,
 			wallet_users.first_name,
 			wallet_users.last_name,
 			wallet_users.profile_picture,
 			wallet_users.is_notifications_enabled,
 			wallet_users.email,
 			wallet_users.dob,
-			wallet_users.phone, 
+			wallet_users.phone,
+			wallet_users.core_customer_id,
 			wallet_bvn_records.bvn,
 			wallet_bvn_records.full_home_address AS address,
 			wallet_customer_wallets.account_number,
-			wallet_customer_wallets.available_balance, 
+			wallet_customer_wallets.available_balance,
 			wallet_customer_wallets.booked_balance,
 			wallet_customer_wallets.bank_name`).
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
 		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
 	return &row, err
+}
+
+const dashboardLoansQuery = `
+SELECT
+    l.id::text                                                                AS loan_id,
+    COALESCE(l.ref_no, '')                                                    AS loan_number,
+    COALESCE(l.amount, 0)                                                     AS loan_amount,
+    COALESCE(l.amount_to_be_paid - COALESCE(l.actual_money_collected, 0), 0) AS outstanding_balance,
+    COALESCE(next_due.amount, 0)                                              AS next_payment,
+    COALESCE(next_due.expected_to_be_paid_date::date::text, '')               AS next_due_date,
+    COALESCE(l.status, '')                                                    AS status
+FROM loan_loan l
+LEFT JOIN LATERAL (
+    SELECT lr.expected_to_be_paid_date, lr.amount
+    FROM loan_loan_repayment lr
+    WHERE lr.loan_id = l.id
+      AND lr.paid IS NOT TRUE
+    ORDER BY lr.expected_to_be_paid_date ASC, lr.id ASC
+    LIMIT 1
+) next_due ON TRUE
+`
+
+func (r *Repository) GetLoansByCustomerID(ctx context.Context, coreCustomerID string) ([]DashboardLoanItem, error) {
+	var loans []DashboardLoanItem
+	err := r.db.WithContext(ctx).
+		Raw(dashboardLoansQuery+`
+			WHERE l.customer_id = (SELECT user_id FROM account_customer_info WHERE id = ?)
+			ORDER BY l.id DESC
+		`, coreCustomerID).
+		Scan(&loans).Error
+	if err != nil {
+		return nil, err
+	}
+	return loans, nil
 }
 
 func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, data UpdateProfileData) error {

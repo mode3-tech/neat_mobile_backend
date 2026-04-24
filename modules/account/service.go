@@ -25,14 +25,13 @@ import (
 
 type Service struct {
 	repo           *Repository
-	loanProvider   LoanProvider
 	b2             UploadService
 	notifier       *notification.Service
 	pdfShiftAPIKey string
 }
 
-func NewService(repo *Repository, loanProvider LoanProvider, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string) *Service {
-	return &Service{repo: repo, loanProvider: loanProvider, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey}
+func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string) *Service {
+	return &Service{repo: repo, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey}
 }
 
 func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID string) (*AccountSummary, error) {
@@ -59,21 +58,23 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	var loanBalance float64
 	var activeLoans []ActiveLoan
 
-	resp, err := s.loanProvider.GetAllLoans(ctx, mobileUserID, deviceID)
-	if err == nil {
-		for _, loan := range resp.Loans {
-			loanBalance += loan.OutstandingBalance
-			if strings.ToLower(loan.Status) != "active" {
-				continue
+	if accountInfo.CoreCustomerID != nil {
+		loans, err := s.repo.GetLoansByCustomerID(ctx, *accountInfo.CoreCustomerID)
+		if err == nil {
+			for _, loan := range loans {
+				loanBalance += loan.OutstandingBalance
+				if strings.ToLower(loan.Status) != "active" {
+					continue
+				}
+				activeLoans = append(activeLoans, ActiveLoan{
+					LoanID:           loan.LoanID,
+					LoanNumber:       loan.LoanNumber,
+					LoanAmount:       loan.LoanAmount,
+					TotalRepayment:   loan.OutstandingBalance,
+					MonthlyRepayment: loan.NextPayment,
+					NextDueDate:      loan.NextDueDate,
+				})
 			}
-			activeLoans = append(activeLoans, ActiveLoan{
-				LoanID:           loan.LoanID,
-				LoanNumber:       loan.LoanNumber,
-				LoanAmount:       loan.PrincipalAmount,
-				TotalRepayment:   loan.OutstandingBalance,
-				MonthlyRepayment: loan.NextDueAmount,
-				NextDueDate:      loan.NextDueDate,
-			})
 		}
 	}
 

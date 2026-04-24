@@ -34,6 +34,17 @@ type AccountSummaryRow struct {
 	BookedBalance          int64
 	InternalWalletID       string
 	IsNotificationsEnabled bool
+	CoreCustomerID         *string
+}
+
+type DashboardLoanItem struct {
+	LoanID             string  `gorm:"column:loan_id"`
+	LoanNumber         string  `gorm:"column:loan_number"`
+	LoanAmount         float64 `gorm:"column:loan_amount"`
+	OutstandingBalance float64 `gorm:"column:outstanding_balance"`
+	NextPayment        float64 `gorm:"column:next_payment"`
+	NextDueDate        string  `gorm:"column:next_due_date"`
+	Status             string  `gorm:"column:status"`
 }
 
 type UpdateProfileData struct {
