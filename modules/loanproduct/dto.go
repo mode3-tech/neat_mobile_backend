@@ -42,3 +42,20 @@ type AllLoansResponse struct {
 	NextDueDate        *time.Time `json:"next_due_date"`
 	NextDueAmount      int64      `json:"next_due_amount"`
 }
+
+type ManualRepaymentRequest struct {
+	LoanID         string `json:"loan_id" binding:"loan_id"`
+	Amount         int64  `json:"amount"`
+	TransactionPin string `json:"transaction_pin" binding:"transaction_pin"`
+}
+
+type ManualRepaymentResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+type LoanRepaymentResponse struct {
+	Status    string        `json:"status"`
+	Message   string        `json:"message"`
+	Repayment LoanRepayment `json:"repayment"`
+}

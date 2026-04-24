@@ -11,3 +11,11 @@ type CoreLoanFinder interface {
 	GetLoanDetail(ctx context.Context, loanID string) (*CoreLoanDetail, error)
 	GetLoanRepayments(ctx context.Context, loanID string) (*[]LoanRepayment, error)
 }
+
+type ManualRepayer interface {
+	MakeManualRepayment(ctx context.Context, req RepaymentRequest) (*ManualRepaymentResponse, error)
+}
+
+type RepaymentFundTransferrer interface {
+	TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error
+}

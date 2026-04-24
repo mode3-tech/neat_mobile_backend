@@ -59,7 +59,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	var loanBalance float64
 	var activeLoans []ActiveLoan
 
-	loans, err := s.loanProvider.GetAllLoans(ctx, mobileUserID)
+	loans, err := s.loanProvider.GetAllLoans(ctx, mobileUserID, deviceID)
 	if err == nil {
 		for _, loan := range loans {
 			loanBalance += loan.OutstandingBalance

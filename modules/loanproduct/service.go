@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
 	"strings"
@@ -16,9 +17,12 @@ import (
 )
 
 type Service struct {
-	repo               *Repository
-	coreCustomerFinder CoreCustomerFinder
-	coreLoanFinder     CoreLoanFinder
+	repo                 *Repository
+	coreCustomerFinder   CoreCustomerFinder
+	coreLoanFinder       CoreLoanFinder
+	manualRepayer        ManualRepayer
+	pinVerifier          *pinverifier.Verifier
+	repaymentTransferrer RepaymentFundTransferrer
 }
 
 const (
@@ -32,11 +36,14 @@ var (
 	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
 )
 
-func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder) *Service {
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *pinverifier.Verifier, repaymentTransferrer RepaymentFundTransferrer) *Service {
 	return &Service{
-		repo:               repo,
-		coreCustomerFinder: coreCustomerFinder,
-		coreLoanFinder:     coreLoanFinder,
+		repo:                 repo,
+		coreCustomerFinder:   coreCustomerFinder,
+		coreLoanFinder:       coreLoanFinder,
+		manualRepayer:        manualRepayer,
+		pinVerifier:          pinVerifier,
+		repaymentTransferrer: repaymentTransferrer,
 	}
 }
 
@@ -341,11 +348,29 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	return s.coreCustomerFinder.MatchCustomerByBVN(ctx, bvn)
 }
 
-func (s *Service) GetAllLoans(ctx context.Context, userID string) ([]CoreCustomerLoanItem, error) {
+func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) error {
+	d, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("device not found")
+		}
+		return err
+	}
+	if !d.IsActive || !d.IsTrusted {
+		return errors.New("device not allowed")
+	}
+	return nil
+}
+
+func (s *Service) GetAllLoans(ctx context.Context, userID, deviceID string) ([]CoreCustomerLoanItem, error) {
 	userID = strings.TrimSpace(userID)
 
 	if userID == "" {
 		return nil, errors.New("invalid user id")
+	}
+
+	if err := s.verifyUserDevice(ctx, userID, deviceID); err != nil {
+		return nil, err
 	}
 
 	user, err := s.repo.GetUser(ctx, userID)
@@ -372,14 +397,27 @@ func (s *Service) GetAllLoans(ctx context.Context, userID string) ([]CoreCustome
 
 }
 
-func (s *Service) GetLoanRepayments(ctx context.Context, loanID string) (*LoanSummaryRow, error) {
+func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanID string) (*LoanRepaymentResponse, error) {
 	loanID = strings.TrimSpace(loanID)
 
 	if loanID == "" {
 		return nil, errors.New("invalid loan id")
 	}
 
-	return s.repo.GetLoanSummary(ctx, loanID)
+	if err := s.verifyUserDevice(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
+	repaymentSummary, err := s.repo.GetLoanRepaymentSummary(ctx, loanID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoanRepaymentResponse{
+		Status:    "success",
+		Message:   "Loan repayment fetched successfully",
+		Repayment: *repaymentSummary,
+	}, nil
 }
 
 func (s *Service) getCoreCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error) {
@@ -410,6 +448,43 @@ func (s *Service) GetCoreLoanDetail(ctx context.Context, loanID string) (*CoreLo
 	}
 
 	return s.coreLoanFinder.GetLoanDetail(ctx, loanID)
+}
+
+func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID, deviceID string, req ManualRepaymentRequest) (*ManualRepaymentResponse, error) {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return nil, errors.New("mobile user id is required")
+	}
+
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, errors.New("device id is required")
+	}
+
+	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
+	}
+
+	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
+		return nil, err
+	}
+
+	if s.manualRepayer == nil {
+		return nil, errors.New("repayment service is not configured")
+	}
+
+	if s.repaymentTransferrer == nil {
+		return nil, errors.New("wallet service is not configured")
+	}
+
+	if err := s.repaymentTransferrer.TransferForLoanRepayment(ctx, mobileUserID, req.Amount); err != nil {
+		return nil, err
+	}
+
+	return s.manualRepayer.MakeManualRepayment(ctx, RepaymentRequest{
+		Amount:      req.Amount,
+		RepaymentID: req.LoanID,
+	})
 }
 
 func newTooManyTransactionPinAttemptsError(lockedUntil, now time.Time) error {

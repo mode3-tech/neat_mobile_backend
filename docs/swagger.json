@@ -2658,6 +2658,15 @@
         ],
         "parameters": [
           {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device identifier for the authenticated session."
+          },
+          {
             "in": "query",
             "name": "loan_id",
             "required": true,
@@ -2679,7 +2688,7 @@
             }
           },
           "400": {
-            "description": "Missing or invalid loan id query parameter",
+            "description": "Missing X-Device-ID header, missing loan_id query param, or invalid loan id",
             "content": {
               "application/json": {
                 "schema": {
@@ -2700,6 +2709,123 @@
           },
           "500": {
             "description": "Core-banking integration is unavailable or repayment lookup failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loan/repayment/manual": {
+      "post": {
+        "tags": [
+          "Loan"
+        ],
+        "summary": "Make a manual loan repayment",
+        "description": "Verifies the device and transaction PIN, debits the customer's wallet, then submits the repayment to the core-banking system atomically.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device identifier for the authenticated session."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualRepaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Repayment submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualRepaymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — invalid token, device, or wrong PIN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Insufficient wallet balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Transaction PIN is temporarily locked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many incorrect PIN attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Repayment or wallet service is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Repayment failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7217,72 +7343,95 @@
       "LoanRepayment": {
         "type": "object",
         "properties": {
-          "repayment_id": {
+          "loan_product_type": {
             "type": "string",
-            "example": "RP-001"
+            "example": "SME-WK"
           },
-          "loan_id": {
+          "loan_amount": {
+            "type": "number",
+            "format": "double",
+            "example": 100000.00
+          },
+          "total_repayment": {
+            "type": "number",
+            "format": "double",
+            "example": 115000.00
+          },
+          "periodic_repayment": {
+            "type": "number",
+            "format": "double",
+            "example": 28750.00
+          },
+          "loan_duration": {
             "type": "string",
-            "example": "LN-1001"
+            "example": "4 Weeks"
           },
-          "expected_date_to_be_paid": {
-            "type": "string",
-            "example": "2026-04-01"
-          },
-          "amount": {
-            "type": "integer",
-            "format": "int64",
-            "example": 25000
-          },
-          "principal": {
-            "type": "integer",
-            "format": "int64",
-            "example": 20000
-          },
-          "profit": {
-            "type": "integer",
-            "format": "int64",
-            "example": 5000
-          },
-          "paid": {
-            "type": "boolean",
-            "nullable": true,
-            "example": false
-          },
-          "date_paid": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "example": "2026-04-01T10:00:00Z"
-          },
-          "defaulted_date": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "example": "2026-04-10T10:00:00Z"
-          },
-          "status": {
-            "type": "string",
-            "example": "pending"
+          "interest_rate": {
+            "type": "number",
+            "format": "double",
+            "example": 15.0
           }
         }
       },
       "LoanRepaymentsResponse": {
         "type": "object",
         "required": [
+          "status",
           "message",
-          "repayments"
+          "repayment"
         ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
-            "example": "loan repayments fetched"
+            "example": "Loan repayment fetched successfully"
           },
-          "repayments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LoanRepayment"
-            }
+          "repayment": {
+            "$ref": "#/components/schemas/LoanRepayment"
+          }
+        }
+      },
+      "ManualRepaymentRequest": {
+        "type": "object",
+        "required": [
+          "loan_id",
+          "amount",
+          "transaction_pin"
+        ],
+        "properties": {
+          "loan_id": {
+            "type": "string",
+            "example": "LN-20240101-00123"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Repayment amount in Naira.",
+            "example": 5000
+          },
+          "transaction_pin": {
+            "type": "string",
+            "example": "1234"
+          }
+        }
+      },
+      "ManualRepaymentResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Repayment submitted successfully"
           }
         }
       },

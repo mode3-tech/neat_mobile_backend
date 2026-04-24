@@ -281,7 +281,13 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 		return
 	}
 
-	loans, err := h.service.GetAllLoans(c.Request.Context(), userID)
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing X-Device-ID header"})
+		return
+	}
+
+	loans, err := h.service.GetAllLoans(c.Request.Context(), userID, deviceID)
 
 	if err != nil {
 		_ = c.Error(err)
@@ -353,6 +359,17 @@ func (h *Handler) GetLoanWithID(c *gin.Context) {
 }
 
 func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing X-Device-ID header"})
+		return
+	}
 
 	loanID := strings.TrimSpace(c.Query("loan_id"))
 
@@ -361,7 +378,7 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	summary, err := h.service.GetLoanRepayments(c.Request.Context(), loanID)
+	resp, err := h.service.GetLoanRepayments(c.Request.Context(), userID, deviceID, loanID)
 
 	if err != nil {
 		if isBadRequestGetRepaymentScheduleError(err) {
@@ -373,7 +390,7 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "loan summary fetched", "summary": summary})
+	c.JSON(http.StatusOK, resp)
 
 }
 
@@ -388,3 +405,58 @@ func isBadRequestGetRepaymentScheduleError(err error) bool {
 	}
 }
 
+func (h *Handler) HandleManualRepayment(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req ManualRepaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	resp, err := h.service.MakeManualRepayment(c.Request.Context(), mobileUserID, deviceID, req)
+	if err != nil {
+		handleHandleManualRepaymentError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func handleHandleManualRepaymentError(c *gin.Context, err error) {
+	if errors.Is(err, ErrTooManyTransactionPinAttempts) || errors.Is(err, ErrTransactionPinTemporarilyLocked) {
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+
+	msg := strings.TrimSpace(err.Error())
+
+	if strings.Contains(msg, "wrong transaction pin: you have") {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg})
+		return
+	}
+
+	switch msg {
+	case "mobile user id is required", "device id is required", "device not found", "device not allowed",
+		"wrong transaction pin":
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	case "transaction pin locked":
+		c.AbortWithStatusJSON(http.StatusLocked, gin.H{"error": msg})
+	case "insufficient balance":
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+	case "repayment service is not configured", "wallet service is not configured":
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": msg})
+	default:
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, please try again"})
+	}
+}

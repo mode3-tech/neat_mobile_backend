@@ -29,6 +29,9 @@ type Config struct {
 	ProvidusSecretKey          string
 	ProvidusBaseURL            string
 	ProvidusWebhookSecret      string
+	LoanRepaymentAccountNumber string
+	LoanRepaymentBankCode      string
+	LoanRepaymentAccountName   string
 	B2KeyID                    string
 	B2AppKey                   string
 	B2DocumentsBucketName      string
@@ -70,6 +73,9 @@ func Load() Config {
 		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
+		LoanRepaymentAccountNumber: getEnv("LOAN_REPAYMENT_ACCOUNT_NUMBER", ""),
+		LoanRepaymentBankCode:      getEnv("LOAN_REPAYMENT_BANK_CODE", ""),
+		LoanRepaymentAccountName:   getEnv("LOAN_REPAYMENT_ACCOUNT_NAME", ""),
 		B2KeyID:                    getEnv("B2_KEY_ID", ""),
 		B2AppKey:                   getEnv("B2_APP_KEY", ""),
 		B2DocumentsBucketName:      getEnv("B2_DOCUMENTS_BUCKET", ""),

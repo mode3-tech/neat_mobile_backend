@@ -10,6 +10,7 @@ import (
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/auth/otp"
@@ -20,7 +21,6 @@ import (
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
-	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/wallet"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -163,14 +163,18 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	})
 
-	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient)
-	loanHandler := loanproduct.NewHandler(loanService)
-	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
-
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := pinverifier.New(walletRepo)
-	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier)
+	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
+		AccountNumber: cfg.LoanRepaymentAccountNumber,
+		BankCode:      cfg.LoanRepaymentBankCode,
+		AccountName:   cfg.LoanRepaymentAccountName,
+	})
+
+	loanRepo := loanproduct.NewRepository(db)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService)
+	loanHandler := loanproduct.NewHandler(loanService)
+	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
 	walletHandler := wallet.NewHandler(walletService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
 

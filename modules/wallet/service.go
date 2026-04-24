@@ -15,14 +15,26 @@ import (
 	"gorm.io/gorm"
 )
 
-type Service struct {
-	repo            *Repository
-	providusService ProvidusService
-	pinVerifier     *pinverifier.Verifier
+type SettlementAccount struct {
+	AccountNumber string
+	BankCode      string
+	AccountName   string
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier) *Service {
-	return &Service{repo: repo, providusService: providusService, pinVerifier: pinVerifier}
+type Service struct {
+	repo              *Repository
+	providusService   ProvidusService
+	pinVerifier       *pinverifier.Verifier
+	settlementAccount SettlementAccount
+}
+
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier, settlementAccount SettlementAccount) *Service {
+	return &Service{
+		repo:              repo,
+		providusService:   providusService,
+		pinVerifier:       pinVerifier,
+		settlementAccount: settlementAccount,
+	}
 }
 
 func (s *Service) FetchBanks(ctx context.Context, mobileUserID, deviceID string) ([]Bank, error) {
@@ -178,6 +190,79 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 
 	return resp, nil
 
+}
+
+func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error {
+	if amountNaira <= 0 {
+		return errors.New("amount must be greater than zero")
+	}
+	if strings.TrimSpace(s.settlementAccount.AccountNumber) == "" {
+		return errors.New("loan repayment settlement account is not configured")
+	}
+
+	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch wallet: %w", err)
+	}
+
+	w, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrWalletNotFound
+		}
+		return err
+	}
+
+	amountKobo := amountNaira * 100
+	if w.AvailableBalance < amountKobo {
+		return errors.New("insufficient balance")
+	}
+
+	narration := "Loan repayment"
+	accountName := s.settlementAccount.AccountName
+	txID := uuid.NewString()
+	txRecord := &transaction.Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            walletUser.WalletID,
+		Type:                transaction.TransactionTypeDebit,
+		Category:            transaction.TransactionCategoryLoanRepayment,
+		Source:              transaction.TransactionSourceLoanRepayment,
+		Amount:              amountKobo,
+		Reference:           uuid.NewString(),
+		Narration:           &narration,
+		CounterpartyAccount: s.settlementAccount.AccountNumber,
+		CounterpartyName:    accountName,
+		CounterpartyBank:    s.settlementAccount.BankCode,
+		Status:              transaction.TransactionStatusPending,
+	}
+	if err := s.repo.AddTransaction(ctx, txRecord); err != nil {
+		return fmt.Errorf("failed to create transaction record: %w", err)
+	}
+
+	resp, err := s.providusService.InitiateTransfer(ctx, w.WalletCustomerID, &TransferRequest{
+		Amount:        amountNaira,
+		SortCode:      s.settlementAccount.BankCode,
+		AccountNumber: s.settlementAccount.AccountNumber,
+		AccountName:   &accountName,
+		Narration:     &narration,
+	})
+	if err != nil {
+		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		return fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
+	}
+	if resp == nil || !resp.Status {
+		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		msg := "provider returned an unsuccessful transfer response"
+		if resp != nil && strings.TrimSpace(resp.Message) != "" {
+			msg = resp.Message
+		}
+		return fmt.Errorf("%w: %s", ErrTransferProviderFailed, msg)
+	}
+
+	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
+	return s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference,
+		transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit)
 }
 
 func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {

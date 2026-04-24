@@ -1,7 +1,5 @@
 package loanproduct
 
-import "time"
-
 type LoanFrequency string
 
 const (
@@ -112,23 +110,15 @@ type LoanSummary struct {
 }
 
 type LoanRepayment struct {
-	RepaymentID          string     `json:"repayment_id"`
-	LoanID               string     `json:"loan_id"`
-	ExpectedDateToBePaid string     `json:"expected_date_to_be_paid"`
-	Amount               int64      `json:"amount"`
-	Principal            int64      `json:"principal"`
-	Profit               int64      `json:"profit"`
-	Paid                 *bool      `json:"paid"`
-	DatePaid             *time.Time `json:"date_paid"`
-	DefaultedDate        *time.Time `json:"defaulted_date"`
-	Status               string     `json:"status"`
-}
-
-type LoanSummaryRow struct {
 	LoanProductType   string  `json:"loan_product_type"   gorm:"column:loan_product_type"`
 	LoanAmount        float64 `json:"loan_amount"         gorm:"column:loan_amount"`
 	TotalRepayment    float64 `json:"total_repayment"     gorm:"column:total_repayment"`
 	PeriodicRepayment float64 `json:"periodic_repayment"  gorm:"column:periodic_repayment"`
 	LoanDuration      string  `json:"loan_duration"       gorm:"column:loan_duration"`
 	InterestRate      float64 `json:"interest_rate"       gorm:"column:interest_rate"`
+}
+
+type RepaymentRequest struct {
+	Amount      int64  `json:"amount"`
+	RepaymentID string `json:"repayment_id"`
 }
