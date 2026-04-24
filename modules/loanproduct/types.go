@@ -127,6 +127,13 @@ type ActiveLoanItem struct {
 	DueDate            string  `json:"due_date"            gorm:"column:due_date"`
 }
 
+type LoanHistoryItem struct {
+	LoanAmount  float64 `json:"loan_amount"  gorm:"column:loan_amount"`
+	PaymentDate string  `json:"payment_date" gorm:"column:payment_date"`
+	Status      string  `json:"status"       gorm:"column:status"`
+	AmountPaid  float64 `json:"amount_paid"  gorm:"column:amount_paid"`
+}
+
 type RepaymentRequest struct {
 	Amount      int64  `json:"amount"`
 	RepaymentID string `json:"repayment_id"`

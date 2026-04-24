@@ -1623,6 +1623,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /loan/history:
+    get:
+      tags:
+        - Loan
+      summary: Loan repayment history
+      description: Returns the repayment installment history for the customer's latest active loan.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Device identifier for the authenticated session.
+      responses:
+        "200":
+          description: Loan repayment history fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanHistoryResponse"
+        "400":
+          description: Missing X-Device-ID header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid access token, or unrecognised device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No user or no active loan found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /loan/loans/active:
     get:
       tags:
@@ -4835,6 +4881,41 @@ components:
           type: number
           format: double
           example: 15.0
+    LoanHistoryItem:
+      type: object
+      properties:
+        loan_amount:
+          type: number
+          format: double
+          example: 28750.00
+        payment_date:
+          type: string
+          example: "2026-05-01"
+        status:
+          type: string
+          enum: [paid, overdue, upcoming]
+          example: paid
+        amount_paid:
+          type: number
+          format: double
+          example: 28750.00
+    LoanHistoryResponse:
+      type: object
+      required:
+        - status
+        - message
+        - history
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Loan repayment history fetched successfully
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanHistoryItem"
     ActiveLoanItem:
       type: object
       properties:

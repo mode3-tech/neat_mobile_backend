@@ -433,6 +433,35 @@ func (s *Service) GetActiveLoans(ctx context.Context, userID, deviceID string) (
 	}, nil
 }
 
+func (s *Service) GetLoanHistory(ctx context.Context, userID, deviceID string) (*LoanHistoryResponse, error) {
+	if err := s.verifyUserDevice(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("no user found")
+		}
+		return nil, err
+	}
+
+	if user.CoreCustomerID == nil {
+		return nil, errors.New("no loan history found")
+	}
+
+	history, err := s.repo.GetLoanRepaymentHistory(ctx, *user.CoreCustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoanHistoryResponse{
+		Status:  "success",
+		Message: "Loan repayment history fetched successfully",
+		History: history,
+	}, nil
+}
+
 func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanID string) (*LoanRepaymentResponse, error) {
 	loanID = strings.TrimSpace(loanID)
 

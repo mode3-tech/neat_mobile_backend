@@ -52,6 +52,12 @@ type AllLoansResponse struct {
 	Loans   []CoreCustomerLoanItem `json:"loans"`
 }
 
+type LoanHistoryResponse struct {
+	Status  string            `json:"status"`
+	Message string            `json:"message"`
+	History []LoanHistoryItem `json:"history"`
+}
+
 type ActiveLoansResponse struct {
 	Status  string           `json:"status"`
 	Message string           `json:"message"`

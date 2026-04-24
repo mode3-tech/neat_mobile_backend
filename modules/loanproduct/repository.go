@@ -222,7 +222,8 @@ SELECT
         WHEN 'monthly' THEN 'months'
         ELSE lp.repayment_frequency
     END)                                                                      AS tenure,
-    COALESCE(lp.interest_rate, 0)                                             AS interest_rate
+    COALESCE(lp.interest_rate, 0)                                             AS interest_rate,
+    COALESCE(l.status, '')                                                    AS status
 FROM loan_loan l
 JOIN loan_loanproduct lp ON lp.id = l.product_id
 `
@@ -239,6 +240,37 @@ func (r *Repository) ListLoansByCustomerID(ctx context.Context, coreCustomerID s
 		return nil, err
 	}
 	return loans, nil
+}
+
+const loanHistoryQuery = `
+SELECT
+    COALESCE(lr.amount, 0)                                                         AS loan_amount,
+    COALESCE(lr.expected_to_be_paid_date::date::text, '')                          AS payment_date,
+    CASE
+        WHEN lr.paid IS TRUE                                       THEN 'paid'
+        WHEN lr.expected_to_be_paid_date::date < CURRENT_DATE     THEN 'overdue'
+        ELSE 'upcoming'
+    END                                                                            AS status,
+    CASE WHEN lr.paid IS TRUE THEN COALESCE(lr.amount, 0) ELSE 0 END              AS amount_paid
+FROM loan_loan_repayment lr
+WHERE lr.loan_id = (
+    SELECT l.id
+    FROM loan_loan l
+    WHERE l.customer_id = (SELECT user_id FROM account_customer_info WHERE id = ?)
+      AND LOWER(l.status) NOT IN ('paid', 'closed', 'written off', 'written_off')
+    ORDER BY l.id DESC
+    LIMIT 1
+)
+ORDER BY lr.expected_to_be_paid_date ASC
+`
+
+func (r *Repository) GetLoanRepaymentHistory(ctx context.Context, coreCustomerID string) ([]LoanHistoryItem, error) {
+	var history []LoanHistoryItem
+	err := r.db.WithContext(ctx).Raw(loanHistoryQuery, coreCustomerID).Scan(&history).Error
+	if err != nil {
+		return nil, err
+	}
+	return history, nil
 }
 
 const loanSummaryBaseQuery = `

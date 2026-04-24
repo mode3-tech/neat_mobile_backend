@@ -376,6 +376,37 @@ func (h *Handler) GetActiveLoans(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *Handler) GetLoanHistory(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if userID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing X-Device-ID header"})
+		return
+	}
+
+	resp, err := h.service.GetLoanHistory(c.Request.Context(), userID, deviceID)
+	if err != nil {
+		_ = c.Error(err)
+		msg := strings.TrimSpace(err.Error())
+		switch msg {
+		case "no user found", "no loan history found":
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": msg})
+		case "device not found", "device not allowed":
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		default:
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong, try again"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if userID == "" {
