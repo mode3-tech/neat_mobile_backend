@@ -1,0 +1,282 @@
+AUTO REPAYMENT SERVICE — IMPLEMENTATION GUIDE
+==============================================
+
+This guide describes how to implement automatic loan repayment as a separate
+background service, following the existing patterns in this codebase.
+
+The auto-repayment service mirrors the manual repayment flow
+(TransferForLoanRepayment → MakeManualRepayment) but runs on a cron schedule
+without user interaction.
+
+---
+
+OVERVIEW OF THE EXISTING MANUAL REPAYMENT FLOW
+-----------------------------------------------
+For context, here is what happens when a user manually repays:
+
+  1. User calls POST /api/v1/loan/repayment/manual
+  2. Handler verifies device and transaction PIN
+  3. wallet.Service.TransferForLoanRepayment debits the user's Providus wallet
+     and records a transaction row (category: loan_repayment)
+  4. loanproduct.Service.MakeManualRepayment calls the CBA adapter
+     (MakeManualRepayment) to record the repayment on the core banking side
+  5. CBA sends back a webhook confirming the loan status change
+
+The auto-repayment service does the same steps 3–4 automatically on the day a
+repayment installment is due, without steps 1–2.
+
+---
+
+STEP 1 — CREATE THE DATABASE TABLE FOR REPAYMENT JOBS
+------------------------------------------------------
+Add a migration for a new table that tracks auto-repayment attempts. This
+prevents double-processing if the cron fires more than once on the same day
+and gives you an audit trail.
+
+  Table: wallet_auto_repayment_attempts
+
+  Columns:
+    id                TEXT PRIMARY KEY
+    loan_repayment_id BIGINT NOT NULL          -- FK to loan_loan_repayment.id
+    mobile_user_id    TEXT NOT NULL            -- FK to wallet_users.id
+    amount_kobo       BIGINT NOT NULL
+    status            TEXT NOT NULL            -- pending | success | failed | skipped
+    failure_reason    TEXT
+    provider_ref      TEXT                     -- Providus transaction ref on success
+    attempted_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+
+  Add a unique index on (loan_repayment_id, status) where status = 'success'
+  so you can never mark the same installment succeeded twice.
+
+  Add the Go model in internal/database/migrations and a corresponding GORM
+  model struct in modules/autorepayment/models.go.
+
+---
+
+STEP 2 — QUERY DUE REPAYMENT INSTALLMENTS
+------------------------------------------
+In the repository, write a query that returns installments that are due today
+and have not yet been successfully processed.
+
+  -- modules/autorepayment/repository.go
+
+  const dueTodayQuery = `
+  SELECT
+      lr.id                                   AS repayment_id,
+      lr.loan_id::text                        AS loan_id,
+      lr.amount                               AS amount,
+      wu.id                                   AS mobile_user_id,
+      wu.core_customer_id
+  FROM loan_loan_repayment lr
+  JOIN loan_loan l            ON l.id = lr.loan_id
+  JOIN account_customer_info  aci ON aci.user_id = l.customer_id
+  JOIN wallet_users wu         ON wu.core_customer_id = aci.id
+  WHERE lr.paid IS NOT TRUE
+    AND lr.expected_to_be_paid_date::date <= CURRENT_DATE
+    AND l.status = 'Active'
+    AND NOT EXISTS (
+        SELECT 1 FROM wallet_auto_repayment_attempts a
+        WHERE a.loan_repayment_id = lr.id
+          AND a.status = 'success'
+    )
+  ORDER BY lr.expected_to_be_paid_date ASC
+  `
+
+  func (r *Repository) GetDueRepayments(ctx context.Context) ([]DueRepaymentRow, error)
+
+  DueRepaymentRow fields: RepaymentID, LoanID, Amount, MobileUserID, CoreCustomerID
+
+---
+
+STEP 3 — WRITE THE REPAYMENT JOB SERVICE
+-----------------------------------------
+Create modules/autorepayment/service.go.
+
+The service needs these dependencies (passed via constructor):
+  - *autorepayment.Repository      (for due repayments + attempt tracking)
+  - *wallet.Repository             (to read wallet balance + debit)
+  - wallet.ProvidusService         (to call Providus transfer)
+  - loanproduct.ManualRepayer      (CBA adapter — already implements MakeManualRepayment)
+  - notification.Service           (to push success/failure notifications)
+  - wallet.SettlementAccount       (same settlement account used for manual repayment)
+
+ProcessDueRepayments(ctx context.Context) error:
+
+  a. Call repo.GetDueRepayments(ctx) to get all due installments.
+
+  b. For each row, call processSingle(ctx, row) with a per-item timeout
+     (e.g. 30 seconds). Run items sequentially to avoid hammering Providus.
+
+processSingle(ctx, row):
+
+  a. Insert a wallet_auto_repayment_attempts row with status = 'pending'.
+
+  b. Fetch the user's wallet (wallet.Repository.GetUserWalletID +
+     wallet.Repository.GetWallet).
+
+  c. Check available balance:
+       if wallet.AvailableBalance < row.Amount * 100 {
+           update attempt status = 'skipped', failure_reason = "insufficient balance"
+           send push notification: "Auto-repayment skipped — top up your wallet"
+           return
+       }
+
+  d. Build a transaction.Transaction record (category: loan_repayment,
+     source: auto_repayment) and persist it via wallet.Repository.AddTransaction.
+
+  e. Call providusService.InitiateTransfer with the settlement account details
+     (same as TransferForLoanRepayment in wallet/service.go lines 243–249).
+
+  f. If the Providus transfer fails:
+       update transaction status = failed
+       update attempt status = 'failed', failure_reason = err.Error()
+       send push notification: "Auto-repayment failed — please retry manually"
+       return
+
+  g. Call wallet.Repository.CompleteDebitTransaction to debit the wallet
+     (same as lines 263–265 in wallet/service.go).
+
+  h. Call manualRepayer.MakeManualRepayment(ctx, RepaymentRequest{
+         Amount:      row.Amount,
+         RepaymentID: row.LoanID,    -- CBA uses loan ID as the repayment target
+     })
+
+  i. If CBA call fails:
+       update attempt status = 'failed', failure_reason = err.Error()
+       NOTE: the wallet debit already happened. Log this clearly so ops can
+       reconcile. Do NOT retry the Providus transfer.
+       send push notification: "Auto-repayment processed but CBA confirmation
+       pending — contact support if your balance does not update"
+       return
+
+  j. Update attempt status = 'success', provider_ref = Providus ref.
+
+  k. Send push notification: "Auto-repayment of ₦X successful for loan #LoanID"
+
+---
+
+STEP 4 — REGISTER THE CRON JOB
+--------------------------------
+Create cmd/autorepayment/main.go (a new binary), or register the job inside
+the existing cmd/api/main.go if you prefer a single binary.
+
+Recommended: separate binary, following the pattern in cmd/notification-api/.
+
+  In internal/autorepaymentserver/router.go:
+
+    c := cron.New(cron.WithLocation(time.UTC))
+
+    var mu sync.Mutex
+    var running bool
+
+    c.AddFunc("0 6 * * *", func() {    // runs daily at 06:00 UTC
+        mu.Lock()
+        if running {
+            mu.Unlock()
+            log.Print("auto-repayment sweep already running; skipping")
+            return
+        }
+        running = true
+        mu.Unlock()
+        defer func() { mu.Lock(); running = false; mu.Unlock() }()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+        defer cancel()
+        if err := autoRepaymentService.ProcessDueRepayments(ctx); err != nil {
+            log.Printf("auto-repayment sweep: %v", err)
+        }
+    })
+
+  Use the same mutex + running-flag pattern as the CBA sync sweep in
+  internal/server/router.go lines 143–164.
+
+---
+
+STEP 5 — ADD ENVIRONMENT CONFIG
+---------------------------------
+Add any new config fields to internal/config/config.go if you need separate
+settings (e.g. a toggle to enable/disable, or a separate cron expression).
+
+Suggested fields:
+  AutoRepaymentEnabled bool   (default true)
+  AutoRepaymentCron    string (default "0 6 * * *")
+
+The settlement account fields (LoanRepaymentAccountNumber, LoanRepaymentBankCode,
+LoanRepaymentAccountName) are already configured — reuse them.
+
+---
+
+STEP 6 — HANDLE THE IDEMPOTENCY EDGE CASES
+-------------------------------------------
+These scenarios must be handled explicitly:
+
+  a. Cron fires twice on the same day (e.g. server restart):
+     The NOT EXISTS subquery in GetDueRepayments filters out already-succeeded
+     installments. The pending attempt row inserted at step 3a acts as an
+     advisory lock — check for it before inserting to avoid two goroutines
+     racing on the same row.
+
+  b. Providus succeeds but CBA call times out:
+     Log the discrepancy. Do not reverse the Providus transfer. Ops should
+     reconcile via the wallet_auto_repayment_attempts table where status is
+     'failed' but provider_ref is populated.
+
+  c. The loan gets paid manually before the cron runs:
+     lr.paid = TRUE in the CBA webhook → GetDueRepayments excludes it because
+     of WHERE lr.paid IS NOT TRUE. No action needed.
+
+  d. Insufficient balance on the due date:
+     Record as 'skipped' and notify the user. Re-attempt the next day by
+     including installments where expected_to_be_paid_date::date <= CURRENT_DATE
+     (already in the query). Cap retries if needed by adding a
+     retry_count column and filtering WHERE retry_count < 3.
+
+---
+
+STEP 7 — OBSERVABILITY
+------------------------
+  - Log every attempt at INFO level (mobile_user_id, loan_repayment_id, amount,
+    outcome).
+  - Log failures at ERROR level with the full error.
+  - Expose a GET /health endpoint on the new binary (same as existing services).
+  - The wallet_auto_repayment_attempts table is your audit log — expose it via
+    the internal reporting module if needed (follow modules/reporting/ pattern).
+
+---
+
+DIRECTORY LAYOUT
+-----------------
+  cmd/autorepayment/
+    main.go
+
+  internal/autorepaymentserver/
+    server.go
+    router.go
+
+  modules/autorepayment/
+    models.go        -- DueRepaymentRow, AutoRepaymentAttempt
+    repository.go    -- GetDueRepayments, InsertAttempt, UpdateAttemptStatus
+    service.go       -- ProcessDueRepayments, processSingle
+
+---
+
+DEPENDENCIES TO INJECT (WIRED IN router.go)
+--------------------------------------------
+  autorepaymentRepo    := autorepayment.NewRepository(db)
+  walletRepo           := wallet.NewRepository(db)
+  providusClient       := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+  cbaClient            := cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
+  notificationService  := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
+  settlementAccount    := wallet.SettlementAccount{
+      AccountNumber: cfg.LoanRepaymentAccountNumber,
+      BankCode:      cfg.LoanRepaymentBankCode,
+      AccountName:   cfg.LoanRepaymentAccountName,
+  }
+  autoRepaymentService := autorepayment.NewService(
+      autorepaymentRepo,
+      walletRepo,
+      providusClient,
+      cbaClient,           // implements ManualRepayer
+      notificationService,
+      settlementAccount,
+  )
