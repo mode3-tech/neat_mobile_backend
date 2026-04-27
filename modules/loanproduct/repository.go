@@ -244,6 +244,7 @@ func (r *Repository) ListLoansByCustomerID(ctx context.Context, coreCustomerID s
 
 const loanHistoryQuery = `
 SELECT
+    lr.loan_id::text                                                                AS loan_id,
     COALESCE(lr.amount, 0)                                                         AS loan_amount,
     COALESCE(lr.expected_to_be_paid_date::date::text, '')                          AS payment_date,
     CASE
@@ -253,20 +254,95 @@ SELECT
     END                                                                            AS status,
     CASE WHEN lr.paid IS TRUE THEN COALESCE(lr.amount, 0) ELSE 0 END              AS amount_paid
 FROM loan_loan_repayment lr
-WHERE lr.loan_id = (
+WHERE lr.loan_id IN (
     SELECT l.id
     FROM loan_loan l
     WHERE l.customer_id = (SELECT user_id FROM account_customer_info WHERE id = ?)
-      AND LOWER(l.status) NOT IN ('paid', 'closed', 'written off', 'written_off')
-    ORDER BY l.id DESC
-    LIMIT 1
 )
+ORDER BY lr.expected_to_be_paid_date ASC
+`
+
+const loanHistoryByLoanIDQuery = `
+SELECT
+    lr.loan_id::text                                                                AS loan_id,
+    COALESCE(lr.amount, 0)                                                         AS loan_amount,
+    COALESCE(lr.expected_to_be_paid_date::date::text, '')                          AS payment_date,
+    CASE
+        WHEN lr.paid IS TRUE                                       THEN 'paid'
+        WHEN lr.expected_to_be_paid_date::date < CURRENT_DATE     THEN 'overdue'
+        ELSE 'upcoming'
+    END                                                                            AS status,
+    CASE WHEN lr.paid IS TRUE THEN COALESCE(lr.amount, 0) ELSE 0 END              AS amount_paid
+FROM loan_loan_repayment lr
+WHERE lr.loan_id = ?
 ORDER BY lr.expected_to_be_paid_date ASC
 `
 
 func (r *Repository) GetLoanRepaymentHistory(ctx context.Context, coreCustomerID string) ([]LoanHistoryItem, error) {
 	var history []LoanHistoryItem
 	err := r.db.WithContext(ctx).Raw(loanHistoryQuery, coreCustomerID).Scan(&history).Error
+	if err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+func (r *Repository) GetLoanRepaymentHistoryByLoanID(ctx context.Context, loanID string) ([]LoanHistoryItem, error) {
+	var history []LoanHistoryItem
+	err := r.db.WithContext(ctx).Raw(loanHistoryByLoanIDQuery, loanID).Scan(&history).Error
+	if err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+const loanDetailsQuery = `
+SELECT
+    COALESCE(l.amount_to_be_paid, 0)                                                       AS total_loan_amount,
+    COALESCE(l.actual_money_collected, 0)                                                  AS amount_repaid,
+    GREATEST(COALESCE(l.amount_to_be_paid, 0) - COALESCE(l.actual_money_collected, 0), 0) AS outstanding_balance,
+    COALESCE(next_due.expected_to_be_paid_date::date::text, '')                            AS due_date
+FROM loan_loan l
+LEFT JOIN LATERAL (
+    SELECT lr.expected_to_be_paid_date
+    FROM loan_loan_repayment lr
+    WHERE lr.loan_id = l.id
+      AND lr.paid IS NOT TRUE
+    ORDER BY lr.expected_to_be_paid_date ASC
+    LIMIT 1
+) next_due ON TRUE
+WHERE l.id = ?
+`
+
+const recentLoanHistoryQuery = `
+SELECT
+    lr.loan_id::text                                                                AS loan_id,
+    COALESCE(lr.amount, 0)                                                         AS loan_amount,
+    COALESCE(lr.expected_to_be_paid_date::date::text, '')                          AS payment_date,
+    CASE
+        WHEN lr.paid IS TRUE                                       THEN 'paid'
+        WHEN lr.expected_to_be_paid_date::date < CURRENT_DATE     THEN 'overdue'
+        ELSE 'upcoming'
+    END                                                                            AS status,
+    CASE WHEN lr.paid IS TRUE THEN COALESCE(lr.amount, 0) ELSE 0 END              AS amount_paid
+FROM loan_loan_repayment lr
+WHERE lr.loan_id = ?
+ORDER BY lr.expected_to_be_paid_date DESC
+LIMIT 3
+`
+
+func (r *Repository) GetLoanDetailsByID(ctx context.Context, loanID string) (*LoanDetails, error) {
+	var details LoanDetails
+	err := r.db.WithContext(ctx).Raw(loanDetailsQuery, loanID).Scan(&details).Error
+	if err != nil {
+		return nil, err
+	}
+	return &details, nil
+}
+
+func (r *Repository) GetRecentLoanRepaymentHistory(ctx context.Context, loanID string) ([]LoanHistoryItem, error) {
+	var history []LoanHistoryItem
+	err := r.db.WithContext(ctx).Raw(recentLoanHistoryQuery, loanID).Scan(&history).Error
 	if err != nil {
 		return nil, err
 	}

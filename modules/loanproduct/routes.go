@@ -10,7 +10,9 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		loanProduct.POST("/apply", handler.ApplyForLoan)
 		loanProduct.GET("/loans", handler.GetAllLoans)
 		loanProduct.GET("/loans/active", handler.GetActiveLoans)
+		loanProduct.GET("/loans/:loan_id", handler.GetLoanDetails)
 		loanProduct.GET("/history", handler.GetLoanHistory)
+		loanProduct.GET("/history/:loan_id", handler.GetLoanHistoryByLoanID)
 		loanProduct.GET("/repayment-schedule", handler.GetRepaymentSchedule)
 		loanProduct.POST("/repayment/manual", handler.HandleManualRepayment)
 	}

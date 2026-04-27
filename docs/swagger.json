@@ -2657,7 +2657,7 @@
       "get": {
         "tags": ["Loan"],
         "summary": "Loan repayment history",
-        "description": "Returns the repayment installment history for the customer's latest active loan.",
+        "description": "Returns the repayment installment history across all loans for the customer.",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
@@ -2694,7 +2694,123 @@
             }
           },
           "404": {
-            "description": "No user or no active loan found",
+            "description": "No user found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loan/history/{loan_id}": {
+      "get": {
+        "tags": ["Loan"],
+        "summary": "Loan repayment history by loan ID",
+        "description": "Returns the repayment installment history for a specific loan.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loan_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The loan ID to fetch repayment history for."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Device identifier for the authenticated session."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan repayment history fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanHistoryResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid loan_id or X-Device-ID header",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token, or unrecognised device",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/loan/loans/{loan_id}": {
+      "get": {
+        "tags": ["Loan"],
+        "summary": "Get loan details",
+        "description": "Returns total loan amount, amount repaid, outstanding balance, next due date, and the last 3 repayment installments for a specific loan.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loan_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The loan ID to fetch details for."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Device identifier for the authenticated session."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan details fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanDetailsResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid loan_id or X-Device-ID header",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ErrorResponse" }
@@ -7443,6 +7559,10 @@
       "LoanHistoryItem": {
         "type": "object",
         "properties": {
+          "loan_id": {
+            "type": "string",
+            "example": "42"
+          },
           "loan_amount": {
             "type": "number",
             "format": "double",
@@ -7481,6 +7601,53 @@
             "items": {
               "$ref": "#/components/schemas/LoanHistoryItem"
             }
+          }
+        }
+      },
+      "LoanDetails": {
+        "type": "object",
+        "properties": {
+          "total_loan_amount": {
+            "type": "number",
+            "format": "double",
+            "example": 115000.00
+          },
+          "amount_repaid": {
+            "type": "number",
+            "format": "double",
+            "example": 28750.00
+          },
+          "outstanding_balance": {
+            "type": "number",
+            "format": "double",
+            "example": 86250.00
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2026-06-01"
+          },
+          "repayment_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoanHistoryItem"
+            }
+          }
+        }
+      },
+      "LoanDetailsResponse": {
+        "type": "object",
+        "required": ["status", "message", "details"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Loan details fetched successfully"
+          },
+          "details": {
+            "$ref": "#/components/schemas/LoanDetails"
           }
         }
       },
