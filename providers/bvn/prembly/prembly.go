@@ -43,7 +43,7 @@ func (p *Prembly) ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(p.apiKey))
+	req.Header.Set("x-api-key", strings.TrimSpace(p.apiKey))
 
 	start := time.Now()
 	resp, err := p.httpClient.Do(req)

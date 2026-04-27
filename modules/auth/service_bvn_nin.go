@@ -114,10 +114,12 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
 
-	if provider != ProviderTendar {
-		log.Printf("provider source selected %q; forcing tendar-only validation", provider)
+	switch provider {
+	case ProviderPrembly:
+		return s.ValidateBVNWithPrembly(ctx, bvn)
+	default:
+		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
-	return s.ValidateBVNWithTendar(ctx, bvn)
 }
 
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
