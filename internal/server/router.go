@@ -272,6 +272,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	reportingService := reporting.NewService(reportingRepo)
 	reportingHandler := reporting.NewHandler(reportingService)
 	reporting.RegisterInternalRoutes(internalV1, reportingHandler, internalAuth)
+	notification.RegisterInternalRoutes(internalV1, notificationHandler, internalAuth)
 
 	go func() {
 		c.Start()
