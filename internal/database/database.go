@@ -5,6 +5,7 @@ import (
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/account"
 	"neat_mobile_app_backend/modules/auth/otp"
+	"neat_mobile_app_backend/modules/autorepayment"
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/loanproduct"
 	"neat_mobile_app_backend/modules/neatsave"
@@ -192,6 +193,7 @@ func Migrate(db *gorm.DB) error {
 		&neatsave.SavingsGoal{},
 		&neatsave.AutoSaveRule{},
 		&neatsave.SavingsActivity{},
+		&autorepayment.AutoRepaymentAttempt{},
 	); err != nil {
 		return err
 	}

@@ -160,10 +160,10 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	var req UpdateProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
+	// if err := c.ShouldBindJSON(&req); err != nil {
+	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+	// 	return
+	// }
 
 	file, header, err := c.Request.FormFile("profile_picture")
 	if err != nil && err != http.ErrMissingFile {
@@ -177,7 +177,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		defer file.Close()
 
 		contentType := header.Header.Get("Content-Type")
-		if contentType != "image/jpeg" || contentType != "image/png" || contentType != "image/webp" {
+		if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "only jpeg, png and webp allowed"})
 			return
 		}
