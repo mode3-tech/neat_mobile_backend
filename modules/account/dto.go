@@ -51,8 +51,8 @@ type StatementJobStatusResponse struct {
 }
 
 type UpdateProfileRequest struct {
-	Email   *string `json:"email" binding:"omitempty,email"`
-	Address *string `json:"address"`
+	Email   *string `form:"email" binding:"omitempty,email"`
+	Address *string `form:"address"`
 }
 
 type UpdateProfileResponse struct {

@@ -160,10 +160,10 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	var req UpdateProfileRequest
-	// if err := c.ShouldBindJSON(&req); err != nil {
-	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-	// 	return
-	// }
+	if err := c.ShouldBind(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	file, header, err := c.Request.FormFile("profile_picture")
 	if err != nil && err != http.ErrMissingFile {
