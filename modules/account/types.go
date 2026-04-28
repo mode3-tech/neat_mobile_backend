@@ -19,22 +19,22 @@ const (
 )
 
 type AccountSummaryRow struct {
-	ID                     string
-	ProfilePicture         string
-	FirstName              string
-	LastName               string
-	DOB                    time.Time
-	Email                  string
-	Phone                  string
-	BVN                    string
-	BankName               string
-	Address                string
-	AccountNumber          string
-	AvailableBalance       int64
-	BookedBalance          int64
-	InternalWalletID       string
-	IsNotificationsEnabled bool
-	CoreCustomerID         *string
+	ID                     string    `gorm:"id"`
+	ProfilePicture         string    `gorm:"profile_picture"`
+	FirstName              string    `gorm:"first_name"`
+	LastName               string    `gorm:"last_name"`
+	DOB                    time.Time `gorm:"dob"`
+	Email                  string    `gorm:"email"`
+	Phone                  string    `gorm:"phone"`
+	BVN                    string    `gorm:"bvn"`
+	BankName               string    `gorm:"bank_name"`
+	Address                string    `gorm:"address"`
+	AccountNumber          string    `gorm:"account_number"`
+	AvailableBalance       int64     `gorm:"available_balance"`
+	BookedBalance          int64     `gorm:"booked_balance"`
+	InternalWalletID       string    `gorm:"internal_wallet_id"`
+	IsNotificationsEnabled bool      `gorm:"is_notifications_enabled"`
+	CoreCustomerID         *string   `gorm:"core_customer_id"`
 }
 
 type DashboardLoanItem struct {

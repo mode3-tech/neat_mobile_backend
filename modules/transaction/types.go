@@ -24,6 +24,7 @@ const (
 	TransactionSourceLoanDisbursement TransactionSource = "loan_disbursement"
 	TransactionSourceAutoSave         TransactionSource = "auto_save"
 	TransactionSourceLoanRepayment    TransactionSource = "loan_repayment"
+	TransactionSourceAutoRepayment    TransactionSource = "auto_repayment"
 	TransactionSourceCard             TransactionSource = "card"
 )
 

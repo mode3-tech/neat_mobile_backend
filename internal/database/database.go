@@ -340,5 +340,13 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_auto_repayment_attempts_success
+		ON wallet_auto_repayment_attempts (loan_repayment_id)
+		WHERE status = 'success'
+	`).Error; err != nil {
+		return err
+	}
+
 	return nil
 }
