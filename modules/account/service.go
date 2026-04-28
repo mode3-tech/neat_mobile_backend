@@ -669,6 +669,6 @@ func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File,
 		return "", err
 	}
 
-	url := s.b2.FileURL(key)
+	url := s.b2.ProfilePictureURL(key)
 	return url, nil
 }
