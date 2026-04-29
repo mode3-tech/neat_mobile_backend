@@ -42,11 +42,6 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		return nil, err
 	}
 
-	err = s.repo.MarkValidationRecordUsed(ctx, row.ID)
-	if err != nil {
-		return nil, errors.New("failed to mark nin verification record as used")
-	}
-
 	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
 
 	if err != nil {
