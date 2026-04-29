@@ -51,8 +51,9 @@ type StatementJobStatusResponse struct {
 }
 
 type UpdateProfileRequest struct {
-	Email   *string `form:"email" binding:"omitempty,email"`
-	Address *string `form:"address"`
+	Email                 *string `form:"email" binding:"omitempty,email"`
+	Address               *string `form:"address"`
+	RemoveProfilePicture  bool    `form:"remove_profile_picture"`
 }
 
 type UpdateProfileResponse struct {

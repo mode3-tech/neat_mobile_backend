@@ -171,7 +171,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	var url string
+	var profilePictureURL *string
 
 	if file != nil {
 		defer file.Close()
@@ -186,14 +186,18 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "image larger than 8MB"})
 			return
 		}
-		url, err = h.service.uploadProfilePicture(c.Request.Context(), file, *header, mobileUserID)
-		if err != nil {
+		uploadedURL, uploadErr := h.service.uploadProfilePicture(c.Request.Context(), file, *header, mobileUserID)
+		if uploadErr != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured while uploading profile picture"})
 			return
 		}
+		profilePictureURL = &uploadedURL
+	} else if req.RemoveProfilePicture {
+		empty := ""
+		profilePictureURL = &empty
 	}
 
-	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, url, req); err != nil {
+	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, profilePictureURL, req); err != nil {
 		if err.Error() == "user id is missing" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return

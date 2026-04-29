@@ -107,9 +107,9 @@ func (r *Repository) ListSignedUsers(ctx context.Context, limit, offset int) ([]
 	return rows, total, nil
 }
 
-func (r *Repository) GetTransactionsWithMobileUserID(ctx context.Context, mobileUserID string, limit, offset int) ([]UserTransaction, int64, error) {
+func (r *Repository) GetTransactionsWithMobileUserID(ctx context.Context, mobileUserID string, limit, offset int) ([]userTransactionRow, int64, error) {
 	var total int64
-	var transactions []UserTransaction
+	var transactions []userTransactionRow
 
 	base := r.db.WithContext(ctx).
 		Table("wallet_transactions wt").
@@ -124,7 +124,7 @@ func (r *Repository) GetTransactionsWithMobileUserID(ctx context.Context, mobile
 	r.logQuery("GetTransactionsWithMobileUserID.count", countStart, fmt.Sprintf("total=%d", total), nil)
 
 	if total == 0 {
-		return []UserTransaction{}, 0, nil
+		return []userTransactionRow{}, 0, nil
 	}
 
 	listStart := time.Now()

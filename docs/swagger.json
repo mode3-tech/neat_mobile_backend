@@ -6340,6 +6340,11 @@
             "format": "binary",
             "description": "Profile picture image file (optional)."
           },
+          "remove_profile_picture": {
+            "type": "boolean",
+            "description": "Set to true to remove the current profile picture. Ignored if a new profile_picture file is also provided.",
+            "example": false
+          },
           "email": {
             "type": "string",
             "format": "email",

@@ -311,15 +311,15 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	}
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID, profilePictureURL string, req UpdateProfileRequest) error {
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, profilePictureURL *string, req UpdateProfileRequest) error {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return errors.New("user id is missing")
 	}
 
 	data := UpdateProfileData{
-		ProfilePictureURL: &profilePictureURL,
 		Address:           req.Address,
 		Email:             req.Email,
+		ProfilePictureURL: profilePictureURL,
 	}
 
 	if err := s.repo.UpdateProfile(ctx, mobileUserID, data); err != nil {

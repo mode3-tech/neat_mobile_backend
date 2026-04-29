@@ -107,7 +107,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, dat
 	}
 
 	if data.ProfilePictureURL != nil {
-		updates["profile_picture"] = *data.ProfilePictureURL
+		if *data.ProfilePictureURL == "" {
+			updates["profile_picture"] = nil
+		} else {
+			updates["profile_picture"] = *data.ProfilePictureURL
+		}
 	}
 
 	return r.db.WithContext(ctx).

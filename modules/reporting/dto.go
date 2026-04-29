@@ -66,6 +66,23 @@ type ListSignedUsersResponse struct {
 	TotalPages int              `json:"total_pages"`
 }
 
+type userTransactionRow struct {
+	MobileUserID         string                        `gorm:"column:mobile_user_id"`
+	Type                 transaction.TransactionType   `gorm:"column:type"`
+	Amount               int64                         `gorm:"column:amount"`
+	Charges              int64                         `gorm:"column:charges"`
+	VAT                  int64                         `gorm:"column:vat"`
+	BalanceBefore        int64                         `gorm:"column:balance_before"`
+	BalanceAfter         int64                         `gorm:"column:balance_after"`
+	TransactionReference string                        `gorm:"column:transaction_reference"`
+	Narration            *string                       `gorm:"column:narration"`
+	RecipientName        string                        `gorm:"column:recipient_name"`
+	RecipientAccount     string                        `gorm:"column:recipient_account"`
+	RecipientBank        string                        `gorm:"column:recipient_bank"`
+	Status               transaction.TransactionStatus `gorm:"column:status"`
+	CreatedAt            time.Time                     `gorm:"column:created_at"`
+}
+
 type UserTransactionQuery struct {
 	MobileUserID string `form:"mobile_user_id" binding:"required"`
 	Page         int    `json:"form:page"`
@@ -75,11 +92,11 @@ type UserTransactionQuery struct {
 type UserTransaction struct {
 	MobileUserID         string                        `json:"mobile_user_id"`
 	Type                 transaction.TransactionType   `json:"type"`
-	Amount               int64                         `json:"amount"`
-	Charges              int64                         `json:"charges"`
-	VAT                  int64                         `json:"vat"`
-	BalanceBefore        int64                         `json:"balance_before"`
-	BalanceAfter         int64                         `json:"balance_after"`
+	Amount               float64                       `json:"amount"`
+	Charges              float64                       `json:"charges"`
+	VAT                  float64                       `json:"vat"`
+	BalanceBefore        float64                       `json:"balance_before"`
+	BalanceAfter         float64                       `json:"balance_after"`
 	TransactionReference string                        `json:"transaction_reference"`
 	Narration            *string                       `json:"narration"`
 	RecipientName        string                        `json:"recipient_name"`

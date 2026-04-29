@@ -38,10 +38,10 @@ type LoanStatus string
 
 const (
 	LoanStatusEmbryo   LoanStatus = "embryo"
-	LoanStatusPending  LoanStatus = "pending"
-	LoanStatusApproved LoanStatus = "approved"
-	LoanStatusDeclined LoanStatus = "declined"
-	LoanStatusActive   LoanStatus = "active"
+	LoanStatusPending  LoanStatus = "Pending"
+	LoanStatusApproved LoanStatus = "Approved"
+	LoanStatusDeclined LoanStatus = "Declined"
+	LoanStatusActive   LoanStatus = "Active"
 )
 
 type CoreCustomerMatchStatus string

@@ -103,10 +103,30 @@ func (s *Service) GetUserTransactions(ctx context.Context, mobileUserID string, 
 		return nil, errors.New("an error occured when trying to fetch user transactions")
 	}
 
+	txs := make([]UserTransaction, 0, len(transactions))
+	for _, r := range transactions {
+		txs = append(txs, UserTransaction{
+			MobileUserID:         r.MobileUserID,
+			Type:                 r.Type,
+			Amount:               float64(r.Amount) / 100,
+			Charges:              float64(r.Charges),
+			VAT:                  float64(r.VAT),
+			BalanceBefore:        float64(r.BalanceBefore) / 100,
+			BalanceAfter:         float64(r.BalanceAfter) / 100,
+			TransactionReference: r.TransactionReference,
+			Narration:            r.Narration,
+			RecipientName:        r.RecipientName,
+			RecipientAccount:     r.RecipientAccount,
+			RecipientBank:        r.RecipientBank,
+			Status:               r.Status,
+			CreatedAt:            r.CreatedAt,
+		})
+	}
+
 	totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
 	return &UserTransactionResponse{
-		Transactions: transactions,
+		Transactions: txs,
 		Total:        total,
 		Page:         page,
 		Limit:        limit,
