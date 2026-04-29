@@ -39,6 +39,25 @@ func (r *VerificationRepo) GetVerificationByID(ctx context.Context, id string) (
 	return &rec, nil
 }
 
+func (r *VerificationRepo) GetVerifiedRecordBySubjectHash(ctx context.Context, subjectHash, verType string) (*models.VerificationRecord, error) {
+	var rec models.VerificationRecord
+	result := r.db.WithContext(ctx).
+		Where("subject_hash = ? AND type = ? AND status IN ?", subjectHash, verType, []string{
+			models.VerificationStatusVerified,
+			models.VerificationStatusUsed,
+		}).
+		Order("created_at DESC").
+		Limit(1).
+		Find(&rec)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+	return &rec, nil
+}
+
 func (r *VerificationRepo) MarkVerificationUsed(ctx context.Context, id string, usedAt time.Time) error {
 	result := r.db.WithContext(ctx).
 		Model(&models.VerificationRecord{}).

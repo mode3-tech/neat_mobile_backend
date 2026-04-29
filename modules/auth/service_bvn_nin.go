@@ -23,6 +23,18 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		return nil, errors.New("invalid nin")
 	}
 
+	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("bvn verification record not found")
+		}
+		return nil, err
+	}
+
+	if info, err := s.reuseVerifiedNIN(ctx, nin, row); err == nil && info != nil {
+		return info, nil
+	}
+
 	resp, err := s.nin.ValidateNIN(ctx, nin)
 	if err != nil {
 		return nil, err
@@ -32,15 +44,6 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	middleName := TitleCase(resp.Data.MiddleName)
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
-
-	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("bvn verification record not found")
-		}
-		return nil, err
-	}
 
 	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
 
@@ -99,6 +102,10 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 }
 
 func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if info, err := s.reuseVerifiedBVN(ctx, bvn); err == nil && info != nil {
+		return info, nil
+	}
+
 	if s.providerSource == nil {
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
@@ -115,6 +122,119 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 	default:
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
+}
+
+func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+	if s.verification == nil {
+		return nil, errors.New("verification repo not configured")
+	}
+	hashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
+	hash := hex.EncodeToString(hashBytes[:])
+
+	cached, err := s.verification.GetVerifiedRecordBySubjectHash(ctx, hash, models.VerificationTypeBVN)
+	if err != nil || cached == nil {
+		return nil, errors.New("no cached bvn record")
+	}
+	if cached.VerifiedName == nil || cached.VerifiedDOB == nil || cached.VerifiedPhone == nil {
+		return nil, errors.New("cached bvn record is incomplete")
+	}
+
+	verificationID := uuid.NewString()
+	now := time.Now().UTC()
+	expiresAt := now.Add(15 * time.Minute)
+	maskedBVN := MaskSub(bvn)
+
+	record := &models.VerificationRecord{
+		ID:            verificationID,
+		Type:          models.VerificationTypeBVN,
+		Provider:      cached.Provider,
+		Status:        models.VerificationStatusVerified,
+		SubjectHash:   hash,
+		SubjectMasked: &maskedBVN,
+		VerifiedAt:    &now,
+		ExpiresAt:     &expiresAt,
+		VerifiedID:    cached.VerifiedID,
+		VerifiedName:  cached.VerifiedName,
+		VerifiedDOB:   cached.VerifiedDOB,
+		VerifiedPhone: cached.VerifiedPhone,
+		VerifiedEmail: cached.VerifiedEmail,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := s.saveVerifiedBVN(ctx, record, nil); err != nil {
+		return nil, err
+	}
+
+	log.Printf("bvn cache hit: reused existing verified record masked=%s", maskedBVN)
+
+	return &bvnInfo{
+		name:           *cached.VerifiedName,
+		dob:            *cached.VerifiedDOB,
+		phone:          *cached.VerifiedPhone,
+		verificationID: verificationID,
+	}, nil
+}
+
+func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *models.VerificationRecord) (*ninInfo, error) {
+	if s.verification == nil {
+		return nil, errors.New("verification repo not configured")
+	}
+	hashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
+	hash := hex.EncodeToString(hashBytes[:])
+
+	cached, err := s.verification.GetVerifiedRecordBySubjectHash(ctx, hash, models.VerificationTypeNIN)
+	if err != nil || cached == nil {
+		return nil, errors.New("no cached nin record")
+	}
+	if cached.VerifiedName == nil || cached.VerifiedDOB == nil || cached.VerifiedPhone == nil {
+		return nil, errors.New("cached nin record is incomplete")
+	}
+
+	if _, err := compareBVNAndNinDetails(
+		*bvnRow.VerifiedName,
+		SerializeDOB(strings.TrimSpace(*bvnRow.VerifiedDOB)),
+		*cached.VerifiedName,
+		SerializeDOB(strings.TrimSpace(*cached.VerifiedDOB)),
+	); err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	verificationID := uuid.NewString()
+	now := time.Now().UTC()
+	expiresAt := now.Add(15 * time.Minute)
+	maskedNIN := MaskSub(nin)
+
+	record := &models.VerificationRecord{
+		ID:            verificationID,
+		Type:          models.VerificationTypeNIN,
+		Provider:      cached.Provider,
+		Status:        models.VerificationStatusVerified,
+		SubjectHash:   hash,
+		SubjectMasked: &maskedNIN,
+		VerifiedAt:    &now,
+		ExpiresAt:     &expiresAt,
+		VerifiedID:    cached.VerifiedID,
+		VerifiedName:  cached.VerifiedName,
+		VerifiedDOB:   cached.VerifiedDOB,
+		VerifiedPhone: cached.VerifiedPhone,
+		VerifiedEmail: cached.VerifiedEmail,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := s.verification.AddVerification(ctx, record); err != nil {
+		return nil, err
+	}
+
+	log.Printf("nin cache hit: reused existing verified record masked=%s", maskedNIN)
+
+	return &ninInfo{
+		name:           *cached.VerifiedName,
+		dob:            *cached.VerifiedDOB,
+		phone:          *cached.VerifiedPhone,
+		verificationID: verificationID,
+	}, nil
 }
 
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
@@ -359,7 +479,10 @@ func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *model
 		if err := s.verification.AddVerification(ctx, verificationRecord); err != nil {
 			return err
 		}
-		return s.repo.CreateBVNRecord(ctx, bvnRecord)
+		if bvnRecord != nil {
+			return s.repo.CreateBVNRecord(ctx, bvnRecord)
+		}
+		return nil
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
@@ -370,6 +493,9 @@ func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *model
 			return err
 		}
 
-		return authRepo.CreateBVNRecord(ctx, bvnRecord)
+		if bvnRecord != nil {
+			return authRepo.CreateBVNRecord(ctx, bvnRecord)
+		}
+		return nil
 	})
 }
