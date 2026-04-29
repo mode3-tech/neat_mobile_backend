@@ -1,5 +1,21 @@
 package loanproduct
 
+import (
+	"encoding/json"
+	"time"
+)
+
+// DDMMYYYYDate scans a YYYY-MM-DD string from the DB and serialises it as dd/MM/YYYY in JSON.
+type DDMMYYYYDate string
+
+func (d DDMMYYYYDate) MarshalJSON() ([]byte, error) {
+	t, err := time.Parse("2006-01-02", string(d))
+	if err != nil {
+		return json.Marshal(string(d))
+	}
+	return json.Marshal(t.Format("02/01/2006"))
+}
+
 type LoanFrequency string
 
 const (
@@ -74,15 +90,15 @@ type CoreCustomerLoanItem struct {
 }
 
 type CoreLoanDetail struct {
-	LoanID             string  `json:"loan_id"`
-	LoanNumber         string  `json:"loan_number"`
-	PrincipalAmount    float64 `json:"principal_amount"`
-	DisbursedAmount    float64 `json:"disbursed_amount"`
-	OutstandingBalance float64 `json:"outstanding_balance"`
-	AccruedInterest    float64 `json:"accrued_interest"`
-	Status             string  `json:"status"`
-	NextDueDate        string  `json:"next_due_date"`
-	NextDueAmount      float64 `json:"next_due_amount"`
+	LoanID             string       `json:"loan_id"`
+	LoanNumber         string       `json:"loan_number"`
+	PrincipalAmount    float64      `json:"principal_amount"`
+	DisbursedAmount    float64      `json:"disbursed_amount"`
+	OutstandingBalance float64      `json:"outstanding_balance"`
+	AccruedInterest    float64      `json:"accrued_interest"`
+	Status             string       `json:"status"`
+	NextDueDate        DDMMYYYYDate `json:"next_due_date"`
+	NextDueAmount      float64      `json:"next_due_amount"`
 }
 
 type PartialLoanProduct struct {
@@ -121,18 +137,18 @@ type LoanRepayment struct {
 }
 
 type ActiveLoanItem struct {
-	LoanID             string  `json:"loan_id"             gorm:"column:loan_id"`
-	OutstandingBalance float64 `json:"outstanding_balance" gorm:"column:outstanding_balance"`
-	NextPayment        float64 `json:"next_payment"        gorm:"column:next_payment"`
-	DueDate            string  `json:"due_date"            gorm:"column:due_date"`
+	LoanID             string       `json:"loan_id"             gorm:"column:loan_id"`
+	OutstandingBalance float64      `json:"outstanding_balance" gorm:"column:outstanding_balance"`
+	NextPayment        float64      `json:"next_payment"        gorm:"column:next_payment"`
+	DueDate            DDMMYYYYDate `json:"due_date"            gorm:"column:due_date"`
 }
 
 type LoanHistoryItem struct {
-	LoanID      string  `json:"loan_id"      gorm:"column:loan_id"`
-	LoanAmount  float64 `json:"loan_amount"  gorm:"column:loan_amount"`
-	PaymentDate string  `json:"payment_date" gorm:"column:payment_date"`
-	Status      string  `json:"status"       gorm:"column:status"`
-	AmountPaid  float64 `json:"amount_paid"  gorm:"column:amount_paid"`
+	LoanID      string       `json:"loan_id"      gorm:"column:loan_id"`
+	LoanAmount  float64      `json:"loan_amount"  gorm:"column:loan_amount"`
+	PaymentDate DDMMYYYYDate `json:"payment_date" gorm:"column:payment_date"`
+	Status      string       `json:"status"       gorm:"column:status"`
+	AmountPaid  float64      `json:"amount_paid"  gorm:"column:amount_paid"`
 }
 
 type RepaymentRequest struct {
@@ -144,7 +160,7 @@ type LoanDetails struct {
 	TotalLoanAmount    float64           `json:"total_loan_amount"    gorm:"column:total_loan_amount"`
 	AmountRepaid       float64           `json:"amount_repaid"        gorm:"column:amount_repaid"`
 	OutstandingBalance float64           `json:"outstanding_balance"  gorm:"column:outstanding_balance"`
-	DueDate            string            `json:"due_date"             gorm:"column:due_date"`
+	DueDate            DDMMYYYYDate      `json:"due_date"             gorm:"column:due_date"`
 	RepaymentHistory   []LoanHistoryItem `json:"repayment_history"`
 }
 
