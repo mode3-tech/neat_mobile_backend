@@ -28,19 +28,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) 
 		return nil, errors.New("bvn verification record not found")
 	}
 
-	err = s.repo.MarkValidationRecordUsed(ctx, req.BVNVerificationID)
-	if err != nil {
-		return nil, errors.New("failed to mark bvn verification record as used")
-	}
-
 	ninRecord, err := s.repo.GetValidationRow(ctx, req.NINVerificationID)
 	if err != nil || ninRecord.VerifiedDOB == nil {
 		return nil, errors.New("nin verification record not found")
-	}
-
-	err = s.repo.MarkValidationRecordUsed(ctx, req.NINVerificationID)
-	if err != nil {
-		return nil, errors.New("failed to mark nin verification record as used")
 	}
 
 	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
