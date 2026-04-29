@@ -275,7 +275,7 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
-	isPhoneVerified := phoneRecord.VerifiedPhone == &normalizedNumber
+	isPhoneVerified := phoneRecord.VerifiedPhone != nil && *phoneRecord.VerifiedPhone == normalizedNumber
 	isBvnVerified := bvnRecord != nil
 	isNinVerified := ninRecord != nil
 
