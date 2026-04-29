@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/transaction"
@@ -215,6 +216,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 
 	amountKobo := amountNaira * 100
 	if w.AvailableBalance < amountKobo {
+		log.Println("insufficient balance")
 		return errors.New("insufficient balance")
 	}
 

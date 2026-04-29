@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"neat_mobile_app_backend/modules/loanproduct"
 	"net/http"
 	"strings"
@@ -71,6 +72,8 @@ func (c *ProviderClient) MakeManualRepayment(ctx context.Context, repaymentReq l
 		if msg == "" {
 			msg = "repayment failed"
 		}
+		log.Println(err)
+
 		return nil, fmt.Errorf("%s", msg)
 	}
 
