@@ -285,7 +285,7 @@ func canTransition(from, to LoanStatus) bool {
 	case LoanStatusEmbryo:
 		return to == LoanStatusPending
 	case LoanStatusPending:
-		return to == LoanStatusApproved || to == LoanStatusDeclined
+		return to == LoanStatusApproved || to == LoanStatusDeclined || to == LoanStatusPending
 	case LoanStatusApproved:
 		return to == LoanStatusActive || to == LoanStatusDeclined
 	case LoanStatusDeclined:

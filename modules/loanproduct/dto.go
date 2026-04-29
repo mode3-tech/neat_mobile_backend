@@ -30,9 +30,9 @@ type ApplyForLoanResponse struct {
 }
 
 type ManualRepaymentRequest struct {
-	LoanID         string `json:"loan_id" binding:"loan_id"`
-	Amount         int64  `json:"amount"`
-	TransactionPin string `json:"transaction_pin" binding:"transaction_pin"`
+	LoanID         string `json:"loan_id" binding:"required"`
+	Amount         int64  `json:"amount" binding:"required"`
+	TransactionPin string `json:"transaction_pin" binding:"required"`
 }
 
 type ManualRepaymentResponse struct {
