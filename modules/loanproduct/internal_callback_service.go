@@ -291,7 +291,7 @@ func canTransition(from, to LoanStatus) bool {
 	case LoanStatusDeclined:
 		return to == LoanStatusPending
 	case LoanStatusActive:
-		return false
+		return to == LoanStatusActive
 	default:
 		return false
 	}
