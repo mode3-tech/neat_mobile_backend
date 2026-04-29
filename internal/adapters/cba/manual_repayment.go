@@ -66,6 +66,14 @@ func (c *ProviderClient) MakeManualRepayment(ctx context.Context, repaymentReq l
 		return nil, fmt.Errorf("failed to decode repayment response: %w", err)
 	}
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := strings.TrimSpace(result.Message)
+		if msg == "" {
+			msg = "repayment failed"
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
+
 	return &loanproduct.ManualRepaymentResponse{
 		Status:  result.Status,
 		Message: result.Message,

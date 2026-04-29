@@ -575,7 +575,7 @@ func handleHandleManualRepaymentError(c *gin.Context, err error) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 	case "transaction pin locked":
 		c.AbortWithStatusJSON(http.StatusLocked, gin.H{"error": msg})
-	case "insufficient balance":
+	case "insufficient balance", "insufficient funds":
 		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 	case "repayment service is not configured", "wallet service is not configured":
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": msg})
