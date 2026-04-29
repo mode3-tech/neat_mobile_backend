@@ -145,44 +145,70 @@ func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, e
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{
-		ID:            verificationID,
-		Type:          models.VerificationTypeBVN,
-		Provider:      cached.Provider,
-		Status:        models.VerificationStatusVerified,
-		SubjectHash:   hash,
-		SubjectMasked: &maskedBVN,
-		VerifiedAt:    &now,
-		ExpiresAt:     &expiresAt,
-		VerifiedID:     cached.VerifiedID,
-		VerifiedName:   cached.VerifiedName,
-		VerifiedDOB:    cached.VerifiedDOB,
-		VerifiedPhone:  cached.VerifiedPhone,
-		VerifiedEmail:  cached.VerifiedEmail,
-		VerifiedGender: cached.VerifiedGender,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:                      verificationID,
+		Type:                    models.VerificationTypeBVN,
+		Provider:                cached.Provider,
+		Status:                  models.VerificationStatusVerified,
+		SubjectHash:             hash,
+		SubjectMasked:           &maskedBVN,
+		VerifiedAt:              &now,
+		ExpiresAt:               &expiresAt,
+		VerifiedID:              cached.VerifiedID,
+		VerifiedName:            cached.VerifiedName,
+		VerifiedDOB:             cached.VerifiedDOB,
+		VerifiedPhone:           cached.VerifiedPhone,
+		VerifiedEmail:           cached.VerifiedEmail,
+		VerifiedGender:          cached.VerifiedGender,
+		VerifiedNationality:     cached.VerifiedNationality,
+		VerifiedStateOfOrigin:   cached.VerifiedStateOfOrigin,
+		VerifiedPlaceOfBirth:    cached.VerifiedPlaceOfBirth,
+		VerifiedOccupation:      cached.VerifiedOccupation,
+		VerifiedMaritalStatus:   cached.VerifiedMaritalStatus,
+		VerifiedEducation:       cached.VerifiedEducation,
+		VerifiedReligion:        cached.VerifiedReligion,
+		PassportOnBVN:           cached.PassportOnBVN,
+		Passport:                cached.Passport,
+		VerifiedFullHomeAddress: cached.VerifiedFullHomeAddress,
+		TypeOfHouse:             cached.TypeOfHouse,
+		City:                    cached.City,
+		Landmark:                cached.Landmark,
+		LivingSince:             cached.LivingSince,
+		AlternativeMobilePhone:  cached.AlternativeMobilePhone,
+		BankName:                cached.BankName,
+		AccountNumber:           cached.AccountNumber,
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 
 	firstName, middleName, lastName := SplitFullName(*cached.VerifiedName)
-	email := ""
-	if cached.VerifiedEmail != nil {
-		email = *cached.VerifiedEmail
-	}
-	gender := ""
-	if cached.VerifiedGender != nil {
-		gender = *cached.VerifiedGender
-	}
 	bvnRecord := &models.BVNRecord{
-		ID:           uuid.NewString(),
-		UserID:       "",
-		FirstName:    firstName,
-		MiddleName:   middleName,
-		LastName:     lastName,
-		Gender:       gender,
-		DateOfBirth:  parseBVNRecordDOB(*cached.VerifiedDOB),
-		MobilePhone:  *cached.VerifiedPhone,
-		EmailAddress: email,
-		BVN:          *cached.VerifiedID,
+		ID:                     uuid.NewString(),
+		UserID:                 "",
+		FirstName:              firstName,
+		MiddleName:             middleName,
+		LastName:               lastName,
+		Gender:                 derefString(cached.VerifiedGender),
+		Nationality:            derefString(cached.VerifiedNationality),
+		StateOfOrigin:          derefString(cached.VerifiedStateOfOrigin),
+		PlaceOfBirth:           derefString(cached.VerifiedPlaceOfBirth),
+		Occupation:             derefString(cached.VerifiedOccupation),
+		MaritalStatus:          derefString(cached.VerifiedMaritalStatus),
+		Education:              derefString(cached.VerifiedEducation),
+		Religion:               derefString(cached.VerifiedReligion),
+		EmailAddress:           derefString(cached.VerifiedEmail),
+		PassportOnBVN:          derefString(cached.PassportOnBVN),
+		Passport:               cached.Passport,
+		FullHomeAddress:        derefString(cached.VerifiedFullHomeAddress),
+		TypeOfHouse:            cached.TypeOfHouse,
+		City:                   cached.City,
+		Landmark:               cached.Landmark,
+		LivingSince:            cached.LivingSince,
+		MobilePhone:            *cached.VerifiedPhone,
+		AlternativeMobilePhone: cached.AlternativeMobilePhone,
+		BankName:               cached.BankName,
+		AccountNumber:          cached.AccountNumber,
+		DateOfBirth:            parseBVNRecordDOB(*cached.VerifiedDOB),
+		BVN:                    *cached.VerifiedID,
 	}
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
@@ -310,7 +336,6 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
 		VerifiedName:  &fullName,
-		VerifiedDOB:   &bvnDetails.Data.Details.DateOfBirth,
 		VerifiedID:    &bvn,
 	}
 
@@ -336,6 +361,30 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 	if gender := strings.TrimSpace(bvnDetails.Data.Details.Gender); gender != "" {
 		record.VerifiedGender = &gender
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.Nationality); v != "" {
+		record.VerifiedNationality = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.StateOfOrigin); v != "" {
+		record.VerifiedStateOfOrigin = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.MaritalStatus); v != "" {
+		record.VerifiedMaritalStatus = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.Image); v != "" {
+		record.PassportOnBVN = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.ResidentialAddress); v != "" {
+		record.VerifiedFullHomeAddress = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.LGAOfResidence); v != "" {
+		record.City = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.EnrollmentBank); v != "" {
+		record.BankName = v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber2); v != "" {
+		record.AlternativeMobilePhone = &v
 	}
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
@@ -457,33 +506,47 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if gender := strings.TrimSpace(bvnDetails.Data.Gender); gender != "" {
 		record.VerifiedGender = &gender
 	}
+	if v := strings.TrimSpace(bvnDetails.Data.Nationality); v != "" {
+		record.VerifiedNationality = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.StateOfOrigin); v != "" {
+		record.VerifiedStateOfOrigin = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.MaritalStatus); v != "" {
+		record.VerifiedMaritalStatus = &v
+	}
+	if v := trimmedStringValue(bvnDetails.Data.Image); v != "" {
+		record.PassportOnBVN = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.LGAOfOrigin); v != "" {
+		record.City = &v
+	}
+	if v := strings.TrimSpace(bvnDetails.Data.EnrollmentBank); v != "" {
+		record.BankName = v
+	}
 
 	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
 		return nil, errors.New("invalid bvn number")
 	}
 
 	bvnRecord := &models.BVNRecord{
-		ID:              uuid.NewString(),
-		UserID:          "",
-		FirstName:       firstName,
-		MiddleName:      middleName,
-		LastName:        lastName,
-		Gender:          strings.TrimSpace(bvnDetails.Data.Gender),
-		Nationality:     strings.TrimSpace(bvnDetails.Data.Nationality),
-		StateOfOrigin:   strings.TrimSpace(bvnDetails.Data.StateOfOrigin),
-		DateOfBirth:     parseBVNRecordDOB(bvnDetails.Data.DateOfBirth),
-		PlaceOfBirth:    "",
-		Occupation:      "",
-		MaritalStatus:   strings.TrimSpace(bvnDetails.Data.MaritalStatus),
-		Education:       "",
-		Religion:        "",
-		EmailAddress:    strings.TrimSpace(bvnDetails.Data.Email),
-		PassportOnBVN:   trimmedStringValue(bvnDetails.Data.Image),
-		FullHomeAddress: "",
-		MobilePhone:     strings.TrimSpace(bvnDetails.Data.PhoneNumber),
-		BankName:        strings.TrimSpace(bvnDetails.Data.EnrollmentBank),
-		BVN:             strings.TrimSpace(firstNonEmptyString(bvnDetails.Data.BVN, bvn)),
+		ID:            uuid.NewString(),
+		UserID:        "",
+		FirstName:     firstName,
+		MiddleName:    middleName,
+		LastName:      lastName,
+		Gender:        strings.TrimSpace(bvnDetails.Data.Gender),
+		Nationality:   strings.TrimSpace(bvnDetails.Data.Nationality),
+		StateOfOrigin: strings.TrimSpace(bvnDetails.Data.StateOfOrigin),
+		DateOfBirth:   parseBVNRecordDOB(bvnDetails.Data.DateOfBirth),
+		MaritalStatus: strings.TrimSpace(bvnDetails.Data.MaritalStatus),
+		EmailAddress:  strings.TrimSpace(bvnDetails.Data.Email),
+		PassportOnBVN: trimmedStringValue(bvnDetails.Data.Image),
+		MobilePhone:   strings.TrimSpace(bvnDetails.Data.PhoneNumber),
+		BankName:      strings.TrimSpace(bvnDetails.Data.EnrollmentBank),
+		BVN:           strings.TrimSpace(firstNonEmptyString(bvnDetails.Data.BVN, bvn)),
 	}
+	bvnRecord.City = trimmedStringPtr(bvnDetails.Data.LGAOfOrigin)
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		return nil, err

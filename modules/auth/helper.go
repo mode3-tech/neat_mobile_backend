@@ -291,3 +291,10 @@ func randomToken(size int) (string, error) {
 
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
