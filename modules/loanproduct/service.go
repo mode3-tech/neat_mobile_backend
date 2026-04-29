@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/internal/timeutil"
@@ -577,11 +578,15 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID, deviceI
 		return nil, errors.New("device id is required")
 	}
 
+	log.Printf("manual repayment user=%s loan_id=%s amount=%d", mobileUserID, req.LoanID, req.Amount)
+
 	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		log.Printf("manual repayment device verification failed user=%s err=%v", mobileUserID, err)
 		return nil, err
 	}
 
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
+		log.Printf("manual repayment pin verification failed user=%s err=%v", mobileUserID, err)
 		return nil, err
 	}
 
@@ -594,13 +599,23 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID, deviceI
 	}
 
 	if err := s.repaymentTransferrer.TransferForLoanRepayment(ctx, mobileUserID, req.Amount); err != nil {
+		log.Printf("manual repayment wallet transfer failed user=%s amount=%d err=%v", mobileUserID, req.Amount, err)
 		return nil, err
 	}
 
-	return s.manualRepayer.MakeManualRepayment(ctx, RepaymentRequest{
+	log.Printf("manual repayment wallet transfer ok user=%s amount=%d — calling CBA", mobileUserID, req.Amount)
+
+	resp, err := s.manualRepayer.MakeManualRepayment(ctx, RepaymentRequest{
 		Amount:      req.Amount,
 		RepaymentID: req.LoanID,
 	})
+	if err != nil {
+		log.Printf("manual repayment CBA call failed user=%s loan_id=%s amount=%d err=%v", mobileUserID, req.LoanID, req.Amount, err)
+		return nil, err
+	}
+
+	log.Printf("manual repayment CBA call ok user=%s loan_id=%s status=%s", mobileUserID, req.LoanID, resp.Status)
+	return resp, nil
 }
 
 func newTooManyTransactionPinAttemptsError(lockedUntil, now time.Time) error {
