@@ -31,6 +31,7 @@ type VerificationRecord struct {
 	VerifiedEmail          *string    `gorm:"column:verified_email;type:text"`
 	VerifiedID             *string    `gorm:"column:verified_id"`
 	VerifiedDOB            *string    `gorm:"column:verified_dob;type:text"`
+	VerifiedGender         *string    `gorm:"column:verified_gender;type:text"`
 	FailureReason          *string    `gorm:"column:failure_reason;type:text"`
 	CreatedAt              time.Time  `gorm:"column:created_at;not null;autoCreateTime"`
 	UpdatedAt              time.Time  `gorm:"column:updated_at;not null;autoUpdateTime"`

@@ -153,16 +153,39 @@ func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, e
 		SubjectMasked: &maskedBVN,
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
-		VerifiedID:    cached.VerifiedID,
-		VerifiedName:  cached.VerifiedName,
-		VerifiedDOB:   cached.VerifiedDOB,
-		VerifiedPhone: cached.VerifiedPhone,
-		VerifiedEmail: cached.VerifiedEmail,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		VerifiedID:     cached.VerifiedID,
+		VerifiedName:   cached.VerifiedName,
+		VerifiedDOB:    cached.VerifiedDOB,
+		VerifiedPhone:  cached.VerifiedPhone,
+		VerifiedEmail:  cached.VerifiedEmail,
+		VerifiedGender: cached.VerifiedGender,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
-	if err := s.saveVerifiedBVN(ctx, record, nil); err != nil {
+	firstName, middleName, lastName := SplitFullName(*cached.VerifiedName)
+	email := ""
+	if cached.VerifiedEmail != nil {
+		email = *cached.VerifiedEmail
+	}
+	gender := ""
+	if cached.VerifiedGender != nil {
+		gender = *cached.VerifiedGender
+	}
+	bvnRecord := &models.BVNRecord{
+		ID:           uuid.NewString(),
+		UserID:       "",
+		FirstName:    firstName,
+		MiddleName:   middleName,
+		LastName:     lastName,
+		Gender:       gender,
+		DateOfBirth:  parseBVNRecordDOB(*cached.VerifiedDOB),
+		MobilePhone:  *cached.VerifiedPhone,
+		EmailAddress: email,
+		BVN:          *cached.VerifiedID,
+	}
+
+	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		return nil, err
 	}
 
@@ -311,6 +334,9 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	if dob := strings.TrimSpace(bvnDetails.Data.Details.DateOfBirth); dob != "" {
 		record.VerifiedDOB = &dob
 	}
+	if gender := strings.TrimSpace(bvnDetails.Data.Details.Gender); gender != "" {
+		record.VerifiedGender = &gender
+	}
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
 		log.Printf("invalid bvn number")
@@ -427,6 +453,9 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 	if dob := strings.TrimSpace(bvnDetails.Data.DateOfBirth); dob != "" {
 		record.VerifiedDOB = &dob
+	}
+	if gender := strings.TrimSpace(bvnDetails.Data.Gender); gender != "" {
+		record.VerifiedGender = &gender
 	}
 
 	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
