@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
@@ -33,7 +34,7 @@ func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, device
 		return nil, errors.New("user not found")
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return nil, errors.New("invalid phone number on account")
 	}
@@ -144,7 +145,7 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceI
 		verRepo := verification.NewVerification(txDB)
 		serviceRepo := NewRespository(txDB)
 
-		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
+		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return errors.New("invalid phone number on account")
 		}
@@ -202,7 +203,7 @@ func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserI
 		return errors.New("user not found")
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return errors.New("invalid phone number on account")
 	}
@@ -244,7 +245,7 @@ func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID,
 		return nil, errors.New("user not found")
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return nil, errors.New("invalid phone number on account")
 	}
@@ -371,7 +372,7 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 			return errors.New("invalid verification id")
 		}
 
-		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
+		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return errors.New("invalid phone number on account")
 		}
@@ -419,7 +420,7 @@ func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserI
 		return nil, errors.New("user not found")
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return nil, errors.New("invalid phone number on account")
 	}

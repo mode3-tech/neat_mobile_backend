@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
+	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/device"
@@ -17,7 +19,7 @@ import (
 )
 
 func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password string) (*LoginInitObject, error) {
-	normalizedPhone, err := NormalizeNigerianNumber(phone)
+	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +27,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
 
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, appErr.ErrInvalidCredentials
 	}
 
 	err = bcrypt.CompareHashAndPassword(
@@ -34,12 +36,12 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	)
 
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, appErr.ErrInvalidCredentials
 	}
 
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
-		return nil, errors.New("device id is required")
+		return nil, appErr.ErrMissingDeviceID
 	}
 
 	if s.deviceRepo == nil {
@@ -73,35 +75,35 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID string) (*ChallengeRequestResponse, error) {
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
-		return nil, errors.New("device id is required")
+		return nil, appErr.ErrMissingDeviceID
 	}
 
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
-		return nil, errors.New("mobile user id is required")
+		return nil, appErr.ErrMissingUserID
 	}
 
 	sub, _, jti, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 	if err != nil {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	tokenRow, err := s.repo.GetRefreshTokenWithJTI(ctx, jti)
 	if err != nil {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	receivedHash := sha256.Sum256([]byte(refreshToken))
 	if tokenRow.TokenHash != hex.EncodeToString(receivedHash[:]) {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	if tokenRow.RevokedAt != nil {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	if time.Now().UTC().After(tokenRow.ExpiresAt) {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	mobileUserID := sub
@@ -138,18 +140,18 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 
 	sessionToken := strings.TrimSpace(req.SessionToken)
 	if sessionToken == "" {
-		return nil, errors.New("session token is required")
+		return nil, appErr.ErrInvalidSession
 	}
 	if strings.TrimSpace(req.OTP) == "" {
-		return nil, errors.New("otp is required")
+		return nil, appErr.ErrMissingOTP
 	}
 
 	deviceID := strings.TrimSpace(req.Device.DeviceID)
 	if deviceID == "" {
-		return nil, errors.New("device id is required")
+		return nil, appErr.ErrMissingDeviceID
 	}
 	if strings.TrimSpace(req.Device.PublicKey) == "" {
-		return nil, errors.New("public key is required")
+		return nil, appErr.ErrMissingPublicKey
 	}
 
 	var authObj *VerifiedDeviceResponse
@@ -165,20 +167,20 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 		pendingSession, err := deviceRepo.GetPendingSessionByHash(ctx, hashedSessionToken)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("invalid session token")
+				return appErr.ErrInvalidSession
 			}
 			return err
 		}
 
 		now := time.Now().UTC()
 		if pendingSession.IsUsed() || pendingSession.IsExpired(now) {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 		if strings.TrimSpace(pendingSession.DeviceID) != deviceID {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 		if strings.TrimSpace(pendingSession.OTPRef) == "" {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 
 		activeOTP, err := otpRepo.GetActiveOTPByID(ctx, strings.TrimSpace(pendingSession.OTPRef), loginOTPPurpose)
@@ -186,7 +188,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			return err
 		}
 		if activeOTP == nil {
-			return errors.New("invalid otp")
+			return appErr.ErrInvalidOTP
 		}
 
 		maxAttempts := activeOTP.MaxAttempts
@@ -194,7 +196,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			maxAttempts = 5
 		}
 		if activeOTP.AttemptCount >= maxAttempts {
-			return errors.New("invalid otp")
+			return appErr.ErrInvalidOTP
 		}
 
 		hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, activeOTP.Destination, strings.TrimSpace(req.OTP))
@@ -202,7 +204,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			if updateErr := otpRepo.IncrementAttempt(ctx, activeOTP.ID); updateErr != nil {
 				return updateErr
 			}
-			return errors.New("invalid otp")
+			return appErr.ErrInvalidOTP
 		}
 
 		if err := otpRepo.ConsumeOTP(ctx, activeOTP.ID, now); err != nil {
@@ -234,7 +236,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			return err
 		}
 		if !marked {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 
 		authObj, err = s.issueSessionTokensWithRepo(ctx, authRepo, pendingSession.UserID, deviceID, ip)
@@ -269,7 +271,7 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 		return nil, errors.New("otp pepper not configured")
 	}
 
-	normalizedPhone, err := NormalizeNigerianNumber(phone)
+	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +362,7 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
-		return nil, errors.New("device id is required")
+		return nil, appErr.ErrMissingDeviceID
 	}
 
 	if s.deviceRepo == nil {
@@ -371,18 +373,18 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 	storedChallenge, err := s.deviceRepo.GetChallengeByHash(ctx, hex.EncodeToString(challengeHash[:]))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid challenge")
+			return nil, appErr.ErrInvalidSession
 		}
 		return nil, err
 	}
 
 	now := time.Now().UTC()
 	if storedChallenge.IsUsed() || storedChallenge.IsExpired(now) {
-		return nil, errors.New("invalid challenge")
+		return nil, appErr.ErrInvalidSession
 	}
 
 	if storedChallenge.DeviceID != deviceID {
-		return nil, errors.New("invalid challenge")
+		return nil, appErr.ErrInvalidSession
 	}
 
 	deviceRecord, err := s.verifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
@@ -400,7 +402,7 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 		return nil, err
 	}
 	if !marked {
-		return nil, errors.New("invalid challenge")
+		return nil, appErr.ErrInvalidSession
 	}
 
 	if err := s.deviceRepo.UpdateLastUsed(ctx, deviceRecord.UserID, deviceRecord.DeviceID, now); err != nil {
@@ -438,7 +440,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 
 	req.DeviceID = strings.TrimSpace(req.DeviceID)
 	if req.DeviceID == "" {
-		return errors.New("device id is required")
+		return appErr.ErrMissingDeviceID
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
@@ -448,12 +450,12 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 		sum := sha256.Sum256([]byte(req.SessionToken))
 		session, err := deviceRepo.GetPendingSessionByHash(ctx, hex.EncodeToString(sum[:]))
 		if err != nil {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 
 		now := time.Now().UTC()
 		if session.IsUsed() || session.IsExpired(now) || strings.TrimSpace(session.DeviceID) != req.DeviceID {
-			return errors.New("invalid session token")
+			return appErr.ErrInvalidSession
 		}
 
 		user, err := authRepo.GetUserByID(ctx, session.UserID)
@@ -461,7 +463,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 			return err
 		}
 
-		phone, err := NormalizeNigerianNumber(user.Phone)
+		phone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return err
 		}
@@ -489,7 +491,7 @@ func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID s
 	}
 
 	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
+		return nil, appErr.ErrMissingDeviceID
 	}
 
 	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {

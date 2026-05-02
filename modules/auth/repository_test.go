@@ -38,11 +38,11 @@ func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
 }
 
 func getUserByEmailQueryPattern() string {
-	return regexp.QuoteMeta(`SELECT id,email,password,created_at FROM "wallet_users" WHERE email = $1 ORDER BY "wallet_users"."id" LIMIT $2`)
+	return regexp.QuoteMeta(`SELECT id,email,password_hash,created_at FROM "wallet_users" WHERE email = $1 ORDER BY "wallet_users"."id" LIMIT $2`)
 }
 
 func getBVNRecordByBVNQueryPattern() string {
-	return regexp.QuoteMeta(`SELECT id, user_id FROM "wallet_bvn_records" WHERE bvn = $1 LIMIT $2`)
+	return regexp.QuoteMeta(`SELECT id, user_id FROM "wallet_bvn_records" WHERE bvn = $1 LIMIT $2 FOR UPDATE`)
 }
 
 func updateBVNRecordUserIDQueryPattern() string {
@@ -56,7 +56,7 @@ func TestRepository_GetUserByEmail_Success(t *testing.T) {
 	email := "user@example.com"
 	createdAt := time.Date(2026, 2, 23, 12, 0, 0, 0, time.UTC)
 
-	rows := sqlmock.NewRows([]string{"id", "email", "password", "created_at"}).
+	rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "created_at"}).
 		AddRow("user-1", email, "hashed-password", createdAt)
 
 	mock.ExpectQuery(getUserByEmailQueryPattern()).
@@ -73,8 +73,8 @@ func TestRepository_GetUserByEmail_Success(t *testing.T) {
 	if user.ID != "user-1" {
 		t.Fatalf("unexpected user ID: got %q", user.ID)
 	}
-	if user.Email != &email {
-		t.Fatalf("unexpected user email: got %q", user.Email)
+	if user.Email == nil || *user.Email != email {
+		t.Fatalf("unexpected user email: got %v", user.Email)
 	}
 	if user.PasswordHash != "hashed-password" {
 		t.Fatalf("unexpected password hash: got %q", user.PasswordHash)

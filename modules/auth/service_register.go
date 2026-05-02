@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	appErr "neat_mobile_app_backend/internal/errors"
+	phoneUtil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"neat_mobile_app_backend/internal/validators"
-	"neat_mobile_app_backend/models"
-	"neat_mobile_app_backend/modules/device"
-	"neat_mobile_app_backend/modules/wallet"
 	"strings"
 	"time"
 
@@ -17,209 +18,200 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Service) Register(ctx context.Context, req RegisterRequest, ip string) (*AuthObject, error) {
-	now := time.Now().UTC()
-	mobileUserID := uuid.NewString()
-	internalWalletID := uuid.NewString()
+const registrationWalletDefaultAddress = "Address unavailable"
 
-	// Pre-fetch verification records to build the Providus payload before any DB writes
-	bvnRecord, err := s.repo.GetValidationRow(ctx, req.BVNVerificationID)
-	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedID == nil {
-		return nil, errors.New("bvn verification record not found")
+type registrationJobSnapshot struct {
+	Phone               string              `json:"phone"`
+	Email               string              `json:"email,omitempty"`
+	PasswordHash        string              `json:"password_hash"`
+	PinHash             string              `json:"pin_hash"`
+	FirstName           string              `json:"first_name"`
+	MiddleName          string              `json:"middle_name,omitempty"`
+	LastName            string              `json:"last_name"`
+	BVN                 string              `json:"bvn"`
+	NIN                 string              `json:"nin"`
+	DOB                 time.Time           `json:"dob"`
+	IsEmailVerified     bool                `json:"is_email_verified"`
+	IsPhoneVerified     bool                `json:"is_phone_verified"`
+	IsBvnVerified       bool                `json:"is_bvn_verified"`
+	IsNinVerified       bool                `json:"is_nin_verified"`
+	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
+	Device              DeviceRegisteration `json:"device"`
+	IP                  string              `json:"ip"`
+	WalletEmail         string              `json:"wallet_email"`
+	WalletAddress       string              `json:"wallet_address"`
+}
+
+type registrationIdempotencyPayload struct {
+	PhoneNumber         string              `json:"phone_number"`
+	Email               string              `json:"email"`
+	Password            string              `json:"password"`
+	TransactionPin      string              `json:"transaction_pin"`
+	BVNVerificationID   string              `json:"bvn_verification_id"`
+	NINVerificationID   string              `json:"nin_verification_id"`
+	PhoneVerificationID string              `json:"phone_verification_id"`
+	EmailVerificationID string              `json:"email_verification_id"`
+	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
+	Device              DeviceRegisteration `json:"device"`
+}
+
+func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip string) (*RegistrationJobResponse, error) {
+	if s.tx == nil {
+		return nil, errors.New("transaction manager not configured")
 	}
 
-	ninRecord, err := s.repo.GetValidationRow(ctx, req.NINVerificationID)
-	if err != nil || ninRecord.VerifiedDOB == nil {
-		return nil, errors.New("nin verification record not found")
-	}
-
-	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
+	normalizedPhone, err := phoneUtil.NormalizeNigerianNumber(req.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	dobParsed, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
-	if err != nil {
-		return nil, errors.New(err.Error())
-	}
-
-	firstName, _, lastName := SplitFullName(*bvnRecord.VerifiedName)
-
-	walletInfo := &WalletPayload{
-		BVN:         *bvnRecord.VerifiedID,
-		FirstName:   firstName,
-		LastName:    lastName,
-		DateOfBirth: dobParsed.Format("2006-01-02"),
-		PhoneNumber: normalizedPhone,
-		Email:       req.Email,
-		Metadata:    map[string]interface{}{"customer_id": mobileUserID},
-	}
-
-	walletResp, err := s.walletService.GenerateWallet(ctx, walletInfo)
+	idempotencyKey, err := registrationIdempotencyKey(req, normalizedPhone)
 	if err != nil {
 		return nil, err
 	}
+
+	var job *RegistrationJob
+	var claimToken string
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		authRepo := NewRespository(txDB)
-		deviceRepo := device.NewRepository(txDB)
-		walletRepo := wallet.NewRepository(txDB)
 
-		_, txErr := s.createUser(ctx, authRepo, req, mobileUserID, internalWalletID)
-		if txErr != nil {
-			return txErr
+		existingJob, err := authRepo.GetRegistrationJobByIdempotencyKey(ctx, idempotencyKey)
+		switch {
+		case err == nil:
+			if existingJob.Status == RegistrationJobStatusFailed {
+				if requeueErr := authRepo.RequeueRegistrationJob(ctx, existingJob.ID); requeueErr != nil {
+					return requeueErr
+				}
+				existingJob.Status = RegistrationJobStatusPending
+				existingJob.LastError = nil
+			}
+
+			if existingJob.SessionClaimedAt == nil {
+				token, tokenHash, claimExpiresAt, tokenErr := newRegistrationClaimToken(time.Now().UTC())
+				if tokenErr != nil {
+					return tokenErr
+				}
+				if claimErr := authRepo.SetRegistrationJobClaimToken(ctx, existingJob.ID, tokenHash, claimExpiresAt); claimErr != nil {
+					return claimErr
+				}
+
+				claimToken = token
+				existingJob.SessionClaimTokenHash = &tokenHash
+				existingJob.SessionClaimExpiresAt = &claimExpiresAt
+			}
+
+			job = existingJob
+			return nil
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			return err
 		}
 
-		walletRecord := &wallet.CustomerWallet{
-			ID:               uuid.NewString(),
-			InternalWalletID: internalWalletID,
-			MobileUserID:     mobileUserID,
-			PhoneNumber:      walletResp.Customer.PhoneNumber,
-			WalletCustomerID: walletResp.Customer.ID,
-			Metadata:         walletResp.Customer.Metadata,
-			BVN:              walletResp.Customer.BVN,
-			Currency:         walletResp.Customer.Currency,
-			DateOfBirth:      walletResp.Customer.DateOfBirth,
-			FirstName:        walletResp.Customer.FirstName,
-			LastName:         walletResp.Customer.LastName,
-			Email:            walletResp.Customer.Email,
-			Address:          *walletResp.Customer.Address,
-			MerchantID:       walletResp.Customer.MerchantId,
-			Tier:             walletResp.Customer.Tier,
-			WalletID:         walletResp.Wallet.WalletId,
-			Mode:             walletResp.Customer.Mode,
-			BankName:         walletResp.Wallet.BankName,
-			BankCode:         walletResp.Wallet.BankCode,
-			AccountNumber:    walletResp.Wallet.AccountNumber,
-			AccountName:      walletResp.Wallet.AccountName,
-			AccountRef:       walletResp.Wallet.AccountReference,
-			BookedBalance:    walletResp.Wallet.BookedBalance,
-			AvailableBalance: walletResp.Wallet.AvailableBalance,
-			Status:           walletResp.Wallet.Status,
-			WalletType:       walletResp.Wallet.WalletType,
-			Updated:          walletResp.Wallet.Updated,
-			CreatedAt:        time.Now().UTC(),
-			UpdatedAt:        nil,
+		openJob, err := authRepo.GetOpenRegistrationJobByPhone(ctx, normalizedPhone)
+		switch {
+		case err == nil && openJob != nil:
+			return errors.New("registration already in progress")
+		case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
+			return err
 		}
 
-		if txErr = walletRepo.CreateWallet(ctx, walletRecord); txErr != nil {
-			return txErr
+		mobileUserID := uuid.NewString()
+		internalWalletID := uuid.NewString()
+
+		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, mobileUserID, ip)
+		if buildErr != nil {
+			return buildErr
 		}
 
-		deviceReq := device.DeviceBindingRequest{
-			DeviceID:    req.Device.DeviceID,
-			PublicKey:   req.Device.PublicKey,
-			DeviceName:  req.Device.DeviceName,
-			DeviceModel: req.Device.DeviceModel,
-			OS:          req.Device.OS,
-			OSVersion:   req.Device.OSVersion,
-			AppVersion:  req.Device.AppVersion,
-			IP:          ip,
+		snapshotJSON, buildErr := json.Marshal(snapshot)
+		if buildErr != nil {
+			return buildErr
 		}
-		deviceService := device.NewDeviceService(*deviceRepo)
-		return deviceService.BindDevice(ctx, mobileUserID, &deviceReq)
+
+		token, tokenHash, claimExpiresAt, tokenErr := newRegistrationClaimToken(time.Now().UTC())
+		if tokenErr != nil {
+			return tokenErr
+		}
+		claimToken = token
+
+		job = &RegistrationJob{
+			ID:                    uuid.NewString(),
+			IdempotencyKey:        idempotencyKey,
+			MobileUserID:          mobileUserID,
+			InternalWalletID:      internalWalletID,
+			Phone:                 normalizedPhone,
+			Status:                RegistrationJobStatusPending,
+			SnapshotJSON:          string(snapshotJSON),
+			SessionClaimTokenHash: &tokenHash,
+			SessionClaimExpiresAt: &claimExpiresAt,
+		}
+
+		return authRepo.CreateRegistrationJob(ctx, job)
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
-	sid := uuid.NewString()
-
-	accessToken, err := s.jwtSigner.IssueAccessToken(mobileUserID, sid)
-	if err != nil {
-		return nil, err
+	if job != nil && job.Status != RegistrationJobStatusCompleted {
+		s.kickRegistrationProcessing()
 	}
 
-	authSession := &models.AuthSession{
-		UserID:   mobileUserID,
-		SID:      sid,
-		DeviceID: &req.Device.DeviceID,
-		IP:       &ip,
+	resp := registrationJobResponse(job)
+	if resp != nil && strings.TrimSpace(claimToken) != "" {
+		resp.ClaimToken = &claimToken
+		if job != nil && job.SessionClaimExpiresAt != nil {
+			resp.ClaimExpiresAt = job.SessionClaimExpiresAt
+		}
 	}
 
-	if err = s.repo.AddAccessToken(ctx, authSession); err != nil {
-		return nil, err
-	}
-
-	refreshToken, jti, _, err := s.jwtSigner.IssueRefreshToken(mobileUserID, sid)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedRefreshToken := sha256.Sum256([]byte(refreshToken))
-
-	refreshTokenObj := &models.RefreshToken{
-		JTI:       jti,
-		SessionID: sid,
-		UserID:    mobileUserID,
-		TokenHash: hex.EncodeToString(hashedRefreshToken[:]),
-		IssuedAt:  now,
-		ExpiresAt: now.Add(time.Hour * 24 * 30),
-	}
-
-	if err := s.repo.AddRefreshToken(ctx, refreshTokenObj); err != nil {
-		return nil, err
-	}
-
-	go s.syncAndUpdateCBACustomer(context.Background(), mobileUserID, *bvnRecord.VerifiedID, walletResp.Wallet.AccountName, walletResp.Wallet.AccountNumber, walletResp.Wallet.BankCode, walletResp.Wallet.BankName)
-
-	return &AuthObject{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
+	return resp, nil
 }
 
-func (s *Service) createUser(ctx context.Context, repo *Repository, req RegisterRequest, mobileUserID, internalWalletID string) (*models.User, error) {
-	var isEmailVerified bool
+func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repository, req RegisterationRequest, normalizedPhone, mobileUserID, ip string) (*registrationJobSnapshot, error) {
 	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
-		return nil, errors.New("phone verification record not found")
+		return nil, appErr.ErrPhoneNotFound
 	}
 
-	if err := s.repo.MarkValidationRecordUsed(ctx, phoneRecord.ID); err != nil {
-		return nil, errors.New("failed to mark phone verification record as used")
+	if phoneRecord.VerifiedPhone == nil || *phoneRecord.VerifiedPhone != normalizedPhone {
+		return nil, appErr.ErrPhoneMismatch
 	}
 
-	normalizedNumber, err := NormalizeNigerianNumber(req.PhoneNumber)
-	if err != nil {
-		return nil, errors.New(err.Error())
-	}
-
-	if *phoneRecord.VerifiedPhone != normalizedNumber {
-		return nil, errors.New("phone number does not match")
-	}
-
-	existingUser, err := repo.GetUserByPhone(ctx, normalizedNumber)
+	existingUser, err := repo.GetUserByPhone(ctx, normalizedPhone)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 	if existingUser != nil {
-		return nil, errors.New("user already exists")
+		return nil, appErr.ErrUserExists
+	}
+
+	trimmedEmail := strings.TrimSpace(req.Email)
+	if trimmedEmail != "" {
+		existingByEmail, emailErr := repo.GetUserByEmail(ctx, trimmedEmail)
+		if emailErr != nil && !errors.Is(emailErr, gorm.ErrRecordNotFound) {
+			return nil, emailErr
+		}
+		if existingByEmail != nil {
+			return nil, appErr.ErrUserExists
+		}
 	}
 
 	bvnRecord, err := repo.GetValidationRow(ctx, req.BVNVerificationID)
-	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil {
-		return nil, errors.New("bvn verification record not found")
-	}
-
-	if err := s.repo.MarkValidationRecordUsed(ctx, bvnRecord.ID); err != nil {
-		return nil, errors.New("failed to mark bvn verification record as used")
+	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil || bvnRecord.VerifiedID == nil {
+		return nil, appErr.ErrBVNNotFound
 	}
 
 	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
-	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil {
-		return nil, errors.New("nin verification record not found")
+	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil || ninRecord.VerifiedID == nil {
+		return nil, appErr.ErrNINNotFound
 	}
 
-	if err := s.repo.MarkValidationRecordUsed(ctx, ninRecord.ID); err != nil {
-		return nil, errors.New("failed to mark nin verification record as used")
-	}
-
-	if req.Email != "" {
-		emailRecord, err := repo.GetValidationRow(ctx, req.EmailVerificationID)
-		if err != nil || emailRecord.VerifiedName == nil || emailRecord.VerifiedDOB == nil {
-			return nil, errors.New("email verification record not found")
+	var isEmailVerified bool
+	var emailRecordUsedID string
+	if trimmedEmail != "" {
+		emailRecord, emailErr := repo.GetValidationRow(ctx, req.EmailVerificationID)
+		if emailErr != nil || emailRecord.VerifiedName == nil || emailRecord.VerifiedDOB == nil {
+			return nil, appErr.ErrEmailNotFound
 		}
 
 		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
@@ -227,29 +219,24 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		}
 
 		isEmailVerified = true
-
-		if err := s.repo.MarkValidationRecordUsed(ctx, emailRecord.ID); err != nil {
-			return nil, errors.New("failed to mark email verification record as used")
-		}
+		emailRecordUsedID = emailRecord.ID
 	}
 
 	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
 	ninName := strings.ToLower(strings.Join(strings.Fields(*ninRecord.VerifiedName), " "))
-
 	if bvnName != ninName || SerializeDOB(*bvnRecord.VerifiedDOB) != SerializeDOB(*ninRecord.VerifiedDOB) {
-		return nil, errors.New("unable to confirm bvn and nin belong to the same person due to names or date of births mismatch")
+		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
 	if req.Password != req.ConfirmPassword {
-		return nil, errors.New("passwords do not match")
+		return nil, appErr.ErrPasswordMismatch
 	}
-
 	if err = validators.ValidatePassword(req.Password); err != nil {
 		return nil, errors.New(err.Error())
 	}
 
 	if req.TransactionPin != req.ConfirmTransactionPin {
-		return nil, errors.New("transaction pins do not match")
+		return nil, appErr.ErrTransactionPinMismatch
 	}
 
 	hashedPassword, err := HashPassword(req.Password)
@@ -262,52 +249,83 @@ func (s *Service) createUser(ctx context.Context, repo *Repository, req Register
 		return nil, err
 	}
 
-	normalizedPhone, err := NormalizeNigerianNumber(req.PhoneNumber)
-	if err != nil {
-		return nil, err
-	}
-
 	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
-
 	if err != nil {
 		return nil, errors.New(err.Error())
 	}
 
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
-	isPhoneVerified := phoneRecord.VerifiedPhone != nil && *phoneRecord.VerifiedPhone == normalizedNumber
-	isBvnVerified := bvnRecord != nil
-	isNinVerified := ninRecord != nil
-
-	user := &models.User{
-		ID:                     mobileUserID,
-		WalletID:               internalWalletID,
-		Phone:                  normalizedPhone,
-		Email:                  &req.Email,
-		FirstName:              firstName,
-		LastName:               lastName,
-		MiddleName:             &middleName,
-		PasswordHash:           hashedPassword,
-		PinHash:                hashedTransactionPin,
-		IsEmailVerified:        isEmailVerified,
-		BVN:                    *bvnRecord.VerifiedID,
-		NIN:                    *ninRecord.VerifiedID,
-		DOB:                    dob,
-		IsPhoneVerified:        isPhoneVerified,
-		IsBvnVerified:          isBvnVerified,
-		IsNinVerified:          isNinVerified,
-		IsBiometricsEnabled:    req.IsBiometricsEnabled,
-		IsNotificationsEnabled: true,
+	if err := repo.MarkValidationRecordUsed(ctx, phoneRecord.ID); err != nil {
+		return nil, errors.New("failed to mark phone verification record as used")
+	}
+	if err := repo.MarkValidationRecordUsed(ctx, bvnRecord.ID); err != nil {
+		return nil, errors.New("failed to mark bvn verification record as used")
+	}
+	if err := repo.MarkValidationRecordUsed(ctx, ninRecord.ID); err != nil {
+		return nil, errors.New("failed to mark nin verification record as used")
+	}
+	if emailRecordUsedID != "" {
+		if err := repo.MarkValidationRecordUsed(ctx, emailRecordUsedID); err != nil {
+			return nil, errors.New("failed to mark email verification record as used")
+		}
 	}
 
-	createdUser, err := repo.CreateUser(ctx, user)
+	return &registrationJobSnapshot{
+		Phone:               normalizedPhone,
+		Email:               trimmedEmail,
+		PasswordHash:        hashedPassword,
+		PinHash:             hashedTransactionPin,
+		FirstName:           firstName,
+		MiddleName:          strings.TrimSpace(middleName),
+		LastName:            lastName,
+		BVN:                 *bvnRecord.VerifiedID,
+		NIN:                 *ninRecord.VerifiedID,
+		DOB:                 dob,
+		IsEmailVerified:     isEmailVerified,
+		IsPhoneVerified:     true,
+		IsBvnVerified:       true,
+		IsNinVerified:       true,
+		IsBiometricsEnabled: *req.IsBiometricsEnabled,
+		Device: DeviceRegisteration{
+			DeviceID:    strings.TrimSpace(req.Device.DeviceID),
+			PublicKey:   strings.TrimSpace(req.Device.PublicKey),
+			DeviceName:  strings.TrimSpace(req.Device.DeviceName),
+			DeviceModel: strings.TrimSpace(req.Device.DeviceModel),
+			OS:          strings.TrimSpace(req.Device.OS),
+			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
+			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
+		},
+		IP:            strings.TrimSpace(ip),
+		WalletEmail:   walletRegistrationEmail(trimmedEmail, mobileUserID),
+		WalletAddress: registrationWalletDefaultAddress,
+	}, nil
+}
+
+func registrationIdempotencyKey(req RegisterationRequest, normalizedPhone string) (string, error) {
+	payload := registrationIdempotencyPayload{
+		PhoneNumber:         normalizedPhone,
+		Email:               strings.ToLower(strings.TrimSpace(req.Email)),
+		BVNVerificationID:   strings.TrimSpace(req.BVNVerificationID),
+		NINVerificationID:   strings.TrimSpace(req.NINVerificationID),
+		PhoneVerificationID: strings.TrimSpace(req.PhoneVerificationID),
+		EmailVerificationID: strings.TrimSpace(req.EmailVerificationID),
+	}
+
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	if err := repo.LinkBVNRecordToUser(ctx, user.BVN, createdUser.ID); err != nil {
-		return nil, err
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func walletRegistrationEmail(email, mobileUserID string) string {
+	trimmedEmail := strings.TrimSpace(email)
+	if trimmedEmail != "" {
+		return trimmedEmail
 	}
 
-	return createdUser, nil
+	return fmt.Sprintf("%s@example.com", strings.TrimSpace(mobileUserID))
 }

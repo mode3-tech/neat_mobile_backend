@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
+	phoneUtil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"strings"
@@ -26,7 +28,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("bvn verification record not found")
+			return nil, appErr.ErrBVNNotFound
 		}
 		return nil, err
 	}
@@ -57,7 +59,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	now := time.Now().UTC()
 	expiresAt := now.Add(15 * time.Minute)
 	maskedNIN := MaskSub(nin)
-	normalizedPhoneNumber, err := NormalizeNigerianNumber(resp.Data.TelephoneNo)
+	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(resp.Data.TelephoneNo)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +82,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	}
 
 	if fullName == "" || strings.TrimSpace(resp.Data.BirthDate) == "" || strings.TrimSpace(resp.Data.TelephoneNo) == "" {
-		return nil, errors.New("invalid nin number")
+		return nil, appErr.ErrInvalidNIN
 	}
 
 	record.VerifiedName = &fullName
@@ -93,10 +95,15 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		return nil, err
 	}
 
+	maskedPhone, err := phoneUtil.MaskPhone(phone)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ninInfo{
 		name:           fullName,
 		dob:            dob,
-		phone:          phone,
+		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
 }
@@ -217,10 +224,15 @@ func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, e
 
 	log.Printf("bvn cache hit: reused existing verified record masked=%s", maskedBVN)
 
+	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
+	if err != nil {
+		return nil, err
+	}
+
 	return &bvnInfo{
 		name:           *cached.VerifiedName,
 		dob:            *cached.VerifiedDOB,
-		phone:          *cached.VerifiedPhone,
+		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
 }
@@ -278,10 +290,15 @@ func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *mode
 
 	log.Printf("nin cache hit: reused existing verified record masked=%s", maskedNIN)
 
+	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ninInfo{
 		name:           *cached.VerifiedName,
 		dob:            *cached.VerifiedDOB,
-		phone:          *cached.VerifiedPhone,
+		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
 }
@@ -294,12 +311,12 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	if bvn == "" {
 		log.Printf("bvn is required")
-		return nil, errors.New("bvn is required")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	if len(bvn) != 11 {
 		log.Printf("invalid bvn number")
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
@@ -308,7 +325,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 	if bvnDetails == nil {
 		log.Printf("invalid bvn number")
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	caser := cases.Title(language.English)
@@ -347,7 +364,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		record.VerifiedName = &fullName
 	}
 	if phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber); phone != "" {
-		normalizedPhoneNumber, err := NormalizeNigerianNumber(phone)
+		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +406,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
 		log.Printf("invalid bvn number")
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnRecord := &models.BVNRecord{
@@ -422,10 +439,15 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		return nil, err
 	}
 
+	maskedPhone, err := phoneUtil.MaskPhone(bvnDetails.Data.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+
 	return &bvnInfo{
 		name:           fullName,
 		dob:            bvnDetails.Data.Details.DateOfBirth,
-		phone:          bvnDetails.Data.Details.PhoneNumber,
+		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
 }
@@ -436,11 +458,11 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	if bvn == "" {
-		return nil, errors.New("bvn is required")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	if len(bvn) != 11 {
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
@@ -448,7 +470,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		return nil, err
 	}
 	if bvnDetails == nil {
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	firstName := TitleCase(bvnDetails.Data.FirstName)
@@ -491,7 +513,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		record.VerifiedName = &fullName
 	}
 	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
-		normalizedPhoneNumber, err := NormalizeNigerianNumber(phone)
+		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
 			return nil, err
 		}
@@ -526,7 +548,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnRecord := &models.BVNRecord{
@@ -552,10 +574,15 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		return nil, err
 	}
 
+	maskedPhone, err := phoneUtil.MaskPhone(bvnDetails.Data.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+
 	return &bvnInfo{
 		name:           fullName,
 		dob:            bvnDetails.Data.DateOfBirth,
-		phone:          bvnDetails.Data.PhoneNumber,
+		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
 }

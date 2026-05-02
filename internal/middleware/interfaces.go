@@ -8,5 +8,5 @@ type AccessTokenSigner interface {
 }
 
 type SessionChecker interface {
-	IsSessionActive(ctx context.Context, sid, userID string) (bool, error)
+	IsSessionActive(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error)
 }

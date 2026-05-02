@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/providers/bvn"
 	"testing"
 )
@@ -60,7 +59,7 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		&verification.VerificationRepo{},
+		nil,
 		nil,
 		nil,
 		nil,
@@ -128,7 +127,7 @@ func TestService_ValidateBVN_RoutesToPrembly(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		&verification.VerificationRepo{},
+		nil,
 		nil,
 		nil,
 		nil,

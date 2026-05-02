@@ -12,7 +12,7 @@ type DeviceRegisteration struct {
 	AppVersion  string `json:"app_version" binding:"required"`
 }
 
-type RegisterRequest struct {
+type RegisterationRequest struct {
 	PhoneNumber           string              `json:"phone_number" binding:"required"`
 	Email                 string              `json:"email"`
 	Password              string              `json:"password" binding:"required"`
@@ -23,8 +23,30 @@ type RegisterRequest struct {
 	NINVerificationID     string              `json:"nin_verification_id" binding:"required"`
 	PhoneVerificationID   string              `json:"phone_verification_id" binding:"required"`
 	EmailVerificationID   string              `json:"email_verification_id"`
-	IsBiometricsEnabled   bool                `json:"is_biometrics_enabled" binding:"required"`
+	IsBiometricsEnabled   *bool               `json:"is_biometrics_enabled" binding:"required"`
 	Device                DeviceRegisteration `json:"device" binding:"required"`
+}
+
+type RegistrationResponse struct {
+	Status  string     `json:"status"`
+	Message string     `json:"message"`
+	Tokens  AuthObject `json:"tokens"`
+}
+
+type RegistrationJobResponse struct {
+	Status             string     `json:"status"`
+	Message            string     `json:"message"`
+	JobID              string     `json:"job_id"`
+	RegistrationStatus string     `json:"registration_status"`
+	CanLogin           bool       `json:"can_login"`
+	CanClaimSession    bool       `json:"can_claim_session"`
+	ClaimToken         *string    `json:"claim_token,omitempty"`
+	ClaimExpiresAt     *time.Time `json:"claim_expires_at,omitempty"`
+	Error              *string    `json:"error,omitempty"`
+}
+
+type RegistrationSessionClaimRequest struct {
+	ClaimToken string `json:"claim_token" binding:"required"`
 }
 
 type LoginRequest struct {

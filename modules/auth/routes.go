@@ -8,6 +8,8 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 
 	{
 		auth.POST("/register", handler.Register)
+		auth.GET("/register/:job_id/status", handler.GetRegistrationStatus)
+		auth.POST("/register/:job_id/claim", handler.ClaimRegistrationSession)
 
 		loginHandlers := append(loginMiddlewares, handler.Login)
 		auth.POST("/login", loginHandlers...)

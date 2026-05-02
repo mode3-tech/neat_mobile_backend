@@ -141,7 +141,7 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 func (r *Repository) GetValidationRow(ctx context.Context, verificationID string) (*models.VerificationRecord, error) {
 	var record models.VerificationRecord
 	err := r.db.WithContext(ctx).Table("wallet_verification_records").
-		Select("verified_name, verified_dob, verified_phone, verified_id").
+		Select("id, verified_name, verified_dob, verified_phone, verified_id").
 		Where("id = ? AND status = ? AND used_at IS NULL", verificationID, models.VerificationStatusVerified).
 		First(&record).Error
 
@@ -152,9 +152,16 @@ func (r *Repository) GetValidationRow(ctx context.Context, verificationID string
 }
 
 func (r *Repository) MarkValidationRecordUsed(ctx context.Context, verificationID string) error {
-	return r.db.WithContext(ctx).Table("wallet_verification_records").
-		Where("id = ?", verificationID).
-		Update("used_at", time.Now().UTC()).Error
+	result := r.db.WithContext(ctx).Table("wallet_verification_records").
+		Where("id = ? AND status = ? AND used_at IS NULL", verificationID, models.VerificationStatusVerified).
+		Update("used_at", time.Now().UTC())
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("verification record already used or not verified")
+	}
+	return nil
 }
 
 func (r *Repository) CreateBVNRecord(ctx context.Context, record *models.BVNRecord) error {
@@ -222,6 +229,7 @@ func (r *Repository) LinkBVNRecordToUser(ctx context.Context, bvn, userID string
 
 	err := r.db.WithContext(ctx).
 		Table("wallet_bvn_records").
+		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Select("id, user_id").
 		Where("bvn = ?", bvn).
 		Take(&row).Error
@@ -299,4 +307,12 @@ func (r *Repository) DeactiveOlderDevices(ctx context.Context, mobileUserID, new
 		Model(&device.UserDevice{}).
 		Where("user_id = ? AND device_id != ?", mobileUserID, newDeviceID).
 		Update("is_active", false).Error
+}
+
+func (r *Repository) CheckSession(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error) {
+	err := r.db.WithContext(ctx).Where("sid = ? AND user_id = ? AND revoked_at IS NULL AND device_id = ?", sid, mobileUserID, deviceID).Error
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

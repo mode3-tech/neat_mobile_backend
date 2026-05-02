@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -16,7 +17,7 @@ func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) 
 	isValidAccessToken := s.jwtSigner.ValidAccessToken(accessToken)
 	isValidRefreshToken := s.jwtSigner.ValidRefreshToken(refreshToken)
 	if !isValidAccessToken || !isValidRefreshToken {
-		return errors.New("invalid access or refresh token")
+		return appErr.ErrInvalidSession
 	}
 
 	accessTokenSub, accessTokenSID, err := s.jwtSigner.ExtractAccessTokenIdentifiers(accessToken)
@@ -30,11 +31,11 @@ func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) 
 	}
 
 	if accessTokenSub != refreshTokenSub {
-		return errors.New("access token and refresh token do not match")
+		return appErr.ErrUnauthorized
 	}
 
 	if accessTokenSID != refreshTokenSID {
-		return errors.New("access token and refresh token do not match")
+		return appErr.ErrUnauthorized
 	}
 
 	if s.deviceRepo != nil {
@@ -68,25 +69,25 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
-		return nil, errors.New("invalid refresh token")
+		return nil, appErr.ErrUnauthorized
 	}
 
 	sub, sid, oldJTI, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 
 	if err != nil {
-		return nil, errors.New("invalid refresh token")
+		return nil, appErr.ErrUnauthorized
 	}
 
 	refreshTokenObj, err := s.repo.GetRefreshTokenWithJTI(ctx, oldJTI)
 
 	if err != nil {
-		return nil, errors.New("invalid refresh token")
+		return nil, appErr.ErrUnauthorized
 	}
 
 	if refreshTokenObj.TokenHash != "" {
 		receivedHash := sha256.Sum256([]byte(refreshToken))
 		if refreshTokenObj.TokenHash != hex.EncodeToString(receivedHash[:]) {
-			return nil, errors.New("invalid refresh token")
+			return nil, appErr.ErrUnauthorized
 		}
 	}
 
@@ -97,13 +98,13 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 	now := time.Now().UTC()
 
 	if refreshTokenObj.RevokedAt != nil || refreshTokenObj.SessionID != sid || refreshTokenObj.UserID != sub || refreshTokenObj.ExpiresAt.Before(now) {
-		return nil, errors.New("invalid refresh token")
+		return nil, appErr.ErrUnauthorized
 	}
 
 	accessSession, err := s.repo.GetAccessTokenWithSID(ctx, sid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid session")
+			return nil, appErr.ErrInvalidSession
 		}
 		return nil, err
 	}
@@ -142,4 +143,8 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 
 	return &AuthObject{AccessToken: accessToken, RefreshToken: newRefreshToken}, nil
 
+}
+
+func (s *Service) IsSessionActive(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error) {
+	return s.repo.CheckSession(ctx, sid, mobileUserID, deviceID)
 }

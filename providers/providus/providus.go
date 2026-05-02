@@ -7,41 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/wallet"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
-
-var phoneAreaCodes = []string{"0701", "0703", "0706", "0801", "0802", "0803", "0805", "0806", "0807", "0810", "0811", "0812", "0813", "0814", "0815", "0816", "0817", "0818", "0819", "0901", "0902", "0903", "0904", "0905", "0906", "0907", "0908", "0909"}
-
-func randomDigits(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = byte('0' + rand.Intn(10))
-	}
-	return string(b)
-}
-
-func randomBVN() string {
-	return string(byte('1'+rand.Intn(9))) + randomDigits(10)
-}
-
-func randomPhone() string {
-	return phoneAreaCodes[rand.Intn(len(phoneAreaCodes))] + randomDigits(7)
-}
-
-func randomName(length int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz"
-	b := make([]byte, length)
-	b[0] = letters[rand.Intn(len(letters))] - 32 // uppercase first letter
-	for i := 1; i < length; i++ {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
 
 type Providus struct {
 	APIKey  string
@@ -73,17 +45,6 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 	}
 
 	url := p.BaseURL + "/wallet"
-
-	firstName := randomName(5 + rand.Intn(4))
-	lastName := randomName(5 + rand.Intn(4))
-	walletInfo.BVN = randomBVN()
-	walletInfo.PhoneNumber = randomPhone()
-	walletInfo.FirstName = firstName
-	walletInfo.LastName = lastName
-	walletInfo.Metadata = map[string]interface{}{"customer_id": "user124"}
-	walletInfo.Address = "123 Main St, Ibadan"
-	walletInfo.Email = strings.ToLower(firstName+"."+lastName) + "@example.com"
-	walletInfo.DateOfBirth = "1991-01-01"
 
 	body, err := json.Marshal(walletInfo)
 	if err != nil {
@@ -119,6 +80,112 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 	}
 
 	return &result, nil
+}
+
+func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerID string) (*auth.WalletResponse, bool, error) {
+	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+		return nil, false, errors.New("providus service not configured")
+	}
+
+	requestedCustomerID := strings.TrimSpace(walletCustomerID)
+	if requestedCustomerID == "" {
+		return nil, false, errors.New("providus customer id is required")
+	}
+
+	endpoint := p.BaseURL + "/wallet/customer?customerId=" + url.QueryEscape(requestedCustomerID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return nil, false, fmt.Errorf("providus wallet lookup request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if len(respBody) == 0 {
+			return nil, false, fmt.Errorf("providus wallet lookup failed with status: %d", resp.StatusCode)
+		}
+		return nil, false, fmt.Errorf("providus wallet lookup failed: %s", extractErrorMessage(respBody))
+	}
+
+	var result struct {
+		Status *bool `json:"status"`
+		Wallet struct {
+			ID                    string `json:"id"`
+			Type                  string `json:"type"`
+			Tier                  string `json:"tier"`
+			Status                string `json:"status"`
+			Email                 string `json:"email"`
+			CustomerID            string `json:"customerId"`
+			LastName              string `json:"lastName"`
+			FirstName             string `json:"firstName"`
+			BankName              string `json:"bankName"`
+			BankCode              string `json:"bankCode"`
+			CreatedAt             string `json:"createdAt"`
+			UpdatedAt             string `json:"updatedAt"`
+			AccountName           string `json:"accountName"`
+			PhoneNumber           string `json:"phoneNumber"`
+			AccountNumber         string `json:"accountNumber"`
+			BookedBalance         int64  `json:"bookedBalance"`
+			AvailableBalance      int64  `json:"availableBalance"`
+			AccountReference      string `json:"accountReference"`
+			DailyTransactionLimit int64  `json:"dailyTransactionLimit"`
+		} `json:"wallet"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, false, fmt.Errorf("failed to decode providus wallet lookup response: %w", err)
+	}
+
+	resolvedCustomerID := strings.TrimSpace(result.Wallet.CustomerID)
+	if resolvedCustomerID == "" {
+		resolvedCustomerID = requestedCustomerID
+	}
+
+	mapped := &auth.WalletResponse{
+		Status: result.Status,
+		Customer: &auth.WalletCustomer{
+			ID:          resolvedCustomerID,
+			Metadata:    map[string]any{"customer_id": resolvedCustomerID},
+			PhoneNumber: strings.TrimSpace(result.Wallet.PhoneNumber),
+			LastName:    strings.TrimSpace(result.Wallet.LastName),
+			FirstName:   strings.TrimSpace(result.Wallet.FirstName),
+			Email:       strings.TrimSpace(result.Wallet.Email),
+			Tier:        strings.TrimSpace(result.Wallet.Tier),
+			UpdatedAt:   strings.TrimSpace(result.Wallet.UpdatedAt),
+			CreatedAt:   strings.TrimSpace(result.Wallet.CreatedAt),
+		},
+		Wallet: &auth.WalletInfo{
+			ID:               strings.TrimSpace(result.Wallet.ID),
+			Email:            strings.TrimSpace(result.Wallet.Email),
+			BankName:         strings.TrimSpace(result.Wallet.BankName),
+			BankCode:         strings.TrimSpace(result.Wallet.BankCode),
+			AccountName:      strings.TrimSpace(result.Wallet.AccountName),
+			AccountNumber:    strings.TrimSpace(result.Wallet.AccountNumber),
+			AccountReference: strings.TrimSpace(result.Wallet.AccountReference),
+			UpdatedAt:        strings.TrimSpace(result.Wallet.UpdatedAt),
+			CreatedAt:        strings.TrimSpace(result.Wallet.CreatedAt),
+			BookedBalance:    result.Wallet.BookedBalance,
+			AvailableBalance: result.Wallet.AvailableBalance,
+			Status:           strings.TrimSpace(result.Wallet.Status),
+			WalletType:       strings.TrimSpace(result.Wallet.Type),
+			WalletId:         strings.TrimSpace(result.Wallet.ID),
+		},
+	}
+
+	return mapped, true, nil
 }
 
 func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {

@@ -10,6 +10,7 @@ import (
 func AuthGuard(signer AccessTokenSigner, checker SessionChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
 		parts := strings.Fields(authHeader)
 
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
@@ -30,7 +31,7 @@ func AuthGuard(signer AccessTokenSigner, checker SessionChecker) gin.HandlerFunc
 		}
 
 		if checker != nil {
-			ok, err := checker.IsSessionActive(c.Request.Context(), sid, sub)
+			ok, err := checker.IsSessionActive(c.Request.Context(), sid, sub, deviceID)
 			if err != nil || !ok {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session is not active"})
 				return

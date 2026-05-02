@@ -37,7 +37,10 @@ paths:
       tags:
         - Auth
       summary: Register a user
-      description: Creates a new account and binds the initial device in one transaction. The server captures the client IP from the request metadata and stores it with the created auth session.
+      description: |
+        Accepts a registration request, consumes the verification records locally, and creates a durable registration job.
+        Returns a `job_id` plus a one-time `claim_token` that can later be exchanged for access and refresh tokens
+        after the job reaches `completed`. Registration no longer returns auth tokens directly.
       requestBody:
         required: true
         content:
@@ -45,26 +48,178 @@ paths:
             schema:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
-        "201":
-          description: Registration successful
+        "202":
+          description: Registration accepted and queued
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RegisterResponse"
+                $ref: "#/components/schemas/RegistrationJobResponse"
+              examples:
+                queued:
+                  value:
+                    status: success
+                    message: registration queued successfully
+                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                    registration_status: pending
+                    can_login: false
+                    can_claim_session: false
+                    claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
+                    claim_expires_at: "2026-05-02T18:30:00Z"
+        "200":
+          description: Matching registration already completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationJobResponse"
+              examples:
+                completed:
+                  value:
+                    status: success
+                    message: registration completed successfully, claim session to continue
+                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                    registration_status: completed
+                    can_login: true
+                    can_claim_session: true
+                    claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
+                    claim_expires_at: "2026-05-02T18:30:00Z"
         "400":
-          description: Invalid request body or failed registration validation
+          description: Invalid request body, invalid phone number, or failed registration validation
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: Account or device already exists
+          description: Registration already in progress or account already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/register/{job_id}/status:
+    get:
+      tags:
+        - Auth
+      summary: Get registration job status
+      description: |
+        Returns the current status of a registration job. This endpoint is intentionally token-free:
+        it never returns access or refresh tokens. Use the one-time `claim_token` from `/auth/register`
+        with `/auth/register/{job_id}/claim` after the job is complete.
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+          description: Registration job identifier returned by `/auth/register`.
+      responses:
+        "200":
+          description: Registration job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationJobResponse"
+              examples:
+                processing:
+                  value:
+                    status: success
+                    message: registration is being processed
+                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                    registration_status: processing
+                    can_login: false
+                    can_claim_session: false
+                completed:
+                  value:
+                    status: success
+                    message: registration completed successfully, claim session to continue
+                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                    registration_status: completed
+                    can_login: true
+                    can_claim_session: true
+                    claim_expires_at: "2026-05-02T18:30:00Z"
+        "400":
+          description: Missing or invalid job id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Registration job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch registration job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/register/{job_id}/claim:
+    post:
+      tags:
+        - Auth
+      summary: Claim registration session
+      description: |
+        Exchanges the one-time `claim_token` returned by `/auth/register` for access and refresh tokens
+        after the registration job is `completed`. The request must include the original `X-Device-ID`
+        submitted during registration. A claim token can only be used once.
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+          description: Registration job identifier returned by `/auth/register`.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Original device identifier submitted in the registration payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationSessionClaimRequest"
+      responses:
+        "200":
+          description: Registration session claimed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyDeviceResponse"
+        "400":
+          description: Invalid request body or missing job id, device id, or claim token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or expired claim token, or device not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Registration job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Registration is not complete, failed, unavailable for claim, or already claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to claim registration session
           content:
             application/json:
               schema:
@@ -4430,22 +4585,62 @@ components:
           example: true
         device:
           $ref: "#/components/schemas/DeviceRegistrationRequest"
-    RegisterResponse:
+    RegistrationJobResponse:
       type: object
       required:
+        - status
         - message
-        - access_token
-        - refresh_token
+        - job_id
+        - registration_status
+        - can_login
+        - can_claim_session
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
-          example: registration successful
-        access_token:
+          example: registration queued successfully
+        job_id:
           type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
-        refresh_token:
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        registration_status:
           type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+          example: pending
+        can_login:
+          type: boolean
+          example: false
+        can_claim_session:
+          type: boolean
+          example: false
+        claim_token:
+          type: string
+          description: One-time token returned by `POST /auth/register`. Never returned by the status endpoint.
+          example: reg_claim_x7F1z0gVh4Wk2NfQ
+        claim_expires_at:
+          type: string
+          format: date-time
+          description: Present while an unclaimed registration session is still available.
+          example: "2026-05-02T18:30:00Z"
+        error:
+          type: string
+          description: Present when `registration_status` is `failed`.
+          example: provider wallet lookup failed
+    RegistrationSessionClaimRequest:
+      type: object
+      required:
+        - claim_token
+      properties:
+        claim_token:
+          type: string
+          description: One-time token returned by `/auth/register`.
+          example: reg_claim_x7F1z0gVh4Wk2NfQ
     LoginRequest:
       type: object
       required:

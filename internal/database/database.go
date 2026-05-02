@@ -4,6 +4,7 @@ import (
 	"context"
 	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/modules/account"
+	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/autorepayment"
 	"neat_mobile_app_backend/modules/device"
@@ -176,6 +177,7 @@ func Migrate(db *gorm.DB) error {
 		&models.AuthSession{},
 		&models.RefreshToken{},
 		&models.VerificationRecord{},
+		&auth.RegistrationJob{},
 		&models.PendingDeviceSession{},
 		&otp.OTPModel{},
 		&device.UserDevice{},
@@ -283,6 +285,21 @@ func Migrate(db *gorm.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_wallet_notification_tickets_pending
 		ON wallet_notification_tickets (created_at, expo_ticket_id)
 		WHERE receipt_checked_at IS NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_registration_jobs_phone_open
+		ON wallet_registration_jobs (phone)
+		WHERE status IN ('pending', 'processing')
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_wallet_registration_jobs_status_created_at
+		ON wallet_registration_jobs (status, created_at ASC)
 	`).Error; err != nil {
 		return err
 	}

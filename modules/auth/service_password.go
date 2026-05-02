@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
@@ -39,7 +40,7 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, devic
 		return nil, err
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return nil, errors.New("invalid phone number on account")
 	}
@@ -157,7 +158,7 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 		verRepo := verification.NewVerification(txDB)
 		serviceRepo := NewRespository(txDB)
 
-		normalizedPhone, err := NormalizeNigerianNumber(user.Phone)
+		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
 			return errors.New("invalid phone number on account")
 		}
@@ -222,7 +223,7 @@ func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 		return nil, err
 	}
 
-	phone, err := NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
+	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
 		return nil, errors.New("invalid phone number on account")
 	}
@@ -251,7 +252,7 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 		return nil, "", errors.New("phone is required")
 	}
 
-	normalizedPhone, err := NormalizeNigerianNumber(phone)
+	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
 	if err != nil {
 		return nil, "", errors.New(err.Error())
 	}

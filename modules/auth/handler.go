@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -86,7 +88,7 @@ func (h *Handler) respondError(c *gin.Context, status int, clientMessage string,
 }
 
 func (h *Handler) Register(c *gin.Context) {
-	var req RegisterRequest
+	var req RegisterationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
@@ -95,14 +97,14 @@ func (h *Handler) Register(c *gin.Context) {
 
 	ip := c.ClientIP()
 
-	authObj, err := h.service.Register(c.Request.Context(), req, ip)
+	resp, err := h.service.Register(c.Request.Context(), req, ip)
 	if err != nil {
 		if isBadRequestRegisterError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)
 			return
 		}
 		if isConflictRegisterError(err) {
-			h.respondError(c, http.StatusConflict, "account or device already exists", err)
+			h.respondError(c, http.StatusConflict, err.Error(), err)
 			return
 		}
 		if isBadPasswordError(err) {
@@ -110,12 +112,29 @@ func (h *Handler) Register(c *gin.Context) {
 			return
 		}
 
-		if status, message, ok := classifyUpstreamError(err); ok {
-			h.respondError(c, status, message, err)
-			return
-		}
-		if isProvidusWalletError(err) {
-			h.respondError(c, http.StatusBadGateway, err.Error(), err)
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		return
+	}
+
+	statusCode := http.StatusAccepted
+	if resp != nil && resp.RegistrationStatus == string(RegistrationJobStatusCompleted) {
+		statusCode = http.StatusOK
+	}
+
+	c.JSON(statusCode, resp)
+}
+
+func (h *Handler) GetRegistrationStatus(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("job_id"))
+	if jobID == "" {
+		h.respondError(c, http.StatusBadRequest, "job id is required", nil)
+		return
+	}
+
+	resp, err := h.service.GetRegistrationStatus(c.Request.Context(), jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			h.respondError(c, http.StatusNotFound, "registration job not found", err)
 			return
 		}
 
@@ -123,21 +142,108 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "registration successful", "access_token": authObj.AccessToken, "refresh_token": authObj.RefreshToken})
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("job_id"))
+	if jobID == "" {
+		h.respondError(c, http.StatusBadRequest, "job id is required", nil)
+		return
+	}
+
+	var req RegistrationSessionClaimRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	deviceID := c.GetHeader("X-Device-ID")
+	ip := c.ClientIP()
+
+	resp, err := h.service.ClaimRegistrationSession(c.Request.Context(), jobID, req.ClaimToken, deviceID, ip)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			h.respondError(c, http.StatusNotFound, "registration job not found", err)
+			return
+		}
+		if isBadRequestClaimRegistrationSessionError(err) {
+			h.respondError(c, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		if isUnauthorizedClaimRegistrationSessionError(err) {
+			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
+			return
+		}
+		if isConflictClaimRegistrationSessionError(err) {
+			h.respondError(c, http.StatusConflict, err.Error(), err)
+			return
+		}
+
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		return
+	}
+
+	if resp == nil || resp.AccessToken == "" || resp.RefreshToken == "" {
+		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty registration session claim response"))
+		return
+	}
+
+	c.JSON(http.StatusOK, VerifiedDeviceResponse{
+		Status:              "success",
+		AccessToken:         resp.AccessToken,
+		RefreshToken:        resp.RefreshToken,
+		IsBiometricsEnabled: resp.IsBiometricsEnabled,
+	})
+}
+
+func isBadRequestClaimRegistrationSessionError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "job id is required", "claim token is required", "device id is required":
+		return true
+	}
+
+	return false
+}
+
+func isUnauthorizedClaimRegistrationSessionError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "invalid registration claim token", "registration session expired", "device not found", "device not allowed":
+		return true
+	}
+
+	return false
+}
+
+func isConflictClaimRegistrationSessionError(err error) bool {
+	msg := strings.TrimSpace(err.Error())
+	switch msg {
+	case "registration is not completed", "registration failed", "registration session unavailable", "registration session already claimed":
+		return true
+	}
+
+	return false
 }
 
 func isBadRequestRegisterError(err error) bool {
+	switch {
+	case errors.Is(err, appErr.ErrPhoneNotFound),
+		errors.Is(err, appErr.ErrBVNNotFound),
+		errors.Is(err, appErr.ErrNINNotFound),
+		errors.Is(err, appErr.ErrEmailNotFound),
+		errors.Is(err, appErr.ErrPhoneMismatch),
+		errors.Is(err, appErr.ErrNINAndBVNMismatch),
+		errors.Is(err, appErr.ErrPasswordMismatch),
+		errors.Is(err, appErr.ErrTransactionPinMismatch):
+		return true
+	}
+
 	msg := strings.TrimSpace(err.Error())
 	switch msg {
-	case "phone verification record not found",
-		"bvn verification record not found",
-		"nin verification record not found",
-		"email verification record not found",
+	case
 		"unable to confirm email and phone number belong to the same person due to names or date of births mismatch",
-		"unable to confirm bvn and nin belong to the same person due to names or date of births mismatch",
-		"passwords do not match",
-		"transaction pins do not match",
-		"device not found",
 		"invalid Nigerian number":
 		return true
 	}
@@ -146,10 +252,15 @@ func isBadRequestRegisterError(err error) bool {
 }
 
 func isConflictRegisterError(err error) bool {
+	if errors.Is(err, appErr.ErrUserExists) {
+		return true
+	}
+
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch msg {
 	case "user already exists",
 		"device already exists",
+		"registration already in progress",
 		"bvn already linked to another user":
 		return true
 	default:

@@ -132,7 +132,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	cbaWalletUpdateSem := make(chan struct{}, 10)
 	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, cbaSyncSem, cbaWalletUpdateSem)
 	authHandler := auth.NewHandler(authService)
-	authGuard := middleware.AuthGuard(tokenSigner, nil)
+	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
 
 	authService.ConfigureOTPManager(otpManager)
@@ -141,6 +141,32 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	var mu sync.Mutex
 	var running bool
+
+	var registrationMu sync.Mutex
+	var registrationRunning bool
+
+	c.AddFunc("@every 5s", func() {
+		registrationMu.Lock()
+		if registrationRunning {
+			registrationMu.Unlock()
+			return
+		}
+		registrationRunning = true
+		registrationMu.Unlock()
+
+		defer func() {
+			registrationMu.Lock()
+			registrationRunning = false
+			registrationMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		if err := authService.ProcessPendingRegistrationJobs(ctx, 2); err != nil {
+			log.Printf("registration job sweep: %v", err)
+		}
+	})
 
 	c.AddFunc("@every 10m", func() {
 		mu.Lock()
