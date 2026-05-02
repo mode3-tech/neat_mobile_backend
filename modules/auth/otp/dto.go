@@ -1,9 +1,9 @@
 package otp
 
 type RequestOTPRequest struct {
-	Purpose     string `json:"purpose" binding:"required,oneof=login signup password_reset pin_reset"`
-	Channel     string `json:"channel" binding:"required,oneof=sms email"`
-	Destination string `json:"destination" binding:"required"`
+	Purpose        string `json:"purpose" binding:"required,oneof=login signup password_reset pin_reset"`
+	Channel        string `json:"channel" binding:"required,oneof=sms email"`
+	VerificationID string `json:"verification_id" binding:"required"`
 }
 
 type VerifyOTPRequest struct {

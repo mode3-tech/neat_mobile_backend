@@ -123,7 +123,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
-	otpRepo := otp.NewOTPRepository(db)
+	otpRepo := otp.NewRepository(db)
 	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)

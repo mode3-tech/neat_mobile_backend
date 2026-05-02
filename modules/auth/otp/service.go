@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/models"
@@ -17,8 +18,8 @@ import (
 	"gorm.io/gorm"
 )
 
-type OTPService struct {
-	repo         *OTPRepository
+type Service struct {
+	repo         *Repository
 	verification *verification.VerificationRepo
 	tx           *tx.Transactor
 	sms          notify.SMSSender
@@ -26,21 +27,50 @@ type OTPService struct {
 	pepper       string
 }
 
-func NewOTPService(repo *OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) *OTPService {
-	return &OTPService{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper}
+func NewOTPService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) *Service {
+	return &Service{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper}
 }
 
-func NewOTPManager(repo *OTPRepository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) OTPManager {
+func NewOTPManager(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper string) OTPManager {
 	return NewOTPService(repo, verification, tx, sms, email, pepper)
 }
 
-func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult, error) {
+func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult, error) {
 	now := time.Now().UTC()
 
-	normalizeDestination, err := NormalizeDestination(in.Destination, in.Channel)
+	var normalizeDestination string
+	var err error
 
-	if err != nil {
-		return nil, err
+	if in.VerificationID != "" {
+		row, err := s.repo.GetVerificationRow(ctx, in.VerificationID)
+		if err != nil {
+			return nil, err
+		}
+		if row == nil {
+			log.Printf("verification record not found")
+			return nil, errors.New("verification record not found")
+		}
+
+		var phoneNumber string
+		if row.VerifiedPhone != nil && *row.VerifiedPhone != "" {
+			phoneNumber = *row.VerifiedPhone
+		} else {
+			log.Printf("no verified phone number found in verification record")
+			return nil, errors.New("no verified phone number found in verification record")
+		}
+
+		normalizeDestination, err = NormalizeDestination(phoneNumber, in.Channel)
+		if err != nil {
+			return nil, err
+		}
+	} else if in.Destination != "" {
+		normalizeDestination, err = NormalizeDestination(in.Destination, in.Channel)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		log.Printf("either verification_id or destination must be provided")
+		return nil, errors.New("either verification_id or destination must be provided")
 	}
 
 	ttl := in.TTL
@@ -65,14 +95,14 @@ func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResu
 		return nil, errors.New("unable to generate OTP")
 	}
 
-	hashedOTP, err := HashOTP(o.pepper, in.Purpose, normalizeDestination, code)
+	hashedOTP, err := HashOTP(s.pepper, in.Purpose, normalizeDestination, code)
 	if err != nil {
 		return nil, errors.New("unable to hash OTP")
 	}
 
 	var result IssueOTPResult
 
-	err = o.repo.WithTx(ctx, func(r *OTPRepository) error {
+	err = s.repo.WithTx(ctx, func(r *Repository) error {
 		active, err := r.GetActiveOTP(ctx, normalizeDestination, in.Purpose)
 		if err != nil {
 			return err
@@ -99,7 +129,7 @@ func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResu
 
 		switch in.Channel {
 		case ChannelSMS:
-			if err := o.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
+			if err := s.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
 				return err
 			}
 		case ChannelEmail:
@@ -107,7 +137,7 @@ func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResu
 			if in.Purpose == PurposePasswordReset {
 				subject = "Your Password Reset OTP"
 			}
-			if err := o.email.Send(ctx, normalizeDestination, subject, code); err != nil {
+			if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
 				return err
 			}
 		default:
@@ -162,14 +192,14 @@ func (o *OTPService) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResu
 	return &result, nil
 }
 
-func (o *OTPService) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResult, error) {
+func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResult, error) {
 	now := time.Now().UTC()
 
 	var result VerifyOTPResult
 	var verifyErr error
 
-	err := o.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		r := NewOTPRepository(txDB)
+	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		r := NewRepository(txDB)
 		verificationRepo := verification.NewVerification(txDB)
 
 		var active *OTPModel
@@ -201,7 +231,7 @@ func (o *OTPService) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPR
 			return errors.New("invalid otp")
 		}
 
-		hashed, err := HashOTP(o.pepper, in.Purpose, active.Destination, strings.TrimSpace(in.Code))
+		hashed, err := HashOTP(s.pepper, in.Purpose, active.Destination, strings.TrimSpace(in.Code))
 		if err != nil {
 			return errors.New("invalid otp")
 		}
@@ -247,7 +277,7 @@ func (o *OTPService) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPR
 	return &result, nil
 }
 
-func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination string, channel Channel) error {
+func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination string, channel Channel) error {
 	now := time.Now().UTC()
 
 	normalizedDestination, err := NormalizeDestination(destination, channel)
@@ -263,13 +293,13 @@ func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination s
 		return errors.New("unable to generate OTP")
 	}
 
-	hashedOTP, err := HashOTP(o.pepper, purpose, normalizedDestination, generatedOTP)
+	hashedOTP, err := HashOTP(s.pepper, purpose, normalizedDestination, generatedOTP)
 	if err != nil {
 		return errors.New("unable to hash OTP")
 	}
 
-	// TODO: use an outbox/job queue so network I/O is not inside the DB tx.
-	return o.repo.WithTx(ctx, func(r *OTPRepository) error {
+	// TODO: use an outbox/job queue so network I/s is not inside the DB tx.
+	return s.repo.WithTx(ctx, func(r *Repository) error {
 		active, err := r.GetActiveOTP(ctx, normalizedDestination, purpose)
 		if err != nil {
 			return err
@@ -286,11 +316,11 @@ func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination s
 
 		switch channel {
 		case ChannelSMS:
-			if err := o.sms.Send(ctx, normalizedDestination, string(fmt.Sprintf("Your verification code is %s. It expires in 5 minutes. Do not share this code with anyone.", generatedOTP))); err != nil {
+			if err := s.sms.Send(ctx, normalizedDestination, string(fmt.Sprintf("Your verification code is %s. It expires in 5 minutes. Do not share this code with anyone.", generatedOTP))); err != nil {
 				return err
 			}
 		case ChannelEmail:
-			if err := o.email.Send(ctx, normalizedDestination, "Your One Time Password (OTP)", generatedOTP); err != nil {
+			if err := s.email.Send(ctx, normalizedDestination, "Your One Time Password (OTP)", generatedOTP); err != nil {
 				return err
 			}
 		default:
@@ -323,7 +353,7 @@ func (o *OTPService) SendOTP(ctx context.Context, purpose Purpose, destination s
 }
 
 // Note: verify now takes channel so normalization is deterministic.
-func (o *OTPService) VerifyOTP(ctx context.Context, otpCode string, destination string, channel Channel, purpose Purpose) (*VerifyOTPResponse, error) {
+func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination string, channel Channel, purpose Purpose) (*VerifyOTPResponse, error) {
 	now := time.Now().UTC()
 
 	normalizedDestination, err := NormalizeDestination(destination, channel)
@@ -334,8 +364,8 @@ func (o *OTPService) VerifyOTP(ctx context.Context, otpCode string, destination 
 	var resp VerifyOTPResponse
 	var verifyErr error
 
-	err = o.tx.WithTx(ctx, func(tx *gorm.DB) error {
-		r := NewOTPRepository(tx)
+	err = s.tx.WithTx(ctx, func(tx *gorm.DB) error {
+		r := NewRepository(tx)
 		verificationRepo := verification.NewVerification(tx)
 
 		active, err := r.GetActiveOTP(ctx, normalizedDestination, purpose)
@@ -343,19 +373,19 @@ func (o *OTPService) VerifyOTP(ctx context.Context, otpCode string, destination 
 			return err
 		}
 		if active == nil {
-			if err = o.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "no active otp found"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "no active otp found"); err != nil {
 				return err
 			}
 			return errors.New("invalid otp")
 		}
 		if active.AttemptCount >= active.MaxAttempts {
-			if err = o.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "too many failed attempts"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "too many failed attempts"); err != nil {
 				return err
 			}
 			return errors.New("invalid otp")
 		}
 
-		hashed, err := HashOTP(o.pepper, purpose, normalizedDestination, otpCode)
+		hashed, err := HashOTP(s.pepper, purpose, normalizedDestination, otpCode)
 		if err != nil {
 			return errors.New("invalid otp")
 		}
@@ -364,7 +394,7 @@ func (o *OTPService) VerifyOTP(ctx context.Context, otpCode string, destination 
 			if err = r.IncrementAttempt(ctx, active.ID); err != nil {
 				return err
 			}
-			if err = o.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "incorrect otp"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "incorrect otp"); err != nil {
 				return err
 			}
 			verifyErr = errors.New("invalid otp")
@@ -402,7 +432,7 @@ func (o *OTPService) VerifyOTP(ctx context.Context, otpCode string, destination 
 	return &resp, nil
 }
 
-func (o *OTPService) addFailedVerification(ctx context.Context, repo *verification.VerificationRepo, channel Channel, destination string, reason string) error {
+func (s *Service) addFailedVerification(ctx context.Context, repo *verification.VerificationRepo, channel Channel, destination string, reason string) error {
 	record, err := newFailedVerificationRecord(channel, destination, reason)
 	if err != nil {
 		return err

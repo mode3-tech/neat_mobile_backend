@@ -158,7 +158,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewRepository(txDB)
-		otpRepo := authotp.NewOTPRepository(txDB)
+		otpRepo := authotp.NewRepository(txDB)
 		authRepo := NewRespository(txDB)
 
 		sessionTokenHash := sha256.Sum256([]byte(sessionToken))

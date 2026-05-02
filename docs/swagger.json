@@ -8516,7 +8516,7 @@
         "required": [
           "purpose",
           "channel",
-          "destination"
+          "verification_id"
         ],
         "properties": {
           "purpose": {
@@ -8536,9 +8536,9 @@
             ],
             "example": "email"
           },
-          "destination": {
+          "verification_id": {
             "type": "string",
-            "example": "user@example.com"
+            "example": "ver_1234567890abcdef"
           }
         }
       },

@@ -11,13 +11,14 @@ type OTPManager interface {
 }
 
 type IssueOTPInput struct {
-	Purpose     Purpose
-	Channel     Channel
-	Destination string
-	UserID      string
-	TTL         time.Duration
-	MaxAttempts int
-	MaxResends  int
+	Purpose        Purpose
+	Channel        Channel
+	Destination    string
+	UserID         string
+	VerificationID string
+	TTL            time.Duration
+	MaxAttempts    int
+	MaxResends     int
 }
 
 type IssueOTPResult struct {

@@ -312,6 +312,9 @@ func (r *Repository) DeactiveOlderDevices(ctx context.Context, mobileUserID, new
 func (r *Repository) CheckSession(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error) {
 	err := r.db.WithContext(ctx).Where("sid = ? AND user_id = ? AND revoked_at IS NULL AND device_id = ?", sid, mobileUserID, deviceID).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
 		return false, err
 	}
 	return true, nil

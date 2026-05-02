@@ -42,9 +42,9 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 	}
 
 	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
-		Purpose:     purpose,
-		Channel:     channel,
-		Destination: req.Destination,
+		Purpose:        purpose,
+		Channel:        channel,
+		VerificationID: req.VerificationID,
 	}); err != nil {
 		writeOTPError(c, err)
 		return

@@ -5682,7 +5682,7 @@ components:
       required:
         - purpose
         - channel
-        - destination
+        - verification_id
       properties:
         purpose:
           type: string
@@ -5697,9 +5697,9 @@ components:
             - sms
             - email
           example: email
-        destination:
+        verification_id:
           type: string
-          example: user@example.com
+          example: ver_1234567890abcdef
     VerifyOTPRequest:
       type: object
       required:
