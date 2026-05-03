@@ -156,6 +156,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrInvalidPhone:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_PHONE",
+				Message: "invalid phone number",
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

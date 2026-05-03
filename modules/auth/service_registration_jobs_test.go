@@ -53,9 +53,6 @@ func TestRegistrationJobResponseCompletedClaimable(t *testing.T) {
 	if !resp.CanClaimSession {
 		t.Fatal("expected completed job to allow claim")
 	}
-	if resp.Message != "registration completed successfully, claim session to continue" {
-		t.Fatalf("unexpected message: %q", resp.Message)
-	}
 	if resp.ClaimExpiresAt == nil || !resp.ClaimExpiresAt.Equal(expiresAt) {
 		t.Fatalf("unexpected claim expiry: got %v want %v", resp.ClaimExpiresAt, expiresAt)
 	}
@@ -81,9 +78,6 @@ func TestRegistrationJobResponseCompletedClaimedFallsBackToLogin(t *testing.T) {
 	}
 	if resp.CanClaimSession {
 		t.Fatal("expected claimed job to disallow session claim")
-	}
-	if resp.Message != "registration completed successfully, login to continue" {
-		t.Fatalf("unexpected message: %q", resp.Message)
 	}
 	if resp.ClaimExpiresAt != nil {
 		t.Fatalf("expected no claim expiry after claim, got %v", resp.ClaimExpiresAt)

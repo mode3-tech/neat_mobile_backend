@@ -10,8 +10,8 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/modules/auth"
-	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/transaction"
 	"net/http"
@@ -20,7 +20,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
-	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -28,26 +27,16 @@ type Service struct {
 	b2             UploadService
 	notifier       *notification.Service
 	pdfShiftAPIKey string
+	deviceVerifier DeviceVerifier
 }
 
-func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string) *Service {
-	return &Service{repo: repo, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey}
+func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier) *Service {
+	return &Service{repo: repo, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey, deviceVerifier: deviceVerifier}
 }
 
 func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID string) (*AccountSummary, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
-	}
-
-	if deviceID == "" {
-		return nil, errors.New("device ID is required")
-	}
-
 	if _, err := s.repo.GetDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+		return nil, appErr.ErrUnauthorized
 	}
 
 	accountInfo, err := s.repo.GetAccountSummary(ctx, mobileUserID)
@@ -100,16 +89,6 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 }
 
 func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, deviceID string, req AccountStatementRequest) (string, error) {
-	if strings.TrimSpace(mobileUserID) == "" {
-		log.Printf("mobile user ID is required")
-		return "", errors.New("mobile user ID is required")
-	}
-
-	if strings.TrimSpace(deviceID) == "" {
-		log.Printf("device ID is required")
-		return "", errors.New("device ID is required")
-	}
-
 	if req.DateFrom.IsZero() {
 		log.Printf("date_from is required")
 		return "", errors.New("date_from is required")
@@ -121,7 +100,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 	now := time.Now().UTC()
 	if req.DateFrom.After(now) {
 		log.Printf("date_from cannot be in the future: %v", req.DateFrom)
-		return "", errors.New("date_from cannot be in the future")
+		return "", appErr.ErrInvalidDateFrom
 	}
 	// if req.DateTo.After(now) {
 	// 	log.Printf("date_to cannot be in the future: %v", req.DateTo)
@@ -129,23 +108,23 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 	// }
 	if !req.DateFrom.Before(req.DateTo) {
 		log.Printf("invalid date range for account statement request: %v to %v", req.DateFrom, req.DateTo)
-		return "", errors.New("date_from must be before date_to")
+		return "", appErr.ErrInvalidDateRange
 	}
 	if req.DateTo.Sub(req.DateFrom) > 365*24*time.Hour {
 		log.Printf("date range for account statement request exceeds 365 days: %v to %v", req.DateFrom, req.DateTo)
-		return "", errors.New("date range cannot exceed 365 days")
+		return "", appErr.ErrInvalidDateRange
 	}
 
 	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		log.Printf("failed to verify device for account statement request: %v", err)
-		return "", fmt.Errorf("failed to verify device: %w", err)
+		return "", appErr.ErrUnauthorized
 	}
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("failed to retrieve user for account statement request: %v", err)
-		return "", fmt.Errorf("failed to retrieve user: %w", err)
+		return "", appErr.ErrUnauthorized
 	}
 
 	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.%s", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"), req.Format)
@@ -212,25 +191,13 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 }
 
 func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, deviceID, jobID string) (*AccountReportJob, string, error) {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return nil, "", errors.New("mobile user id is required")
-	}
-
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, "", errors.New("device id is required")
-	}
-
-	if strings.TrimSpace(jobID) == "" {
-		return nil, "", errors.New("job id is required")
-	}
-
 	job, err := s.repo.GetAccountReportJob(ctx, jobID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to retrieve account report job: %w", err)
 	}
 
 	if job.MobileUserID != strings.TrimSpace(mobileUserID) {
-		return nil, "", errors.New("job not found")
+		return nil, "", appErr.ErrNotFound
 	}
 
 	var downloadURL string
@@ -253,13 +220,7 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, devic
 }
 
 func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID, deviceID string) (*GetLatestAccountStatementResponse, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-	if mobileUserID == "" || deviceID == "" {
-		return nil, errors.New("mobile user id or device id is missing")
-	}
-
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -312,10 +273,6 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, profilePictureURL *string, req UpdateProfileRequest) error {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("user id is missing")
-	}
-
 	data := UpdateProfileData{
 		Address:           req.Address,
 		Email:             req.Email,
@@ -501,29 +458,6 @@ func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID 
 	return nil
 }
 
-type statementTxRow struct {
-	Date        string
-	Description string
-	Reference   string
-	Debit       string
-	Credit      string
-	Balance     string
-}
-
-type statementTemplateData struct {
-	TodayDate        string
-	StartDate        string
-	EndDate          string
-	AccountName      string
-	Address          string
-	AccountNumber    string
-	OpeningBalance   string
-	TotalWithdrawals string
-	TotalLodgement   string
-	ClosingBalance   string
-	Transactions     []statementTxRow
-}
-
 func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	if s.pdfShiftAPIKey == "" {
 		return errors.New("PDF generation is not configured")
@@ -650,18 +584,6 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 	}
 
 	return nil
-}
-
-func (s *Service) verifyUserDevice(ctx context.Context, mobileUser, deviceID string) (*device.UserDevice, error) {
-	device, err := s.repo.FindDevice(ctx, mobileUser, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device not found")
-		}
-		return nil, err
-	}
-
-	return device, nil
 }
 
 func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File, header multipart.FileHeader, mobileUserID string) (string, error) {

@@ -60,7 +60,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 		return s.startNewDeviceFlow(ctx, user.ID, user.Phone, deviceID, ip)
 	}
 
-	deviceService := device.NewDeviceService(*s.deviceRepo)
+	deviceService := device.NewService(*s.deviceRepo)
 	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID, 0)
 	if err != nil {
 		return nil, err
@@ -73,16 +73,6 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 }
 
 func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID string) (*ChallengeRequestResponse, error) {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return nil, appErr.ErrMissingDeviceID
-	}
-
-	refreshToken = strings.TrimSpace(refreshToken)
-	if refreshToken == "" {
-		return nil, appErr.ErrMissingUserID
-	}
-
 	sub, _, jti, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 	if err != nil {
 		return nil, appErr.ErrDeviceNotAllowed
@@ -108,12 +98,12 @@ func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID st
 
 	mobileUserID := sub
 
-	_, err = s.verifyUserDevice(ctx, mobileUserID, deviceID)
+	_, err = s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		return nil, err
 	}
 
-	deviceService := device.NewDeviceService(*s.deviceRepo)
+	deviceService := device.NewService(*s.deviceRepo)
 	challenge, err := deviceService.CreateChallenge(ctx, mobileUserID, deviceID, 60*time.Second)
 	if err != nil {
 		return nil, err
@@ -139,20 +129,8 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 	}
 
 	sessionToken := strings.TrimSpace(req.SessionToken)
-	if sessionToken == "" {
-		return nil, appErr.ErrInvalidSession
-	}
-	if strings.TrimSpace(req.OTP) == "" {
-		return nil, appErr.ErrMissingOTP
-	}
-
+	otp := strings.TrimSpace(req.OTP)
 	deviceID := strings.TrimSpace(req.Device.DeviceID)
-	if deviceID == "" {
-		return nil, appErr.ErrMissingDeviceID
-	}
-	if strings.TrimSpace(req.Device.PublicKey) == "" {
-		return nil, appErr.ErrMissingPublicKey
-	}
 
 	var authObj *VerifiedDeviceResponse
 
@@ -199,7 +177,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			return appErr.ErrInvalidOTP
 		}
 
-		hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, activeOTP.Destination, strings.TrimSpace(req.OTP))
+		hashedOTP, err := authotp.HashOTP(s.otpPepper, loginOTPPurpose, activeOTP.Destination, otp)
 		if err != nil || !authotp.HashEqualHex(hashedOTP, activeOTP.OTPHash) {
 			if updateErr := otpRepo.IncrementAttempt(ctx, activeOTP.ID); updateErr != nil {
 				return updateErr
@@ -387,7 +365,7 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 		return nil, appErr.ErrInvalidSession
 	}
 
-	deviceRecord, err := s.verifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
+	deviceRecord, err := s.deviceVerifier.VerifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
 	if err != nil {
 		return nil, errors.New("device verification failed")
 	}
@@ -494,7 +472,7 @@ func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID s
 		return nil, appErr.ErrMissingDeviceID
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 

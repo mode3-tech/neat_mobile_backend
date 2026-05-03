@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/models"
-	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 const (
@@ -29,15 +27,17 @@ type Service struct {
 	repo             Store
 	sender           Sender
 	defaultChannelID string
+	deviceVerifier   DeviceVerifier
 }
 
 var ErrSenderNotConfigured = errors.New("push sender is not configured")
 
-func NewService(repo Store, sender Sender, defaultChannelID string) *Service {
+func NewService(repo Store, sender Sender, defaultChannelID string, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:             repo,
 		sender:           sender,
 		defaultChannelID: strings.TrimSpace(defaultChannelID),
+		deviceVerifier:   deviceVerifier,
 	}
 }
 
@@ -408,7 +408,7 @@ func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID, dev
 		return nil, errors.New("device id is required")
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -432,18 +432,4 @@ func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID, dev
 		IsEnabled: enabled,
 	}, nil
 
-}
-
-func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
-	rec, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device not found")
-		}
-		return nil, err
-	}
-	if !rec.IsActive || !rec.IsTrusted {
-		return nil, errors.New("device not allowed")
-	}
-	return rec, nil
 }

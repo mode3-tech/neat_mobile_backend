@@ -7,13 +7,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-type DeviceService struct {
+type Service struct {
 	repo Repository
 }
 
@@ -21,11 +22,11 @@ const challengeTTL = 5 * time.Minute
 
 var ErrDeviceNotEligible = errors.New("device not eligible for challenge")
 
-func NewDeviceService(repo Repository) *DeviceService {
-	return &DeviceService{repo: repo}
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
-func (s *DeviceService) BindDevice(ctx context.Context, userID string, req *DeviceBindingRequest) error {
+func (s *Service) BindDevice(ctx context.Context, userID string, req *DeviceBindingRequest) error {
 	device := &UserDevice{
 		ID:          req.DeviceID,
 		UserID:      userID,
@@ -43,17 +44,17 @@ func (s *DeviceService) BindDevice(ctx context.Context, userID string, req *Devi
 	return s.repo.Save(ctx, device)
 }
 
-func (s *DeviceService) CreateChallenge(ctx context.Context, userID, deviceID string, ttl time.Duration) (string, error) {
+func (s *Service) CreateChallenge(ctx context.Context, userID, deviceID string, ttl time.Duration) (string, error) {
 	device, err := s.repo.FindDevice(ctx, userID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", ErrDeviceNotEligible
+			return "", appErr.ErrUnauthorized
 		}
 		return "", err
 	}
 
 	if !device.IsActive || !device.IsTrusted {
-		return "", ErrDeviceNotEligible
+		return "", appErr.ErrUnauthorized
 	}
 
 	rawChallenge, err := randomToken(32)
@@ -93,4 +94,19 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*UserDevice, error) {
+	userDevice, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("device not found")
+		}
+		return nil, err
+	}
+
+	if !userDevice.IsActive || !userDevice.IsTrusted {
+		return nil, errors.New("device not allowed")
+	}
+	return userDevice, nil
 }

@@ -91,7 +91,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 		}
 	}
 
-	if _, err := s.verifyUserDevice(ctx, refreshTokenObj.UserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, refreshTokenObj.UserID, deviceID); err != nil {
 		return nil, err
 	}
 

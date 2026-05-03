@@ -160,7 +160,7 @@ func TestServiceApplyForLoan_IncorrectTransactionPin(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	service := NewService(repo, nil, nil, nil, nil, nil)
+	service := NewService(repo, nil, nil, nil, nil, nil, nil)
 
 	_, err := service.ApplyForLoan(context.Background(), LoanRequest{TransactionPin: "0000"}, "user-1")
 	if !errors.Is(err, ErrIncorrectTransactionPin) {
@@ -201,7 +201,7 @@ func TestServiceApplyForLoan_LocksAfterFifthIncorrectTransactionPin(t *testing.T
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	service := NewService(repo, nil, nil, nil, nil, nil)
+	service := NewService(repo, nil, nil, nil, nil, nil, nil)
 
 	_, err := service.ApplyForLoan(context.Background(), LoanRequest{TransactionPin: "0000"}, "user-1")
 	if !errors.Is(err, ErrTooManyTransactionPinAttempts) {
@@ -237,7 +237,7 @@ func TestServiceApplyForLoan_RejectsLockedTransactionPin(t *testing.T) {
 		WithArgs("user-1", 1).
 		WillReturnRows(rows)
 
-	service := NewService(repo, nil, nil, nil, nil, nil)
+	service := NewService(repo, nil, nil, nil, nil, nil, nil)
 
 	_, err := service.ApplyForLoan(context.Background(), LoanRequest{TransactionPin: "1234"}, "user-1")
 	if !errors.Is(err, ErrTransactionPinTemporarilyLocked) {
@@ -283,7 +283,7 @@ func TestServiceApplyForLoan_NoCoreCustomerMatchStillCreatesApplication(t *testi
 		loanDetailErr:    errors.New("unexpected core loan detail lookup"),
 	}
 
-	service := NewService(repo, customerFinder, loanFinder, nil, nil, nil)
+	service := NewService(repo, customerFinder, loanFinder, nil, nil, nil, nil)
 
 	resp, err := service.ApplyForLoan(context.Background(), LoanRequest{
 		LoanProductType:   LoanTypeBusiness,
@@ -363,7 +363,7 @@ func TestServiceApplyForLoan_SingleCoreCustomerMatchPersistsIDAndChecksLoans(t *
 		loans: []CoreCustomerLoanItem{},
 	}
 
-	service := NewService(repo, customerFinder, loanFinder, nil, nil, nil)
+	service := NewService(repo, customerFinder, loanFinder, nil, nil, nil, nil)
 
 	resp, err := service.ApplyForLoan(context.Background(), LoanRequest{
 		LoanProductType:   LoanTypeBusiness,

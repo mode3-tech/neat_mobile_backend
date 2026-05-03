@@ -1,15 +1,11 @@
 package auth
 
 import (
-	"context"
-	"errors"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/notify"
 	authotp "neat_mobile_app_backend/modules/auth/otp"
 	"neat_mobile_app_backend/modules/auth/verification"
 	"neat_mobile_app_backend/modules/device"
-
-	"gorm.io/gorm"
 )
 
 type bvnInfo struct {
@@ -47,6 +43,7 @@ type Service struct {
 	providerSource     BVNProviderSource
 	otpManager         authotp.OTPManager
 	walletService      WalletService
+	deviceVerifier     DeviceVerifier
 	cbaSyncSem         chan struct{}
 	cbaWalletUpdateSem chan struct{}
 }
@@ -67,6 +64,7 @@ func NewService(
 	providerSource BVNProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
+	deviceVerifier DeviceVerifier,
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
 ) *Service {
 	return &Service{
@@ -85,6 +83,7 @@ func NewService(
 		providerSource:     providerSource,
 		otpManager:         otpManager,
 		walletService:      walletService,
+		deviceVerifier:     deviceVerifier,
 		cbaSyncSem:         cbaSyncSem,
 		cbaWalletUpdateSem: cbaWalletUpdateSem,
 	}
@@ -92,21 +91,4 @@ func NewService(
 
 func (s *Service) ConfigureOTPManager(manager authotp.OTPManager) {
 	s.otpManager = manager
-}
-
-func (s *Service) verifyUserDevice(ctx context.Context, userID, deviceID string) (*device.UserDevice, error) {
-	if s.deviceRepo == nil {
-		return nil, errors.New("device repository not configured")
-	}
-	rec, err := s.deviceRepo.FindDevice(ctx, userID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device not found")
-		}
-		return nil, err
-	}
-	if !rec.IsActive || !rec.IsTrusted {
-		return nil, errors.New("device not allowed")
-	}
-	return rec, nil
 }

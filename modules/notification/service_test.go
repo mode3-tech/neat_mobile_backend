@@ -109,7 +109,7 @@ func (s *stubSender) GetReceipts(_ context.Context, _ []string) (map[string]Expo
 }
 
 func TestRegisterTokenRejectsInvalidExpoPushToken(t *testing.T) {
-	service := NewService(&stubStore{}, nil, "default")
+	service := NewService(&stubStore{}, nil, "default", nil)
 
 	err := service.RegisterToken(context.Background(), "user-1", RegisterTokenRequest{
 		ExpoPushToken: "not-a-real-token",
@@ -137,7 +137,7 @@ func TestSendToUserDeletesDeviceNotRegisteredTokens(t *testing.T) {
 			{Status: "error", Details: map[string]interface{}{"error": "DeviceNotRegistered"}},
 		},
 	}
-	service := NewService(store, sender, "default")
+	service := NewService(store, sender, "default", nil)
 
 	err := service.SendToUser(context.Background(), "user-1", "Loan Approved!", models.NotificationTypeLoan, "Your loan has been approved.", map[string]any{
 		"screen": "/(loan)/details",
@@ -164,7 +164,7 @@ func TestSendToUserReturnsSenderError(t *testing.T) {
 		listTokens: []models.PushToken{
 			{UserID: "user-1", DeviceID: "device-1", ExpoPushToken: "ExpoPushToken[token-1]", Platform: "android"},
 		},
-	}, &stubSender{err: expectedErr}, "default")
+	}, &stubSender{err: expectedErr}, "default", nil)
 
 	err := service.SendToUser(context.Background(), "user-1", "Title", models.NotificationTypeTransaction, "Body", nil)
 	if !errors.Is(err, expectedErr) {

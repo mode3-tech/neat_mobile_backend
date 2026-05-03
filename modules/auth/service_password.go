@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
@@ -28,21 +29,21 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, devic
 		return nil, errors.New("otp manager not configured")
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+			return nil, appErr.ErrUnauthorized
 		}
 		return nil, err
 	}
 
 	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
-		return nil, errors.New("invalid phone number on account")
+		return nil, appErr.ErrInvalidPhone
 	}
 	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
 		Purpose:     authotp.PurposePasswordChange,
@@ -86,7 +87,7 @@ func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 		return nil, errors.New("otp manager not configured")
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -130,14 +131,14 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 		return err
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("user not found")
+			return appErr.ErrUnauthorized
 		}
 		return err
 	}
@@ -160,7 +161,7 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 
 		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
-			return errors.New("invalid phone number on account")
+			return appErr.ErrInvalidPhone
 		}
 
 		rec, err := verRepo.GetVerificationByID(ctx, req.VerificationID)
@@ -211,21 +212,21 @@ func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 		return nil, errors.New("otp manager not configured")
 	}
 
-	if _, err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+			return nil, appErr.ErrUnauthorized
 		}
 		return nil, err
 	}
 
 	phone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(user.Phone))
 	if err != nil {
-		return nil, errors.New("invalid phone number on account")
+		return nil, appErr.ErrInvalidPhone
 	}
 
 	result, err := s.otpManager.Issue(ctx, authotp.IssueOTPInput{
@@ -241,8 +242,7 @@ func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 	}
 
 	return &ResendPasswordChangeOTPResponse{
-		Message: "OTP resent successfully",
-		OTPID:   result.OTPID,
+		OTPID: result.OTPID,
 	}, nil
 }
 
@@ -260,12 +260,12 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", errors.New("no account exists under this phone number")
+			return nil, "", appErr.ErrUnauthorized
 		}
 		return nil, "", err
 	}
 	if user == nil {
-		return nil, "", errors.New("no account exists under this phone number")
+		return nil, "", appErr.ErrUnauthorized
 	}
 
 	return user, normalizedPhone, nil
@@ -299,8 +299,7 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 	}
 
 	return &ForgotPasswordResponse{
-		Message: "OTP has been sent to your phone",
-		OTPID:   result.OTPID,
+		OTPID: result.OTPID,
 	}, nil
 }
 
@@ -334,11 +333,10 @@ func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, 
 		return nil, err
 	}
 	if result == nil {
-		return nil, errors.New("otp verification failed")
+		return nil, appErr.ErrInvalidOTP
 	}
 
 	return &VerifyForgotPasswordOTPResponse{
-		Message:        "OTP verified successfully",
 		VerificationID: result.VerificationID,
 	}, nil
 }
@@ -362,7 +360,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	}
 
 	if req.NewPassword != req.ConfirmNewPassword {
-		return errors.New("new password and confirm new password do not match")
+		return appErr.ErrPasswordMismatch
 	}
 
 	user, normalizedPhone, err := s.resolvePasswordResetTarget(ctx, req.Phone)
@@ -387,24 +385,24 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 			return err
 		}
 		if rec == nil {
-			return errors.New("invalid verification id")
+			return appErr.ErrUnauthorized
 		}
 
 		if rec.Status != models.VerificationStatusVerified {
-			return errors.New("invalid verification id")
+			return appErr.ErrUnauthorized
 		}
 
 		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
-			return errors.New("invalid verification id")
+			return appErr.ErrUnauthorized
 		}
 
 		now := time.Now().UTC()
 		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
-			return errors.New("verification id has expired")
+			return appErr.ErrUnauthorized
 		}
 
 		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
-			return errors.New("invalid verification id")
+			return appErr.ErrUnauthorized
 		}
 
 		if err := serviceRepo.UpdateUserPassword(ctx, user.ID, hashedPassword); err != nil {
@@ -415,27 +413,26 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	})
 }
 
-func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ResendForgotPasswordOTPResponse, error) {
+func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
 	resp, err := s.issueForgotPasswordOTP(ctx, req, deviceID)
 	if err != nil {
 		return nil, err
 	}
-	return &ResendForgotPasswordOTPResponse{
-		Message: "OTP resent successfully",
-		OTPID:   resp.OTPID,
+	return &ForgotPasswordResponse{
+		OTPID: resp.OTPID,
 	}, nil
 }
 
 func (s *Service) validateCurrentPassword(user *models.User, currentPassword string) error {
 	if user == nil {
-		return errors.New("user not found")
+		return appErr.ErrUnauthorized
 	}
 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash),
 		[]byte(currentPassword),
 	); err != nil {
-		return errors.New("invalid current password")
+		return appErr.ErrInvalidCredentials
 	}
 	return nil
 }

@@ -17,13 +17,17 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) CreateGoal(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	var req CreateGoalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,13 +44,17 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 }
 
 func (h *Handler) GetUserGoals(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	resp, err := h.service.GetUserGoals(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
@@ -58,13 +66,17 @@ func (h *Handler) GetUserGoals(c *gin.Context) {
 }
 
 func (h *Handler) GetGoalSummary(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	var query GetGoalSummaryQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -72,7 +84,7 @@ func (h *Handler) GetGoalSummary(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetGoalSummary(c.Request.Context(), mobileUserID, deviceID, query.GoalID)
+	resp, err := h.service.GetGoalSummary(c.Request.Context(), mobileUserID, deviceID, strings.TrimSpace(query.GoalID))
 	if err != nil {
 		handleNeatSaveError(c, err)
 		return

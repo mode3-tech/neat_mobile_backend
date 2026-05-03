@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/modules/device"
 	"strings"
 	"time"
@@ -92,11 +93,11 @@ func (s *Service) ClaimRegistrationSession(ctx context.Context, jobID, claimToke
 		if !registrationJobCanClaimAt(job, now) {
 			switch {
 			case job.SessionClaimedAt != nil:
-				return errors.New("registration session already claimed")
+				return appErr.ErrInvalidSession
 			case job.SessionClaimExpiresAt != nil && now.After(*job.SessionClaimExpiresAt):
-				return errors.New("registration session expired")
+				return appErr.ErrInvalidSession
 			default:
-				return errors.New("registration session unavailable")
+				return appErr.ErrInvalidSession
 			}
 		}
 

@@ -1,18 +1,14 @@
 package auth
 
 import (
-	"context"
 	"errors"
 	"log"
-	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
-	"net"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -99,20 +95,11 @@ func (h *Handler) Register(c *gin.Context) {
 
 	resp, err := h.service.Register(c.Request.Context(), req, ip)
 	if err != nil {
-		if isBadRequestRegisterError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isConflictRegisterError(err) {
-			h.respondError(c, http.StatusConflict, err.Error(), err)
-			return
-		}
-		if isBadPasswordError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -121,7 +108,11 @@ func (h *Handler) Register(c *gin.Context) {
 		statusCode = http.StatusOK
 	}
 
-	c.JSON(statusCode, resp)
+	c.JSON(statusCode, response.APIResponse[RegistrationJobResponse]{
+		Status:  "success",
+		Message: "Registration processed successfully",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) GetRegistrationStatus(c *gin.Context) {
@@ -133,16 +124,19 @@ func (h *Handler) GetRegistrationStatus(c *gin.Context) {
 
 	resp, err := h.service.GetRegistrationStatus(c.Request.Context(), jobID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			h.respondError(c, http.StatusNotFound, "registration job not found", err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, response.APIResponse[RegistrationJobResponse]{
+		Status:  "success",
+		Message: "Registration status retrieved successfully",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
@@ -163,24 +157,11 @@ func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
 
 	resp, err := h.service.ClaimRegistrationSession(c.Request.Context(), jobID, req.ClaimToken, deviceID, ip)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			h.respondError(c, http.StatusNotFound, "registration job not found", err)
-			return
-		}
-		if isBadRequestClaimRegistrationSessionError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnauthorizedClaimRegistrationSessionError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isConflictClaimRegistrationSessionError(err) {
-			h.respondError(c, http.StatusConflict, err.Error(), err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -189,96 +170,11 @@ func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifiedDeviceResponse{
-		Status:              "success",
-		AccessToken:         resp.AccessToken,
-		RefreshToken:        resp.RefreshToken,
-		IsBiometricsEnabled: resp.IsBiometricsEnabled,
+	c.JSON(http.StatusOK, response.APIResponse[VerifiedDeviceResponse]{
+		Status:  "success",
+		Message: "Registration session claimed successfully",
+		Data:    resp,
 	})
-}
-
-func isBadRequestClaimRegistrationSessionError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "job id is required", "claim token is required", "device id is required":
-		return true
-	}
-
-	return false
-}
-
-func isUnauthorizedClaimRegistrationSessionError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "invalid registration claim token", "registration session expired", "device not found", "device not allowed":
-		return true
-	}
-
-	return false
-}
-
-func isConflictClaimRegistrationSessionError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "registration is not completed", "registration failed", "registration session unavailable", "registration session already claimed":
-		return true
-	}
-
-	return false
-}
-
-func isBadRequestRegisterError(err error) bool {
-	switch {
-	case errors.Is(err, appErr.ErrPhoneNotFound),
-		errors.Is(err, appErr.ErrBVNNotFound),
-		errors.Is(err, appErr.ErrNINNotFound),
-		errors.Is(err, appErr.ErrEmailNotFound),
-		errors.Is(err, appErr.ErrPhoneMismatch),
-		errors.Is(err, appErr.ErrNINAndBVNMismatch),
-		errors.Is(err, appErr.ErrPasswordMismatch),
-		errors.Is(err, appErr.ErrTransactionPinMismatch):
-		return true
-	}
-
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case
-		"unable to confirm email and phone number belong to the same person due to names or date of births mismatch",
-		"invalid Nigerian number":
-		return true
-	}
-
-	return false
-}
-
-func isConflictRegisterError(err error) bool {
-	if errors.Is(err, appErr.ErrUserExists) {
-		return true
-	}
-
-	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	switch msg {
-	case "user already exists",
-		"device already exists",
-		"registration already in progress",
-		"bvn already linked to another user":
-		return true
-	default:
-		return strings.Contains(msg, "duplicate key value violates unique constraint")
-
-	}
-}
-
-func isBadPasswordError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	return msg == "password length should be at least 8 characters long" ||
-		msg == "password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
-}
-
-func isProvidusWalletError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	return strings.HasPrefix(msg, "providus wallet") ||
-		strings.HasPrefix(msg, "failed to decode providus wallet generation")
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -290,25 +186,20 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	ip := c.ClientIP()
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
-	loginObj, err := h.service.Login(c.Request.Context(), deviceID, ip, req.Phone, req.Password)
+	loginObj, err := h.service.Login(c.Request.Context(), deviceID, ip, strings.TrimSpace(req.Phone), strings.TrimSpace(req.Password))
 
 	if err != nil {
-		if isBadRequestLoginError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isRateLimitedLoginError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		if isUnauthorizedLoginError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -318,11 +209,15 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	resp := LoginInitResponse{
-		Status:       loginObj.Status,
 		Challenge:    loginObj.Challenge,
 		SessionToken: loginObj.SessionToken,
 	}
-	c.JSON(http.StatusOK, resp)
+
+	c.JSON(http.StatusOK, response.APIResponse[LoginInitResponse]{
+		Status:  "success",
+		Message: "login credentials verified",
+		Data:    &resp,
+	})
 }
 
 func (h *Handler) VerifyDevice(c *gin.Context) {
@@ -337,16 +232,11 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 
 	resp, err := h.service.VerifyDeviceChallenge(c.Request.Context(), req.Challenge, req.Signature, req.DeviceID, ip)
 	if err != nil {
-		if isBadRequestVerifyDeviceError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnauthorizedVerifyDeviceError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -355,57 +245,11 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifiedDeviceResponse{
-		Status:              "success",
-		AccessToken:         resp.AccessToken,
-		RefreshToken:        resp.RefreshToken,
-		IsBiometricsEnabled: resp.IsBiometricsEnabled,
+	c.JSON(http.StatusOK, response.APIResponse[VerifiedDeviceResponse]{
+		Status:  "success",
+		Message: "device successfully verified",
+		Data:    resp,
 	})
-}
-
-func isBadRequestLoginError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "invalid Nigerian number":
-		return true
-	}
-
-	return false
-}
-
-func isUnauthorizedLoginError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "invalid credentials":
-		return true
-	}
-
-	return false
-}
-
-func isRateLimitedLoginError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	return msg == "too many requests"
-}
-
-func isBadRequestVerifyDeviceError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "challenge is required", "signature is required", "device id is required":
-		return true
-	}
-
-	return false
-}
-
-func isUnauthorizedVerifyDeviceError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "invalid challenge", "device verification failed":
-		return true
-	}
-
-	return false
 }
 
 func (h *Handler) Logout(c *gin.Context) {
@@ -432,7 +276,11 @@ func (h *Handler) Logout(c *gin.Context) {
 		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "logout successful",
+	})
 }
 
 func (h *Handler) RefreshAccessToken(c *gin.Context) {
@@ -445,17 +293,11 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 
 	tokenObj, err := h.service.RefreshAccessToken(c.Request.Context(), strings.TrimSpace(req.DeviceID), strings.TrimSpace(req.RefreshToken))
 	if err != nil {
-		if isBadRequestRefreshError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnauthorizedRefreshError(err) {
-			h.respondError(c, http.StatusUnauthorized, "invalid refresh token", err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
-		return
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
 	if tokenObj == nil || tokenObj.AccessToken == "" || tokenObj.RefreshToken == "" {
@@ -463,27 +305,11 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, LoginResponse{AccessToken: tokenObj.AccessToken, RefreshToken: tokenObj.RefreshToken})
-}
-
-func isBadRequestRefreshError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required":
-		return true
-	}
-
-	return false
-}
-
-func isUnauthorizedRefreshError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "invalid refresh token", "refresh token not found", "refresh token already revoked", "refresh token expired", "device not found", "device not allowed", "invalid session":
-		return true
-	}
-
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[LoginResponse]{
+		Status:  "success",
+		Message: "access token successfully refreshed",
+		Data:    (*LoginResponse)(tokenObj),
+	})
 }
 
 func (h *Handler) VerifyBVN(c *gin.Context) {
@@ -496,21 +322,11 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 
 	bvnInfo, err := h.service.ValidateBVN(c.Request.Context(), req.BVN)
 	if err != nil {
-		if isBadRequestBVNError(err) {
-			switch err.Error() {
-			case "tendar bvn validation failed with status 404":
-				h.respondError(c, http.StatusBadRequest, "invalid bvn", err)
-				return
-			default:
-				h.respondError(c, http.StatusBadRequest, err.Error(), err)
-				return
-			}
-		}
-		if status, message, ok := classifyUpstreamError(err); ok {
-			h.respondError(c, status, message, err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -519,40 +335,18 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &BVNValidationResponse{
+	resp := &BVNValidationResponse{
 		Name:           bvnInfo.name,
 		DOB:            bvnInfo.dob,
 		PhoneNumber:    bvnInfo.phone,
 		VerificationID: bvnInfo.verificationID,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[BVNValidationResponse]{
+		Status:  "success",
+		Message: "bvn verification was succesful",
+		Data:    resp,
 	})
-}
-
-func isBadRequestBVNError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "bvn is required", "invalid bvn number":
-		return true
-	}
-
-	prefixes := []string{
-		"tendar bvn validation failed with status ",
-		"prembly bvn validation failed with status ",
-	}
-
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(msg, prefix) {
-			statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
-			statusCode, convErr := strconv.Atoi(statusCodeText)
-			if convErr == nil {
-				switch statusCode {
-				case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
-					return true
-				}
-			}
-		}
-	}
-
-	return false
 }
 
 func (h *Handler) VerifyNIN(c *gin.Context) {
@@ -565,27 +359,11 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 
 	ninInfo, err := h.service.ValidateNIN(c.Request.Context(), req.BVNVerificationID, req.NIN)
 	if err != nil {
-		if isBadRequestNINError(err) {
-			switch err.Error() {
-			case "prembly nin validation failed with status 404":
-				h.respondError(c, http.StatusBadRequest, "invalid nin", err)
-				return
-			default:
-				h.respondError(c, http.StatusBadRequest, err.Error(), err)
-				return
-			}
-		}
-
-		if isBVNAndNINNotAMatch(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-
-		if status, message, ok := classifyUpstreamError(err); ok {
-			h.respondError(c, status, message, err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -594,101 +372,18 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &NINValidationResponse{
+	resp := &NINValidationResponse{
 		Name:           ninInfo.name,
 		DOB:            ninInfo.dob,
 		PhoneNumber:    ninInfo.phone,
 		VerificationID: ninInfo.verificationID,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[NINValidationResponse]{
+		Status:  "success",
+		Message: "nin verification was successful",
+		Data:    resp,
 	})
-}
-
-func isBVNAndNINNotAMatch(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "bvn name does not match nin name", "bvn dob does not match nin dob":
-		return true
-	default:
-		return false
-	}
-}
-
-func isBadRequestNINError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "nin is required", "invalid nin", "invalid nin number":
-		return true
-	}
-
-	const premblyStatusPrefix = "prembly nin validation failed with status "
-	if strings.HasPrefix(msg, premblyStatusPrefix) {
-		statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, premblyStatusPrefix))
-		statusCode, convErr := strconv.Atoi(statusCodeText)
-		if convErr == nil {
-			switch statusCode {
-			case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func classifyUpstreamError(err error) (int, string, bool) {
-	if err == nil {
-		return 0, "", false
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
-	}
-
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
-	}
-
-	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	if strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "timeout") {
-		return http.StatusGatewayTimeout, "upstream service timed out, please try again", true
-	}
-
-	statusCode, ok := extractUpstreamStatusCode(msg)
-	if !ok {
-		return 0, "", false
-	}
-
-	switch {
-	case statusCode >= http.StatusInternalServerError:
-		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
-	case statusCode == http.StatusTooManyRequests:
-		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
-	case statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden:
-		return http.StatusServiceUnavailable, "upstream service unavailable, please try again", true
-	default:
-		return 0, "", false
-	}
-}
-
-func extractUpstreamStatusCode(msg string) (int, bool) {
-	prefixes := []string{
-		"tendar bvn validation failed with status ",
-		"prembly bvn validation failed with status ",
-		"prembly nin validation failed with status ",
-		"cba returned status ",
-	}
-
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(msg, prefix) {
-			statusCodeText := strings.TrimSpace(strings.TrimPrefix(msg, prefix))
-			statusCode, err := strconv.Atoi(statusCodeText)
-			if err == nil {
-				return statusCode, true
-			}
-		}
-	}
-
-	return 0, false
 }
 
 func (h *Handler) VerifyNewDevice(c *gin.Context) {
@@ -702,17 +397,11 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 
 	authObj, err := h.service.VerifyNewDevice(c.Request.Context(), ip, req)
 	if err != nil {
-		if isBadRequestVerifyNewDeviceError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-
-		if isUnauthorizedVerifyNewDeviceError(err) {
-			h.respondError(c, http.StatusUnauthorized, "expired session", err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -721,32 +410,17 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifiedDeviceResponse{
-		Status:              "success",
+	resp := VerifiedDeviceResponse{
 		AccessToken:         authObj.AccessToken,
 		RefreshToken:        authObj.RefreshToken,
 		IsBiometricsEnabled: authObj.IsBiometricsEnabled,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[VerifiedDeviceResponse]{
+		Status:  "success",
+		Message: "new device successfully verified",
+		Data:    &resp,
 	})
-}
-
-func isBadRequestVerifyNewDeviceError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "otp is required", "session token is required", "device id is required", "public key is required":
-		return true
-	}
-	return false
-}
-
-func isUnauthorizedVerifyNewDeviceError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-
-	switch msg {
-	case "invalid session token", "invalid otp":
-		return true
-	}
-
-	return false
 }
 
 func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
@@ -757,41 +431,18 @@ func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
 	}
 
 	if err := h.service.ResendNewDeviceOTP(c.Request.Context(), req); err != nil {
-		if isBadRequestResendNewDeviceOTPError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isRateLimitedResendNewDeviceOTPError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		if isUnauthorizedResendNewDeviceOTPError(err) {
-			h.respondError(c, http.StatusUnauthorized, "expired session", err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "otp resent successfully"})
-}
-
-func isBadRequestResendNewDeviceOTPError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "session token is required", "device id is required":
-		return true
-	}
-	return false
-}
-
-func isRateLimitedResendNewDeviceOTPError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "too many requests"
-}
-
-func isUnauthorizedResendNewDeviceOTPError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "invalid session token"
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "otp successfully resent",
+	})
 }
 
 func (h *Handler) ForgotPassword(c *gin.Context) {
@@ -802,49 +453,33 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	deviceID := c.Request.Header.Get("X-Device-ID")
-
-	resp, err := h.service.ForgotPassword(c.Request.Context(), req, deviceID)
-	if err != nil {
-		if isForgotPasswordBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isForgotPasswordUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isForgotPasswordRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "MISSING_DEVICE_ID",
+				Message: "unauthorized",
+			},
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isForgotPasswordBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "phone is required", "invalid Nigerian number":
-		return true
+	resp, err := h.service.ForgotPassword(c.Request.Context(), req, deviceID)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
 	}
-	return false
-}
 
-func isForgotPasswordUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no account exists under this phone number", "device not found", "device not allowed":
-		return true
-	}
-	return false
-}
-
-func isForgotPasswordRateLimitedError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "too many requests"
+	c.JSON(http.StatusOK, response.APIResponse[ForgotPasswordResponse]{
+		Status:  "success",
+		Message: "otp has been sent",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
@@ -859,23 +494,19 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 
 	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req, deviceID)
 	if err != nil {
-		if isForgotPasswordBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isForgotPasswordUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isForgotPasswordRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, response.APIResponse[ForgotPasswordResponse]{
+		Status:  "success",
+		Message: "otp has been resent",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
@@ -889,37 +520,24 @@ func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
 
 	resp, err := h.service.VerifyForgotPasswordOTP(c.Request.Context(), deviceID, req)
 	if err != nil {
-		if isVerifyForgotPasswordOTPBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isVerifyForgotPasswordOTPUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isVerifyForgotPasswordOTPBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "otp id is required", "otp code is required":
-		return true
-	}
-	return false
-}
-
-func isVerifyForgotPasswordOTPUnauthorizedError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "invalid otp"
+	c.JSON(http.StatusOK, response.APIResponse[VerifyForgotPasswordOTPResponse]{
+		Status:  "success",
+		Message: "verification of otp was successful",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ForgotTransactionPin(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
 		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
@@ -1647,9 +1265,9 @@ func isInternalServerBiometricsError(err error) bool {
 }
 
 func (h *Handler) ChallengeRequest(c *gin.Context) {
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		h.respondError(c, http.StatusBadRequest, "device id is required", nil)
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		h.respondError(c, http.StatusBadRequest, "unauthorized", nil)
 		return
 	}
 
@@ -1659,7 +1277,7 @@ func (h *Handler) ChallengeRequest(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.CreateChallenge(c.Request.Context(), req.RefreshToken, deviceID)
+	resp, err := h.service.CreateChallenge(c.Request.Context(), strings.TrimSpace(req.RefreshToken), deviceID)
 	if err != nil {
 		if isBadRequestChallengeRequestError(err) {
 			h.respondError(c, http.StatusBadRequest, err.Error(), err)

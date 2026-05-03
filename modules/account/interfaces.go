@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"io"
+	"neat_mobile_app_backend/modules/device"
 	"time"
 )
 
@@ -12,4 +13,8 @@ type UploadService interface {
 	PresignURL(ctx context.Context, filePath string, ttl time.Duration) (string, error)
 	FileURL(key string) string
 	ProfilePictureURL(key string) string
+}
+
+type DeviceVerifier interface {
+	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }

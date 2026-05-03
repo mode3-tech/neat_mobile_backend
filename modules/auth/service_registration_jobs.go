@@ -92,7 +92,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			AppVersion:  snapshot.Device.AppVersion,
 			IP:          snapshot.IP,
 		}
-		deviceService := device.NewDeviceService(*deviceRepo)
+		deviceService := device.NewService(*deviceRepo)
 		if txErr = deviceService.BindDevice(ctx, job.MobileUserID, &deviceReq); txErr != nil {
 			return txErr
 		}
@@ -359,8 +359,6 @@ func registrationJobResponse(job *RegistrationJob) *RegistrationJobResponse {
 	canClaimSession := registrationJobCanClaimAt(job, now)
 
 	resp := &RegistrationJobResponse{
-		Status:             "success",
-		Message:            "registration queued successfully",
 		JobID:              job.ID,
 		RegistrationStatus: string(job.Status),
 		CanLogin:           false,
@@ -368,24 +366,6 @@ func registrationJobResponse(job *RegistrationJob) *RegistrationJobResponse {
 	}
 	if job.SessionClaimedAt == nil && job.SessionClaimExpiresAt != nil {
 		resp.ClaimExpiresAt = job.SessionClaimExpiresAt
-	}
-
-	switch job.Status {
-	case RegistrationJobStatusProcessing:
-		resp.Message = "registration is being processed"
-	case RegistrationJobStatusCompleted:
-		resp.CanLogin = true
-		if canClaimSession {
-			resp.Message = "registration completed successfully, claim session to continue"
-		} else {
-			resp.Message = "registration completed successfully, login to continue"
-		}
-	case RegistrationJobStatusFailed:
-		resp.Message = "registration failed, retry the same request to resume"
-		if job.LastError != nil && strings.TrimSpace(*job.LastError) != "" {
-			errMsg := strings.TrimSpace(*job.LastError)
-			resp.Error = &errMsg
-		}
 	}
 
 	return resp

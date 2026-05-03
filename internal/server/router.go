@@ -110,6 +110,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	transactor := tx.NewTransactor(db)
 	deviceRepo := device.NewRepository(db)
+	deviceService := device.NewService(*deviceRepo)
 
 	authRepo := auth.NewRespository(db)
 	verificationRepo := verification.NewVerification(db)
@@ -130,7 +131,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, cbaSyncSem, cbaWalletUpdateSem)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, deviceService, cbaSyncSem, cbaWalletUpdateSem)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
@@ -198,7 +199,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService, deviceService)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
 	walletHandler := wallet.NewHandler(walletService)
@@ -217,12 +218,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
-	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard)
 
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey)
+	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard)
 
@@ -306,7 +307,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	neatsaveRepo := neatsave.NewRepository(db)
 	neatsavePinVerifier := pinverifier.New(neatsaveRepo)
-	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier)
+	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
 

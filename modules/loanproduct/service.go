@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
@@ -24,6 +25,7 @@ type Service struct {
 	manualRepayer        ManualRepayer
 	pinVerifier          *pinverifier.Verifier
 	repaymentTransferrer RepaymentFundTransferrer
+	deviceVerifier       DeviceVerifier
 }
 
 const (
@@ -37,7 +39,7 @@ var (
 	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
 )
 
-func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *pinverifier.Verifier, repaymentTransferrer RepaymentFundTransferrer) *Service {
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *pinverifier.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:                 repo,
 		coreCustomerFinder:   coreCustomerFinder,
@@ -45,6 +47,7 @@ func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoa
 		manualRepayer:        manualRepayer,
 		pinVerifier:          pinVerifier,
 		repaymentTransferrer: repaymentTransferrer,
+		deviceVerifier:       deviceVerifier,
 	}
 }
 
@@ -59,7 +62,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("current user does not exist")
+			return nil, appErr.ErrUnauthorized
 		}
 		return nil, err
 	}
@@ -72,7 +75,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		if user.FailedTransactionAttempts > 0 {
 			if err := s.repo.ResetTransactionPinAttempts(ctx, mobileUserID); err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, errors.New("current user does not exist")
+					return nil, appErr.ErrUnauthorized
 				}
 				return nil, err
 			}
@@ -91,7 +94,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 		if err := s.repo.UpdateTransactionPinAttempts(ctx, mobileUserID, failedAttempts, lockedUntil); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.New("current user does not exist")
+				return nil, appErr.ErrUnauthorized
 			}
 			return nil, err
 		}
@@ -106,7 +109,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	if user.FailedTransactionAttempts > 0 || user.TransactionPinLockedUntil != nil {
 		if err := s.repo.ResetTransactionPinAttempts(ctx, mobileUserID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.New("current user does not exist")
+				return nil, appErr.ErrUnauthorized
 			}
 			return nil, err
 		}
@@ -119,20 +122,20 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	userAge := timeutil.AgeFromDOB(*user.DOB, now)
 
 	if userAge < 18 {
-		return nil, errors.New("user is below the legal age to borrow a loan")
+		return nil, appErr.ErrUnderaged
 	}
 
 	parsedAmount, err := strconv.ParseInt(req.LoanAmount, 10, 64)
 
 	if err != nil {
-		return nil, errors.New("invalid loan amount")
+		return nil, appErr.ErrInvalidLoanAmount
 	}
 
 	loanProduct, err := s.repo.GetLoanProductWithCode(ctx, req.LoanProductType)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("loan product type is invalid")
+			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, err
 	}
@@ -146,35 +149,35 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("loan rule not found")
+			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, err
 	}
 
 	if loanRule.RequireBVN != nil && *loanRule.RequireBVN {
 		if !user.IsBVNVerified || strings.TrimSpace(user.BVN) == "" {
-			return nil, errors.New("user's bvn is not verified")
+			return nil, appErr.ErrIncompleteKYC
 		}
 	}
 
 	if loanRule.RequireNIN != nil && *loanRule.RequireNIN {
 		if !user.IsNINVerified || strings.TrimSpace(user.NIN) == "" {
-			return nil, errors.New("user's nin is not verified")
+			return nil, appErr.ErrIncompleteKYC
 		}
 	}
 
 	if loanRule.RequirePhoneVerified != nil && *loanRule.RequirePhoneVerified {
 		if !user.IsPhoneVerified {
-			return nil, errors.New("user's phone is not verified")
+			return nil, appErr.ErrIncompleteKYC
 		}
 	}
 
 	if parsedAmount > loanProduct.MaxLoanAmount || parsedAmount < loanProduct.MinLoanAmount {
-		return nil, errors.New("loan amount must be in the range of the min and max amount of selected loan product")
+		return nil, appErr.ErrInvalidLoanAmount
 	}
 
 	if businessAgeYears < 1 {
-		return nil, errors.New("business must be at least a year old")
+		return nil, appErr.ErrIneligibleBusinessAge
 	}
 
 	// Core matching is best-effort. A locally registered user may not exist in CBA yet.
@@ -191,7 +194,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 		activeLoanCount := countActiveCoreLoans(customerLoans)
 		if exceedsMaxActiveLoans(activeLoanCount, loanRule.MaxActiveLoans) {
-			return nil, errors.New("customer has reached the maximum number of active loans")
+			return nil, appErr.ErrIneligibleForLoan
 		}
 
 		if loanRule.RequireNoOutstandingDefault != nil && *loanRule.RequireNoOutstandingDefault {
@@ -206,7 +209,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 				}
 
 				if hasOutstandingDefaultLoan(loanDetail) {
-					return nil, errors.New("customer has an outstanding defaulted loan")
+					return nil, appErr.ErrIneligibleForLoan
 				}
 			}
 		}
@@ -273,7 +276,7 @@ func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID s
 		coreCustomerID := strings.TrimSpace(match.Customer.CustomerID)
 		if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, coreCustomerID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.New("current user does not exist")
+				return nil, appErr.ErrUnauthorized
 			}
 			return nil, err
 		}
@@ -287,12 +290,12 @@ func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID s
 func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now time.Time) (*LoanSummaryResponse, int64, int64, int, error) {
 	businessValue, err := strconv.ParseInt(strings.TrimSpace(req.BusinessValue), 10, 64)
 	if err != nil {
-		return nil, 0, 0, 0, errors.New("invalid business value")
+		return nil, 0, 0, 0, appErr.ErrInvalidBusinessValue
 	}
 
 	loanAmount, err := strconv.ParseInt(strings.TrimSpace(req.LoanAmount), 10, 64)
 	if err != nil {
-		return nil, 0, 0, 0, errors.New("invalid loan amount")
+		return nil, 0, 0, 0, appErr.ErrInvalidLoanAmount
 	}
 
 	startDate, err := timeutil.ParseDOB(req.BusinessStartDate)
@@ -303,7 +306,7 @@ func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now ti
 	businessAgeYears := timeutil.AgeFromDOB(startDate, now)
 
 	if product.LoanTermValue <= 0 {
-		return nil, 0, 0, 0, errors.New("loan term must be greater than zero")
+		return nil, 0, 0, 0, appErr.ErrInvalidLoanTerm
 	}
 
 	ratePercent := float64(product.InterestRateBPS) // current repo meaning: 24 => 24%
@@ -337,7 +340,7 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	}
 
 	if !ascii.IsDigits([]byte(bvn)) || len(bvn) != 11 {
-		return nil, errors.New("invalid bvn number")
+		return nil, appErr.ErrInvalidBVN
 	}
 
 	if s.coreCustomerFinder == nil {
@@ -349,20 +352,6 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	return s.coreCustomerFinder.MatchCustomerByBVN(ctx, bvn)
 }
 
-func (s *Service) verifyUserDevice(ctx context.Context, mobileUserID, deviceID string) error {
-	d, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("device not found")
-		}
-		return err
-	}
-	if !d.IsActive || !d.IsTrusted {
-		return errors.New("device not allowed")
-	}
-	return nil
-}
-
 func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string) (*AllLoansResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 
@@ -370,7 +359,7 @@ func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string
 		return nil, errors.New("invalid user id")
 	}
 
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -378,7 +367,7 @@ func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no user found")
+			return nil, appErr.ErrUnauthorized
 		}
 
 		return nil, err
@@ -406,14 +395,14 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 		return nil, errors.New("invalid user id")
 	}
 
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no user found")
+			return nil, appErr.ErrUnauthorized
 		}
 		return nil, err
 	}
@@ -435,14 +424,14 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 }
 
 func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID string) (*LoanHistoryResponse, error) {
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no user found")
+			return nil, appErr.ErrUnauthorized
 		}
 		return nil, err
 	}
@@ -469,7 +458,7 @@ func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, deviceID, lo
 		return nil, errors.New("invalid loan id")
 	}
 
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -498,7 +487,7 @@ func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, devi
 		return nil, errors.New("invalid loan id")
 	}
 
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -521,7 +510,7 @@ func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanI
 		return nil, errors.New("invalid loan id")
 	}
 
-	if err := s.verifyUserDevice(ctx, userID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, userID, deviceID); err != nil {
 		return nil, err
 	}
 
@@ -580,7 +569,7 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID, deviceI
 
 	log.Printf("manual repayment user=%s loan_id=%s amount=%d", mobileUserID, req.LoanID, req.Amount)
 
-	if err := s.verifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		log.Printf("manual repayment device verification failed user=%s err=%v", mobileUserID, err)
 		return nil, err
 	}

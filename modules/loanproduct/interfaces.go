@@ -1,6 +1,9 @@
 package loanproduct
 
-import "context"
+import (
+	"context"
+	"neat_mobile_app_backend/modules/device"
+)
 
 type CoreCustomerFinder interface {
 	MatchCustomerByBVN(ctx context.Context, bvn string) (*CoreCustomerMatchData, error)
@@ -18,4 +21,8 @@ type ManualRepayer interface {
 
 type RepaymentFundTransferrer interface {
 	TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error
+}
+
+type DeviceVerifier interface {
+	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }

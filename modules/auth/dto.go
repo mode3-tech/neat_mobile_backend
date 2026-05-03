@@ -34,8 +34,6 @@ type RegistrationResponse struct {
 }
 
 type RegistrationJobResponse struct {
-	Status             string     `json:"status"`
-	Message            string     `json:"message"`
 	JobID              string     `json:"job_id"`
 	RegistrationStatus string     `json:"registration_status"`
 	CanLogin           bool       `json:"can_login"`
@@ -60,14 +58,12 @@ type LoginResponse struct {
 }
 
 type VerifiedDeviceResponse struct {
-	Status              string `json:"status"`
 	IsBiometricsEnabled bool   `json:"is_biometrics_enabled"`
 	AccessToken         string `json:"access_token"`
 	RefreshToken        string `json:"refresh_token"`
 }
 
 type LoginInitResponse struct {
-	Status       string `json:"status"`
 	Challenge    string `json:"challenge,omitempty"`
 	SessionToken string `json:"session_token,omitempty"`
 }
@@ -207,13 +203,7 @@ type ForgotPasswordRequest struct {
 }
 
 type ForgotPasswordResponse struct {
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
-}
-
-type ResendForgotPasswordOTPResponse struct {
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
+	OTPID string `json:"otp_id"`
 }
 
 type VerifyForgotPasswordOTPRequest struct {
@@ -222,7 +212,6 @@ type VerifyForgotPasswordOTPRequest struct {
 }
 
 type VerifyForgotPasswordOTPResponse struct {
-	Message        string `json:"message"`
 	VerificationID string `json:"verification_id"`
 }
 
@@ -234,8 +223,7 @@ type ResetPasswordRequest struct {
 }
 
 type ResendPasswordChangeOTPResponse struct {
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
+	OTPID string `json:"otp_id"`
 }
 
 type ResendNewDeviceOTPRequest struct {

@@ -52,3 +52,26 @@ type UpdateProfileData struct {
 	Email             *string
 	Address           *string
 }
+
+type statementTxRow struct {
+	Date        string
+	Description string
+	Reference   string
+	Debit       string
+	Credit      string
+	Balance     string
+}
+
+type statementTemplateData struct {
+	TodayDate        string
+	StartDate        string
+	EndDate          string
+	AccountName      string
+	Address          string
+	AccountNumber    string
+	OpeningBalance   string
+	TotalWithdrawals string
+	TotalLodgement   string
+	ClosingBalance   string
+	Transactions     []statementTxRow
+}

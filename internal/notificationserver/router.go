@@ -8,6 +8,7 @@ import (
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/push"
@@ -54,9 +55,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	authGuard := middleware.AuthGuard(tokenSigner, nil)
 
+	deviceRepo := device.NewRepository(db)
+	deviceService := device.NewService(*deviceRepo)
+
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
-	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 	notificationHandler := notification.NewHandler(notificationService)
 
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard)

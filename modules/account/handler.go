@@ -17,21 +17,21 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) GetAccountSummary(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	summary, err := h.service.GetAccountSummary(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch account summary"})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch account summary"})
 		return
 	}
 
@@ -42,15 +42,15 @@ func (h *Handler) GetAccountSummary(c *gin.Context) {
 }
 
 func (h *Handler) GetAccountStatement(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
@@ -74,13 +74,17 @@ func (h *Handler) GetAccountStatement(c *gin.Context) {
 }
 
 func (h *Handler) GetStatementJobStatus(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
@@ -147,15 +151,15 @@ func isBadRequestGetStatementJobStatusError(err error) bool {
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
@@ -219,7 +223,11 @@ func (h *Handler) GetLatestAccountStatement(c *gin.Context) {
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	resp, err := h.service.GetLatestAccountStatement(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
