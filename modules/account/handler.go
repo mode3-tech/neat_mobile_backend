@@ -2,6 +2,7 @@ package account
 
 import (
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"strings"
 
@@ -19,159 +20,208 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) GetAccountSummary(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
 	summary, err := h.service.GetAccountSummary(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch account summary"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, AccountSummaryResponse{
-		Status: true,
-		Data:   *summary,
+	c.JSON(http.StatusOK, response.APIResponse[AccountSummary]{
+		Status:  "success",
+		Message: "Account summary has been fetched successfully",
+		Data:    summary,
 	})
 }
 
 func (h *Handler) GetAccountStatement(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
 	var req AccountStatementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body",
+			},
+		})
 		return
 	}
 
 	jobID, err := h.service.RequestAccountStatement(c.Request.Context(), mobileUserID, deviceID, req)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to request account statement"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, AccountStatementResponse{
-		Status:  true,
-		Message: "Account statement request is being processed",
-		JobID:   jobID,
+	dto := AccountStatementResponse{
+		JobID: jobID,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[AccountStatementResponse]{
+		Status:  "success",
+		Message: "Account statement generation has been initiated successfully",
+		Data:    &dto,
 	})
 }
 
 func (h *Handler) GetStatementJobStatus(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "job_id is required"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidParams),
+				Message: "job_id is required",
+			},
+		})
 		return
 	}
 
 	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, deviceID, jobID)
 	if err != nil {
-		if isUnauthorizedGetStatementJobStatusError(err) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
-		}
-		if isInternalServerGetStatementJobStatusError(err) {
-			if err.Error() == "job not found" {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
-				return
-			}
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve account report"})
-			return
-		}
-		if isBadRequestGetStatementJobStatusError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, StatementJobStatusResponse{
-		Status:      true,
+	dto := StatementJobStatusResponse{
 		JobStatus:   string(job.Status),
 		DownloadURL: downloadURL,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[StatementJobStatusResponse]{
+		Status:  "success",
+		Message: "Account statement job status has been fetched successfully",
+		Data:    &dto,
 	})
-}
-
-func isUnauthorizedGetStatementJobStatusError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "mobile user id is required", "device id is required":
-		return true
-	}
-	return false
-}
-
-func isInternalServerGetStatementJobStatusError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "job not found":
-		return true
-	}
-	if strings.HasPrefix(msg, "failed to retrieve account report job: ") {
-		return true
-	}
-	return false
-}
-
-func isBadRequestGetStatementJobStatusError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "job id is required":
-		return true
-	}
-	return false
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
 	var req UpdateProfileRequest
 	if err := c.ShouldBind(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body",
+			},
+		})
 		return
 	}
 
 	file, header, err := c.Request.FormFile("profile_picture")
 	if err != nil && err != http.ErrMissingFile {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid image file"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid image file",
+			},
+		})
 		return
 	}
 
@@ -182,17 +232,35 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 
 		contentType := header.Header.Get("Content-Type")
 		if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "only jpeg, png and webp allowed"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+				Status: "error",
+				Error: &response.APIError{
+					Code:    string(ErrCodeInvalidRequestBody),
+					Message: "only jpeg, png and webp allowed",
+				},
+			})
 			return
 		}
 
 		if header.Size > 5<<20 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "image larger than 8MB"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+				Status: "error",
+				Error: &response.APIError{
+					Code:    string(ErrCodeInvalidRequestBody),
+					Message: "image larger than 8MB",
+				},
+			})
 			return
 		}
 		uploadedURL, uploadErr := h.service.uploadProfilePicture(c.Request.Context(), file, *header, mobileUserID)
 		if uploadErr != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "an error occured while uploading profile picture"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+				Status: "error",
+				Error: &response.APIError{
+					Code:    string(ErrCodeInternalServerError),
+					Message: "an error occured while uploading profile picture",
+				},
+			})
 			return
 		}
 		profilePictureURL = &uploadedURL
@@ -202,67 +270,58 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, profilePictureURL, req); err != nil {
-		if err.Error() == "user id is missing" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, &UpdateProfileResponse{
-		Status:  true,
-		Message: "Profile successfully updated",
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Profile has been updated successfully",
 	})
 }
 
 func (h *Handler) GetLatestAccountStatement(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
+			},
+		})
 		return
 	}
 
 	resp, err := h.service.GetLatestAccountStatement(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isUnauthorizedGetLatestAccountStatementError(err) {
-			if err.Error() == "device not found" {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
-				return
-			}
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		if isInternalServerGetLatestAccountStatementError(err) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": strings.SplitN(err.Error(), ":", 2)[0]})
-			return
-		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isUnauthorizedGetLatestAccountStatementError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "mobile user id or device id is missing", "device not found":
-		return true
-	}
-	return false
-}
-
-func isInternalServerGetLatestAccountStatementError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	if strings.HasPrefix(msg, "failed to generate download link for account statement: ") || strings.HasPrefix(msg, "failed to save download URL for account statement: ") {
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[GetLatestAccountStatementResponse]{
+		Status:  "success",
+		Message: "Latest account statement has been fetched successfully",
+		Data:    resp,
+	})
 }

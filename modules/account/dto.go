@@ -3,8 +3,7 @@ package account
 import "time"
 
 type AccountSummaryResponse struct {
-	Status bool           `json:"status"`
-	Data   AccountSummary `json:"data"`
+	Data AccountSummary `json:"data"`
 }
 
 type AccountSummary struct {
@@ -39,30 +38,20 @@ type AccountStatementRequest struct {
 }
 
 type AccountStatementResponse struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
-	JobID   string `json:"job_id,omitempty"`
+	JobID string `json:"job_id,omitempty"`
 }
 
 type StatementJobStatusResponse struct {
-	Status      bool   `json:"status"`
 	JobStatus   string `json:"job_status"`
 	DownloadURL string `json:"download_url,omitempty"`
 }
 
 type UpdateProfileRequest struct {
-	Email                 *string `form:"email" binding:"omitempty,email"`
-	Address               *string `form:"address"`
-	RemoveProfilePicture  bool    `form:"remove_profile_picture"`
-}
-
-type UpdateProfileResponse struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
+	Email                *string `form:"email" binding:"omitempty,email"`
+	Address              *string `form:"address"`
+	RemoveProfilePicture bool    `form:"remove_profile_picture"`
 }
 
 type GetLatestAccountStatementResponse struct {
-	Status      string `json:"status"`
-	Message     string `json:"message"`
 	DownloadURL string `json:"download_url"`
 }

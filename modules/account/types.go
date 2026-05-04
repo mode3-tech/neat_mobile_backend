@@ -2,6 +2,16 @@ package account
 
 import "time"
 
+type ErrCode string
+
+const (
+	ErrCodeInvalidRequestBody  ErrCode = "INVALID_REQUEST_BODY"
+	ErrCodeInvalidToken        ErrCode = "INVALID_TOKEN"
+	ErrCodeInvalidParams       ErrCode = "INVALID_PARAMS"
+	ErrCodeInvalidDeviceID     ErrCode = "INVALID_DEVICE_ID"
+	ErrCodeInternalServerError ErrCode = "INTERNAL_SERVER_ERROR"
+)
+
 type ReportStatus string
 
 const (

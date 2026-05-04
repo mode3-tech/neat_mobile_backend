@@ -81,19 +81,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistrationJobResponse"
+                  "$ref": "#/components/schemas/RegistrationJobSuccessResponse"
                 },
                 "examples": {
                   "queued": {
                     "value": {
                       "status": "success",
-                      "message": "registration queued successfully",
-                      "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
-                      "registration_status": "pending",
-                      "can_login": false,
-                      "can_claim_session": false,
-                      "claim_token": "reg_claim_x7F1z0gVh4Wk2NfQ",
-                      "claim_expires_at": "2026-05-02T18:30:00Z"
+                      "message": "Registration processed successfully.",
+                      "data": {
+                        "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+                        "registration_status": "pending",
+                        "can_login": false,
+                        "can_claim_session": false,
+                        "claim_token": "reg_claim_x7F1z0gVh4Wk2NfQ",
+                        "claim_expires_at": "2026-05-02T18:30:00Z"
+                      }
                     }
                   }
                 }
@@ -105,19 +107,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistrationJobResponse"
+                  "$ref": "#/components/schemas/RegistrationJobSuccessResponse"
                 },
                 "examples": {
                   "completed": {
                     "value": {
                       "status": "success",
-                      "message": "registration completed successfully, claim session to continue",
-                      "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
-                      "registration_status": "completed",
-                      "can_login": true,
-                      "can_claim_session": true,
-                      "claim_token": "reg_claim_x7F1z0gVh4Wk2NfQ",
-                      "claim_expires_at": "2026-05-02T18:30:00Z"
+                      "message": "Registration processed successfully.",
+                      "data": {
+                        "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+                        "registration_status": "completed",
+                        "can_login": true,
+                        "can_claim_session": true,
+                        "claim_token": "reg_claim_x7F1z0gVh4Wk2NfQ",
+                        "claim_expires_at": "2026-05-02T18:30:00Z"
+                      }
                     }
                   }
                 }
@@ -130,6 +134,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -140,6 +155,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "user_exists": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "USER_EXISTS",
+                        "message": "user already exists"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -150,6 +176,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "something went wrong"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -181,28 +218,32 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistrationJobResponse"
+                  "$ref": "#/components/schemas/RegistrationJobSuccessResponse"
                 },
                 "examples": {
                   "processing": {
                     "value": {
                       "status": "success",
-                      "message": "registration is being processed",
-                      "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
-                      "registration_status": "processing",
-                      "can_login": false,
-                      "can_claim_session": false
+                      "message": "Registration status retrieved successfully.",
+                      "data": {
+                        "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+                        "registration_status": "processing",
+                        "can_login": false,
+                        "can_claim_session": false
+                      }
                     }
                   },
                   "completed": {
                     "value": {
                       "status": "success",
-                      "message": "registration completed successfully, claim session to continue",
-                      "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
-                      "registration_status": "completed",
-                      "can_login": true,
-                      "can_claim_session": true,
-                      "claim_expires_at": "2026-05-02T18:30:00Z"
+                      "message": "Registration status retrieved successfully.",
+                      "data": {
+                        "job_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+                        "registration_status": "completed",
+                        "can_login": true,
+                        "can_claim_session": true,
+                        "claim_expires_at": "2026-05-02T18:30:00Z"
+                      }
                     }
                   }
                 }
@@ -215,6 +256,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_params": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_PARAMS",
+                        "message": "Missing query paramter."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -225,6 +277,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "resource not found"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -235,6 +298,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "something went wrong"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -286,6 +360,19 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VerifyDeviceResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "Registration session claimed successfully.",
+                      "data": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+                        "is_biometrics_enabled": true
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -296,6 +383,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Unauthorized."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -306,6 +404,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_DEVICE_ID",
+                        "message": "Unauthorized."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -316,6 +425,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "not_found": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "resource not found"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -326,6 +446,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "claim_conflict": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "USER_EXISTS",
+                        "message": "user already exists"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -336,6 +467,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "something went wrong"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -349,7 +491,7 @@
           "Auth"
         ],
         "summary": "Login a user",
-        "description": "Authenticates a user by phone and password, then starts device verification flow.\nThe server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.\nIf that device exists and is both active and trusted, returns `challenge_required`.\nIf the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's\nphone number, and returns a `session_token` for `/auth/device/otp/verify` and `/auth/device/otp/resend`.\n",
+        "description": "Authenticates a user by phone and password, then starts the device verification flow.\nReturns a success envelope with a `data` object containing `challenge` and `session_token`.\n",
         "parameters": [
           {
             "in": "header",
@@ -373,25 +515,21 @@
         },
         "responses": {
           "200": {
-            "description": "Login initialized; response shape depends on device trust state",
+            "description": "Login credentials verified",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoginInitResponse"
                 },
                 "examples": {
-                  "challenge_required": {
-                    "summary": "Recognized trusted device",
+                  "success": {
                     "value": {
-                      "status": "challenge_required",
-                      "challenge": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-                    }
-                  },
-                  "new_device_detected": {
-                    "summary": "Device missing, inactive, or untrusted",
-                    "value": {
-                      "status": "new_device_detected",
-                      "session_token": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
+                      "status": "success",
+                      "message": "Login credentials verified.",
+                      "data": {
+                        "challenge": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ",
+                        "session_token": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
+                      }
                     }
                   }
                 }
@@ -404,6 +542,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -414,6 +563,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_credentials": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "AUTH_INVALID_CREDENTIALS",
+                        "message": "invalid credentials"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -424,6 +584,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "too_many_requests": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "TOO_MANY_REQUESTS",
+                        "message": "too many login attempts"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -434,6 +605,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "something went wrong"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -465,6 +647,19 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VerifyDeviceResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "device successfully verified",
+                      "data": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+                        "is_biometrics_enabled": true
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -475,6 +670,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -485,6 +691,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_token": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_TOKEN",
+                        "message": "Unauthorized."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -495,6 +712,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "Something went wrong."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -508,7 +736,7 @@
           "Auth"
         ],
         "summary": "Verify new device with OTP",
-        "description": "Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an\nactive trusted device, using the `session_token` returned by `/auth/login` and the OTP sent\nduring `new_device_detected` flow. If the OTP expires or is not received, request another code\nwith `/auth/device/otp/resend` using the same `session_token` and `device_id`.\n",
+        "description": "Completes login for a pending device-verification session using the `session_token`\nfrom `/auth/login` and the OTP sent to the user. If the OTP expires or is not received,\nrequest another code with `/auth/device/otp/resend` using the same `session_token` and `device_id`.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -526,6 +754,19 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VerifyDeviceResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "New device successfully verified.",
+                      "data": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access",
+                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh",
+                        "is_biometrics_enabled": true
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -536,6 +777,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -546,6 +798,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_session": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_SESSION",
+                        "message": "invalid or expired session"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -556,6 +819,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "Something went wrong."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -569,7 +843,7 @@
           "Auth"
         ],
         "summary": "Resend OTP for new device login",
-        "description": "Resends the login OTP for an active `new_device_detected` session created by `/auth/login`.\nThe same `session_token` remains valid and the pending session expiry is extended.\n",
+        "description": "Resends the login OTP for an active pending device-verification session created by `/auth/login`.\nThe same `session_token` remains valid and the pending session expiry is extended.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -581,22 +855,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "OTP resent successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                },
-                "examples": {
-                  "success": {
-                    "value": {
-                      "message": "otp resent successfully"
-                    }
-                  }
-                }
-              }
-            }
+          "204": {
+            "description": "OTP resent successfully"
           },
           "400": {
             "description": "Invalid request body or missing session token/device id",
@@ -604,6 +864,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -614,6 +885,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_session": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_SESSION",
+                        "message": "invalid or expired session"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -624,6 +906,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "too_many_requests": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "TOO_MANY_REQUESTS",
+                        "message": "too many requests"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -634,6 +927,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "something went wrong"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -767,15 +1071,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Logout successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Logout successful"
           },
           "400": {
             "description": "Invalid request body or missing authorization header",
@@ -833,7 +1130,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
+                  "$ref": "#/components/schemas/LoginSuccessResponse"
                 }
               }
             }
@@ -894,7 +1191,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BVNValidationResponse"
+                  "$ref": "#/components/schemas/BVNValidationSuccessResponse"
                 }
               }
             }
@@ -965,7 +1262,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NINValidationResponse"
+                  "$ref": "#/components/schemas/NINValidationSuccessResponse"
                 }
               }
             }
@@ -1047,7 +1344,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForgotPasswordResponse"
+                  "$ref": "#/components/schemas/ForgotPasswordSuccessResponse"
                 }
               }
             }
@@ -1129,7 +1426,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ResendForgotPasswordOTPResponse"
+                  "$ref": "#/components/schemas/ForgotPasswordResendSuccessResponse"
                 }
               }
             }
@@ -1211,7 +1508,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifyForgotPasswordOTPResponse"
+                  "$ref": "#/components/schemas/VerifyForgotPasswordOTPSuccessResponse"
                 }
               }
             }
@@ -1278,15 +1575,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Password reset successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Password reset successful"
           },
           "400": {
             "description": "Invalid request body, phone required, verification id required, or invalid password format",
@@ -1359,7 +1649,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForgotTransactionPinResponse"
+                  "$ref": "#/components/schemas/ForgotTransactionPinSuccessResponse"
                 }
               }
             }
@@ -1430,15 +1720,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OTP resent successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "OTP resent successfully"
           },
           "400": {
             "description": "Device id is required or invalid phone number on account",
@@ -1531,7 +1814,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifyForgotTransactionPinOTPResponse"
+                  "$ref": "#/components/schemas/VerifyForgotTransactionPinOTPSuccessResponse"
                 }
               }
             }
@@ -1612,15 +1895,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Transaction PIN reset successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Transaction PIN reset successfully"
           },
           "400": {
             "description": "Device id required, verification id required, pin validation failed, or pins don't match",
@@ -1693,7 +1969,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RequestTransactionPinChangeResponse"
+                  "$ref": "#/components/schemas/RequestTransactionPinChangeSuccessResponse"
                 }
               }
             }
@@ -1747,7 +2023,7 @@
           "Auth"
         ],
         "summary": "Resend transaction PIN change OTP",
-        "description": "Resends the transaction PIN change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.",
+        "description": "Resends the transaction PIN change OTP to the authenticated user's phone number.",
         "parameters": [
           {
             "in": "header",
@@ -1779,7 +2055,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ResendTransactionPinChangeOTPResponse"
+                  "$ref": "#/components/schemas/ResendTransactionPinChangeOTPSuccessResponse"
                 }
               }
             }
@@ -1875,7 +2151,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifyTransactionPinChangeOTPResponse"
+                  "$ref": "#/components/schemas/VerifyTransactionPinChangeOTPSuccessResponse"
                 }
               }
             }
@@ -1956,15 +2232,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Transaction PIN changed successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Transaction PIN changed successfully"
           },
           "400": {
             "description": "Device id required, verification id required, pin validation failed, current pin wrong, or pins don't match",
@@ -2037,7 +2306,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RequestChangePasswordResponse"
+                  "$ref": "#/components/schemas/RequestChangePasswordSuccessResponse"
                 }
               }
             }
@@ -2209,7 +2478,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifyPasswordChangeOTPResponse"
+                  "$ref": "#/components/schemas/VerifyPasswordChangeOTPSuccessResponse"
                 }
               }
             }
@@ -2290,15 +2559,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Password changed successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Password changed successfully"
           },
           "400": {
             "description": "Device id required, verification id required, password validation failed, or passwords don't match",
@@ -2381,7 +2643,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ToggleBiometricsResponse"
+                  "$ref": "#/components/schemas/ToggleBiometricsSuccessResponse"
                 }
               }
             }
@@ -2453,7 +2715,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["refresh_token"],
+                "required": [
+                  "refresh_token"
+                ],
                 "properties": {
                   "refresh_token": {
                     "type": "string",
@@ -2470,7 +2734,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChallengeRequestResponse"
+                  "$ref": "#/components/schemas/ChallengeRequestSuccessResponse"
                 }
               }
             }
@@ -2526,30 +2790,22 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "OTP sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPRequestSuccessResponse"
-                },
-                "examples": {
-                  "success": {
-                    "value": {
-                      "status": "success",
-                      "message": "OTP sent successfully"
-                    }
-                  }
-                }
-              }
-            }
+          "204": {
+            "description": "OTP sent"
           },
           "400": {
             "description": "Invalid request body, purpose, channel, email, or phone number",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPValidationErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid request body"
+                    }
+                  }
                 }
               }
             }
@@ -2559,7 +2815,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "too_many_requests": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "Too many requests"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2569,7 +2835,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "sms_delivery_failed": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "SMS delivery failed"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2579,7 +2855,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "sms_not_configured": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "SMS service not configured"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2589,7 +2875,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "Internal server error"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2633,6 +2929,7 @@
                     }
                   }
                 }
+              }
             }
           },
           "400": {
@@ -2640,7 +2937,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPValidationErrorResponse"
+                },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "error": "invalid request body"
+                    }
+                  }
                 }
               }
             }
@@ -2650,7 +2954,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "invalid_otp": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "Invalid OTP"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2660,7 +2974,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
+                },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "message": "Internal server error"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2837,7 +3161,9 @@
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Device identifier for the authenticated session."
           }
         ],
@@ -2897,16 +3223,24 @@
     },
     "/loan/history": {
       "get": {
-        "tags": ["Loan"],
+        "tags": [
+          "Loan"
+        ],
         "summary": "Loan repayment history",
         "description": "Returns the repayment installment history across all loans for the customer.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Device identifier for the authenticated session."
           }
         ],
@@ -2915,7 +3249,9 @@
             "description": "Loan repayment history fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/LoanHistoryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/LoanHistoryResponse"
+                }
               }
             }
           },
@@ -2923,7 +3259,9 @@
             "description": "Missing X-Device-ID header",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -2931,7 +3269,9 @@
             "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -2939,7 +3279,9 @@
             "description": "No user found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -2947,7 +3289,9 @@
             "description": "Unexpected server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2956,23 +3300,33 @@
     },
     "/loan/history/{loan_id}": {
       "get": {
-        "tags": ["Loan"],
+        "tags": [
+          "Loan"
+        ],
         "summary": "Loan repayment history by loan ID",
         "description": "Returns the repayment installment history for a specific loan.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "loan_id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "The loan ID to fetch repayment history for."
           },
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Device identifier for the authenticated session."
           }
         ],
@@ -2981,7 +3335,9 @@
             "description": "Loan repayment history fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/LoanHistoryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/LoanHistoryResponse"
+                }
               }
             }
           },
@@ -2989,7 +3345,9 @@
             "description": "Missing or invalid loan_id or X-Device-ID header",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -2997,7 +3355,9 @@
             "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3005,7 +3365,9 @@
             "description": "Unexpected server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3014,23 +3376,33 @@
     },
     "/loan/loans/{loan_id}": {
       "get": {
-        "tags": ["Loan"],
+        "tags": [
+          "Loan"
+        ],
         "summary": "Get loan details",
         "description": "Returns total loan amount, amount repaid, outstanding balance, next due date, and the last 3 repayment installments for a specific loan.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "loan_id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "The loan ID to fetch details for."
           },
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Device identifier for the authenticated session."
           }
         ],
@@ -3039,7 +3411,9 @@
             "description": "Loan details fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/LoanDetailsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/LoanDetailsResponse"
+                }
               }
             }
           },
@@ -3047,7 +3421,9 @@
             "description": "Missing or invalid loan_id or X-Device-ID header",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3055,7 +3431,9 @@
             "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3063,7 +3441,9 @@
             "description": "Unexpected server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3072,16 +3452,24 @@
     },
     "/loan/loans/active": {
       "get": {
-        "tags": ["Loan"],
+        "tags": [
+          "Loan"
+        ],
         "summary": "List active loans",
         "description": "Returns the authenticated user's active loans directly from the database.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Device identifier for the authenticated session."
           }
         ],
@@ -3090,7 +3478,9 @@
             "description": "Active loans fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ActiveLoanListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveLoanListResponse"
+                }
               }
             }
           },
@@ -3098,7 +3488,9 @@
             "description": "Missing X-Device-ID header or invalid user context",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3106,7 +3498,9 @@
             "description": "Missing or invalid access token, or unrecognised device",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3114,7 +3508,9 @@
             "description": "User not found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3122,7 +3518,9 @@
             "description": "Unexpected server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3211,7 +3609,7 @@
           "Loan"
         ],
         "summary": "Make a manual loan repayment",
-        "description": "Verifies the device and transaction PIN, debits the customer's wallet, then submits the repayment to the core-banking system atomically.",
+        "description": "Verifies the device and transaction PIN, debits the customer's wallet,\nthen submits the repayment to the core-banking system atomically.\n",
         "security": [
           {
             "bearerAuth": []
@@ -5040,7 +5438,7 @@
           "Webhook"
         ],
         "summary": "Providus credit notification",
-        "description": "Receives inbound credit notifications from Providus when money lands on a\nuser's virtual account. Protected by a shared secret sent in the\n`X-Notification-Secret` header. Always returns 200 \u2014 errors are logged\ninternally and do not trigger Providus retries.\n",
+        "description": "Receives inbound credit notifications from Providus when money lands on a\nuser's virtual account. Protected by a shared secret sent in the\n`X-Notification-Secret` header. Always returns 200 — errors are logged\ninternally and do not trigger Providus retries.\n",
         "servers": [
           {
             "url": "/"
@@ -5860,16 +6258,24 @@
     },
     "/savings/goals": {
       "get": {
-        "tags": ["NeatSave"],
+        "tags": [
+          "NeatSave"
+        ],
         "summary": "List user savings goals",
         "description": "Returns all savings goals for the authenticated user, each including the timestamp of the last deposit.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Stable device installation identifier from the mobile app."
           }
         ],
@@ -5878,7 +6284,9 @@
             "description": "Goals fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetUserSavingsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserSavingsResponse"
+                }
               }
             }
           },
@@ -5886,7 +6294,9 @@
             "description": "Unauthorized, missing device ID, device not found, or device not allowed",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -5894,7 +6304,9 @@
             "description": "Failed to fetch goals",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -5903,23 +6315,33 @@
     },
     "/savings/goals/summary": {
       "get": {
-        "tags": ["NeatSave"],
+        "tags": [
+          "NeatSave"
+        ],
         "summary": "Get goal summary",
         "description": "Returns the title, start date, target amount, total savings, and last deposit for a specific goal.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "header",
             "name": "X-Device-ID",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Stable device installation identifier from the mobile app."
           },
           {
             "in": "query",
             "name": "goal_id",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "ID of the savings goal to summarise."
           }
         ],
@@ -5928,7 +6350,9 @@
             "description": "Goal summary fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetGoalSummaryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetGoalSummaryResponse"
+                }
               }
             }
           },
@@ -5936,7 +6360,9 @@
             "description": "Missing or invalid goal_id query parameter",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -5944,7 +6370,9 @@
             "description": "Unauthorized, missing device ID, device not found, or device not allowed",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -5952,7 +6380,9 @@
             "description": "Failed to fetch goal summary",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -5972,44 +6402,96 @@
       "GetUserSavingsResponse": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "User's goals fetched successfully" },
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "User's goals fetched successfully"
+          },
           "goals": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UserGoalInfo" }
+            "items": {
+              "$ref": "#/components/schemas/UserGoalInfo"
+            }
           }
         }
       },
       "UserGoalInfo": {
         "type": "object",
         "properties": {
-          "goal_id": { "type": "string", "example": "3f7b1c2a-..." },
-          "name": { "type": "string", "example": "Emergency Fund" },
-          "start_date": { "type": "string", "format": "date-time" },
-          "last_deposit": { "type": "string", "format": "date-time", "nullable": true }
+          "goal_id": {
+            "type": "string",
+            "example": "3f7b1c2a-..."
+          },
+          "name": {
+            "type": "string",
+            "example": "Emergency Fund"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_deposit": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
         }
       },
       "GetGoalSummaryResponse": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Goal summary fetched successfully" },
-          "summary": { "$ref": "#/components/schemas/GoalSummary" }
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Goal summary fetched successfully"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/GoalSummary"
+          }
         }
       },
       "GoalSummary": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "example": "Emergency Fund" },
-          "start_date": { "type": "string", "format": "date-time" },
-          "target_amount": { "type": "integer", "description": "Target amount in kobo", "example": 500000 },
-          "total_savings": { "type": "integer", "description": "Current total saved in kobo", "example": 120000 },
-          "last_deposit": { "type": "string", "format": "date-time", "nullable": true }
+          "name": {
+            "type": "string",
+            "example": "Emergency Fund"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "target_amount": {
+            "type": "integer",
+            "description": "Target amount in kobo",
+            "example": 500000
+          },
+          "total_savings": {
+            "type": "integer",
+            "description": "Current total saved in kobo",
+            "example": 120000
+          },
+          "last_deposit": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
         }
       },
       "CreateGoalRequest": {
         "type": "object",
-        "required": ["name", "target_amount", "target_date", "savings_type"],
+        "required": [
+          "name",
+          "target_amount",
+          "target_date",
+          "savings_type"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -6028,7 +6510,10 @@
           },
           "savings_type": {
             "type": "string",
-            "enum": ["flexible", "locked"],
+            "enum": [
+              "flexible",
+              "locked"
+            ],
             "example": "flexible"
           },
           "auto_save": {
@@ -6038,7 +6523,11 @@
           },
           "frequency": {
             "type": "string",
-            "enum": ["daily", "weekly", "monthly"],
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
             "description": "Required when auto_save is true",
             "example": "weekly"
           },
@@ -6240,7 +6729,10 @@
       },
       "BulkTransferRequest": {
         "type": "object",
-        "required": ["recipient_info", "transaction_pin"],
+        "required": [
+          "recipient_info",
+          "transaction_pin"
+        ],
         "properties": {
           "recipient_info": {
             "type": "array",
@@ -6257,7 +6749,12 @@
       },
       "BulkTransferRecipientInfo": {
         "type": "object",
-        "required": ["amount", "sort_code", "account_number", "account_name"],
+        "required": [
+          "amount",
+          "sort_code",
+          "account_number",
+          "account_name"
+        ],
         "properties": {
           "amount": {
             "type": "integer",
@@ -7062,22 +7559,12 @@
       "RegistrationJobResponse": {
         "type": "object",
         "required": [
-          "status",
-          "message",
           "job_id",
           "registration_status",
           "can_login",
           "can_claim_session"
         ],
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "success"
-          },
-          "message": {
-            "type": "string",
-            "example": "registration queued successfully"
-          },
           "job_id": {
             "type": "string",
             "format": "uuid",
@@ -7119,6 +7606,26 @@
           }
         }
       },
+      "RegistrationJobSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Registration processed successfully."
+          },
+          "data": {
+            "$ref": "#/components/schemas/RegistrationJobResponse"
+          }
+        }
+      },
       "RegistrationSessionClaimRequest": {
         "type": "object",
         "required": [
@@ -7150,66 +7657,40 @@
           }
         }
       },
-      "LoginChallengeRequiredResponse": {
+      "LoginInitData": {
         "type": "object",
-        "title": "Trusted device challenge response",
-        "required": [
-          "status",
-          "challenge"
-        ],
         "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "challenge_required"
-            ],
-            "example": "challenge_required"
-          },
           "challenge": {
             "type": "string",
-            "description": "Present when status is challenge_required.",
+            "description": "Challenge to be signed by the device private key.",
             "example": "V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ"
-          }
-        }
-      },
-      "LoginNewDeviceDetectedResponse": {
-        "type": "object",
-        "title": "New device OTP response",
-        "required": [
-          "status",
-          "session_token"
-        ],
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "new_device_detected"
-            ],
-            "example": "new_device_detected"
           },
           "session_token": {
             "type": "string",
-            "description": "Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/device/otp/verify or to request another code at /auth/device/otp/resend.",
+            "description": "Session token used by device OTP verification flow.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
           }
         }
       },
       "LoginInitResponse": {
-        "discriminator": {
-          "propertyName": "status",
-          "mapping": {
-            "challenge_required": "#/components/schemas/LoginChallengeRequiredResponse",
-            "new_device_detected": "#/components/schemas/LoginNewDeviceDetectedResponse"
-          }
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/LoginChallengeRequiredResponse"
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
           },
-          {
-            "$ref": "#/components/schemas/LoginNewDeviceDetectedResponse"
+          "message": {
+            "type": "string",
+            "example": "Login credentials verified."
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginInitData"
           }
-        ]
+        }
       },
       "LoginResponse": {
         "type": "object",
@@ -7221,6 +7702,26 @@
           "refresh_token": {
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh"
+          }
+        }
+      },
+      "LoginSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "access token successfully refreshed"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResponse"
           }
         }
       },
@@ -7253,14 +7754,30 @@
         "type": "object",
         "required": [
           "status",
-          "access_token",
-          "refresh_token"
+          "message"
         ],
         "properties": {
           "status": {
             "type": "string",
             "example": "success"
           },
+          "message": {
+            "type": "string",
+            "example": "device successfully verified"
+          },
+          "data": {
+            "$ref": "#/components/schemas/VerifiedDeviceData"
+          }
+        }
+      },
+      "VerifiedDeviceData": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "is_biometrics_enabled"
+        ],
+        "properties": {
           "access_token": {
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access"
@@ -7271,13 +7788,7 @@
           },
           "is_biometrics_enabled": {
             "type": "boolean",
-            "description": "Whether biometric authentication is enabled for this user.",
             "example": true
-          },
-          "action_token": {
-            "type": "string",
-            "description": "Reserved for short-lived sensitive actions.",
-            "example": ""
           }
         }
       },
@@ -7291,7 +7802,7 @@
         "properties": {
           "session_token": {
             "type": "string",
-            "description": "Session token returned from /auth/login when status is new_device_detected. The same token is also used with /auth/device/otp/resend.",
+            "description": "Session token returned from /auth/login for pending device verification. The same token is also used with /auth/device/otp/resend.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
           },
           "otp": {
@@ -7314,7 +7825,7 @@
         "properties": {
           "session_token": {
             "type": "string",
-            "description": "Session token returned from /auth/login when status is new_device_detected.",
+            "description": "Session token returned from /auth/login for pending device verification.",
             "example": "CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A"
           },
           "device_id": {
@@ -7368,10 +7879,6 @@
       "ForgotPasswordResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP has been sent to your phone"
-          },
           "otp_id": {
             "type": "string",
             "format": "uuid",
@@ -7379,17 +7886,43 @@
           }
         }
       },
-      "ResendForgotPasswordOTPResponse": {
+      "ForgotPasswordSuccessResponse": {
         "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
-            "example": "OTP resent successfully"
+            "example": "OTP has been sent."
           },
-          "otp_id": {
+          "data": {
+            "$ref": "#/components/schemas/ForgotPasswordResponse"
+          }
+        }
+      },
+      "ForgotPasswordResendSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
             "type": "string",
-            "format": "uuid",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been resent."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ForgotPasswordResponse"
           }
         }
       },
@@ -7416,10 +7949,6 @@
       "VerifyForgotPasswordOTPResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP verified successfully"
-          },
           "verification_id": {
             "type": "string",
             "format": "uuid",
@@ -7427,8 +7956,12 @@
           }
         }
       },
-      "RequestChangePasswordResponse": {
+      "VerifyForgotPasswordOTPSuccessResponse": {
         "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
         "properties": {
           "status": {
             "type": "string",
@@ -7436,8 +7969,16 @@
           },
           "message": {
             "type": "string",
-            "example": "OTP has been sent to your phone"
+            "example": "OTP successfully verified."
           },
+          "data": {
+            "$ref": "#/components/schemas/VerifyForgotPasswordOTPResponse"
+          }
+        }
+      },
+      "RequestChangePasswordResponse": {
+        "type": "object",
+        "properties": {
           "otp_id": {
             "type": "string",
             "format": "uuid",
@@ -7445,13 +7986,29 @@
           }
         }
       },
+      "RequestChangePasswordSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been sent."
+          },
+          "data": {
+            "$ref": "#/components/schemas/RequestChangePasswordResponse"
+          }
+        }
+      },
       "ResendPasswordChangeOTPResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP resent successfully"
-          },
           "otp_id": {
             "type": "string",
             "format": "uuid",
@@ -7482,18 +8039,30 @@
       "VerifyPasswordChangeOTPResponse": {
         "type": "object",
         "properties": {
+          "verification_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "VerifyPasswordChangeOTPSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
           "status": {
             "type": "string",
             "example": "success"
           },
           "message": {
             "type": "string",
-            "example": "OTP verified successfully"
+            "example": "OTP successfully verified."
           },
-          "verification_id": {
-            "type": "string",
-            "format": "uuid",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          "data": {
+            "$ref": "#/components/schemas/VerifyPasswordChangeOTPResponse"
           }
         }
       },
@@ -7562,11 +8131,31 @@
           }
         }
       },
+      "BVNValidationSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "BVN verification was succesful."
+          },
+          "data": {
+            "$ref": "#/components/schemas/BVNValidationResponse"
+          }
+        }
+      },
       "NINValidationRequest": {
         "type": "object",
         "required": [
           "nin",
-          "bvn_validation_id"
+          "bvn_verification_id"
         ],
         "properties": {
           "nin": {
@@ -7575,7 +8164,7 @@
             "maxLength": 11,
             "example": "12345678901"
           },
-          "bvn_validation_id": {
+          "bvn_verification_id": {
             "type": "string",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           }
@@ -7831,17 +8420,17 @@
           "loan_amount": {
             "type": "number",
             "format": "double",
-            "example": 250000.00
+            "example": 250000.0
           },
           "balance_remaining": {
             "type": "number",
             "format": "double",
-            "example": 180000.00
+            "example": 180000.0
           },
           "periodic_payment": {
             "type": "number",
             "format": "double",
-            "example": 62500.00
+            "example": 62500.0
           },
           "tenure": {
             "type": "string",
@@ -7864,7 +8453,7 @@
           "loan_amount": {
             "type": "number",
             "format": "double",
-            "example": 28750.00
+            "example": 28750.0
           },
           "payment_date": {
             "type": "string",
@@ -7872,19 +8461,27 @@
           },
           "status": {
             "type": "string",
-            "enum": ["paid", "overdue", "upcoming"],
+            "enum": [
+              "paid",
+              "overdue",
+              "upcoming"
+            ],
             "example": "paid"
           },
           "amount_paid": {
             "type": "number",
             "format": "double",
-            "example": 28750.00
+            "example": 28750.0
           }
         }
       },
       "LoanHistoryResponse": {
         "type": "object",
-        "required": ["status", "message", "history"],
+        "required": [
+          "status",
+          "message",
+          "history"
+        ],
         "properties": {
           "status": {
             "type": "string",
@@ -7908,17 +8505,17 @@
           "total_loan_amount": {
             "type": "number",
             "format": "double",
-            "example": 115000.00
+            "example": 115000.0
           },
           "amount_repaid": {
             "type": "number",
             "format": "double",
-            "example": 28750.00
+            "example": 28750.0
           },
           "outstanding_balance": {
             "type": "number",
             "format": "double",
-            "example": 86250.00
+            "example": 86250.0
           },
           "due_date": {
             "type": "string",
@@ -7934,7 +8531,11 @@
       },
       "LoanDetailsResponse": {
         "type": "object",
-        "required": ["status", "message", "details"],
+        "required": [
+          "status",
+          "message",
+          "details"
+        ],
         "properties": {
           "status": {
             "type": "string",
@@ -7959,12 +8560,12 @@
           "outstanding_balance": {
             "type": "number",
             "format": "double",
-            "example": 57500.00
+            "example": 57500.0
           },
           "next_payment": {
             "type": "number",
             "format": "double",
-            "example": 28750.00
+            "example": 28750.0
           },
           "due_date": {
             "type": "string",
@@ -7974,7 +8575,11 @@
       },
       "ActiveLoanListResponse": {
         "type": "object",
-        "required": ["status", "message", "loans"],
+        "required": [
+          "status",
+          "message",
+          "loans"
+        ],
         "properties": {
           "status": {
             "type": "string",
@@ -8026,17 +8631,17 @@
           "loan_amount": {
             "type": "number",
             "format": "double",
-            "example": 100000.00
+            "example": 100000.0
           },
           "total_repayment": {
             "type": "number",
             "format": "double",
-            "example": 115000.00
+            "example": 115000.0
           },
           "periodic_repayment": {
             "type": "number",
             "format": "double",
-            "example": 28750.00
+            "example": 28750.0
           },
           "loan_duration": {
             "type": "string",
@@ -8045,12 +8650,12 @@
           "amount_paid": {
             "type": "number",
             "format": "double",
-            "example": 57500.00
+            "example": 57500.0
           },
           "yet_to_pay": {
             "type": "number",
             "format": "double",
-            "example": 57500.00
+            "example": 57500.0
           },
           "interest_rate": {
             "type": "number",
@@ -8529,6 +9134,26 @@
           }
         }
       },
+      "NINValidationSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "NIN verification was successful."
+          },
+          "data": {
+            "$ref": "#/components/schemas/NINValidationResponse"
+          }
+        }
+      },
       "RequestOTPRequest": {
         "type": "object",
         "required": [
@@ -8602,11 +9227,10 @@
       },
       "VerifyOTPResponse": {
         "type": "object",
+        "required": [
+          "verification_id"
+        ],
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP verification was successful"
-          },
           "verification_id": {
             "type": "string",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
@@ -8854,7 +9478,15 @@
       },
       "MessageResponse": {
         "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
             "example": "otp sent"
@@ -8988,6 +9620,26 @@
           }
         }
       },
+      "ForgotTransactionPinSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been sent."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ForgotTransactionPinResponse"
+          }
+        }
+      },
       "VerifyForgotTransactionPinOTPRequest": {
         "type": "object",
         "required": [
@@ -9011,18 +9663,30 @@
       "VerifyForgotTransactionPinOTPResponse": {
         "type": "object",
         "properties": {
+          "verification_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "VerifyForgotTransactionPinOTPSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
           "status": {
             "type": "string",
             "example": "success"
           },
           "message": {
             "type": "string",
-            "example": "OTP verified successfully"
+            "example": "OTP has been verified."
           },
-          "verification_id": {
-            "type": "string",
-            "format": "uuid",
-            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          "data": {
+            "$ref": "#/components/schemas/VerifyForgotTransactionPinOTPResponse"
           }
         }
       },
@@ -9052,10 +9716,6 @@
       "RequestTransactionPinChangeResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP has been sent to your phone"
-          },
           "otp_id": {
             "type": "string",
             "format": "uuid",
@@ -9064,18 +9724,54 @@
           }
         }
       },
+      "RequestTransactionPinChangeSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been sent."
+          },
+          "data": {
+            "$ref": "#/components/schemas/RequestTransactionPinChangeResponse"
+          }
+        }
+      },
       "ResendTransactionPinChangeOTPResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP resent successfully"
-          },
           "otp_id": {
             "type": "string",
             "format": "uuid",
             "description": "OTP record identifier (same as from the original request step).",
             "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          }
+        }
+      },
+      "ResendTransactionPinChangeOTPSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been resent successfully."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResendTransactionPinChangeOTPResponse"
           }
         }
       },
@@ -9104,15 +9800,31 @@
       "VerifyTransactionPinChangeOTPResponse": {
         "type": "object",
         "properties": {
-          "message": {
-            "type": "string",
-            "example": "OTP verified successfully"
-          },
           "verification_id": {
             "type": "string",
             "format": "uuid",
             "description": "Verification identifier (valid for 15 minutes) to be passed to the change step.",
             "example": "f9e8d7c6-b5a4-3210-fedc-ba9876543210"
+          }
+        }
+      },
+      "VerifyTransactionPinChangeOTPSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP has been verified."
+          },
+          "data": {
+            "$ref": "#/components/schemas/VerifyTransactionPinChangeOTPResponse"
           }
         }
       },
@@ -9190,10 +9902,35 @@
       },
       "ToggleBiometricsResponse": {
         "type": "object",
+        "properties": {
+          "is_enabled": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "ToggleBiometricsSuccessResponse": {
+        "type": "object",
         "required": [
           "status",
           "message"
         ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Biometrics toggled successfully."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ToggleBiometricsResponse"
+          }
+        }
+      },
+      "ChallengeRequestResponse": {
+        "type": "object",
         "properties": {
           "status": {
             "type": "string",
@@ -9202,7 +9939,38 @@
           },
           "message": {
             "type": "string",
-            "example": "Biometrics have been enabled successfully."
+            "example": "Challenge generated successfully."
+          },
+          "challenge": {
+            "type": "string",
+            "example": "a1b2c3d4e5f6...",
+            "description": "Cryptographic challenge string to be signed by the device."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-20T12:00:00Z",
+            "description": "Timestamp when the challenge expires."
+          }
+        }
+      },
+      "ChallengeRequestSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Challenge signature sent."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ChallengeRequestResponse"
           }
         }
       },
@@ -9276,9 +10044,6 @@
           },
           "error": {
             "$ref": "#/components/schemas/APIError"
-          },
-          "message": {
-            "type": "string"
           }
         }
       },
@@ -9337,33 +10102,43 @@
           }
         }
       },
-      "ChallengeRequestResponse": {
+      "OTPValidationErrorResponse": {
         "type": "object",
-        "required": ["status", "message", "challenge", "expires_at"],
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "invalid request body"
+          }
+        }
+      },
+      "OTPServiceErrorResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "error"
+        ],
         "properties": {
           "status": {
             "type": "string",
-            "example": "success",
-            "description": "Operation status."
+            "example": "error"
           },
-          "message": {
-            "type": "string",
-            "example": "Challenge generated successfully."
-          },
-          "challenge": {
-            "type": "string",
-            "example": "a1b2c3d4e5f6...",
-            "description": "Cryptographic challenge string to be signed by the device."
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-04-20T12:00:00Z",
-            "description": "Timestamp when the challenge expires."
+          "error": {
+            "type": "object",
+            "required": [
+              "message"
+            ],
+            "properties": {
+              "message": {
+                "type": "string",
+                "example": "Too many requests"
+              }
+            }
           }
         }
       }
     }
   }
-}
 }

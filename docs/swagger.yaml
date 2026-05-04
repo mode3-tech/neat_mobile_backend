@@ -53,53 +53,76 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RegistrationJobResponse"
+                $ref: "#/components/schemas/RegistrationJobSuccessResponse"
               examples:
                 queued:
                   value:
                     status: success
-                    message: registration queued successfully
-                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-                    registration_status: pending
-                    can_login: false
-                    can_claim_session: false
-                    claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
-                    claim_expires_at: "2026-05-02T18:30:00Z"
+                    message: Registration processed successfully.
+                    data:
+                      job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                      registration_status: pending
+                      can_login: false
+                      can_claim_session: false
+                      claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
+                      claim_expires_at: "2026-05-02T18:30:00Z"
         "200":
           description: Matching registration already completed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RegistrationJobResponse"
+                $ref: "#/components/schemas/RegistrationJobSuccessResponse"
               examples:
                 completed:
                   value:
                     status: success
-                    message: registration completed successfully, claim session to continue
-                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-                    registration_status: completed
-                    can_login: true
-                    can_claim_session: true
-                    claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
-                    claim_expires_at: "2026-05-02T18:30:00Z"
+                    message: Registration processed successfully.
+                    data:
+                      job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                      registration_status: completed
+                      can_login: true
+                      can_claim_session: true
+                      claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
+                      claim_expires_at: "2026-05-02T18:30:00Z"
         "400":
           description: Invalid request body, invalid phone number, or failed registration validation
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body
         "409":
           description: Registration already in progress or account already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                user_exists:
+                  value:
+                    status: error
+                    error:
+                      code: USER_EXISTS
+                      message: user already exists
         "500":
           description: Registration failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: something went wrong
   /auth/register/{job_id}/status:
     get:
       tags:
@@ -122,43 +145,66 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RegistrationJobResponse"
+                $ref: "#/components/schemas/RegistrationJobSuccessResponse"
               examples:
                 processing:
                   value:
                     status: success
-                    message: registration is being processed
-                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-                    registration_status: processing
-                    can_login: false
-                    can_claim_session: false
+                    message: Registration status retrieved successfully.
+                    data:
+                      job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                      registration_status: processing
+                      can_login: false
+                      can_claim_session: false
                 completed:
                   value:
                     status: success
-                    message: registration completed successfully, claim session to continue
-                    job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-                    registration_status: completed
-                    can_login: true
-                    can_claim_session: true
-                    claim_expires_at: "2026-05-02T18:30:00Z"
+                    message: Registration status retrieved successfully.
+                    data:
+                      job_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+                      registration_status: completed
+                      can_login: true
+                      can_claim_session: true
+                      claim_expires_at: "2026-05-02T18:30:00Z"
         "400":
           description: Missing or invalid job id
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_params:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_PARAMS
+                      message: Missing query paramter.
         "404":
           description: Registration job not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  value:
+                    status: error
+                    error:
+                      code: NOT_FOUND
+                      message: resource not found
         "500":
           description: Failed to fetch registration job status
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: something went wrong
   /auth/register/{job_id}/claim:
     post:
       tags:
@@ -194,47 +240,88 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifyDeviceResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Registration session claimed successfully.
+                    data:
+                      access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
+                      refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+                      is_biometrics_enabled: true
         "400":
           description: Invalid request body or missing job id, device id, or claim token
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Unauthorized.
         "401":
           description: Invalid or expired claim token, or device not allowed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_DEVICE_ID
+                      message: Unauthorized.
         "404":
           description: Registration job not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  value:
+                    status: error
+                    error:
+                      code: NOT_FOUND
+                      message: resource not found
         "409":
           description: Registration is not complete, failed, unavailable for claim, or already claimed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                claim_conflict:
+                  value:
+                    status: error
+                    error:
+                      code: USER_EXISTS
+                      message: user already exists
         "500":
           description: Failed to claim registration session
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: something went wrong
   /auth/login:
     post:
       tags:
         - Auth
       summary: Login a user
       description: |
-        Authenticates a user by phone and password, then starts device verification flow.
-        The server evaluates the submitted `X-Device-ID` against the authenticated user's stored devices.
-        If that device exists and is both active and trusted, returns `challenge_required`.
-        If the device is missing, inactive, or untrusted, returns `new_device_detected`, sends a login OTP to the user's
-        phone number, and returns a `session_token` for `/auth/device/otp/verify` and `/auth/device/otp/resend`.
+        Authenticates a user by phone and password, then starts the device verification flow.
+        Returns a success envelope with a `data` object containing `challenge` and `session_token`.
       parameters:
         - in: header
           name: X-Device-ID
@@ -250,46 +337,71 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Login initialized; response shape depends on device trust state
+          description: Login credentials verified
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginInitResponse"
               examples:
-                challenge_required:
-                  summary: Recognized trusted device
+                success:
                   value:
-                    status: challenge_required
-                    challenge: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
-                new_device_detected:
-                  summary: Device missing, inactive, or untrusted
-                  value:
-                    status: new_device_detected
-                    session_token: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
+                    status: success
+                    message: Login credentials verified.
+                    data:
+                      challenge: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
+                      session_token: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
         "400":
           description: Invalid request body, invalid phone number, or missing/invalid device id
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body.
         "401":
           description: Invalid phone or password
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_credentials:
+                  value:
+                    status: error
+                    error:
+                      code: AUTH_INVALID_CREDENTIALS
+                      message: invalid credentials
         "429":
           description: Too many login attempts
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                too_many_requests:
+                  value:
+                    status: error
+                    error:
+                      code: TOO_MANY_REQUESTS
+                      message: too many login attempts
         "500":
           description: Login initialization failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: something went wrong
   /auth/device/challenge/verify:
     post:
       tags:
@@ -309,34 +421,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifyDeviceResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: device successfully verified
+                    data:
+                      access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
+                      refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+                      is_biometrics_enabled: true
         "400":
           description: Invalid request body or missing challenge fields
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body.
         "401":
           description: Invalid challenge or signature verification failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_TOKEN
+                      message: Unauthorized.
         "500":
           description: Device verification failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: Something went wrong.
   /auth/device/otp/verify:
     post:
       tags:
         - Auth
       summary: Verify new device with OTP
       description: |
-        Completes login when the submitted `X-Device-ID` from `/auth/login` was not found as an
-        active trusted device, using the `session_token` returned by `/auth/login` and the OTP sent
-        during `new_device_detected` flow. If the OTP expires or is not received, request another code
-        with `/auth/device/otp/resend` using the same `session_token` and `device_id`.
+        Completes login for a pending device-verification session using the `session_token`
+        from `/auth/login` and the OTP sent to the user. If the OTP expires or is not received,
+        request another code with `/auth/device/otp/resend` using the same `session_token` and `device_id`.
       requestBody:
         required: true
         content:
@@ -350,31 +491,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifyDeviceResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: New device successfully verified.
+                    data:
+                      access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
+                      refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+                      is_biometrics_enabled: true
         "400":
           description: Invalid request body or missing required fields
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body.
         "401":
           description: Invalid/expired session token or invalid OTP
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_session:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_SESSION
+                      message: invalid or expired session
         "500":
           description: New-device verification failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: Something went wrong.
   /auth/device/otp/resend:
     post:
       tags:
         - Auth
       summary: Resend OTP for new device login
       description: |
-        Resends the login OTP for an active `new_device_detected` session created by `/auth/login`.
+        Resends the login OTP for an active pending device-verification session created by `/auth/login`.
         The same `session_token` remains valid and the pending session expiry is extended.
       requestBody:
         required: true
@@ -383,40 +554,60 @@ paths:
             schema:
               $ref: "#/components/schemas/ResendNewDeviceOTPRequest"
       responses:
-        "200":
+        "204":
           description: OTP resent successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-              examples:
-                success:
-                  value:
-                    message: otp resent successfully
         "400":
           description: Invalid request body or missing session token/device id
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body.
         "401":
           description: Invalid or expired session token
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_session:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_SESSION
+                      message: invalid or expired session
         "429":
           description: OTP resend cooldown or resend limit reached
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                too_many_requests:
+                  value:
+                    status: error
+                    error:
+                      code: TOO_MANY_REQUESTS
+                      message: too many requests
         "500":
           description: Failed to resend OTP
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      code: INTERNAL_SERVER_ERROR
+                      message: something went wrong
   /health:
     get:
       tags:
@@ -496,12 +687,8 @@ paths:
             schema:
               $ref: "#/components/schemas/LogoutRequest"
       responses:
-        "200":
+        "204":
           description: Logout successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Invalid request body or missing authorization header
           content:
@@ -538,7 +725,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
+                $ref: "#/components/schemas/LoginSuccessResponse"
         "400":
           description: Missing refresh token/device id or invalid request body
           content:
@@ -575,7 +762,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BVNValidationResponse"
+                $ref: "#/components/schemas/BVNValidationSuccessResponse"
         "400":
           description: Missing or invalid request body, invalid BVN, or provider validation error
           content:
@@ -618,7 +805,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NINValidationResponse"
+                $ref: "#/components/schemas/NINValidationSuccessResponse"
         "400":
           description: Missing or invalid request body, invalid NIN, or provider validation error
           content:
@@ -668,7 +855,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ForgotPasswordResponse"
+                $ref: "#/components/schemas/ForgotPasswordSuccessResponse"
         "400":
           description: Invalid request body, phone required, or invalid phone number
           content:
@@ -718,7 +905,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ResendForgotPasswordOTPResponse"
+                $ref: "#/components/schemas/ForgotPasswordResendSuccessResponse"
         "400":
           description: Invalid request body, phone required, or invalid phone number
           content:
@@ -768,7 +955,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VerifyForgotPasswordOTPResponse"
+                $ref: "#/components/schemas/VerifyForgotPasswordOTPSuccessResponse"
         "400":
           description: Invalid request body, device id required, otp id required, or otp code required
           content:
@@ -807,12 +994,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ResetPasswordRequest"
       responses:
-        "200":
+        "204":
           description: Password reset successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Invalid request body, phone required, verification id required, or invalid password format
           content:
@@ -858,7 +1041,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ForgotTransactionPinResponse"
+                $ref: "#/components/schemas/ForgotTransactionPinSuccessResponse"
         "400":
           description: Device id is required or invalid phone number on account
           content:
@@ -899,12 +1082,8 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200":
+        "204":
           description: OTP resent successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Device id is required or invalid phone number on account
           content:
@@ -962,7 +1141,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VerifyForgotTransactionPinOTPResponse"
+                $ref: "#/components/schemas/VerifyForgotTransactionPinOTPSuccessResponse"
         "400":
           description: Invalid request body, device id required, otp id required, or otp code required
           content:
@@ -1009,12 +1188,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ResetTransactionPinRequest"
       responses:
-        "200":
+        "204":
           description: Transaction PIN reset successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Device id required, verification id required, pin validation failed, or pins don't match
           content:
@@ -1060,7 +1235,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RequestTransactionPinChangeResponse"
+                $ref: "#/components/schemas/RequestTransactionPinChangeSuccessResponse"
         "400":
           description: Device id required or invalid phone number on account
           content:
@@ -1090,7 +1265,7 @@ paths:
       tags:
         - Auth
       summary: Resend transaction PIN change OTP
-      description: Resends the transaction PIN change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.
+      description: Resends the transaction PIN change OTP to the authenticated user's phone number.
       parameters:
         - in: header
           name: Authorization
@@ -1112,7 +1287,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ResendTransactionPinChangeOTPResponse"
+                $ref: "#/components/schemas/ResendTransactionPinChangeOTPSuccessResponse"
         "400":
           description: Device id is required
           content:
@@ -1170,7 +1345,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VerifyTransactionPinChangeOTPResponse"
+                $ref: "#/components/schemas/VerifyTransactionPinChangeOTPSuccessResponse"
         "400":
           description: Invalid request body, device id required, otp id required, or otp code required
           content:
@@ -1217,12 +1392,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ChangeTransactionPinRequest"
       responses:
-        "200":
+        "204":
           description: Transaction PIN changed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Device id required, verification id required, pin validation failed, current pin wrong, or pins don't match
           content:
@@ -1268,7 +1439,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RequestChangePasswordResponse"
+                $ref: "#/components/schemas/RequestChangePasswordSuccessResponse"
         "400":
           description: Device id required or invalid phone number on account
           content:
@@ -1372,7 +1543,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VerifyPasswordChangeOTPResponse"
+                $ref: "#/components/schemas/VerifyPasswordChangeOTPSuccessResponse"
         "400":
           description: Invalid request body, device id required, otp id required, or otp code required
           content:
@@ -1419,12 +1590,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ChangePasswordRequest"
       responses:
-        "200":
+        "204":
           description: Password changed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
         "400":
           description: Device id required, verification id required, password validation failed, or passwords don't match
           content:
@@ -1476,7 +1643,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ToggleBiometricsResponse"
+                $ref: "#/components/schemas/ToggleBiometricsSuccessResponse"
         "400":
           description: Invalid request body or device id required
           content:
@@ -1532,7 +1699,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChallengeRequestResponse"
+                $ref: "#/components/schemas/ChallengeRequestSuccessResponse"
         "400":
           description: Missing or invalid request body
           content:
@@ -1564,47 +1731,66 @@ paths:
             schema:
               $ref: "#/components/schemas/RequestOTPRequest"
       responses:
-        "200":
+        "204":
           description: OTP sent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OTPRequestSuccessResponse"
-              examples:
-                success:
-                  value:
-                    status: success
-                    message: OTP sent successfully
         "400":
           description: Invalid request body, purpose, channel, email, or phone number
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPValidationErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    error: invalid request body
         "429":
           description: Too many requests
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                too_many_requests:
+                  value:
+                    status: error
+                    error:
+                      message: Too many requests
         "502":
           description: SMS delivery failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                sms_delivery_failed:
+                  value:
+                    status: error
+                    error:
+                      message: SMS delivery failed
         "503":
           description: SMS service not configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                sms_not_configured:
+                  value:
+                    status: error
+                    error:
+                      message: SMS service not configured
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      message: Internal server error
   /auth/otp/verify:
     post:
       tags:
@@ -1636,19 +1822,35 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPValidationErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    error: invalid request body
         "401":
           description: Invalid OTP
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                invalid_otp:
+                  value:
+                    status: error
+                    error:
+                      message: Invalid OTP
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OTPServiceErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    status: error
+                    error:
+                      message: Internal server error
   /loan:
     get:
       tags:
@@ -4600,19 +4802,11 @@ components:
     RegistrationJobResponse:
       type: object
       required:
-        - status
-        - message
         - job_id
         - registration_status
         - can_login
         - can_claim_session
       properties:
-        status:
-          type: string
-          example: success
-        message:
-          type: string
-          example: registration queued successfully
         job_id:
           type: string
           format: uuid
@@ -4644,6 +4838,20 @@ components:
           type: string
           description: Present when `registration_status` is `failed`.
           example: provider wallet lookup failed
+    RegistrationJobSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Registration processed successfully.
+        data:
+          $ref: "#/components/schemas/RegistrationJobResponse"
     RegistrationSessionClaimRequest:
       type: object
       required:
@@ -4666,47 +4874,31 @@ components:
           type: string
           minLength: 8
           example: your-password
-    LoginChallengeRequiredResponse:
+    LoginInitData:
       type: object
-      title: Trusted device challenge response
-      required:
-        - status
-        - challenge
       properties:
-        status:
-          type: string
-          enum:
-            - challenge_required
-          example: challenge_required
         challenge:
           type: string
-          description: Present when status is challenge_required.
+          description: Challenge to be signed by the device private key.
           example: V6Y0dxLF5leasw5ISJZgshZc8HP75fkQjwD8f2fOUeQ
-    LoginNewDeviceDetectedResponse:
+        session_token:
+          type: string
+          description: Session token used by device OTP verification flow.
+          example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
+    LoginInitResponse:
       type: object
-      title: New device OTP response
       required:
         - status
-        - session_token
+        - message
       properties:
         status:
           type: string
-          enum:
-            - new_device_detected
-          example: new_device_detected
-        session_token:
+          example: success
+        message:
           type: string
-          description: Present when status is new_device_detected because the submitted X-Device-ID was not an active trusted device; use this with OTP at /auth/device/otp/verify or to request another code at /auth/device/otp/resend.
-          example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
-    LoginInitResponse:
-      discriminator:
-        propertyName: status
-        mapping:
-          challenge_required: "#/components/schemas/LoginChallengeRequiredResponse"
-          new_device_detected: "#/components/schemas/LoginNewDeviceDetectedResponse"
-      oneOf:
-        - $ref: "#/components/schemas/LoginChallengeRequiredResponse"
-        - $ref: "#/components/schemas/LoginNewDeviceDetectedResponse"
+          example: Login credentials verified.
+        data:
+          $ref: "#/components/schemas/LoginInitData"
     LoginResponse:
       type: object
       properties:
@@ -4716,6 +4908,20 @@ components:
         refresh_token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+    LoginSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: access token successfully refreshed
+        data:
+          $ref: "#/components/schemas/LoginResponse"
     VerifyDeviceRequest:
       type: object
       required:
@@ -4739,12 +4945,23 @@ components:
       type: object
       required:
         - status
-        - access_token
-        - refresh_token
+        - message
       properties:
         status:
           type: string
           example: success
+        message:
+          type: string
+          example: device successfully verified
+        data:
+          $ref: "#/components/schemas/VerifiedDeviceData"
+    VerifiedDeviceData:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - is_biometrics_enabled
+      properties:
         access_token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
@@ -4753,12 +4970,7 @@ components:
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
         is_biometrics_enabled:
           type: boolean
-          description: Whether biometric authentication is enabled for this user.
           example: true
-        action_token:
-          type: string
-          description: Reserved for short-lived sensitive actions.
-          example: ""
     NewDeviceRequest:
       type: object
       required:
@@ -4768,7 +4980,7 @@ components:
       properties:
         session_token:
           type: string
-          description: Session token returned from /auth/login when status is new_device_detected. The same token is also used with /auth/device/otp/resend.
+          description: Session token returned from /auth/login for pending device verification. The same token is also used with /auth/device/otp/resend.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
         otp:
           type: string
@@ -4785,7 +4997,7 @@ components:
       properties:
         session_token:
           type: string
-          description: Session token returned from /auth/login when status is new_device_detected.
+          description: Session token returned from /auth/login for pending device verification.
           example: CxDfs7E0ucjQ8v72n9v5M9o2xU4SyfV8h3caE6WvF1A
         device_id:
           type: string
@@ -4822,23 +5034,38 @@ components:
     ForgotPasswordResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP has been sent to your phone
         otp_id:
           type: string
           format: uuid
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-    ResendForgotPasswordOTPResponse:
+    ForgotPasswordSuccessResponse:
       type: object
+      required:
+        - status
+        - message
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
-          example: OTP resent successfully
-        otp_id:
+          example: OTP has been sent.
+        data:
+          $ref: "#/components/schemas/ForgotPasswordResponse"
+    ForgotPasswordResendSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
           type: string
-          format: uuid
-          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+          example: success
+        message:
+          type: string
+          example: OTP has been resent.
+        data:
+          $ref: "#/components/schemas/ForgotPasswordResponse"
     VerifyForgotPasswordOTPRequest:
       type: object
       required:
@@ -4857,32 +5084,48 @@ components:
     VerifyForgotPasswordOTPResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP verified successfully
         verification_id:
           type: string
           format: uuid
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-    RequestChangePasswordResponse:
+    VerifyForgotPasswordOTPSuccessResponse:
       type: object
+      required:
+        - status
+        - message
       properties:
         status:
           type: string
           example: success
         message:
           type: string
-          example: OTP has been sent to your phone
+          example: OTP successfully verified.
+        data:
+          $ref: "#/components/schemas/VerifyForgotPasswordOTPResponse"
+    RequestChangePasswordResponse:
+      type: object
+      properties:
         otp_id:
           type: string
           format: uuid
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    RequestChangePasswordSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been sent.
+        data:
+          $ref: "#/components/schemas/RequestChangePasswordResponse"
     ResendPasswordChangeOTPResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP resent successfully
         otp_id:
           type: string
           format: uuid
@@ -4905,16 +5148,24 @@ components:
     VerifyPasswordChangeOTPResponse:
       type: object
       properties:
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    VerifyPasswordChangeOTPSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
         status:
           type: string
           example: success
         message:
           type: string
-          example: OTP verified successfully
-        verification_id:
-          type: string
-          format: uuid
-          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+          example: OTP successfully verified.
+        data:
+          $ref: "#/components/schemas/VerifyPasswordChangeOTPResponse"
     ResetPasswordRequest:
       type: object
       required:
@@ -4963,18 +5214,32 @@ components:
         verification_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    BVNValidationSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: BVN verification was succesful.
+        data:
+          $ref: "#/components/schemas/BVNValidationResponse"
     NINValidationRequest:
       type: object
       required:
         - nin
-        - bvn_validation_id
+        - bvn_verification_id
       properties:
         nin:
           type: string
           minLength: 11
           maxLength: 11
           example: "12345678901"
-        bvn_validation_id:
+        bvn_verification_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
     LoanProductCode:
@@ -5689,6 +5954,20 @@ components:
         verification_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    NINValidationSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: NIN verification was successful.
+        data:
+          $ref: "#/components/schemas/NINValidationResponse"
     RequestOTPRequest:
       type: object
       required:
@@ -5745,10 +6024,9 @@ components:
           example: "123456"
     VerifyOTPResponse:
       type: object
+      required:
+        - verification_id
       properties:
-        message:
-          type: string
-          example: OTP verification was successful
         verification_id:
           type: string
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
@@ -5930,7 +6208,13 @@ components:
           example: 12
     MessageResponse:
       type: object
+      required:
+        - status
+        - message
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
           example: otp sent
@@ -6028,6 +6312,20 @@ components:
           type: string
           format: uuid
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    ForgotTransactionPinSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been sent.
+        data:
+          $ref: "#/components/schemas/ForgotTransactionPinResponse"
     VerifyForgotTransactionPinOTPRequest:
       type: object
       required:
@@ -6046,16 +6344,24 @@ components:
     VerifyForgotTransactionPinOTPResponse:
       type: object
       properties:
+        verification_id:
+          type: string
+          format: uuid
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+    VerifyForgotTransactionPinOTPSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
         status:
           type: string
           example: success
         message:
           type: string
-          example: OTP verified successfully
-        verification_id:
-          type: string
-          format: uuid
-          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+          example: OTP has been verified.
+        data:
+          $ref: "#/components/schemas/VerifyForgotTransactionPinOTPResponse"
     ResetTransactionPinRequest:
       type: object
       required:
@@ -6076,25 +6382,47 @@ components:
     RequestTransactionPinChangeResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP has been sent to your phone
         otp_id:
           type: string
           format: uuid
           description: OTP record identifier to be passed to the verify step.
           example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    RequestTransactionPinChangeSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been sent.
+        data:
+          $ref: "#/components/schemas/RequestTransactionPinChangeResponse"
     ResendTransactionPinChangeOTPResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP resent successfully
         otp_id:
           type: string
           format: uuid
           description: OTP record identifier (same as from the original request step).
           example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    ResendTransactionPinChangeOTPSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been resent successfully.
+        data:
+          $ref: "#/components/schemas/ResendTransactionPinChangeOTPResponse"
     VerifyTransactionPinChangeOTPRequest:
       type: object
       required:
@@ -6115,14 +6443,25 @@ components:
     VerifyTransactionPinChangeOTPResponse:
       type: object
       properties:
-        message:
-          type: string
-          example: OTP verified successfully
         verification_id:
           type: string
           format: uuid
           description: Verification identifier (valid for 15 minutes) to be passed to the change step.
           example: "f9e8d7c6-b5a4-3210-fedc-ba9876543210"
+    VerifyTransactionPinChangeOTPSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP has been verified.
+        data:
+          $ref: "#/components/schemas/VerifyTransactionPinChangeOTPResponse"
     ChangeTransactionPinRequest:
       type: object
       required:
@@ -6179,6 +6518,12 @@ components:
           description: Whether biometric authentication should be enabled for the current device.
     ToggleBiometricsResponse:
       type: object
+      properties:
+        is_enabled:
+          type: boolean
+          example: true
+    ToggleBiometricsSuccessResponse:
+      type: object
       required:
         - status
         - message
@@ -6186,17 +6531,13 @@ components:
         status:
           type: string
           example: success
-          description: Operation status.
         message:
           type: string
-          example: Biometrics have been enabled successfully.
+          example: Biometrics toggled successfully.
+        data:
+          $ref: "#/components/schemas/ToggleBiometricsResponse"
     ChallengeRequestResponse:
       type: object
-      required:
-        - status
-        - message
-        - challenge
-        - expires_at
       properties:
         status:
           type: string
@@ -6214,6 +6555,20 @@ components:
           format: date-time
           example: "2026-04-20T12:00:00Z"
           description: Timestamp when the challenge expires.
+    ChallengeRequestSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Challenge signature sent.
+        data:
+          $ref: "#/components/schemas/ChallengeRequestResponse"
     ProvidusCreditPayload:
       type: object
       properties:
@@ -6267,8 +6622,6 @@ components:
           example: error
         error:
           $ref: "#/components/schemas/APIError"
-        message:
-          type: string
     APIError:
       type: object
       required:
@@ -6308,3 +6661,28 @@ components:
           example: OTP verified successfully
         data:
           $ref: "#/components/schemas/VerifyOTPResponse"
+    OTPValidationErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: invalid request body
+    OTPServiceErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: object
+          required:
+            - message
+          properties:
+            message:
+              type: string
+              example: Too many requests

@@ -247,8 +247,6 @@ func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID, d
 	}
 
 	return &GetLatestAccountStatementResponse{
-		Status:      "success",
-		Message:     "latest account statement fetched with download url",
 		DownloadURL: downloadURL,
 	}, nil
 }
