@@ -14,8 +14,8 @@ type IssueOTPInput struct {
 	Purpose        Purpose
 	Channel        Channel
 	Destination    string
-	UserID         string
 	VerificationID string
+	UserID         string
 	TTL            time.Duration
 	MaxAttempts    int
 	MaxResends     int
@@ -28,11 +28,11 @@ type IssueOTPResult struct {
 }
 
 type VerifyOTPInput struct {
-	Purpose     Purpose
-	OTPID       string  // if set, look up by ID (new-device flow)
-	Channel     Channel // required when OTPID is empty
-	Destination string
-	Code        string // used when OTPID is empty
+	Purpose        Purpose
+	OTPID          string  // if set, look up by ID (new-device flow)
+	Channel        Channel // required when OTPID is empty
+	VerificationID string
+	Code           string // used when OTPID is empty
 }
 
 type VerifyOTPResult struct {

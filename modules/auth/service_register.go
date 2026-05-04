@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	appErr "neat_mobile_app_backend/internal/errors"
-	phoneUtil "neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"neat_mobile_app_backend/internal/validators"
 	"strings"
@@ -20,47 +20,17 @@ import (
 
 const registrationWalletDefaultAddress = "Address unavailable"
 
-type registrationJobSnapshot struct {
-	Phone               string              `json:"phone"`
-	Email               string              `json:"email,omitempty"`
-	PasswordHash        string              `json:"password_hash"`
-	PinHash             string              `json:"pin_hash"`
-	FirstName           string              `json:"first_name"`
-	MiddleName          string              `json:"middle_name,omitempty"`
-	LastName            string              `json:"last_name"`
-	BVN                 string              `json:"bvn"`
-	NIN                 string              `json:"nin"`
-	DOB                 time.Time           `json:"dob"`
-	IsEmailVerified     bool                `json:"is_email_verified"`
-	IsPhoneVerified     bool                `json:"is_phone_verified"`
-	IsBvnVerified       bool                `json:"is_bvn_verified"`
-	IsNinVerified       bool                `json:"is_nin_verified"`
-	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
-	Device              DeviceRegisteration `json:"device"`
-	IP                  string              `json:"ip"`
-	WalletEmail         string              `json:"wallet_email"`
-	WalletAddress       string              `json:"wallet_address"`
-}
-
-type registrationIdempotencyPayload struct {
-	PhoneNumber         string              `json:"phone_number"`
-	Email               string              `json:"email"`
-	Password            string              `json:"password"`
-	TransactionPin      string              `json:"transaction_pin"`
-	BVNVerificationID   string              `json:"bvn_verification_id"`
-	NINVerificationID   string              `json:"nin_verification_id"`
-	PhoneVerificationID string              `json:"phone_verification_id"`
-	EmailVerificationID string              `json:"email_verification_id"`
-	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
-	Device              DeviceRegisteration `json:"device"`
-}
-
 func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip string) (*RegistrationJobResponse, error) {
 	if s.tx == nil {
 		return nil, errors.New("transaction manager not configured")
 	}
 
-	normalizedPhone, err := phoneUtil.NormalizeNigerianNumber(req.PhoneNumber)
+	phoneRow, err := s.repo.GetValidationRow(ctx, req.PhoneVerificationID)
+	if err != nil {
+		return nil, err
+	}
+
+	normalizedPhone, err := phone.NormalizeNigerianNumber(strings.TrimSpace(*phoneRow.VerifiedPhone))
 	if err != nil {
 		return nil, err
 	}

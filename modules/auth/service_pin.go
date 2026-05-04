@@ -99,8 +99,6 @@ func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserI
 	}
 
 	return &VerifyForgotTransactionPinOTPResponse{
-		Status:         "success",
-		Message:        "OTP verified successfully",
 		VerificationID: result.VerificationID,
 	}, nil
 }
@@ -265,8 +263,7 @@ func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID,
 	}
 
 	return &RequestTransactionPinChangeResponse{
-		Message: "OTP has been sent to your phone",
-		OTPID:   result.OTPID,
+		OTPID: result.OTPID,
 	}, nil
 }
 
@@ -308,7 +305,6 @@ func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserI
 	}
 
 	return &VerifyTransactionPinChangeOTPResponse{
-		Message:        "OTP verified successfully",
 		VerificationID: result.VerificationID,
 	}, nil
 }
@@ -440,8 +436,7 @@ func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserI
 	}
 
 	return &ResendTransactionPinChangeOTPResponse{
-		Message: "OTP resent successfully",
-		OTPID:   result.OTPID,
+		OTPID: result.OTPID,
 	}, nil
 }
 

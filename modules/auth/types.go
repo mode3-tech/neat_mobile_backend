@@ -2,6 +2,15 @@ package auth
 
 type TokenType string
 
+type ErrCode string
+
+const (
+	ErrCodeInvalidRequestBody ErrCode = "INVALID_REQUEST_BODY"
+	ErrCodeInvalidToken       ErrCode = "INVALID_TOKEN"
+	ErrCodeInvalidParams      ErrCode = "INVALID_PARAMS"
+	ErrCodeInvalidDeviceID    ErrCode = "INVALID_DEVICE_ID"
+)
+
 type AuthObject struct {
 	AccessToken  string
 	RefreshToken string

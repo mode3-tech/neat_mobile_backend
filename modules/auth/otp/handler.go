@@ -3,6 +3,7 @@ package otp
 import (
 	"errors"
 	"log"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"strings"
 
@@ -50,7 +51,10 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "otp sent"})
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "OTP sent successfully",
+	})
 }
 
 func (o *OTPHandler) VerifyOTP(c *gin.Context) {
@@ -73,10 +77,10 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 	}
 
 	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
-		Code:        req.OTP,
-		Destination: req.Destination,
-		Channel:     channel,
-		Purpose:     purpose,
+		Code:           req.OTP,
+		VerificationID: req.VerificationID,
+		Channel:        channel,
+		Purpose:        purpose,
 	})
 
 	if err != nil {
@@ -84,9 +88,14 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VerifyOTPResponse{
-		Message:        "OTP verification was successful",
+	resp := VerifyOTPResponse{
 		VerificationID: result.VerificationID,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[VerifyOTPResponse]{
+		Status:  "success",
+		Message: "OTP verified successfully",
+		Data:    &resp,
 	})
 }
 
@@ -117,21 +126,34 @@ func parseChannel(v string) (Channel, error) {
 func writeOTPError(c *gin.Context, err error) {
 	log.Printf("otp error: %v", err)
 
+	var status int
+	var message string
+
 	if strings.HasPrefix(err.Error(), "sms send failed with status:") {
-		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": "sms delivery failed"})
-		return
+		status = http.StatusBadGateway
+		message = "SMS delivery failed"
+	} else {
+		switch err.Error() {
+		case "too many requests":
+			status = http.StatusTooManyRequests
+			message = "Too many requests"
+		case "invalid otp":
+			status = http.StatusUnauthorized
+			message = "Invalid OTP"
+		case "invalid email", "invalid Nigerian number", "unsupported channel":
+			status = http.StatusBadRequest
+			message = err.Error()
+		case "sms service not configured":
+			status = http.StatusServiceUnavailable
+			message = "SMS service not configured"
+		default:
+			status = http.StatusInternalServerError
+			message = "Internal server error"
+		}
 	}
 
-	switch err.Error() {
-	case "too many requests":
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
-	case "invalid otp":
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid otp"})
-	case "invalid email", "invalid Nigerian number", "unsupported channel":
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case "sms service not configured":
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "sms service not configured"})
-	default:
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-	}
+	c.AbortWithStatusJSON(status, response.APIResponse[any]{
+		Status: "error",
+		Error:  &response.APIError{Message: message},
+	})
 }

@@ -2,6 +2,41 @@ package auth
 
 import "time"
 
+type registrationJobSnapshot struct {
+	Phone               string              `json:"phone"`
+	Email               string              `json:"email,omitempty"`
+	PasswordHash        string              `json:"password_hash"`
+	PinHash             string              `json:"pin_hash"`
+	FirstName           string              `json:"first_name"`
+	MiddleName          string              `json:"middle_name,omitempty"`
+	LastName            string              `json:"last_name"`
+	BVN                 string              `json:"bvn"`
+	NIN                 string              `json:"nin"`
+	DOB                 time.Time           `json:"dob"`
+	IsEmailVerified     bool                `json:"is_email_verified"`
+	IsPhoneVerified     bool                `json:"is_phone_verified"`
+	IsBvnVerified       bool                `json:"is_bvn_verified"`
+	IsNinVerified       bool                `json:"is_nin_verified"`
+	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
+	Device              DeviceRegisteration `json:"device"`
+	IP                  string              `json:"ip"`
+	WalletEmail         string              `json:"wallet_email"`
+	WalletAddress       string              `json:"wallet_address"`
+}
+
+type registrationIdempotencyPayload struct {
+	PhoneNumber         string              `json:"phone_number"`
+	Email               string              `json:"email"`
+	Password            string              `json:"password"`
+	TransactionPin      string              `json:"transaction_pin"`
+	BVNVerificationID   string              `json:"bvn_verification_id"`
+	NINVerificationID   string              `json:"nin_verification_id"`
+	PhoneVerificationID string              `json:"phone_verification_id"`
+	EmailVerificationID string              `json:"email_verification_id"`
+	IsBiometricsEnabled bool                `json:"is_biometrics_enabled"`
+	Device              DeviceRegisteration `json:"device"`
+}
+
 type DeviceRegisteration struct {
 	DeviceID    string `json:"device_id" binding:"required"`
 	PublicKey   string `json:"public_key" binding:"required"`
@@ -13,7 +48,6 @@ type DeviceRegisteration struct {
 }
 
 type RegisterationRequest struct {
-	PhoneNumber           string              `json:"phone_number" binding:"required"`
 	Email                 string              `json:"email"`
 	Password              string              `json:"password" binding:"required"`
 	ConfirmPassword       string              `json:"confirm_password" binding:"required"`
@@ -86,8 +120,6 @@ type VerifyForgotTransactionPinOTPRequest struct {
 }
 
 type VerifyForgotTransactionPinOTPResponse struct {
-	Status         string `json:"status"`
-	Message        string `json:"message"`
 	VerificationID string `json:"verification_id"`
 }
 
@@ -98,8 +130,7 @@ type ResetTransactionPinRequest struct {
 }
 
 type RequestTransactionPinChangeResponse struct {
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
+	OTPID string `json:"otp_id"`
 }
 
 type VerifyTransactionPinChangeOTPRequest struct {
@@ -108,13 +139,11 @@ type VerifyTransactionPinChangeOTPRequest struct {
 }
 
 type VerifyTransactionPinChangeOTPResponse struct {
-	Message        string `json:"message"`
 	VerificationID string `json:"verification_id"`
 }
 
 type ResendTransactionPinChangeOTPResponse struct {
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
+	OTPID string `json:"otp_id"`
 }
 
 type ChangeTransactionPinRequest struct {
@@ -125,9 +154,7 @@ type ChangeTransactionPinRequest struct {
 }
 
 type RequestChangePasswordResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-	OTPID   string `json:"otp_id"`
+	OTPID string `json:"otp_id"`
 }
 
 type VerifyPasswordChangeOTPRequest struct {
@@ -136,8 +163,6 @@ type VerifyPasswordChangeOTPRequest struct {
 }
 
 type VerifyPasswordChangeOTPResponse struct {
-	Status         string `json:"status"`
-	Message        string `json:"message"`
 	VerificationID string `json:"verification_id"`
 }
 
@@ -297,9 +322,7 @@ type CBAWalletUpdate struct {
 }
 
 type ToggleBiometricsResponse struct {
-	Status    string `json:"status"`
-	Message   string `json:"message"`
-	IsEnabled bool   `json:"is_enabled"`
+	IsEnabled bool `json:"is_enabled"`
 }
 
 type ChallengeRequestResponse struct {

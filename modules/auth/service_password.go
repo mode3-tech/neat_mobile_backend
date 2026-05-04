@@ -60,9 +60,7 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, devic
 	}
 
 	return &RequestChangePasswordResponse{
-		Status:  "success",
-		Message: "OTP has been sent to your phone",
-		OTPID:   result.OTPID,
+		OTPID: result.OTPID,
 	}, nil
 }
 
@@ -104,8 +102,6 @@ func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 	}
 
 	return &VerifyPasswordChangeOTPResponse{
-		Status:         "success",
-		Message:        "OTP verified successfully",
 		VerificationID: result.VerificationID,
 	}, nil
 }

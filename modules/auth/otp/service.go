@@ -51,15 +51,22 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			return nil, errors.New("verification record not found")
 		}
 
-		var phoneNumber string
-		if row.VerifiedPhone != nil && *row.VerifiedPhone != "" {
-			phoneNumber = *row.VerifiedPhone
-		} else {
-			log.Printf("no verified phone number found in verification record")
-			return nil, errors.New("no verified phone number found in verification record")
+		switch in.Channel {
+		case ChannelSMS:
+			if row.VerifiedPhone == nil || *row.VerifiedPhone == "" {
+				log.Printf("no verified phone number found in verification record")
+				return nil, errors.New("no verified phone number found in verification record")
+			}
+			normalizeDestination, err = NormalizeDestination(*row.VerifiedPhone, in.Channel)
+		case ChannelEmail:
+			if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
+				log.Printf("no verified email found in verification record")
+				return nil, errors.New("no verified email found in verification record")
+			}
+			normalizeDestination, err = NormalizeDestination(*row.VerifiedEmail, in.Channel)
+		default:
+			return nil, errors.New("unsupported channel")
 		}
-
-		normalizeDestination, err = NormalizeDestination(phoneNumber, in.Channel)
 		if err != nil {
 			return nil, err
 		}
@@ -202,16 +209,41 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 		r := NewRepository(txDB)
 		verificationRepo := verification.NewVerification(txDB)
 
+		// Get destination from verification record
+		row, err := s.repo.GetVerificationRow(ctx, in.VerificationID)
+		if err != nil {
+			return err
+		}
+		if row == nil {
+			return errors.New("verification record not found")
+		}
+
+		var destination string
+		switch in.Channel {
+		case ChannelSMS:
+			if row.VerifiedPhone == nil || *row.VerifiedPhone == "" {
+				return errors.New("no verified phone number found in verification record")
+			}
+			destination = *row.VerifiedPhone
+		case ChannelEmail:
+			if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
+				return errors.New("no verified email found in verification record")
+			}
+			destination = *row.VerifiedEmail
+		default:
+			return errors.New("unsupported channel")
+		}
+
+		normalizedDestination, normErr := NormalizeDestination(destination, in.Channel)
+		if normErr != nil {
+			return errors.New("invalid destination")
+		}
+
 		var active *OTPModel
-		var err error
 
 		if strings.TrimSpace(in.OTPID) != "" {
 			active, err = r.GetActiveOTPByID(ctx, strings.TrimSpace(in.OTPID), in.Purpose)
 		} else {
-			normalizedDestination, normErr := NormalizeDestination(in.Destination, in.Channel)
-			if normErr != nil {
-				return errors.New("invalid otp")
-			}
 			active, err = r.GetActiveOTP(ctx, normalizedDestination, in.Purpose)
 		}
 
@@ -414,7 +446,6 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 		}
 
 		resp = VerifyOTPResponse{
-			Message:        "OTP verification was successful",
 			VerificationID: record.ID,
 		}
 

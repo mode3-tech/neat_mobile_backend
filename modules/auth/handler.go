@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"errors"
-	"log"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
 	"net/http"
@@ -19,75 +17,17 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func requestIDFromContext(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-
-	if value, ok := c.Get(middleware.RequestIDContextKey); ok {
-		if requestID, ok := value.(string); ok {
-			requestID = strings.TrimSpace(requestID)
-			if requestID != "" {
-				return requestID
-			}
-		}
-	}
-
-	return strings.TrimSpace(c.GetHeader(middleware.RequestIDHeader))
-}
-
-func (h *Handler) respondError(c *gin.Context, status int, clientMessage string, err error) {
-	if c == nil {
-		return
-	}
-
-	requestID := requestIDFromContext(c)
-	route := c.FullPath()
-	if strings.TrimSpace(route) == "" {
-		route = c.Request.URL.Path
-	}
-
-	level := "WARN"
-	if status >= http.StatusInternalServerError {
-		level = "ERROR"
-	}
-
-	if err != nil {
-		_ = c.Error(err)
-		log.Printf(
-			"level=%s request_id=%s method=%s path=%s status=%d client_ip=%s error=%q",
-			level,
-			requestID,
-			c.Request.Method,
-			route,
-			status,
-			c.ClientIP(),
-			err.Error(),
-		)
-	} else {
-		log.Printf(
-			"level=%s request_id=%s method=%s path=%s status=%d client_ip=%s error=%q",
-			level,
-			requestID,
-			c.Request.Method,
-			route,
-			status,
-			c.ClientIP(),
-			clientMessage,
-		)
-	}
-
-	c.AbortWithStatusJSON(status, gin.H{
-		"error":      clientMessage,
-		"request_id": requestID,
-	})
-}
-
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body",
+			},
+		})
 		return
 	}
 
@@ -110,7 +50,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	c.JSON(statusCode, response.APIResponse[RegistrationJobResponse]{
 		Status:  "success",
-		Message: "Registration processed successfully",
+		Message: "Registration processed successfully.",
 		Data:    resp,
 	})
 }
@@ -118,7 +58,13 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) GetRegistrationStatus(c *gin.Context) {
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
-		h.respondError(c, http.StatusBadRequest, "job id is required", nil)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidParams),
+				Message: "Missing query paramter.",
+			},
+		})
 		return
 	}
 
@@ -134,7 +80,7 @@ func (h *Handler) GetRegistrationStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[RegistrationJobResponse]{
 		Status:  "success",
-		Message: "Registration status retrieved successfully",
+		Message: "Registration status retrieved successfully.",
 		Data:    resp,
 	})
 }
@@ -142,17 +88,40 @@ func (h *Handler) GetRegistrationStatus(c *gin.Context) {
 func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
-		h.respondError(c, http.StatusBadRequest, "job id is required", nil)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidParams),
+				Message: "Missing query paramter.",
+			},
+		})
 		return
 	}
 
 	var req RegistrationSessionClaimRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
+
 	ip := c.ClientIP()
 
 	resp, err := h.service.ClaimRegistrationSession(c.Request.Context(), jobID, req.ClaimToken, deviceID, ip)
@@ -166,29 +135,47 @@ func (h *Handler) ClaimRegistrationSession(c *gin.Context) {
 	}
 
 	if resp == nil || resp.AccessToken == "" || resp.RefreshToken == "" {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty registration session claim response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, response.APIResponse[VerifiedDeviceResponse]{
 		Status:  "success",
-		Message: "Registration session claimed successfully",
+		Message: "Registration session claimed successfully.",
 		Data:    resp,
 	})
 }
 
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	ip := c.ClientIP()
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
@@ -204,7 +191,13 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	if loginObj == nil || loginObj.Status == "" {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty login init response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -215,16 +208,21 @@ func (h *Handler) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[LoginInitResponse]{
 		Status:  "success",
-		Message: "login credentials verified",
+		Message: "Login credentials verified.",
 		Data:    &resp,
 	})
 }
 
 func (h *Handler) VerifyDevice(c *gin.Context) {
 	var req VerifyDeviceRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -241,7 +239,13 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 	}
 
 	if resp == nil || resp.AccessToken == "" || resp.RefreshToken == "" {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty verify-device response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -253,41 +257,78 @@ func (h *Handler) VerifyDevice(c *gin.Context) {
 }
 
 func (h *Handler) Logout(c *gin.Context) {
-	var req LogoutRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
-		return
-	}
-
-	authHeader := c.GetHeader("Authorization")
+	authHeader := strings.TrimSpace(c.Request.Header.Get("Authorization"))
 	if authHeader == "" {
-		h.respondError(c, http.StatusBadRequest, "missing authorization header", nil)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 	splittedAuthHeader := strings.Fields(authHeader)
 	if len(splittedAuthHeader) != 2 || splittedAuthHeader[0] != "Bearer" {
-		h.respondError(c, http.StatusUnauthorized, "invalid authorization header", nil)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
-	accessToken := splittedAuthHeader[1]
+
+	accessToken := strings.TrimSpace(splittedAuthHeader[1])
+	if accessToken == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
+
+	var req LogoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
+		return
+	}
 
 	if err := h.service.Logout(c.Request.Context(), req.RefreshToken, accessToken); err != nil {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	c.JSON(http.StatusNoContent, response.APIResponse[any]{
 		Status:  "success",
-		Message: "logout successful",
+		Message: "Logged out.",
 	})
 }
 
 func (h *Handler) RefreshAccessToken(c *gin.Context) {
 	var req RefreshTokenRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "refresh token or device id missing", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -298,10 +339,17 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 			Status: "error",
 			Error:  &mapped.Error,
 		})
+		return
 	}
 
 	if tokenObj == nil || tokenObj.AccessToken == "" || tokenObj.RefreshToken == "" {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty token response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -314,9 +362,14 @@ func (h *Handler) RefreshAccessToken(c *gin.Context) {
 
 func (h *Handler) VerifyBVN(c *gin.Context) {
 	var req BVNValidationRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "bvn is missing", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body",
+			},
+		})
 		return
 	}
 
@@ -331,7 +384,13 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 	}
 
 	if bvnInfo == nil {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty bvn response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -344,16 +403,21 @@ func (h *Handler) VerifyBVN(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[BVNValidationResponse]{
 		Status:  "success",
-		Message: "bvn verification was succesful",
+		Message: "BVN verification was succesful.",
 		Data:    resp,
 	})
 }
 
 func (h *Handler) VerifyNIN(c *gin.Context) {
 	var req NINValidationRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "nin is missing", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -368,7 +432,13 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 	}
 
 	if ninInfo == nil {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty nin response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -381,7 +451,7 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[NINValidationResponse]{
 		Status:  "success",
-		Message: "nin verification was successful",
+		Message: "NIN verification was successful.",
 		Data:    resp,
 	})
 }
@@ -389,7 +459,13 @@ func (h *Handler) VerifyNIN(c *gin.Context) {
 func (h *Handler) VerifyNewDevice(c *gin.Context) {
 	var req NewDeviceResquest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -406,7 +482,13 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 	}
 
 	if authObj == nil || authObj.AccessToken == "" || authObj.RefreshToken == "" {
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again", errors.New("empty verify-device response"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    "INTERNAL_SERVER_ERROR",
+				Message: "Something went wrong.",
+			},
+		})
 		return
 	}
 
@@ -418,7 +500,7 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[VerifiedDeviceResponse]{
 		Status:  "success",
-		Message: "new device successfully verified",
+		Message: "New device successfully verified.",
 		Data:    &resp,
 	})
 }
@@ -426,7 +508,13 @@ func (h *Handler) VerifyNewDevice(c *gin.Context) {
 func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
 	var req ResendNewDeviceOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -441,15 +529,20 @@ func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, response.APIResponse[any]{
 		Status:  "success",
-		Message: "otp successfully resent",
+		Message: "OTP successfully resent.",
 	})
 }
 
 func (h *Handler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -458,8 +551,8 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
 			Status: "error",
 			Error: &response.APIError{
-				Code:    "MISSING_DEVICE_ID",
-				Message: "unauthorized",
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized",
 			},
 		})
 		return
@@ -477,7 +570,7 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[ForgotPasswordResponse]{
 		Status:  "success",
-		Message: "otp has been sent",
+		Message: "OTP has been sent.",
 		Data:    resp,
 	})
 }
@@ -486,11 +579,27 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 	var req ForgotPasswordRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.Request.Header.Get("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req, deviceID)
 	if err != nil {
@@ -504,17 +613,33 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[ForgotPasswordResponse]{
 		Status:  "success",
-		Message: "otp has been resent",
+		Message: "OTP has been resent.",
 		Data:    resp,
 	})
 }
 
 func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
-	deviceID := c.Request.Header.Get("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req VerifyForgotPasswordOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
@@ -530,7 +655,7 @@ func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[VerifyForgotPasswordOTPResponse]{
 		Status:  "success",
-		Message: "verification of otp was successful",
+		Message: "OTP successfully verified.",
 		Data:    resp,
 	})
 }
@@ -538,776 +663,687 @@ func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
 func (h *Handler) ForgotTransactionPin(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	resp, err := h.service.ForgotTransactionPin(c.Request.Context(), mobileUserID, deviceID)
-
 	if err != nil {
-		if isForgotPinBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isForgotPinUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isForgotPinBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "invalid phone number on account":
-		return true
-	}
-	return false
-}
-
-func isForgotPinUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[ForgotTransactionPinResponse]{
+		Status:  "success",
+		Message: "OTP has been sent.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) VerifyForgotTransactionPinOTP(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req VerifyForgotTransactionPinOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	resp, err := h.service.VerifyForgotTransactionPinOTP(c.Request.Context(), mobileUserID, deviceID, req)
 	if err != nil {
-		if isVerifyForgotTransactionPinOTPBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isVerifyForgotTransactionPinOTPUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isVerifyForgotTransactionPinOTPBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "otp id is required", "otp code is required":
-		return true
-	}
-	return false
-}
-
-func isVerifyForgotTransactionPinOTPUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed", "user not found", "invalid otp":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[VerifyForgotTransactionPinOTPResponse]{
+		Status:  "success",
+		Message: "OTP has been verified.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ResendForgotTransactionPinOTP(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	if err := h.service.ResendForgotTransactionPinOTP(c.Request.Context(), mobileUserID, deviceID); err != nil {
-		if isResendForgotPinBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isResendForgotPinUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isResendForgotPinRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "OTP resent successfully"})
-}
-
-func isResendForgotPinBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required":
-		return true
-	}
-	return false
-}
-
-func isResendForgotPinUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
-}
-
-func isResendForgotPinRateLimitedError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "too many requests"
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "OTP has been resent.",
+	})
 }
 
 func (h *Handler) ResetTransactionPin(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req ResetTransactionPinRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	if err := h.service.ResetTransactionPin(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
-		if isResetPinBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isResetPinUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "transaction pin reset successfully"})
-}
-
-func isResetPinBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required",
-		"otp code is required",
-		"transaction pin must be exactly 4 digits long",
-		"transaction pin must contain only digits",
-		"new pin and confirm new pin do not match":
-		return true
-	}
-	return false
-}
-
-func isResetPinUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "invalid device id", "invalid otp", "user not found", "invalid verification id", "verification id has expired", "device not found":
-		return true
-	}
-	return false
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "OTP has been sent.",
+	})
 }
 
 func (h *Handler) RequestPasswordChange(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	resp, err := h.service.RequestPasswordChange(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isRequestPasswordChangeBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isRequestPasswordChangeUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isRequestPasswordChangeBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "invalid phone number on account":
-		return true
-	}
-	return false
-}
-
-func isRequestPasswordChangeUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[RequestChangePasswordResponse]{
+		Status:  "success",
+		Message: "OTP has been sent.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ResendPasswordChangeOTP(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
+
 	resp, err := h.service.ResendPasswordChangeOTP(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isResendPasswordChangeOTPBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isResendPasswordChangeOTPUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isResendPasswordChangeOTPRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, resp)
-}
-
-func isResendPasswordChangeOTPBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required":
-		return true
-	}
-	return false
-}
-
-func isResendPasswordChangeOTPUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
-}
-
-func isResendPasswordChangeOTPRateLimitedError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "too many requests"
 }
 
 func (h *Handler) VerifyPasswordChangeOTP(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
 	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req VerifyPasswordChangeOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	resp, err := h.service.VerifyPasswordChangeOTP(c.Request.Context(), mobileUserID, deviceID, req)
 	if err != nil {
-		if isVerifyPasswordChangeOTPBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isVerifyPasswordChangeOTPUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isVerifyPasswordChangeOTPBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "otp id is required", "otp code is required":
-		return true
-	}
-	return false
-}
-
-func isVerifyPasswordChangeOTPUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed", "user not found", "invalid otp":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[VerifyPasswordChangeOTPResponse]{
+		Status:  "success",
+		Message: "OTP successfully verified.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	if err := h.service.ChangePassword(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
-		if isChangePasswordBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isChangePasswordUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
-}
-
-func isChangePasswordBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required",
-		"verification id is required",
-		"password length should be at least 8 characters long",
-		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
-		"new password and confirm new password do not match":
-		return true
-	}
-	return false
-}
-
-func isChangePasswordUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed", "user not found",
-		"invalid current password",
-		"invalid verification id", "verification id has expired":
-		return true
-	}
-	return false
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Password has been changed successfully",
+	})
 }
 
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	deviceID := c.Request.Header.Get("X-Device-ID")
-
-	if err := h.service.ResetPassword(c.Request.Context(), req, deviceID); err != nil {
-		if isBadRequestResetPasswordError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnauthorizedResetPasswordError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "password reset successfully"})
-
-}
-
-func isBadRequestResetPasswordError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required",
-		"phone is required",
-		"verification id is required",
-		"password length should be at least 8 characters long",
-		"password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
-		"new password and confirm new password do not match",
-		"invalid Nigerian number":
-		return true
+	if err := h.service.ResetPassword(c.Request.Context(), req, deviceID); err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
 	}
 
-	return false
-}
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Password reset successfully.",
+	})
 
-func isUnauthorizedResetPasswordError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed",
-		"invalid verification id", "verification id has expired",
-		"no account exists under this phone number":
-		return true
-	}
-
-	return false
 }
 
 func (h *Handler) RequestTransactionPinChange(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	resp, err := h.service.RequestTransactionPinChange(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isRequestTransactionPinChangeBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isRequestTransactionPinChangeUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isResendRequestTransactionPinChangeRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isRequestTransactionPinChangeBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "invalid phone number on account":
-		return true
-	}
-	return false
-}
-
-func isRequestTransactionPinChangeUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[RequestTransactionPinChangeResponse]{
+		Status:  "success",
+		Message: "OTP has been sent.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ResendRequestTransactionPinChangeOTP(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
+
 	resp, err := h.service.ResendTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isResendRequestTransactionPinChangeBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isResendRequestTransactionPinChangeUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isResendRequestTransactionPinChangeRateLimitedError(err) {
-			h.respondError(c, http.StatusTooManyRequests, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
-}
-
-func isResendRequestTransactionPinChangeBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required":
-		return true
-	}
-	return false
-}
-
-func isResendRequestTransactionPinChangeUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "no record of device found", "user not found":
-		return true
-	}
-	return false
-}
-
-func isResendRequestTransactionPinChangeRateLimitedError(err error) bool {
-	return strings.TrimSpace(err.Error()) == "too many requests"
+	c.JSON(http.StatusOK, response.APIResponse[ResendTransactionPinChangeOTPResponse]{
+		Status:  "success",
+		Message: "OTP has been resent successfully.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) VerifyTransactionPinChangeOTP(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req VerifyTransactionPinChangeOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	resp, err := h.service.VerifyTransactionPinChangeOTP(c.Request.Context(), mobileUserID, deviceID, req)
 	if err != nil {
-		if isVerifyTransactionPinChangeOTPBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isVerifyTransactionPinChangeOTPUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isVerifyTransactionPinChangeOTPBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required", "otp id is required", "otp code is required":
-		return true
-	}
-	return false
-}
-
-func isVerifyTransactionPinChangeOTPUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed", "user not found", "invalid otp":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[VerifyTransactionPinChangeOTPResponse]{
+		Status:  "success",
+		Message: "OTP has been verified.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ChangeTransactionPin(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		h.respondError(c, http.StatusUnauthorized, "unauthorized", nil)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	var req ChangeTransactionPinRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "invalid request body", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	if err := h.service.ChangeTransactionPin(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
-		if isChangeTransactionPinBadRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isChangeTransactionPinUnauthorizedError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "transaction pin successfully changed"})
-}
-
-func isChangeTransactionPinBadRequestError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device id is required",
-		"verification id is required",
-		"transaction pin must be exactly 4 digits long",
-		"transaction pin must contain only digits",
-		"new pin and confirm new pin do not match",
-		"invalid current pin":
-		return true
-	}
-	return false
-}
-
-func isChangeTransactionPinUnauthorizedError(err error) bool {
-	msg := strings.TrimSpace(err.Error())
-	switch msg {
-	case "device not found", "device not allowed", "user not found",
-		"invalid verification id", "verification id has expired":
-		return true
-	}
-	return false
+	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Transaction pin has been changed.",
+	})
 }
 
 func (h *Handler) ToggleBiometrics(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		h.respondError(c, http.StatusUnauthorized, "invalid access token", nil)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
+		return
+	}
 
 	resp, err := h.service.ToggleBiometrics(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isBadRequestToggleBiometricsError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnprocessableEntityBiometricsError(err) {
-			h.respondError(c, http.StatusUnprocessableEntity, err.Error(), err)
-			return
-		}
-		if isUnauthorizedToggleBiometricsError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		if isInternalServerBiometricsError(err) {
-			h.respondError(c, http.StatusInternalServerError, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isBadRequestToggleBiometricsError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "is_enabled must be true or false":
-		return true
-	}
-	return false
-}
-
-func isUnauthorizedToggleBiometricsError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "device is not allowed", "device not found", "device id is required", "mobile user id is required":
-		return true
-	}
-
-	return false
-}
-
-func isUnprocessableEntityBiometricsError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "is_enabled should be true or false":
-		return true
-	}
-	return false
-}
-
-func isInternalServerBiometricsError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "unable to toggle biometrics":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[ToggleBiometricsResponse]{
+		Status:  "success",
+		Message: "Biometrics toggled successfully.",
+		Data:    resp,
+	})
 }
 
 func (h *Handler) ChallengeRequest(c *gin.Context) {
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		h.respondError(c, http.StatusBadRequest, "unauthorized", nil)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidDeviceID),
+				Message: "Unauthorized.",
+			},
+		})
 		return
 	}
 
 	var req ChallengeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondError(c, http.StatusBadRequest, "refresh_token is required", err)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidRequestBody),
+				Message: "Invalid request body.",
+			},
+		})
 		return
 	}
 
 	resp, err := h.service.CreateChallenge(c.Request.Context(), strings.TrimSpace(req.RefreshToken), deviceID)
 	if err != nil {
-		if isBadRequestChallengeRequestError(err) {
-			h.respondError(c, http.StatusBadRequest, err.Error(), err)
-			return
-		}
-		if isUnauthorizedChallengeRequestError(err) {
-			h.respondError(c, http.StatusUnauthorized, err.Error(), err)
-			return
-		}
-		h.respondError(c, http.StatusInternalServerError, "something went wrong, please try again later", err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
-}
-
-func isBadRequestChallengeRequestError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "device id is required":
-		return true
-	}
-	return false
-}
-
-func isUnauthorizedChallengeRequestError(err error) bool {
-	msg := err.Error()
-	switch msg {
-	case "device not found", "device not allowed", "mobile user id is required":
-		return true
-	}
-	return false
+	c.JSON(http.StatusOK, response.APIResponse[ChallengeRequestResponse]{
+		Status:  "success",
+		Message: "Challenge signature sent.",
+		Data:    resp,
+	})
 }

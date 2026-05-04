@@ -2531,7 +2531,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/OTPRequestSuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "OTP sent successfully"
+                    }
+                  }
                 }
               }
             }
@@ -2612,9 +2620,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifyOTPResponse"
+                  "$ref": "#/components/schemas/OTPVerifySuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "OTP verified successfully",
+                      "data": {
+                        "verification_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+                      }
+                    }
+                  }
                 }
-              }
             }
           },
           "400": {
@@ -8524,7 +8542,8 @@
             "enum": [
               "login",
               "signup",
-              "password_reset"
+              "password_reset",
+              "pin_reset"
             ],
             "example": "login"
           },
@@ -8547,7 +8566,7 @@
         "required": [
           "purpose",
           "channel",
-          "destination",
+          "verification_id",
           "otp"
         ],
         "properties": {
@@ -8556,7 +8575,8 @@
             "enum": [
               "login",
               "signup",
-              "password_reset"
+              "password_reset",
+              "pin_reset"
             ],
             "example": "login"
           },
@@ -8568,9 +8588,9 @@
             ],
             "example": "email"
           },
-          "destination": {
+          "verification_id": {
             "type": "string",
-            "example": "user@example.com"
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           },
           "otp": {
             "type": "string",
@@ -9250,14 +9270,70 @@
       "ErrorResponse": {
         "type": "object",
         "properties": {
-          "error": {
+          "status": {
             "type": "string",
-            "example": "invalid request body"
+            "example": "error"
           },
-          "request_id": {
+          "error": {
+            "$ref": "#/components/schemas/APIError"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "APIError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
             "type": "string",
-            "description": "Correlation identifier included in responses for request tracing.",
-            "example": "9c16f4c6-238d-4872-a328-8200e5a916d1"
+            "example": "INVALID_REQUEST_BODY"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid request"
+          }
+        }
+      },
+      "OTPRequestSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP sent successfully"
+          }
+        }
+      },
+      "OTPVerifySuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OTP verified successfully"
+          },
+          "data": {
+            "$ref": "#/components/schemas/VerifyOTPResponse"
           }
         }
       },
@@ -9289,4 +9365,5 @@
       }
     }
   }
+}
 }

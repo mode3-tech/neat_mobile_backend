@@ -1569,7 +1569,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageResponse"
+                $ref: "#/components/schemas/OTPRequestSuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: OTP sent successfully
         "400":
           description: Invalid request body, purpose, channel, email, or phone number
           content:
@@ -1618,7 +1623,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VerifyOTPResponse"
+                $ref: "#/components/schemas/OTPVerifySuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: OTP verified successfully
+                    data:
+                      verification_id: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         "400":
           description: Invalid request body, purpose, or channel
           content:
@@ -5690,6 +5702,7 @@ components:
             - login
             - signup
             - password_reset
+            - pin_reset
           example: login
         channel:
           type: string
@@ -5705,7 +5718,7 @@ components:
       required:
         - purpose
         - channel
-        - destination
+        - verification_id
         - otp
       properties:
         purpose:
@@ -5714,6 +5727,7 @@ components:
             - login
             - signup
             - password_reset
+            - pin_reset
           example: login
         channel:
           type: string
@@ -5721,9 +5735,9 @@ components:
             - sms
             - email
           example: email
-        destination:
+        verification_id:
           type: string
-          example: user@example.com
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         otp:
           type: string
           minLength: 6
@@ -6248,10 +6262,49 @@ components:
     ErrorResponse:
       type: object
       properties:
+        status:
+          type: string
+          example: error
         error:
+          $ref: "#/components/schemas/APIError"
+        message:
           type: string
-          example: invalid request body
-        request_id:
+    APIError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
           type: string
-          description: Correlation identifier included in responses for request tracing.
-          example: 9c16f4c6-238d-4872-a328-8200e5a916d1
+          example: INVALID_REQUEST_BODY
+        message:
+          type: string
+          example: Invalid request
+    OTPRequestSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP sent successfully
+    OTPVerifySuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: OTP verified successfully
+        data:
+          $ref: "#/components/schemas/VerifyOTPResponse"
