@@ -110,6 +110,25 @@ paths:
                     error:
                       code: USER_EXISTS
                       message: user already exists
+        "422":
+          description: Validation failed due to mismatched verification data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                email_phone_mismatch:
+                  value:
+                    status: error
+                    error:
+                      code: EMAIL_PHONE_MISMATCH
+                      message: verified email and phone do not belong to the same person
+                phone_mismatch:
+                  value:
+                    status: error
+                    error:
+                      code: PHONE_MISMATCH
+                      message: verified phone and phone number do not match
         "500":
           description: Registration failed
           content:

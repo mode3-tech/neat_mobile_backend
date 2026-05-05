@@ -39,6 +39,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrRegistrationAlreadyInProgress:
+		return ErrorMapping{
+			Status: http.StatusConflict,
+			Error: APIError{
+				Code:    "REGISTRATION_IN_PROGRESS",
+				Message: "registration already in progress",
+			},
+		}
+
 	case appErr.ErrNotFound:
 		return ErrorMapping{
 			Status: http.StatusNotFound,
@@ -111,6 +120,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrEmailPhoneMismatch:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "EMAIL_PHONE_MISMATCH",
+				Message: "can not verify that email and phone belong to the same person",
+			},
+		}
+
 	case appErr.ErrNINAndBVNMismatch:
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
@@ -162,6 +180,159 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "INVALID_PHONE",
 				Message: "invalid phone number",
+			},
+		}
+
+	case appErr.ErrInvalidDateFrom, appErr.ErrInvalidDateTo, appErr.ErrInvalidDateRange:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_DATE",
+				Message: "invalid date range",
+			},
+		}
+
+	case appErr.ErrUnderaged:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "UNDERAGED",
+				Message: "user is underaged",
+			},
+		}
+
+	case appErr.ErrInvalidLoanAmount:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_LOAN_AMOUNT",
+				Message: "invalid loan amount",
+			},
+		}
+
+	case appErr.ErrInvalidLoanProduct:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_LOAN_PRODUCT",
+				Message: "invalid loan product",
+			},
+		}
+
+	case appErr.ErrIncompleteKYC:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INCOMPLETE_KYC",
+				Message: "kyc is incomplete",
+			},
+		}
+
+	case appErr.ErrIneligibleBusinessAge:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INELIGIBLE_BUSINESS_AGE",
+				Message: "business has to be at least 1 year old to be eligible for a loan",
+			},
+		}
+
+	case appErr.ErrIneligibleForLoan:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INELIGIBLE_FOR_LOAN",
+				Message: "user has active loan or has defaulted on a previous loan",
+			},
+		}
+
+	case appErr.ErrInvalidBusinessValue:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_BUSINESS_VALUE",
+				Message: "business value is too low to be eligible for a loan",
+			},
+		}
+
+	case appErr.ErrInvalidLoanTerm:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_LOAN_TERM",
+				Message: "invalid loan term",
+			},
+		}
+
+	case appErr.ErrInvalidSavingsAmount:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_SAVINGS_AMOUNT",
+				Message: "savings amount must be at least 50 NGN",
+			},
+		}
+
+	case appErr.ErrInvalidVerificationID:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_VERIFICATION_ID",
+				Message: "invalid verification id",
+			},
+		}
+
+	case appErr.ErrInvalidChannel:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "INVALID_CHANNEL",
+				Message: "invalid channel",
+			},
+		}
+
+	case appErr.ErrTooManyRequests:
+		return ErrorMapping{
+			Status: http.StatusTooManyRequests,
+			Error: APIError{
+				Code:    "TOO_MANY_REQUESTS",
+				Message: "too many requests, please try again later",
+			},
+		}
+
+	case appErr.ErrInvalidEmail:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_EMAIL",
+				Message: "invalid email",
+			},
+		}
+
+	case appErr.ErrUnableToGenerateOTP:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "UNABLE_TO_GENERATE_OTP",
+				Message: "OTP generation failed, please try again",
+			},
+		}
+
+	case appErr.ErrUnableToHashOTP:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "UNABLE_TO_HASH_OTP",
+				Message: "error occured while sending OTP, please try again",
+			},
+		}
+
+	case appErr.ErrInvalidFileFormat:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_FILE_FORMAT",
+				Message: "use a valid file format",
 			},
 		}
 

@@ -125,13 +125,13 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
 	otpRepo := otp.NewRepository(db)
-	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper)
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper, cfg.AppName)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, deviceService, cbaSyncSem, cbaWalletUpdateSem)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())

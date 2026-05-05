@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"neat_mobile_app_backend/modules/auth"
 )
 
 func TestLookupWalletByCustomerID_Success(t *testing.T) {
@@ -95,5 +97,60 @@ func TestLookupWalletByCustomerID_NotFound(t *testing.T) {
 	}
 	if resp != nil {
 		t.Fatalf("expected nil response for missing customer, got %+v", resp)
+	}
+}
+
+func TestSeedWalletPayload_Deterministic(t *testing.T) {
+	payload := &auth.WalletPayload{
+		BVN:         "12345678901",
+		FirstName:   "Jane",
+		LastName:    "Doe",
+		DateOfBirth: "1990-01-01",
+		PhoneNumber: "2348012345678",
+		Email:       "jane.doe@example.com",
+		Address:     "1 Lagos Street",
+		Metadata:    map[string]interface{}{"customer_id": "user-123"},
+	}
+
+	seededA, err := SeedWalletPayload(payload, "dev-wallet-key", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seededB, err := SeedWalletPayload(payload, "dev-wallet-key", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if seededA.Email != seededB.Email {
+		t.Fatalf("expected deterministic email with same key; got %q and %q", seededA.Email, seededB.Email)
+	}
+	if seededA.Metadata["wallet_generation_seed"] != seededB.Metadata["wallet_generation_seed"] {
+		t.Fatalf("expected deterministic seed with same key")
+	}
+}
+
+func TestSeedWalletPayload_SecretKeyChange(t *testing.T) {
+	payload := &auth.WalletPayload{
+		BVN:         "12345678901",
+		FirstName:   "Jane",
+		LastName:    "Doe",
+		DateOfBirth: "1990-01-01",
+		PhoneNumber: "2348012345678",
+		Email:       "jane.doe@example.com",
+		Address:     "1 Lagos Street",
+		Metadata:    map[string]interface{}{"customer_id": "user-123"},
+	}
+
+	seededA, err := SeedWalletPayload(payload, "dev-wallet-key-a", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seededB, err := SeedWalletPayload(payload, "dev-wallet-key-b", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if seededA.Email == seededB.Email {
+		t.Fatal("expected different seeded email when secret key changes")
 	}
 }

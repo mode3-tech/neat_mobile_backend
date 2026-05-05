@@ -28,24 +28,25 @@ const (
 )
 
 type Service struct {
-	repo               *Repository
-	coreCustomerFinder CoreCustomerFinder
-	cbaCustomerUpdater CBACustomerUpdater
-	verification       *verification.VerificationRepo
-	tx                 *tx.Transactor
-	deviceRepo         *device.Repository
-	smsSender          notify.SMSSender
-	otpPepper          string
-	jwtSigner          JWTSigner
-	tender             TendarValidation
-	prembly            PremblyValidation
-	nin                NINValidation
-	providerSource     BVNProviderSource
-	otpManager         authotp.OTPManager
-	walletService      WalletService
-	deviceVerifier     DeviceVerifier
-	cbaSyncSem         chan struct{}
-	cbaWalletUpdateSem chan struct{}
+	repo                 *Repository
+	coreCustomerFinder   CoreCustomerFinder
+	cbaCustomerUpdater   CBACustomerUpdater
+	verification         *verification.VerificationRepo
+	tx                   *tx.Transactor
+	deviceRepo           *device.Repository
+	smsSender            notify.SMSSender
+	otpPepper            string
+	jwtSigner            JWTSigner
+	tender               TendarValidation
+	prembly              PremblyValidation
+	nin                  NINValidation
+	providerSource       BVNProviderSource
+	otpManager           authotp.OTPManager
+	walletService        WalletService
+	walletPayloadSeedKey string
+	deviceVerifier       DeviceVerifier
+	cbaSyncSem           chan struct{}
+	cbaWalletUpdateSem   chan struct{}
 }
 
 func NewService(
@@ -64,28 +65,30 @@ func NewService(
 	providerSource BVNProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
+	walletPayloadSeedKey string,
 	deviceVerifier DeviceVerifier,
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
 ) *Service {
 	return &Service{
-		repo:               repo,
-		coreCustomerFinder: coreCustomerFinder,
-		cbaCustomerUpdater: cbaCustomerUpdater,
-		verification:       verification,
-		tx:                 tx,
-		deviceRepo:         deviceRepo,
-		smsSender:          smsSender,
-		otpPepper:          otpPepper,
-		jwtSigner:          jwtSigner,
-		tender:             tender,
-		prembly:            prembly,
-		nin:                nin,
-		providerSource:     providerSource,
-		otpManager:         otpManager,
-		walletService:      walletService,
-		deviceVerifier:     deviceVerifier,
-		cbaSyncSem:         cbaSyncSem,
-		cbaWalletUpdateSem: cbaWalletUpdateSem,
+		repo:                 repo,
+		coreCustomerFinder:   coreCustomerFinder,
+		cbaCustomerUpdater:   cbaCustomerUpdater,
+		verification:         verification,
+		tx:                   tx,
+		deviceRepo:           deviceRepo,
+		smsSender:            smsSender,
+		otpPepper:            otpPepper,
+		jwtSigner:            jwtSigner,
+		tender:               tender,
+		prembly:              prembly,
+		nin:                  nin,
+		providerSource:       providerSource,
+		otpManager:           otpManager,
+		walletService:        walletService,
+		walletPayloadSeedKey: walletPayloadSeedKey,
+		deviceVerifier:       deviceVerifier,
+		cbaSyncSem:           cbaSyncSem,
+		cbaWalletUpdateSem:   cbaWalletUpdateSem,
 	}
 }
 

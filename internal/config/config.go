@@ -29,6 +29,7 @@ type Config struct {
 	ProvidusSecretKey          string
 	ProvidusBaseURL            string
 	ProvidusWebhookSecret      string
+	WalletPayloadSeedKey       string
 	LoanRepaymentAccountNumber string
 	LoanRepaymentBankCode      string
 	LoanRepaymentAccountName   string
@@ -37,6 +38,7 @@ type Config struct {
 	B2DocumentsBucketName      string
 	B2AssetsBucketName         string
 	PDFShiftAPIKey             string
+	AppName                    string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -73,6 +75,7 @@ func Load() Config {
 		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
+		WalletPayloadSeedKey:       getEnv("WALLET_PAYLOAD_SEED_KEY", ""),
 		LoanRepaymentAccountNumber: getEnv("LOAN_REPAYMENT_ACCOUNT_NUMBER", ""),
 		LoanRepaymentBankCode:      getEnv("LOAN_REPAYMENT_BANK_CODE", ""),
 		LoanRepaymentAccountName:   getEnv("LOAN_REPAYMENT_ACCOUNT_NAME", ""),
@@ -81,6 +84,7 @@ func Load() Config {
 		B2DocumentsBucketName:      getEnv("B2_DOCUMENTS_BUCKET", ""),
 		B2AssetsBucketName:         getEnv("B2_ASSETS_BUCKET", ""),
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
+		AppName:                    getEnv("APPNAME", "NeatPay"),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

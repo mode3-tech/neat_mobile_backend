@@ -3,6 +3,9 @@ package providus
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +40,95 @@ func extractErrorMessage(body []byte) string {
 		return result.Message
 	}
 	return strings.TrimSpace(string(body))
+}
+
+func BuildWalletPayloadSeed(secretKey string, walletInfo *auth.WalletPayload) (string, error) {
+	if walletInfo == nil {
+		return "", errors.New("wallet payload is required")
+	}
+	secretKey = strings.TrimSpace(secretKey)
+	if secretKey == "" {
+		return "", nil
+	}
+
+	h := hmac.New(sha256.New, []byte(secretKey))
+	h.Write([]byte(strings.TrimSpace(walletInfo.BVN)))
+	h.Write([]byte("|"))
+	h.Write([]byte(strings.ToLower(strings.TrimSpace(walletInfo.Email))))
+	h.Write([]byte("|"))
+	h.Write([]byte(strings.TrimSpace(walletInfo.PhoneNumber)))
+	h.Write([]byte("|"))
+	h.Write([]byte(strings.TrimSpace(walletInfo.DateOfBirth)))
+
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum)[:8], nil
+}
+
+func SeedWalletPayload(walletInfo *auth.WalletPayload, secretKey string, usePrefix bool) (*auth.WalletPayload, error) {
+	if walletInfo == nil {
+		return nil, errors.New("wallet payload is required")
+	}
+
+	seed, err := BuildWalletPayloadSeed(secretKey, walletInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	copyPayload := *walletInfo
+	copyPayload.Metadata = make(map[string]interface{})
+	for k, v := range walletInfo.Metadata {
+		copyPayload.Metadata[k] = v
+	}
+
+	if seed == "" {
+		return &copyPayload, nil
+	}
+
+	copyPayload.Email = decorateEmailWithSeed(walletInfo.Email, seed, usePrefix)
+	copyPayload.Address = decorateStringWithSeed(walletInfo.Address, seed, usePrefix)
+	if copyPayload.Metadata == nil {
+		copyPayload.Metadata = map[string]interface{}{}
+	}
+	copyPayload.Metadata["wallet_generation_seed"] = seed
+
+	return &copyPayload, nil
+}
+
+func decorateEmailWithSeed(email, seed string, usePrefix bool) string {
+	email = strings.TrimSpace(email)
+	if email == "" || seed == "" {
+		return email
+	}
+
+	parts := strings.SplitN(email, "@", 2)
+	local := parts[0]
+	domain := ""
+	if len(parts) == 2 {
+		domain = parts[1]
+	}
+
+	if usePrefix {
+		local = seed + "." + local
+	} else {
+		local = local + "+" + seed
+	}
+
+	if domain == "" {
+		return local
+	}
+	return local + "@" + domain
+}
+
+func decorateStringWithSeed(value, seed string, usePrefix bool) string {
+	value = strings.TrimSpace(value)
+	if value == "" || seed == "" {
+		return value
+	}
+
+	if usePrefix {
+		return seed + "-" + value
+	}
+	return value + "-" + seed
 }
 
 func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {

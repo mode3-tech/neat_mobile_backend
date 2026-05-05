@@ -91,11 +91,11 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, deviceID string, req AccountStatementRequest) (string, error) {
 	if req.DateFrom.IsZero() {
 		log.Printf("date_from is required")
-		return "", errors.New("date_from is required")
+		return "", appErr.ErrInvalidDateFrom
 	}
 	if req.DateTo.IsZero() {
 		log.Printf("date_to is required")
-		return "", errors.New("date_to is required")
+		return "", appErr.ErrInvalidDateTo
 	}
 	now := time.Now().UTC()
 	if req.DateFrom.After(now) {
@@ -266,7 +266,8 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported account statement format: %s", format)
+		log.Printf("unsupported account statement format requested: %s", format)
+		return appErr.ErrInvalidFileFormat
 	}
 }
 

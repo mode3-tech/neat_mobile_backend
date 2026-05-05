@@ -80,7 +80,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		openJob, err := authRepo.GetOpenRegistrationJobByPhone(ctx, normalizedPhone)
 		switch {
 		case err == nil && openJob != nil:
-			return errors.New("registration already in progress")
+			return appErr.ErrRegistrationAlreadyInProgress
 		case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
 			return err
 		}
@@ -185,7 +185,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		}
 
 		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
-			return nil, errors.New("unable to confirm email and phone number belong to the same person due to names or date of births mismatch")
+			return nil, appErr.ErrEmailPhoneMismatch
 		}
 
 		isEmailVerified = true
