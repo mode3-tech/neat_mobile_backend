@@ -7597,7 +7597,6 @@
       "RegisterRequest": {
         "type": "object",
         "required": [
-          "phone_number",
           "password",
           "confirm_password",
           "transaction_pin",
@@ -7609,11 +7608,6 @@
           "device"
         ],
         "properties": {
-          "phone_number": {
-            "type": "string",
-            "description": "Nigerian phone number. Accepted local or international forms are normalized server-side.",
-            "example": "08012345678"
-          },
           "email": {
             "type": "string",
             "format": "email",

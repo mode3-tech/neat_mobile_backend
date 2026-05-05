@@ -26,6 +26,7 @@ var (
 	ErrMissingPublicKey       = errors.New("public key is required")
 	ErrInvalidPhone           = errors.New("invalid phone")
 	ErrInvalidDateFrom        = errors.New("invalid date from")
+	ErrInvalidDateTo          = errors.New("invalid date to")
 	ErrInvalidDateRange       = errors.New("invalid date range")
 	ErrUnderaged              = errors.New("user is underaged")
 	ErrInvalidLoanAmount      = errors.New("invalid loan amount")
