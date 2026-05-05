@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"neat_mobile_app_backend/modules/auth"
@@ -124,6 +125,33 @@ func TestSeedWalletPayload_Deterministic(t *testing.T) {
 	if seededA.Email != seededB.Email {
 		t.Fatalf("expected deterministic email with same key; got %q and %q", seededA.Email, seededB.Email)
 	}
+	if seededA.FirstName != seededB.FirstName {
+		t.Fatalf("expected deterministic first name with same key; got %q and %q", seededA.FirstName, seededB.FirstName)
+	}
+	if seededA.LastName != seededB.LastName {
+		t.Fatalf("expected deterministic last name with same key; got %q and %q", seededA.LastName, seededB.LastName)
+	}
+	if seededA.PhoneNumber != seededB.PhoneNumber {
+		t.Fatalf("expected deterministic phone number with same key; got %q and %q", seededA.PhoneNumber, seededB.PhoneNumber)
+	}
+	if !strings.HasPrefix(seededA.PhoneNumber, "234") {
+		t.Fatalf("expected phone number to start with 234, got %q", seededA.PhoneNumber)
+	}
+	if len(seededA.PhoneNumber) != 13 {
+		t.Fatalf("expected phone number to be 13 digits, got %d", len(seededA.PhoneNumber))
+	}
+	if len(seededB.PhoneNumber) != 13 {
+		t.Fatalf("expected phone number to be 13 digits, got %d", len(seededB.PhoneNumber))
+	}
+	if seededA.BVN != seededB.BVN {
+		t.Fatalf("expected deterministic BVN with same key; got %q and %q", seededA.BVN, seededB.BVN)
+	}
+	if len(seededA.BVN) != 11 {
+		t.Fatalf("expected BVN to be 11 digits, got %d", len(seededA.BVN))
+	}
+	if len(seededB.BVN) != 11 {
+		t.Fatalf("expected BVN to be 11 digits, got %d", len(seededB.BVN))
+	}
 	if seededA.Metadata["wallet_generation_seed"] != seededB.Metadata["wallet_generation_seed"] {
 		t.Fatalf("expected deterministic seed with same key")
 	}
@@ -152,5 +180,26 @@ func TestSeedWalletPayload_SecretKeyChange(t *testing.T) {
 
 	if seededA.Email == seededB.Email {
 		t.Fatal("expected different seeded email when secret key changes")
+	}
+	if seededA.FirstName == seededB.FirstName {
+		t.Fatal("expected different seeded first name when secret key changes")
+	}
+	if seededA.LastName == seededB.LastName {
+		t.Fatal("expected different seeded last name when secret key changes")
+	}
+	if seededA.PhoneNumber == seededB.PhoneNumber {
+		t.Fatal("expected different seeded phone number when secret key changes")
+	}
+	if !strings.HasPrefix(seededA.PhoneNumber, "234") || !strings.HasPrefix(seededB.PhoneNumber, "234") {
+		t.Fatal("expected seeded phone numbers to start with 234")
+	}
+	if len(seededA.PhoneNumber) != 13 || len(seededB.PhoneNumber) != 13 {
+		t.Fatal("expected seeded phone numbers to be 13 digits")
+	}
+	if seededA.BVN == seededB.BVN {
+		t.Fatal("expected different seeded BVN when secret key changes")
+	}
+	if len(seededA.BVN) != 11 || len(seededB.BVN) != 11 {
+		t.Fatal("expected seeded BVN to be 11 digits")
 	}
 }

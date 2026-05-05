@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
@@ -27,6 +28,9 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 
 	phoneRow, err := s.repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrPhoneNotFound
+		}
 		return nil, err
 	}
 
@@ -74,6 +78,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 			job = existingJob
 			return nil
 		case !errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("error checking for existing registration job with idempotency key %s: %v", idempotencyKey, err)
 			return err
 		}
 
@@ -185,7 +190,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		}
 
 		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
-			return nil, errors.New("unable to confirm email and phone number belong to the same person due to names or date of births mismatch")
+			return nil, appErr.ErrEmailPhoneMismatch
 		}
 
 		isEmailVerified = true
@@ -202,6 +207,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrPasswordMismatch
 	}
 	if err = validators.ValidatePassword(req.Password); err != nil {
+		log.Printf("invalid password: %v", err)
 		return nil, errors.New(err.Error())
 	}
 
@@ -227,16 +233,20 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
 	if err := repo.MarkValidationRecordUsed(ctx, phoneRecord.ID); err != nil {
+		log.Printf("failed to mark phone verification record as used")
 		return nil, errors.New("failed to mark phone verification record as used")
 	}
 	if err := repo.MarkValidationRecordUsed(ctx, bvnRecord.ID); err != nil {
+		log.Printf("failed to mark bvn verification record as used")
 		return nil, errors.New("failed to mark bvn verification record as used")
 	}
 	if err := repo.MarkValidationRecordUsed(ctx, ninRecord.ID); err != nil {
+		log.Printf("failed to mark nin verification record as used")
 		return nil, errors.New("failed to mark nin verification record as used")
 	}
 	if emailRecordUsedID != "" {
 		if err := repo.MarkValidationRecordUsed(ctx, emailRecordUsedID); err != nil {
+			log.Printf("failed to mark email verification record as used")
 			return nil, errors.New("failed to mark email verification record as used")
 		}
 	}

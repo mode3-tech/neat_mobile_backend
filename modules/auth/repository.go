@@ -153,7 +153,7 @@ func (r *Repository) GetValidationRow(ctx context.Context, verificationID string
 
 func (r *Repository) MarkValidationRecordUsed(ctx context.Context, verificationID string) error {
 	result := r.db.WithContext(ctx).Table("wallet_verification_records").
-		Where("id = ? AND status = ? AND used_at IS NULL", verificationID, models.VerificationStatusVerified).
+		Where("id = ? AND status = ?", verificationID, models.VerificationStatusVerified).
 		Update("used_at", time.Now().UTC())
 	if result.Error != nil {
 		return result.Error
