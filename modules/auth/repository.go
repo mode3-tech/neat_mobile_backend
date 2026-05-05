@@ -142,7 +142,7 @@ func (r *Repository) GetValidationRow(ctx context.Context, verificationID string
 	var record models.VerificationRecord
 	err := r.db.WithContext(ctx).Table("wallet_verification_records").
 		Select("id, verified_name, verified_dob, verified_phone, verified_id").
-		Where("id = ? AND status = ? AND used_at IS NULL", verificationID, models.VerificationStatusVerified).
+		Where("id = ? AND status = ?", verificationID, models.VerificationStatusVerified).
 		First(&record).Error
 
 	if err != nil {

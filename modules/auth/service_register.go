@@ -185,7 +185,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		}
 
 		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
-			return nil, appErr.ErrEmailPhoneMismatch
+			return nil, errors.New("unable to confirm email and phone number belong to the same person due to names or date of births mismatch")
 		}
 
 		isEmailVerified = true

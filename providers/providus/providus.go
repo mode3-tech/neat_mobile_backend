@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"neat_mobile_app_backend/modules/auth"
 	"neat_mobile_app_backend/modules/wallet"
 	"net/http"
@@ -154,6 +155,7 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
+		log.Printf("providus wallet generation request failed: %v", err)
 		return nil, fmt.Errorf("providus wallet request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -161,13 +163,16 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if len(respBody) == 0 {
+			log.Printf("providus wallet generation failed with status: %d", resp.StatusCode)
 			return nil, fmt.Errorf("providus wallet generation failed with status: %d", resp.StatusCode)
 		}
+		log.Printf("providus wallet generation failed: %s", extractErrorMessage(respBody))
 		return nil, fmt.Errorf("providus wallet generation failed: %s", extractErrorMessage(respBody))
 	}
 
 	var result auth.WalletResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+
 		return nil, fmt.Errorf("failed to decode providus wallet generation response: %w", err)
 	}
 
@@ -176,11 +181,13 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 
 func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerID string) (*auth.WalletResponse, bool, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+		log.Print("providus service not configured")
 		return nil, false, errors.New("providus service not configured")
 	}
 
 	requestedCustomerID := strings.TrimSpace(walletCustomerID)
 	if requestedCustomerID == "" {
+		log.Print("providus customer id is required")
 		return nil, false, errors.New("providus customer id is required")
 	}
 
@@ -188,6 +195,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
+		log.Printf("providus wallet lookup request failed: %v", err)
 		return nil, false, err
 	}
 
@@ -197,6 +205,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
+		log.Printf("providus wallet lookup request failed: %v", err)
 		return nil, false, fmt.Errorf("providus wallet lookup request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -208,8 +217,10 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if len(respBody) == 0 {
+			log.Printf("providus wallet lookup failed with status: %d", resp.StatusCode)
 			return nil, false, fmt.Errorf("providus wallet lookup failed with status: %d", resp.StatusCode)
 		}
+		log.Printf("providus wallet lookup failed: %s", extractErrorMessage(respBody))
 		return nil, false, fmt.Errorf("providus wallet lookup failed: %s", extractErrorMessage(respBody))
 	}
 
@@ -238,6 +249,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 		} `json:"wallet"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("failed to decode providus wallet lookup response: %v", err)
 		return nil, false, fmt.Errorf("failed to decode providus wallet lookup response: %w", err)
 	}
 
@@ -282,6 +294,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 
 func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
+
 		return nil, errors.New("providus service not configured")
 	}
 
@@ -298,6 +311,7 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
+		log.Printf("providus banks request failed: %v", err)
 		return nil, fmt.Errorf("providus banks request failed: %w", err)
 	}
 	defer resp.Body.Close()
