@@ -6,7 +6,7 @@ info:
     HTTP API for authentication, OTP verification, device trust, identity validation,
     password reset, loan product workflows, and wallet/bank lookup.
 servers:
-  - url: /api/v1
+  - url: https://neat-mobile-backend-2wbh.onrender.com/api/v1
 security: []
 tags:
   - name: Auth
@@ -250,7 +250,7 @@ paths:
                       refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
                       is_biometrics_enabled: true
         "400":
-          description: Invalid request body or missing job id, device id, or claim token
+          description: Invalid request body or missing job id, or claim token
           content:
             application/json:
               schema:
@@ -261,7 +261,7 @@ paths:
                     status: error
                     error:
                       code: INVALID_REQUEST_BODY
-                      message: Unauthorized.
+                      message: Invalid request body.
         "401":
           description: Invalid or expired claim token, or device not allowed
           content:
@@ -687,8 +687,23 @@ paths:
             schema:
               $ref: "#/components/schemas/LogoutRequest"
       responses:
-        "204":
+        "200":
           description: Logout successful
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Logged out.
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Logged out.
         "400":
           description: Invalid request body or missing authorization header
           content:
@@ -994,8 +1009,25 @@ paths:
             schema:
               $ref: "#/components/schemas/ResetPasswordRequest"
       responses:
-        "204":
+        "200":
           description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Password reset successfully.
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Password reset successfully.
+
         "400":
           description: Invalid request body, phone required, verification id required, or invalid password format
           content:
@@ -1082,7 +1114,7 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "204":
+        "200":
           description: OTP resent successfully
         "400":
           description: Device id is required or invalid phone number on account
@@ -1188,8 +1220,24 @@ paths:
             schema:
               $ref: "#/components/schemas/ResetTransactionPinRequest"
       responses:
-        "204":
+        "200":
           description: Transaction PIN reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Transaction pin has been reset.
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Transaction pin has been reset.
         "400":
           description: Device id required, verification id required, pin validation failed, or pins don't match
           content:
@@ -1392,8 +1440,24 @@ paths:
             schema:
               $ref: "#/components/schemas/ChangeTransactionPinRequest"
       responses:
-        "204":
+        "200":
           description: Transaction PIN changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Transaction pin has been changed.
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Transaction pin has been changed.
         "400":
           description: Device id required, verification id required, pin validation failed, current pin wrong, or pins don't match
           content:
@@ -1590,8 +1654,23 @@ paths:
             schema:
               $ref: "#/components/schemas/ChangePasswordRequest"
       responses:
-        "204":
+        "200":
           description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Password has been changed.
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Password has been changed.
         "400":
           description: Device id required, verification id required, password validation failed, or passwords don't match
           content:
@@ -1731,8 +1810,24 @@ paths:
             schema:
               $ref: "#/components/schemas/RequestOTPRequest"
       responses:
-        "204":
+        "200":
           description: OTP sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: OTP sent successfully
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: OTP sent successfully
         "400":
           description: Invalid request body, purpose, channel, email, or phone number
           content:

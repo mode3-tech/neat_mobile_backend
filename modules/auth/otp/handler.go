@@ -51,7 +51,7 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "OTP sent successfully",
 	})

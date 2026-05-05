@@ -313,7 +313,7 @@ func (h *Handler) Logout(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "Logged out.",
 	})
@@ -527,7 +527,7 @@ func (h *Handler) ResendNewDeviceOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "OTP successfully resent.",
 	})
@@ -790,7 +790,7 @@ func (h *Handler) ResendForgotTransactionPinOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "OTP has been resent.",
 	})
@@ -842,9 +842,9 @@ func (h *Handler) ResetTransactionPin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
-		Message: "OTP has been sent.",
+		Message: "Transaction pin has been reset.",
 	})
 }
 
@@ -1028,7 +1028,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "Password has been changed successfully",
 	})
@@ -1068,7 +1068,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "Password reset successfully.",
 	})
@@ -1258,7 +1258,7 @@ func (h *Handler) ChangeTransactionPin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "Transaction pin has been changed.",
 	})

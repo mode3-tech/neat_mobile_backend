@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "/api/v1"
+      "url": "https://neat-mobile-backend-2wbh.onrender.com/api/v1"
     }
   ],
   "security": [],
@@ -378,7 +378,7 @@
             }
           },
           "400": {
-            "description": "Invalid request body or missing job id, device id, or claim token",
+            "description": "Invalid request body or missing job id, or claim token",
             "content": {
               "application/json": {
                 "schema": {
@@ -390,7 +390,7 @@
                       "status": "error",
                       "error": {
                         "code": "INVALID_REQUEST_BODY",
-                        "message": "Unauthorized."
+                        "message": "Invalid request body."
                       }
                     }
                   }
@@ -1071,8 +1071,32 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "Logout successful"
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Logged out."
+                    }
+                  }
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "Logged out."
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request body or missing authorization header",
@@ -1576,7 +1600,21 @@
         },
         "responses": {
           "204": {
-            "description": "Password reset successful"
+            "description": "Password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "Password reset successful."
+                    }
+                  }
+                }
+            }
           },
           "400": {
             "description": "Invalid request body, phone required, verification id required, or invalid password format",
@@ -1895,8 +1933,24 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "Transaction PIN reset successfully"
+          "200": {
+            "description": "Transaction PIN reset successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "Transaction pin has been reset."
+                    }
+                  }
+                }
+              }
+            }
+          }
           },
           "400": {
             "description": "Device id required, verification id required, pin validation failed, or pins don't match",
@@ -2232,8 +2286,25 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "Transaction PIN changed successfully"
+          "200": {
+            "description": "Transaction PIN changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Transaction pin has been changed."
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Device id required, verification id required, pin validation failed, current pin wrong, or pins don't match",
@@ -2559,8 +2630,25 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "Password changed successfully"
+          "200": {
+            "description": "Password changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Password has been changed."
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Device id required, verification id required, password validation failed, or passwords don't match",
@@ -2790,8 +2878,32 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "OTP sent"
+          "200": {
+            "description": "OTP sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "OTP sent successfully"
+                    }
+                  }
+                },
+                "examples": {
+                  "otp_sent": {
+                    "value": {
+                      "status": "success",
+                      "message": "OTP sent successfully"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request body, purpose, channel, email, or phone number",
