@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -20,18 +21,18 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 	user, err := s.repo.FetchUserWithUserID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+			return nil, appErr.ErrUnauthorized
 		}
-		return nil, err
+		return nil, appErr.ErrFetchingTransactions
 	}
 
 	transactions, err := s.repo.FetchRecentTransactions(ctx, mobileUserID, user.WalletID)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no transaction found")
+			return nil, appErr.ErrNoTransactionsFound
 		}
-		return nil, err
+		return nil, appErr.ErrFetchingTransactions
 	}
 
 	result := make([]TransactionResponse, len(transactions))
@@ -60,22 +61,22 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+			return nil, appErr.ErrUnauthorized
 		}
-		return nil, err
+		return nil, appErr.ErrFetchingTransactions
 	}
 
 	var cursorTime time.Time
 	if cursor != "" {
 		cursorTime, err = time.Parse(time.RFC3339, cursor)
 		if err != nil {
-			return nil, errors.New("invalid cursor format")
+			return nil, appErr.ErrInvalidCursor
 		}
 	}
 
 	txs, err := s.repo.FetchTransactionPaged(ctx, userID, user.WalletID, cursorTime, limit)
 	if err != nil {
-		return nil, err
+		return nil, appErr.ErrFetchingTransactions
 	}
 
 	hasMore := len(txs) > limit
@@ -89,7 +90,6 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 	}
 
 	return &PagedTransactionResponse{
-		Status:     true,
 		Sections:   groupByMonth(txs),
 		NextCursor: nextCursor,
 		HasMore:    hasMore,

@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"errors"
 	"log"
 	"neat_mobile_app_backend/internal/middleware"
 	"net/http"
@@ -102,32 +101,31 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 
 	transferResponse, err := h.service.InitiateTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		h.handleInitiateTransferError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, transferResponse)
 }
 
-func (h *Handler) handleInitiateTransferError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, ErrWrongTransactionPin):
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrTransactionPinLocked):
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
-	case errors.Is(err, ErrInvalidTransferRequest):
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrDeviceVerificationFailed):
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device verification failed"})
-	case errors.Is(err, ErrWalletNotFound):
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
-	case errors.Is(err, ErrTransferProviderFailed):
-		log.Printf("Transfer provider error: %v", err)
-		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-	default:
-		log.Printf("Error initiating transfer: %v", err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
-	}
-}
+// func (h *Handler) handleInitiateTransferError(c *gin.Context, err error) {
+// 	switch {
+// 	case errors.Is(err, ErrWrongTransactionPin):
+// 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+// 	case errors.Is(err, ErrTransactionPinLocked):
+// 		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
+// 	case errors.Is(err, ErrInvalidTransferRequest):
+// 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+// 	case errors.Is(err, ErrDeviceVerificationFailed):
+// 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device verification failed"})
+// 	case errors.Is(err, ErrWalletNotFound):
+// 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+// 	case errors.Is(err, ErrTransferProviderFailed):
+// 		log.Printf("Transfer provider error: %v", err)
+// 		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+// 	default:
+// 		log.Printf("Error initiating transfer: %v", err)
+// 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
+// 	}
+// }
 
 func (h *Handler) AddBeneficiary(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
@@ -277,30 +275,8 @@ func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
 
 	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		h.handleBulkTransferError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, resp)
-}
-
-func (h *Handler) handleBulkTransferError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, ErrWrongTransactionPin):
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid transaction PIN"})
-	case errors.Is(err, ErrTransactionPinLocked):
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
-	case errors.Is(err, ErrInvalidTransferRequest):
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "One or more transfer requests are invalid"})
-	case errors.Is(err, ErrDeviceVerificationFailed):
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device verification failed"})
-	case errors.Is(err, ErrWalletNotFound):
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
-	case errors.Is(err, ErrTransferProviderFailed):
-		log.Printf("Bulk transfer provider error: %v", err)
-		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": "Transfer service is temporarily unavailable. Please try again later"})
-	default:
-		log.Printf("Error initiating bulk transfer: %v", err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate bulk transfer"})
-	}
 }

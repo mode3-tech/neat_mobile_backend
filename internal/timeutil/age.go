@@ -1,8 +1,8 @@
 package timeutil
 
 import (
-	"errors"
-	"fmt"
+	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"strings"
 	"time"
 )
@@ -24,7 +24,7 @@ func AgeFromDOB(dob time.Time, now time.Time) int {
 func ParseDOB(value string) (time.Time, error) {
 	clean := strings.TrimSpace(value)
 	if clean == "" {
-		return time.Time{}, fmt.Errorf("dob is required")
+		return time.Time{}, appErr.ErrInvalidDOB
 	}
 
 	clean = strings.ReplaceAll(clean, "/", "-")
@@ -43,13 +43,15 @@ func ParseDOB(value string) (time.Time, error) {
 		return monthYearDOB, nil
 	}
 
-	return time.Time{}, fmt.Errorf("invalid dob format %q: expected DD-MM-YYYY, DD/MM/YYYY, YYYY-MM, YYYY/MM, MM-YYYY or MM/YYYY", value)
+	log.Printf("invalid dob format %q: expected DD-MM-YYYY, DD/MM/YYYY, YYYY-MM, YYYY/MM, MM-YYYY or MM/YYYY", value)
+	return time.Time{}, appErr.ErrInvalidDOB
 }
 
 func AgeFromDOBString(value string, now time.Time) (int, error) {
 	dob, err := ParseDOB(value)
 	if err != nil {
-		return 0, errors.New("unable to get age from dob, check dob again")
+		log.Printf("error parsing dob %q: %v", value, err)
+		return 0, appErr.ErrInvalidDOB
 	}
 
 	return AgeFromDOB(dob, now), nil

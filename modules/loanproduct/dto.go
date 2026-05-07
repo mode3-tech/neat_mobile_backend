@@ -23,7 +23,6 @@ type LoanSummaryResponse struct {
 }
 
 type ApplyForLoanResponse struct {
-	Message        string              `json:"message"`
 	ApplicationRef string              `json:"application_ref"`
 	LoanStatus     LoanStatus          `json:"loan_status"`
 	Summary        LoanSummaryResponse `json:"summary"`
@@ -35,31 +34,27 @@ type ManualRepaymentRequest struct {
 	TransactionPin string `json:"transaction_pin" binding:"required"`
 }
 
-type ManualRepaymentResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
 type LoanRepaymentResponse struct {
-	Status    string        `json:"status"`
-	Message   string        `json:"message"`
 	Repayment LoanRepayment `json:"repayment"`
 }
 
 type AllLoansResponse struct {
-	Status  string                 `json:"status"`
-	Message string                 `json:"message"`
-	Loans   []CoreCustomerLoanItem `json:"loans"`
+	Loans []CoreCustomerLoanItem `json:"loans"`
 }
 
 type LoanHistoryResponse struct {
-	Status  string            `json:"status"`
-	Message string            `json:"message"`
 	History []LoanHistoryItem `json:"history"`
 }
 
 type ActiveLoansResponse struct {
-	Status  string           `json:"status"`
-	Message string           `json:"message"`
-	Loans   []ActiveLoanItem `json:"loans"`
+	Loans []ActiveLoanItem `json:"loans"`
+}
+
+type RepaymentRequest struct {
+	Amount      int64  `json:"amount"`
+	RepaymentID string `json:"repayment_id"`
+}
+
+type LoanDetailsResponse struct {
+	Details LoanDetails `json:"details"`
 }

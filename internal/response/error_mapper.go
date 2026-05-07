@@ -381,6 +381,222 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrFetchingTransactions:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "TRANSACTIONS_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingTransactions.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidRequestBody:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_REQUEST_BODY",
+				Message: appErr.ErrInvalidRequestBody.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidQueryParameter:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_QUERY_PARAMETER",
+				Message: appErr.ErrInvalidQueryParameter.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidQueryParameter:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_REQUIRED_QUERY_PARAMETER",
+				Message: appErr.ErrMissingRequiredQueryParameter.Error(),
+			},
+		}
+
+	case appErr.ErrMissingRequiredQueryParameter:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_REQUIRED_QUERY_PARAMETER",
+				Message: appErr.ErrMissingRequiredQueryParameter.Error(),
+			},
+		}
+
+	case appErr.ErrNoTransactionsFound:
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "NO_TRANSACTIONS_FOUND",
+				Message: appErr.ErrNoTransactionsFound.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidCursor:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_CURSOR",
+				Message: "Invalid request body",
+			},
+		}
+
+	case appErr.ErrDeviceNotAllowed:
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "DEVICE_NOT_ALLOWED",
+				Message: "Device is inactive or not trusted, please contact support to resolve this issue",
+			},
+		}
+
+	case appErr.ErrUnrecognizedDevice:
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "We could not recognize the device you are using, please contact support to resolve this issue",
+			},
+		}
+
+	case appErr.ErrNoLoansFound:
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "NO_LOANS_FOUND",
+				Message: "No loans found for user",
+			},
+		}
+
+	case appErr.ErrIncorrectTransactionPin:
+		return ErrorMapping{
+			Status: http.StatusUnauthorized,
+			Error: APIError{
+				Code:    "INCORRECT_TRANSACTION_PIN",
+				Message: appErr.ErrIncorrectTransactionPin.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidDOB:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_DOB",
+				Message: appErr.ErrInvalidDOB.Error(),
+			},
+		}
+
+	case appErr.ErrApplyingForLoan:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "LOAN_APPLICATION_INTERNAL_ERROR",
+				Message: appErr.ErrApplyingForLoan.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingActiveLoans:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACTIVE_LOANS_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingActiveLoans.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingLoanHistory:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "LOAN_HISTORY_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingLoanHistory.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingLoanDetails:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "LOAN_DETAILS_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingLoanDetails.Error(),
+			},
+		}
+
+	case appErr.ErrMissingDeviceID, appErr.ErrMissingUserID:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_REQUIRED_FIELD",
+				Message: err.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidSession:
+		return ErrorMapping{
+			Status: http.StatusUnauthorized,
+			Error: APIError{
+				Code:    "INVALID_SESSION",
+				Message: "invalid or expired session",
+			},
+		}
+
+	case appErr.ErrMissingOTP:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_OTP",
+				Message: "otp is required",
+			},
+		}
+
+	case appErr.ErrUnableToGenerateResetToken:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "UNABLE_TO_GENERATE_RESET_TOKEN",
+				Message: "unable to generate password reset token, please try again",
+			},
+		}
+
+	case appErr.ErrInvalidRequestBody:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_REQUEST_BODY",
+				Message: "invalid request body",
+			},
+		}
+
+	case appErr.ErrTransactionPinLocked:
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "TRANSACTION_PIN_LOCKED",
+				Message: appErr.ErrTransactionPinLocked.Error(),
+			},
+		}
+
+	case appErr.ErrMakingRepayment:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "REPAYMENT_INTERNAL_ERROR",
+				Message: appErr.ErrMakingRepayment.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidNotificationPlatform:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_NOTIFICATION_PLATFORM",
+				Message: appErr.ErrInvalidNotificationPlatform.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

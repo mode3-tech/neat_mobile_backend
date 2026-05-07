@@ -160,7 +160,7 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 		return
 	}
 
-	_, err = s.repayer.MakeManualRepayment(ctx, loanproduct.RepaymentRequest{
+	err = s.repayer.MakeManualRepayment(ctx, loanproduct.RepaymentRequest{
 		Amount:      row.Amount,
 		RepaymentID: strconv.FormatInt(row.LoanID, 10),
 	})

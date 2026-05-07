@@ -100,13 +100,13 @@ func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 	userDevice, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("device not found")
+			return nil, appErr.ErrUnrecognizedDevice
 		}
 		return nil, err
 	}
 
 	if !userDevice.IsActive || !userDevice.IsTrusted {
-		return nil, errors.New("device not allowed")
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 	return userDevice, nil
 }

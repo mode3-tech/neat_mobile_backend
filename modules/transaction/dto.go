@@ -11,7 +11,6 @@ type TransactionSection struct {
 }
 
 type PagedTransactionResponse struct {
-	Status     bool                 `json:"status"`
 	Sections   []TransactionSection `json:"sections"`
 	NextCursor string               `json:"next_cursor"` // empty when no more pages
 	HasMore    bool                 `json:"has_more"`

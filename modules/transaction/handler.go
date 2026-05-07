@@ -40,29 +40,46 @@ func (h *Handler) FetchRecentTransactions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response.APIResponse[[]TransactionResponse]{
-		Status: "success",
-		Data:   &transactions,
+		Status:  "success",
+		Message: "Recent transactions fetched successfully",
+		Data:    &transactions,
 	})
 }
 
 func (h *Handler) FetchAllTransactions(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrUnauthorized)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	var query FetchAllTransactionsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query"})
+		mapped := response.MapError(appErr.ErrInvalidQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	result, err := h.service.FetchTransactionsPaged(c.Request.Context(), mobileUserID, query.Cursor, query.Limit)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, response.APIResponse[PagedTransactionResponse]{
+		Status:  "success",
+		Message: "Transactions fetched successfully",
+		Data:    result,
+	})
 }

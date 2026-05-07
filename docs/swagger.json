@@ -133,7 +133,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_request": {
@@ -154,7 +154,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API409Error"
                 },
                 "examples": {
                   "user_exists": {
@@ -175,7 +175,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API422Error"
                 },
                 "examples": {
                   "email_phone_mismatch": {
@@ -205,7 +205,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -285,7 +285,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_params": {
@@ -306,7 +306,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 },
                 "examples": {
                   "not_found": {
@@ -327,7 +327,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -412,7 +412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_request": {
@@ -433,7 +433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 },
                 "examples": {
                   "unauthorized": {
@@ -454,7 +454,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 },
                 "examples": {
                   "not_found": {
@@ -475,7 +475,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API409Error"
                 },
                 "examples": {
                   "claim_conflict": {
@@ -496,7 +496,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -571,7 +571,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_request": {
@@ -592,7 +592,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 },
                 "examples": {
                   "invalid_credentials": {
@@ -613,7 +613,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API429Error"
                 },
                 "examples": {
                   "too_many_requests": {
@@ -634,7 +634,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -699,7 +699,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_request": {
@@ -720,7 +720,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 },
                 "examples": {
                   "invalid_token": {
@@ -741,7 +741,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -806,7 +806,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 },
                 "examples": {
                   "invalid_request": {
@@ -827,7 +827,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 },
                 "examples": {
                   "invalid_session": {
@@ -848,7 +848,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 },
                 "examples": {
                   "server_error": {
@@ -3152,12 +3152,22 @@
               }
             }
           },
+          "401":{
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/API401Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Failed to fetch loan products",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3198,7 +3208,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3208,7 +3218,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3218,7 +3228,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 }
               }
             }
@@ -3228,7 +3238,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API409Error"
                 }
               }
             }
@@ -3238,7 +3248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API422Error"
                 }
               }
             }
@@ -3248,7 +3258,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API429Error"
                 }
               }
             }
@@ -3258,7 +3268,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3268,7 +3278,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3278,7 +3288,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3325,7 +3335,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3335,7 +3345,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3345,7 +3355,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 }
               }
             }
@@ -3355,7 +3365,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3402,7 +3412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3412,7 +3422,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3422,7 +3432,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 }
               }
             }
@@ -3432,7 +3442,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3488,7 +3498,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3498,7 +3508,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3508,7 +3518,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3564,7 +3574,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3574,7 +3584,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3584,7 +3594,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3631,7 +3641,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3641,7 +3651,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3651,7 +3661,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API404Error"
                 }
               }
             }
@@ -3661,7 +3671,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3717,7 +3727,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3727,7 +3737,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3737,7 +3747,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3794,7 +3804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -3804,7 +3814,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -3814,7 +3824,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API422Error"
                 }
               }
             }
@@ -3824,7 +3834,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API423Error"
                 }
               }
             }
@@ -3834,7 +3844,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API429Error"
                 }
               }
             }
@@ -3844,7 +3854,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -3854,7 +3864,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -5602,12 +5612,22 @@
               }
             }
           },
+          "400": {
+            "description": "Missing or invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/API400Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized or invalid token",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -5617,7 +5637,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -5676,7 +5696,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API400Error"
                 }
               }
             }
@@ -5686,7 +5706,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API401Error"
                 }
               }
             }
@@ -5696,7 +5716,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/API500Error"
                 }
               }
             }
@@ -8554,10 +8574,15 @@
       "LoanProductsResponse": {
         "type": "object",
         "required": [
+          "status",
           "message",
           "products"
         ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
             "example": "loan products fetch was successful"
@@ -8669,12 +8694,17 @@
       "LoanApplicationResponse": {
         "type": "object",
         "required": [
+          "status",
           "message",
           "application_ref",
           "loan_status",
           "summary"
         ],
         "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
           "message": {
             "type": "string",
             "example": "loan application was successful"
@@ -9780,6 +9810,7 @@
           "id",
           "type",
           "description",
+          "reference",
           "date",
           "status",
           "amount"
@@ -9800,6 +9831,10 @@
           "description": {
             "type": "string",
             "example": "Transfer from John Doe"
+          },
+          "reference": {
+            "type": "string",
+            "example": "TRX-20260403-0001"
           },
           "date": {
             "type": "string",
@@ -9828,8 +9863,12 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "boolean",
-            "example": true
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Recent transactions fetched successfully"
           },
           "transactions": {
             "type": "array",
@@ -9860,8 +9899,12 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "boolean",
-            "example": true
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Transactions fetched successfully"
           },
           "sections": {
             "type": "array",
@@ -10365,17 +10408,98 @@
       "API400Error": {
         "type": "object",
         "required": [
+         "status",
+         "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INVALID_REQUEST_BODY"
+            },
+            "message": {
+                "type": "string",
+                "example": "invalid request body"
+          }
+        }
+       }
+      }
+      },
+      "API404Error": {
+        "type": "object",
+        "required": [
           "code",
           "message"
         ],
         "properties": {
           "code": {
             "type": "string",
-            "example": "INVALID_REQUEST_BODY"
+            "example": "NOT_FOUND"
           },
           "message": {
             "type": "string",
-            "example": "invalid request body"
+            "example": "The requested resource was not found"
+          }
+        }
+      },
+      "API422Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "VALIDATION_ERROR"
+          },
+          "message": {
+            "type": "string",
+            "example": "Validation failed for the request body"
+          }
+        }
+      },
+      "API429Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "TOO_MANY_REQUESTS"
+          },
+          "message": {
+            "type": "string",
+            "example": "Too many requests, please try again later"
+          }
+        }
+      },
+      "API409Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "CONFLICT"
+          },
+          "message": {
+            "type": "string",
+            "example": "A resource with the given identifier already exists"
           }
         }
       },

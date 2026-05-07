@@ -2,12 +2,9 @@ package wallet
 
 import (
 	"errors"
-	"neat_mobile_app_backend/internal/pinverifier"
 )
 
 var (
-	ErrWrongTransactionPin      = pinverifier.ErrWrongTransactionPin
-	ErrTransactionPinLocked     = pinverifier.ErrTransactionPinLocked
 	ErrInvalidTransferRequest   = errors.New("invalid transfer request")
 	ErrWalletNotFound           = errors.New("wallet not found")
 	ErrDeviceVerificationFailed = errors.New("device verification failed")

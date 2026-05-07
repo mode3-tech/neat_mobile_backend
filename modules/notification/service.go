@@ -42,10 +42,6 @@ func NewService(repo Store, sender Sender, defaultChannelID string, deviceVerifi
 }
 
 func (s *Service) RegisterToken(ctx context.Context, userID string, req RegisterTokenRequest) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return errors.New("user id is required")
-	}
 	if s.repo == nil {
 		return errors.New("notification repository is not configured")
 	}
@@ -53,11 +49,8 @@ func (s *Service) RegisterToken(ctx context.Context, userID string, req Register
 	deviceID := strings.TrimSpace(req.DeviceID)
 	expoPushToken := strings.TrimSpace(req.ExpoPushToken)
 	platform := strings.TrimSpace(strings.ToLower(req.Platform))
-
-	if deviceID == "" {
-		return errors.New("device id is required")
-	}
 	if expoPushToken == "" {
+		log.Printf("notification: empty expo push token for user %s and device %s", userID, deviceID)
 		return errors.New("expo push token is required")
 	}
 	if !isSupportedPlatform(platform) {

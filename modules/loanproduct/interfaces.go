@@ -16,7 +16,7 @@ type CoreLoanFinder interface {
 }
 
 type ManualRepayer interface {
-	MakeManualRepayment(ctx context.Context, req RepaymentRequest) (*ManualRepaymentResponse, error)
+	MakeManualRepayment(ctx context.Context, req RepaymentRequest) error
 }
 
 type RepaymentFundTransferrer interface {

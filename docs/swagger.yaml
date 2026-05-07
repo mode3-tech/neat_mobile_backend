@@ -89,7 +89,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
@@ -102,7 +102,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API409Error"
               examples:
                 user_exists:
                   value:
@@ -115,7 +115,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API422Error"
               examples:
                 email_phone_mismatch:
                   value:
@@ -134,7 +134,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
@@ -190,7 +190,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_params:
                   value:
@@ -203,7 +203,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
               examples:
                 not_found:
                   value:
@@ -216,7 +216,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
@@ -273,7 +273,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
@@ -286,7 +286,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
               examples:
                 unauthorized:
                   value:
@@ -299,7 +299,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
               examples:
                 not_found:
                   value:
@@ -312,7 +312,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API409Error"
               examples:
                 claim_conflict:
                   value:
@@ -325,7 +325,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
@@ -374,7 +374,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
@@ -387,7 +387,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
               examples:
                 invalid_credentials:
                   value:
@@ -400,7 +400,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API429Error"
               examples:
                 too_many_requests:
                   value:
@@ -413,7 +413,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
@@ -454,7 +454,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
@@ -467,7 +467,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
               examples:
                 invalid_token:
                   value:
@@ -480,7 +480,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
@@ -524,7 +524,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
@@ -537,7 +537,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
               examples:
                 invalid_session:
                   value:
@@ -1978,12 +1978,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoanProductsResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Failed to fetch loan products
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/apply:
     post:
       tags:
@@ -2011,55 +2017,55 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Incorrect transaction pin or other unauthorized validation failure
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "404":
           description: Current user or loan rule not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
         "409":
           description: Multiple core-banking customers matched the supplied BVN
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API409Error"
         "422":
           description: User or application data failed business-rule validation
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API422Error"
         "429":
           description: Too many incorrect transaction pin attempts or temporary lockout
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API429Error"
         "502":
           description: Core-banking lookup failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
         "503":
           description: Core-banking integration is unavailable or not configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
         "500":
           description: Loan application failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/loans:
     get:
       tags:
@@ -2087,25 +2093,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token, or unrecognised device
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "404":
           description: User or user loan record not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/history:
     get:
       tags:
@@ -2133,25 +2139,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token, or unrecognised device
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "404":
           description: No user found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/history/{loan_id}:
     get:
       tags:
@@ -2185,19 +2191,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token, or unrecognised device
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/loans/{loan_id}:
     get:
       tags:
@@ -2231,19 +2237,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token, or unrecognised device
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
+        "404":
+          description: Loan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API404Error"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/loans/active:
     get:
       tags:
@@ -2271,25 +2283,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token, or unrecognised device
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "404":
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API404Error"
         "500":
           description: Unexpected server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/repayment-schedule:
     get:
       tags:
@@ -2323,19 +2335,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Missing or invalid access token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Core-banking integration is unavailable or repayment lookup failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /loan/repayment/manual:
     post:
       tags:
@@ -2371,43 +2383,43 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Unauthorized — invalid token, device, or wrong PIN
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "422":
           description: Insufficient wallet balance
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API422Error"
         "423":
           description: Transaction PIN is temporarily locked
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API422Error"
         "429":
           description: Too many incorrect PIN attempts
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API429Error"
         "503":
           description: Repayment or wallet service is not configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
         "500":
           description: Repayment failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /notifications:
     get:
       tags:
@@ -3487,18 +3499,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FetchRecentTransactionsResponse"
+        "400":
+          description: Missing or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Unauthorized or invalid token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Failed to fetch transactions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /transaction/all:
     get:
       tags:
@@ -3539,19 +3557,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
           description: Unauthorized or invalid token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Failed to fetch transactions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /webhooks/providus/credit:
     post:
       tags:
@@ -5546,9 +5564,13 @@ components:
     LoanProductsResponse:
       type: object
       required:
+        - status
         - message
         - products
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
           example: loan products fetch was successful
@@ -6448,6 +6470,7 @@ components:
         - id
         - type
         - description
+        - reference
         - date
         - status
         - amount
@@ -6464,6 +6487,9 @@ components:
         description:
           type: string
           example: Transfer from John Doe
+        reference:
+          type: string
+          example: TRX-20260403-0001
         date:
           type: string
           format: date-time
@@ -6485,8 +6511,11 @@ components:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
+          type: string
+          example: success
+        message:
+          type: string
+          example: Recent transactions fetched successfully
         transactions:
           type: array
           items:
@@ -6507,8 +6536,11 @@ components:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
+          type: string
+          example: success
+        message:
+          type: string
+          example: Transactions fetched successfully
         sections:
           type: array
           description: Transactions grouped by month, ordered newest-first.
@@ -6870,6 +6902,54 @@ components:
         message:
           type: string
           example: Unauthorized access
+    API403Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: FORBIDDEN
+        message:
+          type: string
+          example: You do not have permission to access this resource
+    API404Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: The requested resource was not found
+    API429Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: TOO_MANY_REQUESTS
+        message:
+          type: string
+          example: Too many requests, please try again later
+    API422Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: UNPROCESSABLE_ENTITY
+        message:
+          type: string
+          example: Validation failed for the request body
     API500Error:
       type: object
       required:
