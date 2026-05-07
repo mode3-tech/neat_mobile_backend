@@ -204,6 +204,7 @@ func (h *Handler) Login(c *gin.Context) {
 	resp := LoginInitResponse{
 		Challenge:    loginObj.Challenge,
 		SessionToken: loginObj.SessionToken,
+		Status:       loginObj.Status,
 	}
 
 	c.JSON(http.StatusOK, response.APIResponse[LoginInitResponse]{

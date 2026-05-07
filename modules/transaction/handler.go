@@ -1,7 +1,9 @@
 package transaction
 
 import (
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"strings"
 
@@ -17,22 +19,29 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) FetchRecentTransactions(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrUnauthorized)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	transactions, err := h.service.FetchRecentTransactions(c.Request.Context(), mobileUserID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":       true,
-		"transactions": transactions,
+	c.JSON(http.StatusOK, response.APIResponse[[]TransactionResponse]{
+		Status: "success",
+		Data:   &transactions,
 	})
 }
 

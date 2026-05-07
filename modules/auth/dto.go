@@ -98,6 +98,7 @@ type VerifiedDeviceResponse struct {
 }
 
 type LoginInitResponse struct {
+	Status       string `json:"status"`
 	Challenge    string `json:"challenge,omitempty"`
 	SessionToken string `json:"session_token,omitempty"`
 }

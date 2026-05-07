@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-type Server struct {
-	httpServer *http.Server
-}
+// type Server struct {
+// 	httpServer *http.Server
+// }
 
 func New(cfg config.Config) (*http.Server, func(), error) {
 

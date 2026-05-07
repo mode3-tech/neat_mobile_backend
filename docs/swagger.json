@@ -4635,7 +4635,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API401Error"
+                    }
+                  }
                 }
               }
             }
@@ -4645,7 +4658,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API500Error"
+                    }
+                  }
                 }
               }
             }
@@ -4702,7 +4728,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API400Error"
+                    }
+                  }
                 }
               }
             }
@@ -4712,7 +4751,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API401Error"
+                    }
+                  }
                 }
               }
             }
@@ -4722,7 +4774,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API500Error"
+                    }
+                  }
                 }
               }
             }
@@ -4779,7 +4844,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API400Error"
+                    }
+                  }
                 }
               }
             }
@@ -4789,7 +4867,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                 "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API401Error"
+                    }
+                  }
                 }
               }
             }
@@ -4799,7 +4890,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/API500Error"
+                    }
+                  }
                 }
               }
             }
@@ -4932,7 +5036,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "error":{
+                      "$ref": "#/components/schemas/API401Error"
+                    }
+                  }
                 }
               }
             }
@@ -4952,7 +5069,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "required":[
+                    "status",
+                    "error"
+                  ],
+                  "properties":{
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "error":{
+                      "$ref": "#/components/schemas/API500Error"
+                    }
+                  }
                 }
               }
             }
@@ -7173,10 +7303,10 @@
             "example": "0123456789"
           },
           "available_balance": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Available wallet balance in the smallest currency unit (e.g. kobo).",
-            "example": 250000
+            "type": "number",
+            "format": "double",
+            "description": "Available wallet balance.",
+            "example": 2500.00
           },
           "loan_balance": {
             "type": "number",
@@ -7205,8 +7335,12 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "boolean",
-            "example": true
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Account summary fetched successfully"
           },
           "data": {
             "$ref": "#/components/schemas/AccountSummary"
@@ -7243,12 +7377,12 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "boolean",
-            "example": true
+            "type": "string",
+            "example": "success"
           },
           "message": {
             "type": "string",
-            "example": "Profile successfully updated"
+            "example": "Profile has been updated successfully"
           }
         }
       },
@@ -7291,9 +7425,11 @@
             "type": "string",
             "example": "Statement request accepted"
           },
-          "job_id": {
-            "type": "string",
-            "example": "9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f"
+          "data": {
+            "job_id": {
+              "type": "string",
+              "example": "9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f"
+            }
           }
         }
       },
@@ -7304,6 +7440,7 @@
             "type": "boolean",
             "example": true
           },
+        "data": {
           "job_status": {
             "type": "string",
             "example": "ready"
@@ -7314,7 +7451,8 @@
             "example": "https://storage.example.com/statements/9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f.pdf"
           }
         }
-      },
+      }
+    },
       "GetLatestAccountStatementResponse": {
         "type": "object",
         "properties": {
@@ -7326,10 +7464,12 @@
             "type": "string",
             "example": "latest account statement fetched with download url"
           },
-          "download_url": {
+          "data": {
+            "download_url": {
             "type": "string",
             "format": "uri",
             "example": "https://storage.example.com/statements/John_Doe_20260101_to_20260331.pdf"
+          }
           }
         }
       },
@@ -7796,6 +7936,11 @@
       "LoginInitData": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "description": "Indicates the next step in the login flow. If `challenge_required`, the client must verify device ownership before receiving access tokens. If `new_device_detected`, the client must complete a new device registration.",
+            "example": "challenge_required"
+          },
           "challenge": {
             "type": "string",
             "description": "Challenge to be signed by the device private key.",
@@ -10200,6 +10345,57 @@
           }
         }
       },
+      "API401Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "UNAUTHORIZED"
+          },
+          "message": {
+            "type": "string",
+            "example": "Unauthorized access"
+          }
+        }
+      },
+      "API400Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVALID_REQUEST_BODY"
+          },
+          "message": {
+            "type": "string",
+            "example": "invalid request body"
+          }
+        }
+      },
+      "API500Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INTERNAL_SERVER_ERROR"
+          },
+          "message": {
+            "type": "string",
+            "example": "An unexpected error occurred, please try again later"
+          }
+        }
+      },      
       "OTPRequestSuccessResponse": {
         "type": "object",
         "required": [

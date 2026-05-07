@@ -3,7 +3,6 @@ package transaction
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -18,14 +17,7 @@ func NewServie(repo *Repository) *Service {
 }
 
 func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID string) ([]TransactionResponse, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-
-	if mobileUserID == "" {
-		return nil, errors.New("missing user id")
-	}
-
 	user, err := s.repo.FetchUserWithUserID(ctx, mobileUserID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user not found")

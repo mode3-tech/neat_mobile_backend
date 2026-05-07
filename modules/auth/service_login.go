@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
@@ -63,8 +64,11 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	deviceService := device.NewService(*s.deviceRepo)
 	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID, 0)
 	if err != nil {
+		log.Println("Error creating device challenge:", err)
 		return nil, err
 	}
+
+	log.Printf("Device challenge created for user %s on device %s and challenge = %s", user.ID, deviceID, challenge)
 
 	return &LoginInitObject{
 		Status:    LoginStatusChallengeRequired,

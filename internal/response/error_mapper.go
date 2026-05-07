@@ -336,12 +336,57 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrFetchingAccountSummary:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACCOUNT_SUMMARY_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingAccountSummary.Error(),
+			},
+		}
+
+	case appErr.ErrUpdatingProfile:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "PROFILE_UPDATE_INTERNAL_ERROR",
+				Message: appErr.ErrUpdatingProfile.Error(),
+			},
+		}
+
+	case appErr.ErrGeneratingAccountStatement:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACCOUNT_STATEMENT_GENERATION_INTERNAL_ERROR",
+				Message: appErr.ErrGeneratingAccountStatement.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingAccountStatement:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACCOUNT_STATEMENT_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingAccountStatement.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingLastestAccountStatement:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "LATEST_ACCOUNT_STATEMENT_FETCHING_INTERNAL_ERROR",
+				Message: appErr.ErrFetchingLastestAccountStatement.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
 				Code:    "INTERNAL_SERVER_ERROR",
-				Message: "something went wrong",
+				Message: "An unexpected error occurred, please try again later",
 			},
 		}
 	}
