@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -41,28 +42,33 @@ func NewService(repo Store, sender Sender, defaultChannelID string, deviceVerifi
 	}
 }
 
-func (s *Service) RegisterToken(ctx context.Context, userID string, req RegisterTokenRequest) error {
+func (s *Service) RegisterToken(ctx context.Context, mobileUserID string, req RegisterTokenRequest) error {
 	if s.repo == nil {
 		return errors.New("notification repository is not configured")
 	}
 
 	deviceID := strings.TrimSpace(req.DeviceID)
+
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return err
+	}
+
 	expoPushToken := strings.TrimSpace(req.ExpoPushToken)
 	platform := strings.TrimSpace(strings.ToLower(req.Platform))
 	if expoPushToken == "" {
-		log.Printf("notification: empty expo push token for user %s and device %s", userID, deviceID)
+		log.Printf("notification: empty expo push token for user %s and device %s", mobileUserID, deviceID)
 		return errors.New("expo push token is required")
 	}
 	if !isSupportedPlatform(platform) {
-		return errors.New("platform must be ios or android")
+		return appErr.ErrInvalidNotificationPlatform
 	}
 	if !looksLikeExpoPushToken(expoPushToken) {
-		return errors.New("invalid expo push token")
+		return appErr.ErrInvalidExpoToken
 	}
 
 	row := &models.PushToken{
 		ID:            uuid.NewString(),
-		UserID:        userID,
+		UserID:        mobileUserID,
 		DeviceID:      deviceID,
 		ExpoPushToken: expoPushToken,
 		Platform:      platform,
@@ -71,21 +77,20 @@ func (s *Service) RegisterToken(ctx context.Context, userID string, req Register
 	return s.repo.UpsertToken(ctx, row)
 }
 
-func (s *Service) DeleteToken(ctx context.Context, userID, deviceID string) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return errors.New("user id is required")
-	}
+func (s *Service) DeleteToken(ctx context.Context, mobileUserID, deviceID string) error {
 	if s.repo == nil {
 		return errors.New("notification repository is not configured")
 	}
 
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return errors.New("device id is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return err
 	}
 
-	return s.repo.DeleteTokenByUserAndDevice(ctx, userID, deviceID)
+	if err := s.repo.DeleteTokenByUserAndDevice(ctx, mobileUserID, deviceID); err != nil {
+		return appErr.ErrDeletingPushToken
+	}
+
+	return nil
 }
 
 const receiptPollBatchSize = 300
@@ -231,14 +236,16 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 
 	notificationsEnabled, err := s.repo.IsNotificationsEnabled(ctx, userID)
 	if err != nil {
-		return err
+		log.Printf("unable to get is_notifications_enabled flag: %s/n", err)
+		return appErr.ErrSendingPushNotification
 	}
 
 	if notificationsEnabled {
 		// proceed to send push notification
 		tokens, err := s.repo.ListTokensByUserID(ctx, userID)
 		if err != nil {
-			return err
+			log.Printf("error fetching list of tokens by current user: %s/n", err)
+			return appErr.ErrSendingPushNotification
 		}
 		if len(tokens) == 0 {
 			return nil
@@ -258,7 +265,8 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 
 		tickets, err := s.sender.Send(ctx, messages)
 		if err != nil {
-			return err
+			log.Printf("error sending push notification: %s/n", err)
+			return appErr.ErrSendingPushNotification
 		}
 		ticketRows := make([]models.NotificationTicket, 0, len(tickets))
 
@@ -328,20 +336,20 @@ func isDeviceNotRegistered(ticket ExpoPushTicket) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "DeviceNotRegistered")
 }
 
-func (s *Service) GetNotifications(ctx context.Context, userID string, page, pageSize int) (*ListNotificationsResponse, error) {
+func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID string, page, pageSize int) (*ListNotificationsResponse, error) {
 	if s.repo == nil {
 		return nil, errors.New("notification repository is not configured")
 	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return nil, errors.New("user id is required")
+
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
 	page, pageSize, offset := normalizeNotificationPagination(page, pageSize)
 
-	notifications, total, err := s.repo.ListNotificationsPageByUserID(ctx, userID, pageSize, offset)
+	notifications, total, err := s.repo.ListNotificationsPageByUserID(ctx, mobileUserID, pageSize, offset)
 	if err != nil {
-		return nil, err
+		return nil, appErr.ErrFetchingNotifications
 	}
 
 	return &ListNotificationsResponse{
@@ -353,74 +361,72 @@ func (s *Service) GetNotifications(ctx context.Context, userID string, page, pag
 	}, nil
 }
 
-func (s *Service) GetUnreadCount(ctx context.Context, userID string) (int, error) {
+func (s *Service) GetUnreadCount(ctx context.Context, mobileUserID, deviceID string) (int, error) {
 	if s.repo == nil {
 		return 0, errors.New("notification repository is not configured")
 	}
 
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return 0, errors.New("user id is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return 0, err
 	}
 
-	return s.repo.CountUnreadByUserID(ctx, userID)
+	unreadCount, err := s.repo.CountUnreadByUserID(ctx, mobileUserID)
+	if err != nil {
+		return 0, appErr.ErrFetchingUnreadNotifications
+	}
+
+	return unreadCount, nil
 }
 
-func (s *Service) MarkNotificationRead(ctx context.Context, userID, notificationID string) (bool, error) {
+func (s *Service) MarkNotificationRead(ctx context.Context, mobileUserID, deviceID, notificationID string) (bool, error) {
 	if s.repo == nil {
 		return false, errors.New("notification repository is not configured")
 	}
 
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return false, errors.New("user id is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return false, err
 	}
 
-	return s.repo.MarkNotificationRead(ctx, userID, notificationID)
+	read, err := s.repo.MarkNotificationRead(ctx, mobileUserID, notificationID)
+	if err != nil {
+		return read, appErr.ErrMarkingNotifications
+	}
+
+	return read, nil
 }
 
-func (s *Service) MarkAllNotificationsRead(ctx context.Context, userID string) (int64, error) {
+func (s *Service) MarkAllNotificationsRead(ctx context.Context, mobileUserID, deviceID string) error {
 	if s.repo == nil {
-		return 0, errors.New("notification repository is not configured")
+		return errors.New("notification repository is not configured")
 	}
 
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return 0, errors.New("user id is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return err
 	}
 
-	return s.repo.MarkAllNotificationsRead(ctx, userID)
+	return s.repo.MarkAllNotificationsRead(ctx, mobileUserID)
 }
 
 func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID, deviceID string) (*TogglePushNotificationsResponse, error) {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return nil, errors.New("mobile user id is required")
-	}
-
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
 
 	enabled, err := s.repo.TogglePushNotifications(ctx, mobileUserID)
 	if err != nil {
-		return nil, err
+		return nil, appErr.ErrTogglingPushNotification
 	}
 
 	var message string
 
 	switch enabled {
 	case true:
-		message = "push notifications has been enabled"
+		message = "Push notifications has been enabled"
 	case false:
-		message = "push notifications has been disabled"
+		message = "Push notifications has been disabled"
 	}
 
 	return &TogglePushNotificationsResponse{
-		Status:    "success",
 		Message:   message,
 		IsEnabled: enabled,
 	}, nil

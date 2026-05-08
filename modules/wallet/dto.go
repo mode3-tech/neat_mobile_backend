@@ -8,7 +8,6 @@ type BankDetailsQuery struct {
 }
 
 type BankDetailsResponse struct {
-	Status  bool        `json:"status"`
 	Account BankDetails `json:"account"`
 }
 

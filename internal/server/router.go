@@ -196,7 +196,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	})
+	}, deviceService)
 
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService, deviceService)

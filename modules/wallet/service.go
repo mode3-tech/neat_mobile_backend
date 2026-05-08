@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/modules/transaction"
 	"strconv"
@@ -27,14 +28,16 @@ type Service struct {
 	providusService   ProvidusService
 	pinVerifier       *pinverifier.Verifier
 	settlementAccount SettlementAccount
+	deviceVerifier    DeviceVerifier
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier, settlementAccount SettlementAccount) *Service {
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:              repo,
 		providusService:   providusService,
 		pinVerifier:       pinVerifier,
 		settlementAccount: settlementAccount,
+		deviceVerifier:    deviceVerifier,
 	}
 }
 
@@ -42,72 +45,48 @@ func (s *Service) FetchBanks(ctx context.Context, mobileUserID, deviceID string)
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
-	if deviceID == "" {
-		return nil, errors.New("device ID is required")
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
+	banks, err := s.providusService.FetchBanks(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+		return nil, appErr.ErrFetchingBanks
 	}
 
-	return s.providusService.FetchBanks(ctx)
+	return banks, nil
 }
 
 func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode, mobileUserID, deviceID string) (*BankDetails, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
-	if deviceID == "" {
-		return nil, errors.New("device ID is required")
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
+	bankDetails, err := s.providusService.FetchBankDetails(ctx, accountNumber, bankCode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+		return nil, appErr.ErrFetchingBankDetails
 	}
 
-	return s.providusService.FetchBankDetails(ctx, accountNumber, bankCode)
+	return bankDetails, nil
 }
 
 func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID string, req *TransferRequest) (*TransferResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
-	if req == nil {
-		return nil, fmt.Errorf("%w: transfer request is required", ErrInvalidTransferRequest)
-	}
-
-	if mobileUserID == "" {
-		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
-	}
-
-	if deviceID == "" {
-		return nil, fmt.Errorf("%w: device ID is required", ErrInvalidTransferRequest)
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("%w: device not found", ErrDeviceVerificationFailed)
-		}
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
 	}
 
-	if req.Amount <= 0 {
-		return nil, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidTransferRequest)
+	if req.Amount <= 50 {
+		return nil, appErr.ErrInvalidTransferAmount
 	}
 	req.Amount = req.Amount * 100 // convert Naira → kobo for storage and downstream use
 	accountNumber := strings.TrimSpace(req.AccountNumber)
@@ -117,15 +96,15 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	}
 
 	if accountNumber == "" {
-		return nil, fmt.Errorf("%w: account number is required", ErrInvalidTransferRequest)
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	if accountName == "" {
-		return nil, fmt.Errorf("%w: account name is required", ErrInvalidTransferRequest)
+		return nil, appErr.ErrInvalidRequestBody
 	}
 	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch wallet: %w", err)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	narration := ""
@@ -136,9 +115,9 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	wallet, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrWalletNotFound
+			return nil, appErr.ErrMissingUserWallet
 		}
-		return nil, err
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	txID := uuid.NewString()
@@ -160,18 +139,18 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 	}
 
 	if err := s.repo.AddTransaction(ctx, txRecord); err != nil {
-		return nil, fmt.Errorf("failed to create transaction record: %w", err)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		return nil, fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	if resp == nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		return nil, fmt.Errorf("%w: empty response", ErrTransferProviderFailed)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	if !resp.Status {
@@ -180,13 +159,13 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		if message == "" {
 			message = "provider returned an unsuccessful transfer response"
 		}
-		return nil, fmt.Errorf("%w: %s", ErrTransferProviderFailed, message)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 
 	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
-		return nil, fmt.Errorf("failed to set a successful transaction record: %w", err)
+		return nil, appErr.ErrFundsTransfer
 	}
 
 	return resp, nil
@@ -194,8 +173,8 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 }
 
 func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error {
-	if amountNaira <= 0 {
-		return errors.New("amount must be greater than zero")
+	if amountNaira <= 50 {
+		return appErr.ErrInvalidTransferAmount
 	}
 	if strings.TrimSpace(s.settlementAccount.AccountNumber) == "" {
 		return errors.New("loan repayment settlement account is not configured")
@@ -203,7 +182,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 
 	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch wallet: %w", err)
+		return appErr.ErrMakingLoanRepayment
 	}
 
 	w, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
@@ -344,26 +323,16 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
-	}
-
-	if deviceID == "" {
-		return nil, errors.New("device ID is required")
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
 	user, err := s.repo.GetUserWalletID(ctx, mobileUserID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+			return nil, appErr.ErrUnauthorized
 		}
-		return nil, err
+		return nil, appErr.ErrAddingBeneficiary
 	}
 
 	walletID := strings.TrimSpace(user.WalletID)
@@ -372,23 +341,23 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 	bankCode := strings.TrimSpace(req.BankCode)
 
 	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	if walletID == "" {
-		return nil, errors.New("wallet ID is required")
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	if accountNumber == "" {
-		return nil, errors.New("account number is required")
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	if accountName == "" {
-		return nil, errors.New("account name is required")
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	if bankCode == "" {
-		return nil, errors.New("bank code is required")
+		return nil, appErr.ErrInvalidRequestBody
 	}
 
 	beneficiary := &Beneficiary{
@@ -401,7 +370,7 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID str
 	}
 
 	if err := s.repo.CreateBeneficiary(ctx, beneficiary); err != nil {
-		return nil, err
+		return nil, appErr.ErrAddingBeneficiary
 	}
 
 	return beneficiary, nil
@@ -526,18 +495,14 @@ func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID, deviceID s
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	deviceID = strings.TrimSpace(deviceID)
 
-	if mobileUserID == "" {
-		return nil, errors.New("mobile user ID is required")
+	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		return nil, err
 	}
 
-	if deviceID == "" {
-		return nil, errors.New("device ID is required")
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
+	beneficiaries, err := s.repo.GetBeneficiaries(ctx, mobileUserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify device: %w", err)
+		return nil, appErr.ErrFetchingBeneficiaries
 	}
 
-	return s.repo.GetBeneficiaries(ctx, mobileUserID)
+	return beneficiaries, nil
 }

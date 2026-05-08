@@ -2,7 +2,9 @@ package wallet
 
 import (
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"strings"
 
@@ -18,147 +20,197 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) FetchBanks(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	banks, err := h.service.FetchBanks(c.Request.Context(), mobileUserID, deviceID)
-
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch banks"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": true, "banks": banks})
+	c.JSON(http.StatusOK, response.APIResponse[[]Bank]{
+		Status:  "success",
+		Message: "Banks fetched successfully with sortcodes",
+		Data:    &banks,
+	})
 
 }
 
 func (h *Handler) FetchBankDetails(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	var query BankDetailsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
+		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), query.AccountNumber, query.BankCode, mobileUserID, deviceID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bank details"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	response := &BankDetailsResponse{
-		Status:  true,
+	resp := &BankDetailsResponse{
 		Account: *bankDetails,
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.APIResponse[*BankDetailsResponse]{
+		Status:  "success",
+		Message: "Bank details fetched successfully",
+		Data:    &resp,
+	})
 }
 
 func (h *Handler) InitiateTransfer(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	var req TransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request body",
-			"details": err.Error(),
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
 		})
 		return
 	}
 
 	transferResponse, err := h.service.InitiateTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		return
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
-	c.JSON(http.StatusOK, transferResponse)
+
+	dto := &TransferResponse{
+		Transfer: transferResponse.Transfer,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[*TransferResponse]{
+		Status:  "success",
+		Message: "Transfer success",
+		Data:    &dto,
+	})
 }
 
-// func (h *Handler) handleInitiateTransferError(c *gin.Context, err error) {
-// 	switch {
-// 	case errors.Is(err, ErrWrongTransactionPin):
-// 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-// 	case errors.Is(err, ErrTransactionPinLocked):
-// 		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Transaction PIN is locked due to too many failed attempts. Try again later"})
-// 	case errors.Is(err, ErrInvalidTransferRequest):
-// 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 	case errors.Is(err, ErrDeviceVerificationFailed):
-// 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device verification failed"})
-// 	case errors.Is(err, ErrWalletNotFound):
-// 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
-// 	case errors.Is(err, ErrTransferProviderFailed):
-// 		log.Printf("Transfer provider error: %v", err)
-// 		c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-// 	default:
-// 		log.Printf("Error initiating transfer: %v", err)
-// 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate transfer"})
-// 	}
-// }
-
 func (h *Handler) AddBeneficiary(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
-	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	var req AddBeneficiaryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	beneficiary, err := h.service.AddBeneficiary(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to add beneficiary"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	response := &AddBeneficiaryResponse{
-		Status:      true,
-		Message:     "Beneficiary added successfully",
+	dto := &AddBeneficiaryResponse{
 		Beneficiary: *beneficiary,
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.APIResponse[AddBeneficiaryResponse]{
+		Status:  "success",
+		Message: "Beneficiary added successfully",
+		Data:    dto,
+	})
 }
 
 func (h *Handler) HandleCreditWebhook(c *gin.Context) {
@@ -222,15 +274,23 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 }
 
 func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
-	mobileUserID := c.GetString(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := c.GetHeader("X-Device-ID")
+	deviceID := c.Request.Header.Get("X-Device-ID")
 	if strings.TrimSpace(deviceID) == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Device ID is required"})
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -268,14 +328,22 @@ func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
 		}
 	} else {
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			mapped := response.MapError(appErr.ErrInvalidRequestBody)
+			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+				Status: "error",
+				Error:  &mapped.Error,
+			})
 			return
 		}
 	}
 
 	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, deviceID, &req)
 	if err != nil {
-		return
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
 	c.JSON(http.StatusOK, resp)

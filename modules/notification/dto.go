@@ -54,7 +54,18 @@ type ListNotificationsResponse struct {
 }
 
 type TogglePushNotificationsResponse struct {
-	Status    string `json:"status"`
 	Message   string `json:"message"`
 	IsEnabled bool   `json:"is_enabled"`
+}
+
+type UnreadNotificationCountResponse struct {
+	Count int `json:"count"`
+}
+
+type NotificationParams struct {
+	ID string `uri:"id" binding:"required"`
+}
+
+type MarkNotificationReadResponse struct {
+	Updated *bool `json:"bool"`
 }

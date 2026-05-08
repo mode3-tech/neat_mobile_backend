@@ -597,6 +597,150 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrInvalidExpoToken:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "INVALID_EXPO_TOKEN",
+				Message: "An unexpected error occured, please try again later",
+			},
+		}
+
+	case appErr.ErrSendingPushNotification:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ERROR_SENDING_PUSH_NOTIFICATION",
+				Message: appErr.ErrSendingPushNotification.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingNotifications:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ERROR_FETCHING_NOTIFICATIONS",
+				Message: appErr.ErrFetchingNotifications.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingUnreadNotifications:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FETCHING_UNREAD_NOTIFICATIONS_FAILED",
+				Message: appErr.ErrFetchingUnreadNotifications.Error(),
+			},
+		}
+
+	case appErr.ErrMarkingNotifications:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "UNABLE_TO_MARK_NOTIFICATIONS",
+				Message: appErr.ErrMarkingNotifications.Error(),
+			},
+		}
+
+	case appErr.ErrDeletingPushToken:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ERROR_DELETING_EXPO_TOKEN",
+				Message: appErr.ErrDeletingPushToken.Error(),
+			},
+		}
+
+	case appErr.ErrMissingRequiredPathParameter:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_REQUIRED_PATH_PARAMETER",
+				Message: appErr.ErrMissingRequiredPathParameter.Error(),
+			},
+		}
+
+	case appErr.ErrTogglingPushNotification:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "UNABLE_TO_TOGGLE_PUSH",
+				Message: appErr.ErrTogglingPushNotification.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingBanks:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FETCHING_BANKS_ERROR",
+				Message: appErr.ErrFetchingBanks.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingBankDetails:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FETCHING_BANK_DETAILS_ERROR",
+				Message: appErr.ErrFetchingBankDetails.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidTransferAmount:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_TRANSFER_AMOUNT",
+				Message: appErr.ErrInvalidTransferAmount.Error(),
+			},
+		}
+
+	case appErr.ErrFundsTransfer:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FAILED_TRANSFER",
+				Message: appErr.ErrFundsTransfer.Error(),
+			},
+		}
+
+	case appErr.ErrMissingUserWallet:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "USER WALLET NOT FOUND",
+				Message: appErr.ErrMissingUserWallet.Error(),
+			},
+		}
+
+	case appErr.ErrAddingBeneficiary:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ADDING_BENEFICIARY_ERROR",
+				Message: appErr.ErrAddingBeneficiary.Error(),
+			},
+		}
+
+	case appErr.ErrMakingLoanRepayment:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ERROR_MAKING_REPAYMENT",
+				Message: appErr.ErrMakingLoanRepayment.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingBeneficiaries:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ERROR_FETCHING_BENEFICIARIES",
+				Message: appErr.ErrFetchingBeneficiaries.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

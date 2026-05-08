@@ -59,8 +59,8 @@ func (s *stubStore) MarkNotificationRead(_ context.Context, _, _ string) (bool, 
 	return true, nil
 }
 
-func (s *stubStore) MarkAllNotificationsRead(_ context.Context, _ string) (int64, error) {
-	return 0, nil
+func (s *stubStore) MarkAllNotificationsRead(_ context.Context, _ string) error {
+	return nil
 }
 
 func (s *stubStore) CreateNotificationTickets(_ context.Context, rows []models.NotificationTicket) error {

@@ -22,7 +22,7 @@ type Store interface {
 	ListNotificationsPageByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Notification, int64, error)
 	CountUnreadByUserID(ctx context.Context, userID string) (int, error)
 	MarkNotificationRead(ctx context.Context, userID, notificationID string) (bool, error)
-	MarkAllNotificationsRead(ctx context.Context, userID string) (int64, error)
+	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	CreateNotificationTickets(ctx context.Context, rows []models.NotificationTicket) error
 	ListPendingNotificationTickets(ctx context.Context, limit int) ([]models.NotificationTicket, error)
 	MarkNotificationTicketReceipt(ctx context.Context, expoTicketID string, receiptStatus, receiptMessage, receiptError *string, checkedAt time.Time) error
@@ -213,25 +213,25 @@ func (r *Repository) MarkNotificationRead(ctx context.Context, userID, notificat
 	return result.RowsAffected > 0, nil
 }
 
-func (r *Repository) MarkAllNotificationsRead(ctx context.Context, userID string) (int64, error) {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return 0, errors.New("user id is required")
+func (r *Repository) MarkAllNotificationsRead(ctx context.Context, mobileUserID string) error {
+	mobileUserID = strings.TrimSpace(mobileUserID)
+	if mobileUserID == "" {
+		return errors.New("user id is required")
 	}
 
 	now := time.Now().UTC()
 	result := r.db.WithContext(ctx).
 		Model(&models.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
+		Where("user_id = ? AND is_read = ?", mobileUserID, false).
 		Updates(map[string]any{
 			"is_read": true,
 			"read_at": &now,
 		})
 	if result.Error != nil {
-		return 0, result.Error
+		return result.Error
 	}
 
-	return result.RowsAffected, nil
+	return nil
 }
 
 func isSupportedNotificationType(notificationType string) bool {

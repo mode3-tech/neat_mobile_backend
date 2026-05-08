@@ -45,16 +45,8 @@ func run(ctx context.Context) error {
 	defer cancel()
 
 	stopCron()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
+	return srv.Shutdown(shutdownCtx)
 
-	select {
-	case err := <-errChan:
-		return err
-	default:
-		return nil
-	}
 }
 
 func main() {

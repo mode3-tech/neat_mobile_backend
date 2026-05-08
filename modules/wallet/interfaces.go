@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"neat_mobile_app_backend/modules/device"
 )
 
 type BankResponse struct {
@@ -25,4 +26,8 @@ type ProvidusService interface {
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 	InitiateTransfer(ctx context.Context, customerID string, req *TransferRequest) (*TransferResponse, error)
 	InitiateBulkTransfer(ctx context.Context, req []BulkTransferRecipientInfo) (*ProvidusBatchTransferResponse, error)
+}
+
+type DeviceVerifier interface {
+	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }

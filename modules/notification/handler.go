@@ -2,7 +2,9 @@ package notification
 
 import (
 	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"strings"
 
@@ -18,73 +20,87 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) RegisterToken(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
 	var req RegisterTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if err := h.service.RegisterToken(c.Request.Context(), userID, req); err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to register push token"})
+	if err := h.service.RegisterToken(c.Request.Context(), mobileUserID, req); err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "push token registered"})
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Push token registered",
+	})
 }
 
 func (h *Handler) DeleteToken(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
-	}
-
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing X-Device-ID header"})
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if err := h.service.DeleteToken(c.Request.Context(), userID, deviceID); err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to delete push token"})
+	if err := h.service.DeleteToken(c.Request.Context(), mobileUserID, deviceID); err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "push token deleted"})
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Push token deleted",
+	})
 }
 
 func (h *Handler) SendNotification(c *gin.Context) {
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
-	}
-
 	var req SendNotificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -107,149 +123,220 @@ func (h *Handler) SendNotification(c *gin.Context) {
 }
 
 func (h *Handler) GetNotifications(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
 	var query ListNotificationsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid query params"})
+		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
-	response, err := h.service.GetNotifications(c.Request.Context(), userID, query.Page, query.PageSize)
+	resp, err := h.service.GetNotifications(c.Request.Context(), mobileUserID, deviceID, query.Page, query.PageSize)
 	if err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "unable to retrieve notifications"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.APIResponse[*ListNotificationsResponse]{
+		Status:  "success",
+		Message: "Notifications fetched successfully",
+		Data:    &resp,
+	})
 }
 
 func (h *Handler) GetUnreadCount(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
-	count, err := h.service.GetUnreadCount(c.Request.Context(), userID)
+	count, err := h.service.GetUnreadCount(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "unable to retrieve unread count"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"count": count})
+	dto := &UnreadNotificationCountResponse{
+		Count: count,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[UnreadNotificationCountResponse]{
+		Status:  "success",
+		Message: "Unread notification count was successful",
+		Data:    dto,
+	})
 }
 
 func (h *Handler) MarkNotificationRead(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	notificationID := strings.TrimSpace(c.Param("id"))
-	updated, err := h.service.MarkNotificationRead(c.Request.Context(), userID, notificationID)
+	var params NotificationParams
+
+	if err := c.ShouldBindUri(&params); err != nil {
+		mapped := response.MapError(appErr.ErrMissingRequiredPathParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+	}
+
+	updated, err := h.service.MarkNotificationRead(c.Request.Context(), mobileUserID, deviceID, strings.TrimSpace(params.ID))
 	if err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "unable to mark notification as read"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "notification updated",
-		"updated": updated,
+	dto := MarkNotificationReadResponse{
+		Updated: &updated,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[MarkNotificationReadResponse]{
+		Status:  "success",
+		Message: "Notification(s) marked as read",
+		Data:    &dto,
 	})
 }
 
 func (h *Handler) MarkAllNotificationsRead(c *gin.Context) {
-	userID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if userID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	if h.service == nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "notification service not configured"})
-		return
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 	}
 
-	updated, err := h.service.MarkAllNotificationsRead(c.Request.Context(), userID)
+	err := h.service.MarkAllNotificationsRead(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "unable to mark notifications as read"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "notifications updated",
-		"updated": updated,
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Notifications successfully marked as read",
 	})
 }
 
 func (h *Handler) TogglePushNotification(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	resp, err := h.service.TogglePushNotifications(c.Request.Context(), mobileUserID, deviceID)
 	if err != nil {
-		if isBadRequestError(err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if isUnauthorizedError(err) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	dto := &TogglePushNotificationsResponse{
+		IsEnabled: resp.IsEnabled,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[TogglePushNotificationsResponse]{
+		Status:  "success",
+		Message: resp.Message,
+		Data:    dto,
+	})
 }
 
 func isBadRequestError(err error) bool {
