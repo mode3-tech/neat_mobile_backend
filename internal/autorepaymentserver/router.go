@@ -22,7 +22,7 @@ import (
 	"neat_mobile_app_backend/modules/device"
 	"neat_mobile_app_backend/modules/notification"
 	"neat_mobile_app_backend/modules/wallet"
-	"neat_mobile_app_backend/providers/providus"
+	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/push"
 )
 
@@ -54,7 +54,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationRepo := notification.NewRepository(db)
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
-	providusClient := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+	providusClient := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 	cbaClient := cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
 
 	settlementAccount := wallet.SettlementAccount{

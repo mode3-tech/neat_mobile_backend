@@ -22,12 +22,12 @@ import (
 	"neat_mobile_app_backend/modules/reporting"
 	"neat_mobile_app_backend/modules/transaction"
 	"neat_mobile_app_backend/modules/wallet"
+	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	"neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
-	"neat_mobile_app_backend/providers/providus"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	"neat_mobile_app_backend/providers/sms"
@@ -122,7 +122,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		BlockDuration:    time.Duration(cfg.LoginRateLimitBlockMinutes) * time.Minute,
 	})
 
-	providusWalletService := providus.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
 	otpRepo := otp.NewRepository(db)
 	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper, cfg.AppName)

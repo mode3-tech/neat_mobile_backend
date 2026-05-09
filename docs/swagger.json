@@ -2939,13 +2939,12 @@
             "description": "Invalid request body, purpose, channel, email, or phone number",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPValidationErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "invalid_request": {
                     "value": {
-                      "error": "invalid request body"
+                      "status": "error",
+                      "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" }
                     }
                   }
                 }
@@ -2956,16 +2955,12 @@
             "description": "Too many requests",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API429Error" },
                 "examples": {
                   "too_many_requests": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "Too many requests"
-                      }
+                      "error": { "code": "TOO_MANY_REQUESTS", "message": "Too many requests, please try again later" }
                     }
                   }
                 }
@@ -2976,16 +2971,12 @@
             "description": "SMS delivery failed",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API502Error" },
                 "examples": {
                   "sms_delivery_failed": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "SMS delivery failed"
-                      }
+                      "error": { "code": "SMS_DELIVERY_FAILED", "message": "SMS delivery failed" }
                     }
                   }
                 }
@@ -2996,16 +2987,12 @@
             "description": "SMS service not configured",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API503Error" },
                 "examples": {
                   "sms_not_configured": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "SMS service not configured"
-                      }
+                      "error": { "code": "SMS_SERVICE_NOT_CONFIGURED", "message": "SMS service not configured" }
                     }
                   }
                 }
@@ -3016,16 +3003,12 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API500Error" },
                 "examples": {
                   "server_error": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "Internal server error"
-                      }
+                      "error": { "code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred, please try again later" }
                     }
                   }
                 }
@@ -3078,13 +3061,12 @@
             "description": "Invalid request body, purpose, or channel",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPValidationErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "invalid_request": {
                     "value": {
-                      "error": "invalid request body"
+                      "status": "error",
+                      "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" }
                     }
                   }
                 }
@@ -3095,16 +3077,12 @@
             "description": "Invalid OTP",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API401Error" },
                 "examples": {
                   "invalid_otp": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "Invalid OTP"
-                      }
+                      "error": { "code": "INVALID_OTP", "message": "invalid otp" }
                     }
                   }
                 }
@@ -3115,16 +3093,12 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OTPServiceErrorResponse"
-                },
+                "schema": { "$ref": "#/components/schemas/API500Error" },
                 "examples": {
                   "server_error": {
                     "value": {
                       "status": "error",
-                      "error": {
-                        "message": "Internal server error"
-                      }
+                      "error": { "code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred, please try again later" }
                     }
                   }
                 }
@@ -6499,28 +6473,50 @@
             "description": "Savings goal created successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateGoalResponse"
+                "schema": { "$ref": "#/components/schemas/CreateGoalSuccessResponse" },
+                "examples": {
+                  "success": {
+                    "value": { "status": "success", "message": "savings goal creation was successful" }
+                  }
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request body or goal name is empty",
+            "description": "Invalid request body",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "invalid_request": {
+                    "value": { "status": "error", "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" } }
+                  }
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized, missing device ID, device not found, or device not allowed",
+            "description": "Unauthorized — missing user ID or device ID",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "missing_user": {
+                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" },
+                "examples": {
+                  "device_not_allowed": {
+                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                  }
                 }
               }
             }
@@ -6529,8 +6525,14 @@
             "description": "Target amount too low or target date is not in the future",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API422Error" },
+                "examples": {
+                  "invalid_amount": {
+                    "value": { "status": "error", "error": { "code": "INVALID_SAVINGS_AMOUNT", "message": "savings amount must be at least 50 NGN" } }
+                  },
+                  "invalid_date": {
+                    "value": { "status": "error", "error": { "code": "INVALID_DATE", "message": "invalid date range" } }
+                  }
                 }
               }
             }
@@ -6539,8 +6541,11 @@
             "description": "Failed to create savings goal",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API500Error" },
+                "examples": {
+                  "creation_failed": {
+                    "value": { "status": "error", "error": { "code": "SAVINGS_GOAL_CREATION_ERROR", "message": "Failed to create savings goal" } }
+                  }
                 }
               }
             }
@@ -6576,18 +6581,45 @@
             "description": "Goals fetched successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetUserSavingsResponse"
+                "schema": { "$ref": "#/components/schemas/GetUserGoalsSuccessResponse" },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "User's goals fetched successfully",
+                      "data": {
+                        "status": "success",
+                        "message": "User's goals fetched successfully",
+                        "goals": [{ "goal_id": "3f7b1c2a-...", "name": "Emergency Fund", "start_date": "2026-01-01T00:00:00Z", "last_deposit": null }]
+                      }
+                    }
+                  }
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized, missing device ID, device not found, or device not allowed",
+            "description": "Unauthorized — missing user ID or device ID",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "missing_user": {
+                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" },
+                "examples": {
+                  "device_not_allowed": {
+                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                  }
                 }
               }
             }
@@ -6596,8 +6628,11 @@
             "description": "Failed to fetch goals",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API500Error" },
+                "examples": {
+                  "fetch_failed": {
+                    "value": { "status": "error", "error": { "code": "FETCHING_USER_GOALS_ERROR", "message": "Failed to fetch user goals" } }
+                  }
                 }
               }
             }
@@ -6642,8 +6677,19 @@
             "description": "Goal summary fetched successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetGoalSummaryResponse"
+                "schema": { "$ref": "#/components/schemas/GetGoalSummarySuccessResponse" },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "status": "success",
+                      "message": "Goal summary fetched successfully",
+                      "data": {
+                        "status": "success",
+                        "message": "Goal summary fetched successfully",
+                        "summary": { "name": "Emergency Fund", "start_date": "2026-01-01T00:00:00Z", "target_amount": 500000, "total_savings": 120000, "last_deposit": "2026-04-15T10:00:00Z" }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -6652,18 +6698,37 @@
             "description": "Missing or invalid goal_id query parameter",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "invalid_query": {
+                    "value": { "status": "error", "error": { "code": "INVALID_QUERY_PARAMETER", "message": "Invalid query parameter" } }
+                  }
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized, missing device ID, device not found, or device not allowed",
+            "description": "Unauthorized — missing user ID or device ID",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "missing_user": {
+                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" },
+                "examples": {
+                  "device_not_allowed": {
+                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                  }
                 }
               }
             }
@@ -6672,8 +6737,11 @@
             "description": "Failed to fetch goal summary",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                "schema": { "$ref": "#/components/schemas/API500Error" },
+                "examples": {
+                  "fetch_failed": {
+                    "value": { "status": "error", "error": { "code": "FETCHING_GOAL_SUMMARY_ERROR", "message": "Failed to fetch goal summary" } }
+                  }
                 }
               }
             }
@@ -10388,211 +10456,135 @@
           }
         }
       },
-      "API401Error": {
-        "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "UNAUTHORIZED"
-          },
-          "message": {
-            "type": "string",
-            "example": "Unauthorized access"
-          }
-        }
-      },
       "API400Error": {
         "type": "object",
-        "required": [
-         "status",
-         "error"
-        ],
+        "required": ["status", "error"],
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "error"
-          },
-          "error": {
-            "type": "object",
-            "required": [
-              "code",
-              "message"
-            ],
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "INVALID_REQUEST_BODY"
-            },
-            "message": {
-                "type": "string",
-                "example": "invalid request body"
-          }
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
         }
-       }
-      }
+      },
+      "API401Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
+      "API403Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
       },
       "API404Error": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["status", "error"],
         "properties": {
-          "code": {
-            "type": "string",
-            "example": "NOT_FOUND"
-          },
-          "message": {
-            "type": "string",
-            "example": "The requested resource was not found"
-          }
-        }
-      },
-      "API422Error": {
-        "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "VALIDATION_ERROR"
-          },
-          "message": {
-            "type": "string",
-            "example": "Validation failed for the request body"
-          }
-        }
-      },
-      "API429Error": {
-        "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "TOO_MANY_REQUESTS"
-          },
-          "message": {
-            "type": "string",
-            "example": "Too many requests, please try again later"
-          }
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
         }
       },
       "API409Error": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["status", "error"],
         "properties": {
-          "code": {
-            "type": "string",
-            "example": "CONFLICT"
-          },
-          "message": {
-            "type": "string",
-            "example": "A resource with the given identifier already exists"
-          }
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
+      "API422Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
+      "API429Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
         }
       },
       "API500Error": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["status", "error"],
         "properties": {
-          "code": {
-            "type": "string",
-            "example": "INTERNAL_SERVER_ERROR"
-          },
-          "message": {
-            "type": "string",
-            "example": "An unexpected error occurred, please try again later"
-          }
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
         }
-      },      
+      },
+      "API502Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
+      "API503Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
+      "API504Error": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "error": { "$ref": "#/components/schemas/APIError" }
+        }
+      },
       "OTPRequestSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "success"
-          },
-          "message": {
-            "type": "string",
-            "example": "OTP sent successfully"
-          }
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "OTP sent successfully" }
         }
       },
       "OTPVerifySuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "success"
-          },
-          "message": {
-            "type": "string",
-            "example": "OTP verified successfully"
-          },
-          "data": {
-            "$ref": "#/components/schemas/VerifyOTPResponse"
-          }
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "OTP verified successfully" },
+          "data": { "$ref": "#/components/schemas/VerifyOTPResponse" }
         }
       },
-      "OTPValidationErrorResponse": {
+      "CreateGoalSuccessResponse": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["status", "message"],
         "properties": {
-          "error": {
-            "type": "string",
-            "example": "invalid request body"
-          }
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "savings goal creation was successful" }
         }
       },
-      "OTPServiceErrorResponse": {
+      "GetUserGoalsSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "error"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
-          "status": {
-            "type": "string",
-            "example": "error"
-          },
-          "error": {
-            "type": "object",
-            "required": [
-              "message"
-            ],
-            "properties": {
-              "message": {
-                "type": "string",
-                "example": "Too many requests"
-              }
-            }
-          }
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "User's goals fetched successfully" },
+          "data": { "$ref": "#/components/schemas/GetUserSavingsResponse" }
+        }
+      },
+      "GetGoalSummarySuccessResponse": {
+        "type": "object",
+        "required": ["status", "message", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "Goal summary fetched successfully" },
+          "data": { "$ref": "#/components/schemas/GetGoalSummaryResponse" }
         }
       }
     }

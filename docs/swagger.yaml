@@ -1852,59 +1852,66 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPValidationErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
-                    error: invalid request body
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body
         "429":
           description: Too many requests
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API429Error"
               examples:
                 too_many_requests:
                   value:
                     status: error
                     error:
-                      message: Too many requests
+                      code: TOO_MANY_REQUESTS
+                      message: Too many requests, please try again later
         "502":
           description: SMS delivery failed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API502Error"
               examples:
                 sms_delivery_failed:
                   value:
                     status: error
                     error:
+                      code: SMS_DELIVERY_FAILED
                       message: SMS delivery failed
         "503":
           description: SMS service not configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API503Error"
               examples:
                 sms_not_configured:
                   value:
                     status: error
                     error:
+                      code: SMS_SERVICE_NOT_CONFIGURED
                       message: SMS service not configured
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
                     status: error
                     error:
-                      message: Internal server error
+                      code: INTERNAL_SERVER_ERROR
+                      message: An unexpected error occurred, please try again later
   /auth/otp/verify:
     post:
       tags:
@@ -1936,35 +1943,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPValidationErrorResponse"
+                $ref: "#/components/schemas/API400Error"
               examples:
                 invalid_request:
                   value:
-                    error: invalid request body
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body
         "401":
           description: Invalid OTP
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API401Error"
               examples:
                 invalid_otp:
                   value:
                     status: error
                     error:
-                      message: Invalid OTP
+                      code: INVALID_OTP
+                      message: invalid otp
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OTPServiceErrorResponse"
+                $ref: "#/components/schemas/API500Error"
               examples:
                 server_error:
                   value:
                     status: error
                     error:
-                      message: Internal server error
+                      code: INTERNAL_SERVER_ERROR
+                      message: An unexpected error occurred, please try again later
   /loan:
     get:
       tags:
@@ -4071,31 +4083,83 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateGoalResponse"
+                $ref: "#/components/schemas/CreateGoalSuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: savings goal creation was successful
         "400":
-          description: Invalid request body or goal name is empty
+          description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+              examples:
+                invalid_request:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_REQUEST_BODY
+                      message: Invalid request body
         "401":
-          description: Unauthorized, missing device ID, device not found, or device not allowed
+          description: Unauthorized — missing user ID or device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+              examples:
+                missing_user:
+                  value:
+                    status: error
+                    error:
+                      code: MISSING_REQUIRED_FIELD
+                      message: missing user id
+        "403":
+          description: Device not trusted or not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
+              examples:
+                device_not_allowed:
+                  value:
+                    status: error
+                    error:
+                      code: DEVICE_NOT_ALLOWED
+                      message: Device is inactive or not trusted, please contact support to resolve this issue
         "422":
           description: Target amount too low or target date is not in the future
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API422Error"
+              examples:
+                invalid_amount:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_SAVINGS_AMOUNT
+                      message: savings amount must be at least 50 NGN
+                invalid_date:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_DATE
+                      message: invalid date range
         "500":
           description: Failed to create savings goal
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
+              examples:
+                creation_failed:
+                  value:
+                    status: error
+                    error:
+                      code: SAVINGS_GOAL_CREATION_ERROR
+                      message: Failed to create savings goal
   /savings/goals:
     get:
       tags:
@@ -4117,19 +4181,59 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetUserSavingsResponse"
+                $ref: "#/components/schemas/GetUserGoalsSuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: "User's goals fetched successfully"
+                    data:
+                      status: success
+                      message: "User's goals fetched successfully"
+                      goals:
+                        - goal_id: "3f7b1c2a-..."
+                          name: Emergency Fund
+                          start_date: "2026-01-01T00:00:00Z"
+                          last_deposit: null
         "401":
-          description: Unauthorized, missing device ID, device not found, or device not allowed
+          description: Unauthorized — missing user ID or device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+              examples:
+                missing_user:
+                  value:
+                    status: error
+                    error:
+                      code: MISSING_REQUIRED_FIELD
+                      message: missing user id
+        "403":
+          description: Device not trusted or not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
+              examples:
+                device_not_allowed:
+                  value:
+                    status: error
+                    error:
+                      code: DEVICE_NOT_ALLOWED
+                      message: Device is inactive or not trusted, please contact support to resolve this issue
         "500":
           description: Failed to fetch goals
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
+              examples:
+                fetch_failed:
+                  value:
+                    status: error
+                    error:
+                      code: FETCHING_USER_GOALS_ERROR
+                      message: Failed to fetch user goals
   /savings/goals/summary:
     get:
       tags:
@@ -4157,25 +4261,73 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetGoalSummaryResponse"
+                $ref: "#/components/schemas/GetGoalSummarySuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Goal summary fetched successfully
+                    data:
+                      status: success
+                      message: Goal summary fetched successfully
+                      summary:
+                        name: Emergency Fund
+                        start_date: "2026-01-01T00:00:00Z"
+                        target_amount: 500000
+                        total_savings: 120000
+                        last_deposit: "2026-04-15T10:00:00Z"
         "400":
           description: Missing or invalid goal_id query parameter
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+              examples:
+                invalid_query:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_QUERY_PARAMETER
+                      message: Invalid query parameter
         "401":
-          description: Unauthorized, missing device ID, device not found, or device not allowed
+          description: Unauthorized — missing user ID or device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+              examples:
+                missing_user:
+                  value:
+                    status: error
+                    error:
+                      code: MISSING_REQUIRED_FIELD
+                      message: missing user id
+        "403":
+          description: Device not trusted or not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
+              examples:
+                device_not_allowed:
+                  value:
+                    status: error
+                    error:
+                      code: DEVICE_NOT_ALLOWED
+                      message: Device is inactive or not trusted, please contact support to resolve this issue
         "500":
           description: Failed to fetch goal summary
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
+              examples:
+                fetch_failed:
+                  value:
+                    status: error
+                    error:
+                      code: FETCHING_GOAL_SUMMARY_ERROR
+                      message: Failed to fetch goal summary
 components:
   securitySchemes:
     bearerAuth:
@@ -6870,87 +7022,7 @@ components:
         beneficiaryAccountNumber:
           type: string
           example: "1234567890"
-    ErrorResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: error
-        error:
-          $ref: "#/components/schemas/APIError"
-    API400Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: INVALID_REQUEST_BODY
-        message:
-          type: string
-          example: Invalid request
-    API401Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: UNAUTHORIZED
-        message:
-          type: string
-          example: Unauthorized access
-    API403Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: FORBIDDEN
-        message:
-          type: string
-          example: You do not have permission to access this resource
-    API404Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: NOT_FOUND
-        message:
-          type: string
-          example: The requested resource was not found
-    API429Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: TOO_MANY_REQUESTS
-        message:
-          type: string
-          example: Too many requests, please try again later
-    API422Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          example: UNPROCESSABLE_ENTITY
-        message:
-          type: string
-          example: Validation failed for the request body
-    API500Error:
+    APIError:
       type: object
       required:
         - code
@@ -6961,7 +7033,139 @@ components:
           example: INTERNAL_SERVER_ERROR
         message:
           type: string
-          example: Unexpect error occured, please try again later.
+          example: An unexpected error occurred
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API400Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API401Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API403Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API404Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API409Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API422Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API429Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API500Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API502Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API503Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
+    API504Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          $ref: "#/components/schemas/APIError"
     OTPRequestSuccessResponse:
       type: object
       required:
@@ -6989,28 +7193,45 @@ components:
           example: OTP verified successfully
         data:
           $ref: "#/components/schemas/VerifyOTPResponse"
-    OTPValidationErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: string
-          example: invalid request body
-    OTPServiceErrorResponse:
+    CreateGoalSuccessResponse:
       type: object
       required:
         - status
-        - error
+        - message
       properties:
         status:
           type: string
-          example: error
-        error:
-          type: object
-          required:
-            - message
-          properties:
-            message:
-              type: string
-              example: Too many requests
+          example: success
+        message:
+          type: string
+          example: savings goal creation was successful
+    GetUserGoalsSuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: "User's goals fetched successfully"
+        data:
+          $ref: "#/components/schemas/GetUserSavingsResponse"
+    GetGoalSummarySuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Goal summary fetched successfully
+        data:
+          $ref: "#/components/schemas/GetGoalSummaryResponse"

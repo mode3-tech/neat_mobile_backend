@@ -1,10 +1,9 @@
 package otp
 
 import (
-	"errors"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -18,27 +17,34 @@ func NewOTPHandler(manager OTPManager) *OTPHandler {
 	return &OTPHandler{manager: manager}
 }
 
-var (
-	errBadPurpose = errors.New("invalid purpose")
-	errBadChannel = errors.New("invalid channel")
-)
-
 func (o *OTPHandler) RequestOTP(c *gin.Context) {
 	var req RequestOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	purpose, err := parsePurpose(req.Purpose)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	channel, err := parseChannel(req.Channel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -51,7 +57,7 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[any]{
+	c.JSON(200, response.APIResponse[any]{
 		Status:  "success",
 		Message: "OTP sent successfully",
 	})
@@ -60,19 +66,31 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 	var req VerifyOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	purpose, err := parsePurpose(req.Purpose)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
 	channel, err := parseChannel(req.Channel)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -92,7 +110,7 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		VerificationID: result.VerificationID,
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[VerifyOTPResponse]{
+	c.JSON(200, response.APIResponse[VerifyOTPResponse]{
 		Status:  "success",
 		Message: "OTP verified successfully",
 		Data:    &resp,
@@ -108,7 +126,7 @@ func parsePurpose(v string) (Purpose, error) {
 	case string(PurposePasswordReset):
 		return PurposePasswordReset, nil
 	default:
-		return "", errBadPurpose
+		return "", appErr.ErrInvalidRequestBody
 	}
 }
 
@@ -119,41 +137,39 @@ func parseChannel(v string) (Channel, error) {
 	case string(ChannelEmail):
 		return ChannelEmail, nil
 	default:
-		return "", errBadChannel
+		return "", appErr.ErrInvalidRequestBody
 	}
 }
 
 func writeOTPError(c *gin.Context, err error) {
 	log.Printf("otp error: %v", err)
 
-	var status int
-	var message string
-
-	if strings.HasPrefix(err.Error(), "sms send failed with status:") {
-		status = http.StatusBadGateway
-		message = "SMS delivery failed"
-	} else {
+	var mappedErr error
+	switch {
+	case strings.HasPrefix(err.Error(), "sms send failed with status:"):
+		mappedErr = appErr.ErrSMSDeliveryFailed
+	default:
 		switch err.Error() {
 		case "too many requests":
-			status = http.StatusTooManyRequests
-			message = "Too many requests"
+			mappedErr = appErr.ErrTooManyRequests
 		case "invalid otp":
-			status = http.StatusUnauthorized
-			message = "Invalid OTP"
-		case "invalid email", "invalid Nigerian number", "unsupported channel":
-			status = http.StatusBadRequest
-			message = err.Error()
+			mappedErr = appErr.ErrInvalidOTP
+		case "invalid email":
+			mappedErr = appErr.ErrInvalidEmail
+		case "invalid Nigerian number":
+			mappedErr = appErr.ErrInvalidPhone
+		case "unsupported channel":
+			mappedErr = appErr.ErrInvalidChannel
 		case "sms service not configured":
-			status = http.StatusServiceUnavailable
-			message = "SMS service not configured"
+			mappedErr = appErr.ErrSMSServiceNotConfigured
 		default:
-			status = http.StatusInternalServerError
-			message = "Internal server error"
+			mappedErr = nil
 		}
 	}
 
-	c.AbortWithStatusJSON(status, response.APIResponse[any]{
+	mapped := response.MapError(mappedErr)
+	c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 		Status: "error",
-		Error:  &response.APIError{Message: message},
+		Error:  &mapped.Error,
 	})
 }

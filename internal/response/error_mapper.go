@@ -408,15 +408,6 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidQueryParameter:
-		return ErrorMapping{
-			Status: http.StatusBadRequest,
-			Error: APIError{
-				Code:    "MISSING_REQUIRED_QUERY_PARAMETER",
-				Message: appErr.ErrMissingRequiredQueryParameter.Error(),
-			},
-		}
-
 	case appErr.ErrMissingRequiredQueryParameter:
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
@@ -738,6 +729,51 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "ERROR_FETCHING_BENEFICIARIES",
 				Message: appErr.ErrFetchingBeneficiaries.Error(),
+			},
+		}
+
+	case appErr.ErrCreatingSavingsGoal:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "SAVINGS_GOAL_CREATION_ERROR",
+				Message: appErr.ErrCreatingSavingsGoal.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingUserGoals:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FETCHING_USER_GOALS_ERROR",
+				Message: appErr.ErrFetchingUserGoals.Error(),
+			},
+		}
+
+	case appErr.ErrFetchingGoalSummary:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FETCHING_GOAL_SUMMARY_ERROR",
+				Message: appErr.ErrFetchingGoalSummary.Error(),
+			},
+		}
+
+	case appErr.ErrSMSDeliveryFailed:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "SMS_DELIVERY_FAILED",
+				Message: appErr.ErrSMSDeliveryFailed.Error(),
+			},
+		}
+
+	case appErr.ErrSMSServiceNotConfigured:
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "SMS_SERVICE_NOT_CONFIGURED",
+				Message: appErr.ErrSMSServiceNotConfigured.Error(),
 			},
 		}
 

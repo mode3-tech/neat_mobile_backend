@@ -70,7 +70,7 @@ func (s *Service) CreateGoal(ctx context.Context, mobileUserID, deviceID string,
 	}
 
 	if err := s.repository.CreateGoalWithRules(ctx, savingsGoal, autoSaveRule); err != nil {
-		return nil, errors.New("error creating savings goal")
+		return nil, appErr.ErrCreatingSavingsGoal
 	}
 
 	return &CreateGoalResponse{
@@ -99,7 +99,7 @@ func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID strin
 
 	result, err := s.repository.GetUserGoals(ctx, mobileUserID)
 	if err != nil {
-		return nil, errors.New("error fetching user goals")
+		return nil, appErr.ErrFetchingUserGoals
 	}
 
 	var goals []UserGoalInfo
@@ -123,7 +123,7 @@ func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID strin
 func (s *Service) GetGoalSummary(ctx context.Context, mobileUserID, deviceID, goalID string) (*GetGoalSummaryResponse, error) {
 	result, err := s.repository.GetGoalSummary(ctx, mobileUserID, goalID)
 	if err != nil {
-		return nil, errors.New("error fetching goal summary")
+		return nil, appErr.ErrFetchingGoalSummary
 	}
 
 	return &GetGoalSummaryResponse{
