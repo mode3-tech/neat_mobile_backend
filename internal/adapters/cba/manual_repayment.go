@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"net/http"
 	"strings"
 )

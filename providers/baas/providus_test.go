@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"neat_mobile_app_backend/modules/auth"
+	"neat_mobile_app_backend/internal/modules/auth"
 )
 
 func TestLookupWalletByCustomerID_Success(t *testing.T) {

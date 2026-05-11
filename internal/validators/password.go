@@ -17,7 +17,7 @@ func ValidatePassword(pw string) error {
 			hasLower = true
 		case r >= '0' && r <= '9':
 			hasNumber = true
-		case r == '!' || r == '@' || r == '#' || r == '$' || r == '%' || r == '^' || r == '&' || r == '*':
+		case r == '!' || r == '@' || r == '#' || r == '$' || r == '%' || r == '^' || r == '&' || r == '*' || r == '?':
 			hasSpecial = true
 		}
 

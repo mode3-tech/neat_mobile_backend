@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"neat_mobile_app_backend/modules/auth"
+	"neat_mobile_app_backend/internal/modules/auth"
 	"net/http"
 	"strings"
 	"time"

@@ -2,7 +2,7 @@ package jwt
 
 import (
 	"errors"
-	"neat_mobile_app_backend/modules/auth"
+	"neat_mobile_app_backend/internal/modules/auth"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -48,7 +48,7 @@ func (s *Signer) IssueRefreshToken(userID, sid string) (string, string, time.Tim
 	now := time.Now().UTC()
 	expiresAt := now.Add(30 * 24 * time.Hour)
 
-	jti := uuid.New().String()
+	jti := uuid.NewString()
 
 	claims := jwt.MapClaims{
 		"sub": userID,

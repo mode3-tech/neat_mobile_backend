@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/internal/modules/loanproduct"
 )
 
 type internalCustomerLoansResponse struct {

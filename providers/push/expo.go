@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"neat_mobile_app_backend/modules/notification"
+	"neat_mobile_app_backend/internal/modules/notification"
 	"net/http"
 	"strings"
 	"time"

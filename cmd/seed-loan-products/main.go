@@ -20,7 +20,7 @@ import (
 
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
-	"neat_mobile_app_backend/modules/loanproduct"
+	"neat_mobile_app_backend/internal/modules/loanproduct"
 )
 
 type seedProduct struct {
