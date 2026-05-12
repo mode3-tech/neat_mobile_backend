@@ -90,4 +90,6 @@ var (
 	ErrFetchingGoalSummary             = errors.New("Failed to fetch goal summary")
 	ErrSMSDeliveryFailed               = errors.New("SMS delivery failed")
 	ErrSMSServiceNotConfigured         = errors.New("SMS service not configured")
+	ErrRequestingForCard               = errors.New("Failed to request for card")
+	ErrInsufficientBalance             = errors.New("Insufficient balance")
 )

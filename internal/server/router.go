@@ -14,6 +14,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
+	"neat_mobile_app_backend/internal/modules/card"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
@@ -23,6 +24,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/providers/baas"
+	cardprovider "neat_mobile_app_backend/providers/card"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	"neat_mobile_app_backend/providers/email"
@@ -101,13 +103,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
 
 	var cbaClient *cba.ProviderClient
-	var providerSource auth.BVNProviderSource
 	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
 		cbaClient = cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
-		providerSource = cbaClient
-	} else {
-		log.Print("CBA provider source is not fully configured; defaulting BVN validation to Tendar-first fallback")
 	}
+	providerSource := auth.NewDBProviderSource(db)
 	transactor := tx.NewTransactor(db)
 	deviceRepo := device.NewRepository(db)
 	deviceService := device.NewService(*deviceRepo)
@@ -312,6 +311,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
+
+	optimusCardProvider := cardprovider.NewOptimus(cfg.OptimusBaseURL, cfg.OptimusSecretKey, nil)
+	cardRepo := card.NewRepository(db)
+	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider)
+	cardHandler := card.NewHandler(cardService)
+	card.RegisterRoutes(apiV1, authGuard, cardHandler)
 
 	return r, stopCron, nil
 }

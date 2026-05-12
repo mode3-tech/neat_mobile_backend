@@ -777,6 +777,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrRequestingForCard:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "CARD_REQUEST_ERROR",
+				Message: appErr.ErrRequestingForCard.Error(),
+			},
+		}
+
+	case appErr.ErrInsufficientBalance:
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "INSUFFICIENT_FUNDS",
+				Message: appErr.ErrInsufficientBalance.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
