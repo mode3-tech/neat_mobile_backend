@@ -92,8 +92,9 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 
 		mobileUserID := uuid.NewString()
 		internalWalletID := uuid.NewString()
+		requestID := uuid.NewString()
 
-		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, mobileUserID, ip)
+		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, mobileUserID, ip, requestID)
 		if buildErr != nil {
 			return buildErr
 		}
@@ -142,7 +143,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	return resp, nil
 }
 
-func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repository, req RegisterationRequest, normalizedPhone, mobileUserID, ip string) (*registrationJobSnapshot, error) {
+func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repository, req RegisterationRequest, normalizedPhone, mobileUserID, ip, requestID string) (*registrationJobSnapshot, error) {
 	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
 	if err != nil {
 		return nil, appErr.ErrPhoneNotFound
@@ -215,16 +216,6 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrTransactionPinMismatch
 	}
 
-	hashedPassword, err := HashPassword(req.Password)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedTransactionPin, err := HashPassword(req.TransactionPin)
-	if err != nil {
-		return nil, err
-	}
-
 	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
 	if err != nil {
 		return nil, errors.New(err.Error())
@@ -251,11 +242,13 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		}
 	}
 
+	address := strings.TrimSpace(*bvnRecord.VerifiedFullHomeAddress)
+	houseNo := strings.Split(address, ",")[0]
+
 	return &registrationJobSnapshot{
 		Phone:               normalizedPhone,
 		Email:               trimmedEmail,
-		PasswordHash:        hashedPassword,
-		PinHash:             hashedTransactionPin,
+		RequestID:           requestID,
 		FirstName:           firstName,
 		MiddleName:          strings.TrimSpace(middleName),
 		LastName:            lastName,
@@ -276,9 +269,14 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
 			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
 		},
-		IP:            strings.TrimSpace(ip),
-		WalletEmail:   walletRegistrationEmail(trimmedEmail, mobileUserID),
-		WalletAddress: registrationWalletDefaultAddress,
+		IP:                strings.TrimSpace(ip),
+		WalletEmail:       walletRegistrationEmail(trimmedEmail, mobileUserID),
+		WalletAddress:     address,
+		HouseNo:           houseNo,
+		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
+		Gender:            *bvnRecord.VerifiedGender,
+		MaritalStatus:     *bvnRecord.VerifiedMaritalStatus,
+		ProductID:         s.productID,
 	}, nil
 }
 

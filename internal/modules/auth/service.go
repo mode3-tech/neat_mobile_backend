@@ -47,6 +47,7 @@ type Service struct {
 	deviceVerifier       DeviceVerifier
 	cbaSyncSem           chan struct{}
 	cbaWalletUpdateSem   chan struct{}
+	productID            string
 }
 
 func NewService(
@@ -68,6 +69,7 @@ func NewService(
 	walletPayloadSeedKey string,
 	deviceVerifier DeviceVerifier,
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
+	productID string,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -89,6 +91,7 @@ func NewService(
 		deviceVerifier:       deviceVerifier,
 		cbaSyncSem:           cbaSyncSem,
 		cbaWalletUpdateSem:   cbaWalletUpdateSem,
+		productID:            productID,
 	}
 }
 

@@ -75,6 +75,7 @@ func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		"",
 	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
@@ -112,6 +113,7 @@ func TestService_ValidateBVN_FallsBackWhenProviderSourceFails(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		"",
 	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")
@@ -147,6 +149,7 @@ func TestService_ValidateBVN_RoutesToPrembly(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		"",
 	)
 
 	_, err := service.ValidateBVN(context.Background(), "12345678901")

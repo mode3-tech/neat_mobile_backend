@@ -29,6 +29,9 @@ type Config struct {
 	ProvidusSecretKey          string
 	ProvidusBaseURL            string
 	ProvidusWebhookSecret      string
+	OptimusSecretKey           string
+	OptimusBaseURL             string
+	OptimusProductID           string
 	WalletPayloadSeedKey       string
 	LoanRepaymentAccountNumber string
 	LoanRepaymentBankCode      string
@@ -75,6 +78,9 @@ func Load() Config {
 		ProvidusSecretKey:          getEnv("PROVIDUS_SECRET_KEY", ""),
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
+		OptimusSecretKey:           getEnv("OPTIMUS_SECRET_KEY", ""),
+		OptimusBaseURL:             getEnv("OPTIMUS_BASE_URL", ""),
+		OptimusProductID:           getEnv("OPTIMUS_PRODUCT_ID", ""),
 		WalletPayloadSeedKey:       getEnv("WALLET_PAYLOAD_SEED_KEY", ""),
 		LoanRepaymentAccountNumber: getEnv("LOAN_REPAYMENT_ACCOUNT_NUMBER", ""),
 		LoanRepaymentBankCode:      getEnv("LOAN_REPAYMENT_BANK_CODE", ""),

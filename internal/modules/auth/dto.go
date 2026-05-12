@@ -3,13 +3,19 @@ package auth
 import "time"
 
 type registrationJobSnapshot struct {
-	Phone               string              `json:"phone"`
-	Email               string              `json:"email,omitempty"`
-	PasswordHash        string              `json:"password_hash"`
-	PinHash             string              `json:"pin_hash"`
-	FirstName           string              `json:"first_name"`
-	MiddleName          string              `json:"middle_name,omitempty"`
-	LastName            string              `json:"last_name"`
+	Phone               string `json:"phone"`
+	Email               string `json:"email,omitempty"`
+	PasswordHash        string `json:"password_hash"`
+	PinHash             string `json:"pin_hash"`
+	FirstName           string `json:"first_name"`
+	MiddleName          string `json:"middle_name,omitempty"`
+	LastName            string `json:"last_name"`
+	RequestID           string
+	HouseNo             string
+	ProductID           string
+	Gender              string
+	MaritalStatus       string
+	MothersMaidenName   string              `json:"mother_maiden_name"`
 	BVN                 string              `json:"bvn"`
 	NIN                 string              `json:"nin"`
 	DOB                 time.Time           `json:"dob"`
@@ -27,8 +33,7 @@ type registrationJobSnapshot struct {
 type registrationIdempotencyPayload struct {
 	PhoneNumber         string              `json:"phone_number"`
 	Email               string              `json:"email"`
-	Password            string              `json:"password"`
-	TransactionPin      string              `json:"transaction_pin"`
+	MotherMaidenName    string              `json:"mother_maiden_name"`
 	BVNVerificationID   string              `json:"bvn_verification_id"`
 	NINVerificationID   string              `json:"nin_verification_id"`
 	PhoneVerificationID string              `json:"phone_verification_id"`
@@ -49,6 +54,7 @@ type DeviceRegisteration struct {
 
 type RegisterationRequest struct {
 	Email                 string              `json:"email"`
+	MothersMaidenName     string              `json:"mothers_maiden_name"`
 	Password              string              `json:"password" binding:"required"`
 	ConfirmPassword       string              `json:"confirm_password" binding:"required"`
 	TransactionPin        string              `json:"transaction_pin" binding:"required"`
@@ -258,20 +264,43 @@ type ResendNewDeviceOTPRequest struct {
 }
 
 type WalletPayload struct {
-	BVN         string                 `json:"bvn" binding:"required"`
-	FirstName   string                 `json:"firstName" binding:"required"`
-	LastName    string                 `json:"lastName" binding:"required"`
-	DateOfBirth string                 `json:"dateOfBirth" binding:"required"`
-	PhoneNumber string                 `json:"phoneNumber" binding:"required"`
-	Email       string                 `json:"email" binding:"required,email"`
-	Address     string                 `json:"address" binding:"required"`
-	Metadata    map[string]interface{} `json:"metadata" binding:"required"`
+	RequestID         string
+	BVN               string
+	FirstName         string
+	LastName          string
+	MothersMaidenName string
+	DateOfBirth       string
+	PhoneNumber       string
+	Email             string
+	Address           string
+	HouseNo           string
+	ProductId         string
+	Gender            string
+	MaritalStatus     string
+	Metadata          map[string]interface{} `json:"metadata"`
+}
+
+type OptimusWalletData struct {
+	ResponseCode    string               `json:"responseCode"`
+	ResponseMessage string               `json:"responseMessage"`
+	Data            OptimusWalletSubData `json:"data"`
+}
+
+type OptimusWalletSubData struct {
+	NUBAN       string `json:"nuban"`
+	DateCreated string `json:"dateCreated"`
+	AccountName string `json:"accountName"`
+	CustomerID  string `json:"customerId"`
+	RequestId   string `json:"requestId"`
 }
 
 type WalletResponse struct {
-	Status   *bool           `json:"status"`
-	Customer *WalletCustomer `json:"customer,omitempty"`
-	Wallet   *WalletInfo     `json:"wallet,omitempty"`
+	ResponseMessage string            `json:"responseMessage"`
+	ResponseCode    string            `json:"responseCode"`
+	Status          *bool             `json:"status"`
+	Customer        *WalletCustomer   `json:"customer,omitempty"`
+	Wallet          *WalletInfo       `json:"wallet,omitempty"`
+	Data            OptimusWalletData `json:"data"`
 }
 
 type WalletCustomer struct {
