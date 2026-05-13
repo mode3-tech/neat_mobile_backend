@@ -1,5 +1,15 @@
 package baas
 
+type optimusTokenRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type optimusTokenResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken any    `json:"refreshToken"`
+}
+
 type OptimusPayload struct {
 	RequestId         string `json:"RequestId"`
 	Email             string `json:"Email"`

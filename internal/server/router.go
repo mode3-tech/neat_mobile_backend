@@ -121,7 +121,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		BlockDuration:    time.Duration(cfg.LoginRateLimitBlockMinutes) * time.Minute,
 	})
 
-	optimusWalletService := baas.NewOptimus(cfg.OptimusSecretKey, cfg.OptimusBaseURL)
+	optimusWalletService := baas.NewOptimus(cfg.OptimusBaseURL, cfg.OptimusUsername, cfg.OptimusPassword)
 	optimusProductID := cfg.OptimusProductID
 	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
