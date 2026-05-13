@@ -59,33 +59,43 @@ type PremblyBVNValidationSuccessResponse struct {
 	Message            string                           `json:"message"`
 	Detail             string                           `json:"detail"`
 	Data               PremblyBVNValidationSuccessData  `json:"data"`
+	BVNData            PremblyBVNValidationSuccessData  `json:"bvn_data"`
 	Meta               map[string]any                   `json:"meta"`
 	BillingInfo        PremblyBVNValidationBillingInfo  `json:"billing_info"`
 	Verification       PremblyBVNValidationVerification `json:"verification"`
 	ReferenceID        string                           `json:"reference_id"`
+	TransactionID      string                           `json:"transaction_id"`
 	IsSandbox          bool                             `json:"is_sandbox"`
 	AccountVerified    bool                             `json:"account_verified"`
 	VerificationStatus string                           `json:"verification_status"`
 }
 
 type PremblyBVNValidationSuccessData struct {
-	BVN              string  `json:"bvn"`
-	FirstName        string  `json:"first_name"`
-	LastName         string  `json:"last_name"`
-	MiddleName       string  `json:"middle_name"`
-	DateOfBirth      string  `json:"date_of_birth"`
-	PhoneNumber      string  `json:"phone_number"`
-	RegistrationDate string  `json:"registration_date"`
-	EnrollmentBank   string  `json:"enrollment_bank"`
-	EnrollmentBranch string  `json:"enrollment_branch"`
-	Email            string  `json:"email"`
-	Gender           string  `json:"gender"`
-	StateOfOrigin    string  `json:"state_of_origin"`
-	LGAOfOrigin      string  `json:"lga_of_origin"`
-	Nationality      string  `json:"nationality"`
-	MaritalStatus    string  `json:"marital_status"`
-	WatchListed      string  `json:"watch_listed"`
-	Image            *string `json:"image"`
+	BVN                string  `json:"bvn"`
+	NIN                string  `json:"nin"`
+	FirstName          string  `json:"firstName"`
+	LastName           string  `json:"lastName"`
+	MiddleName         string  `json:"middleName"`
+	DateOfBirth        string  `json:"dateOfBirth"`
+	PhoneNumber1       string  `json:"phoneNumber1"`
+	PhoneNumber2       string  `json:"phoneNumber2"`
+	RegistrationDate   string  `json:"registrationDate"`
+	EnrollmentBank     string  `json:"enrollmentBank"`
+	EnrollmentBranch   string  `json:"enrollmentBranch"`
+	Email              string  `json:"email"`
+	Gender             string  `json:"gender"`
+	StateOfOrigin      string  `json:"stateOfOrigin"`
+	StateOfResidence   string  `json:"stateOfResidence"`
+	LGAOfOrigin        string  `json:"lgaOfOrigin"`
+	LGAOfResidence     string  `json:"lgaOfResidence"`
+	ResidentialAddress string  `json:"residentialAddress"`
+	Nationality        string  `json:"nationality"`
+	MaritalStatus      string  `json:"maritalStatus"`
+	LevelOfAccount     string  `json:"levelOfAccount"`
+	WatchListed        string  `json:"watchListed"`
+	Title              string  `json:"title"`
+	NameOnCard         string  `json:"nameOnCard"`
+	Image              *string `json:"base64Image"`
 }
 
 type PremblyBVNValidationBillingInfo struct {

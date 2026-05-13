@@ -532,7 +532,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if fullName != "" {
 		record.VerifiedName = &fullName
 	}
-	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
+	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber1); phone != "" {
 		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
 			log.Printf("ValidateBVNWithPrembly: phone normalization failed phone=%q err=%v", phone, err)
@@ -564,12 +564,15 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if v := strings.TrimSpace(bvnDetails.Data.LGAOfOrigin); v != "" {
 		record.City = &v
 	}
+	if v := strings.TrimSpace(bvnDetails.Data.ResidentialAddress); v != "" {
+		record.VerifiedFullHomeAddress = &v
+	}
 	if v := strings.TrimSpace(bvnDetails.Data.EnrollmentBank); v != "" {
 		record.BankName = v
 	}
 
-	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
-		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, bvnDetails.Data.DateOfBirth, bvnDetails.Data.PhoneNumber)
+	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber1 == "" {
+		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, bvnDetails.Data.DateOfBirth, bvnDetails.Data.PhoneNumber1)
 		return nil, appErr.ErrInvalidBVN
 	}
 
