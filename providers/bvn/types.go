@@ -90,7 +90,7 @@ type PremblyBVNValidationSuccessData struct {
 
 type PremblyBVNValidationBillingInfo struct {
 	WasCharged bool   `json:"was_charged"`
-	Amount     int    `json:"amount"`
+	Amount     string `json:"amount"`
 	Currency   string `json:"currency"`
 	Note       string `json:"note"`
 }
