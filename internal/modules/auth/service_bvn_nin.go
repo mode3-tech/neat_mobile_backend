@@ -39,6 +39,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 
 	resp, err := s.nin.ValidateNIN(ctx, nin)
 	if err != nil {
+		log.Printf("ValidateNIN: provider call failed: %v", err)
 		return nil, err
 	}
 
@@ -50,6 +51,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
 
 	if err != nil {
+		log.Printf("ValidateNIN: BVN/NIN detail mismatch: %v", err)
 		return nil, errors.New(err.Error())
 	}
 
@@ -61,6 +63,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	maskedNIN := MaskSub(nin)
 	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(resp.Data.TelephoneNo)
 	if err != nil {
+		log.Printf("ValidateNIN: phone normalization failed phone=%q err=%v", resp.Data.TelephoneNo, err)
 		return nil, err
 	}
 
@@ -92,11 +95,13 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	record.VerifiedPhone = &phone
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
+		log.Printf("ValidateNIN: AddVerification failed: %v", err)
 		return nil, err
 	}
 
 	maskedPhone, err := phoneUtil.MaskPhone(phone)
 	if err != nil {
+		log.Printf("ValidateNIN: MaskPhone failed: %v", err)
 		return nil, err
 	}
 
@@ -219,6 +224,7 @@ func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, e
 	}
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
+		log.Printf("reuseVerifiedBVN: saveVerifiedBVN failed: %v", err)
 		return nil, err
 	}
 
@@ -226,6 +232,7 @@ func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, e
 
 	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
 	if err != nil {
+		log.Printf("reuseVerifiedBVN: MaskPhone failed: %v", err)
 		return nil, err
 	}
 
@@ -285,6 +292,7 @@ func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *mode
 	}
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
+		log.Printf("reuseVerifiedNIN: AddVerification failed: %v", err)
 		return nil, err
 	}
 
@@ -292,6 +300,7 @@ func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *mode
 
 	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
 	if err != nil {
+		log.Printf("reuseVerifiedNIN: MaskPhone failed: %v", err)
 		return nil, err
 	}
 
@@ -321,6 +330,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
+		log.Printf("ValidateBVNWithTendar: provider call failed: %v", err)
 		return nil, err
 	}
 	if bvnDetails == nil {
@@ -366,7 +376,8 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	if phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber); phone != "" {
 		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
-			return nil, err
+			log.Printf("ValidateBVNWithTendar: phone normalization failed phone=%q err=%v", phone, err)
+			return nil, appErr.ErrInvalidBVN
 		}
 		record.VerifiedPhone = &normalizedPhoneNumber
 	}
@@ -409,6 +420,11 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		return nil, appErr.ErrInvalidBVN
 	}
 
+	if record.VerifiedPhone == nil {
+		log.Printf("ValidateBVNWithTendar: verified phone is nil bvn=%s", MaskSub(bvn))
+		return nil, appErr.ErrInvalidBVN
+	}
+
 	bvnRecord := &models.BVNRecord{
 		ID:              uuid.NewString(),
 		UserID:          "",
@@ -427,7 +443,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		EmailAddress:    firstNonEmptyString(bvnDetails.Data.Details.Email, bvnDetails.Data.Email),
 		PassportOnBVN:   strings.TrimSpace(bvnDetails.Data.Details.Image),
 		FullHomeAddress: strings.TrimSpace(bvnDetails.Data.Details.ResidentialAddress),
-		MobilePhone:     firstNonEmptyString(bvnDetails.Data.Details.PhoneNumber, bvnDetails.Data.PhoneNumber),
+		MobilePhone:     *record.VerifiedPhone,
 		BankName:        strings.TrimSpace(bvnDetails.Data.Details.EnrollmentBank),
 		BVN:             strings.TrimSpace(bvn),
 	}
@@ -439,8 +455,9 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		return nil, err
 	}
 
-	maskedPhone, err := phoneUtil.MaskPhone(bvnDetails.Data.PhoneNumber)
+	maskedPhone, err := phoneUtil.MaskPhone(*record.VerifiedPhone)
 	if err != nil {
+		log.Printf("ValidateBVNWithTendar: MaskPhone failed: %v", err)
 		return nil, err
 	}
 
@@ -454,6 +471,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
+		log.Printf("ValidateBVNWithPrembly: prembly provider not configured")
 		return nil, errors.New("couldn't resolve prembly provider")
 	}
 
@@ -467,9 +485,11 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
 	if err != nil {
+		log.Printf("ValidateBVNWithPrembly: provider call failed: %v", err)
 		return nil, err
 	}
 	if bvnDetails == nil {
+		log.Printf("ValidateBVNWithPrembly: provider returned nil response")
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -515,7 +535,8 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber); phone != "" {
 		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
-			return nil, err
+			log.Printf("ValidateBVNWithPrembly: phone normalization failed phone=%q err=%v", phone, err)
+			return nil, appErr.ErrInvalidBVN
 		}
 		record.VerifiedPhone = &normalizedPhoneNumber
 	}
@@ -548,6 +569,12 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber == "" {
+		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, bvnDetails.Data.DateOfBirth, bvnDetails.Data.PhoneNumber)
+		return nil, appErr.ErrInvalidBVN
+	}
+
+	if record.VerifiedPhone == nil {
+		log.Printf("ValidateBVNWithPrembly: verified phone is nil bvn=%s", MaskSub(bvn))
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -564,18 +591,20 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		MaritalStatus: strings.TrimSpace(bvnDetails.Data.MaritalStatus),
 		EmailAddress:  strings.TrimSpace(bvnDetails.Data.Email),
 		PassportOnBVN: trimmedStringValue(bvnDetails.Data.Image),
-		MobilePhone:   strings.TrimSpace(bvnDetails.Data.PhoneNumber),
+		MobilePhone:   *record.VerifiedPhone,
 		BankName:      strings.TrimSpace(bvnDetails.Data.EnrollmentBank),
 		BVN:           strings.TrimSpace(firstNonEmptyString(bvnDetails.Data.BVN, bvn)),
 	}
 	bvnRecord.City = trimmedStringPtr(bvnDetails.Data.LGAOfOrigin)
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
+		log.Printf("ValidateBVNWithPrembly: saveVerifiedBVN failed: %v", err)
 		return nil, err
 	}
 
-	maskedPhone, err := phoneUtil.MaskPhone(bvnDetails.Data.PhoneNumber)
+	maskedPhone, err := phoneUtil.MaskPhone(*record.VerifiedPhone)
 	if err != nil {
+		log.Printf("ValidateBVNWithPrembly: MaskPhone failed: %v", err)
 		return nil, err
 	}
 
@@ -589,17 +618,23 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 
 func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *models.VerificationRecord, bvnRecord *models.BVNRecord) error {
 	if s.verification == nil {
+		log.Printf("saveVerifiedBVN: verification repo is nil")
 		return errors.New("verification repository not configured")
 	}
 	if s.repo == nil {
+		log.Printf("saveVerifiedBVN: auth repo is nil")
 		return errors.New("auth repository not configured")
 	}
 	if s.tx == nil {
 		if err := s.verification.AddVerification(ctx, verificationRecord); err != nil {
+			log.Printf("saveVerifiedBVN: AddVerification failed: %v", err)
 			return err
 		}
 		if bvnRecord != nil {
-			return s.repo.CreateBVNRecord(ctx, bvnRecord)
+			if err := s.repo.CreateBVNRecord(ctx, bvnRecord); err != nil {
+				log.Printf("saveVerifiedBVN: CreateBVNRecord failed: %v", err)
+				return err
+			}
 		}
 		return nil
 	}
@@ -609,11 +644,15 @@ func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *model
 		verificationRepo := verification.NewVerification(txDB)
 
 		if err := verificationRepo.AddVerification(ctx, verificationRecord); err != nil {
+			log.Printf("saveVerifiedBVN: tx AddVerification failed: %v", err)
 			return err
 		}
 
 		if bvnRecord != nil {
-			return authRepo.CreateBVNRecord(ctx, bvnRecord)
+			if err := authRepo.CreateBVNRecord(ctx, bvnRecord); err != nil {
+				log.Printf("saveVerifiedBVN: tx CreateBVNRecord failed: %v", err)
+				return err
+			}
 		}
 		return nil
 	})
