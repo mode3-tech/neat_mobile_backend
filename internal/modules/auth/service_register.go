@@ -242,8 +242,22 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		}
 	}
 
-	address := strings.TrimSpace(*bvnRecord.VerifiedFullHomeAddress)
+	address := registrationWalletDefaultAddress
+	if bvnRecord.VerifiedFullHomeAddress != nil {
+		if v := strings.TrimSpace(*bvnRecord.VerifiedFullHomeAddress); v != "" {
+			address = v
+		}
+	}
 	houseNo := strings.Split(address, ",")[0]
+
+	gender := ""
+	if bvnRecord.VerifiedGender != nil {
+		gender = *bvnRecord.VerifiedGender
+	}
+	maritalStatus := ""
+	if bvnRecord.VerifiedMaritalStatus != nil {
+		maritalStatus = *bvnRecord.VerifiedMaritalStatus
+	}
 
 	return &registrationJobSnapshot{
 		Phone:               normalizedPhone,
@@ -274,8 +288,8 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		WalletAddress:     address,
 		HouseNo:           houseNo,
 		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
-		Gender:            *bvnRecord.VerifiedGender,
-		MaritalStatus:     *bvnRecord.VerifiedMaritalStatus,
+		Gender:            gender,
+		MaritalStatus:     maritalStatus,
 		ProductID:         s.productID,
 	}, nil
 }
