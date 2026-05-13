@@ -493,15 +493,23 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		return nil, appErr.ErrInvalidBVN
 	}
 
-	firstName := TitleCase(bvnDetails.Data.FirstName)
-	middleName := TitleCase(bvnDetails.Data.MiddleName)
-	lastName := TitleCase(bvnDetails.Data.LastName)
+	// Prembly non-deterministically serves BVN data from either data or bvn_data.
+	// Merge both, preferring data and falling back to bvn_data for each field.
+	d := bvnDetails.Data
+	fb := bvnDetails.BVNData
+
+	firstName := TitleCase(firstNonEmptyString(d.FirstName, fb.FirstName))
+	middleName := TitleCase(firstNonEmptyString(d.MiddleName, fb.MiddleName))
+	lastName := TitleCase(firstNonEmptyString(d.LastName, fb.LastName))
 	fullName := strings.Join(strings.Fields(fmt.Sprintf(
 		"%s %s %s",
 		firstName,
 		middleName,
 		lastName,
 	)), " ")
+	dobField := firstNonEmptyString(d.DateOfBirth, fb.DateOfBirth)
+	phoneField := firstNonEmptyString(d.PhoneNumber1, fb.PhoneNumber1)
+
 	verificationID := uuid.NewString()
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
@@ -519,7 +527,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		VerifiedAt:    &now,
 		ExpiresAt:     &expiresAt,
 		VerifiedName:  &fullName,
-		VerifiedDOB:   &bvnDetails.Data.DateOfBirth,
+		VerifiedDOB:   &dobField,
 		VerifiedID:    &bvn,
 	}
 
@@ -532,7 +540,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	if fullName != "" {
 		record.VerifiedName = &fullName
 	}
-	if phone := strings.TrimSpace(bvnDetails.Data.PhoneNumber1); phone != "" {
+	if phone := strings.TrimSpace(phoneField); phone != "" {
 		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
 			log.Printf("ValidateBVNWithPrembly: phone normalization failed phone=%q err=%v", phone, err)
@@ -540,39 +548,39 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		}
 		record.VerifiedPhone = &normalizedPhoneNumber
 	}
-	if email := strings.TrimSpace(bvnDetails.Data.Email); email != "" {
+	if email := firstNonEmptyString(d.Email, fb.Email); email != "" {
 		record.VerifiedEmail = &email
 	}
-	if dob := strings.TrimSpace(bvnDetails.Data.DateOfBirth); dob != "" {
+	if dob := strings.TrimSpace(dobField); dob != "" {
 		record.VerifiedDOB = &dob
 	}
-	if gender := strings.TrimSpace(bvnDetails.Data.Gender); gender != "" {
+	if gender := firstNonEmptyString(d.Gender, fb.Gender); gender != "" {
 		record.VerifiedGender = &gender
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.Nationality); v != "" {
+	if v := firstNonEmptyString(d.Nationality, fb.Nationality); v != "" {
 		record.VerifiedNationality = &v
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.StateOfOrigin); v != "" {
+	if v := firstNonEmptyString(d.StateOfOrigin, fb.StateOfOrigin); v != "" {
 		record.VerifiedStateOfOrigin = &v
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.MaritalStatus); v != "" {
+	if v := firstNonEmptyString(d.MaritalStatus, fb.MaritalStatus); v != "" {
 		record.VerifiedMaritalStatus = &v
 	}
-	if v := trimmedStringValue(bvnDetails.Data.Image); v != "" {
+	if v := firstNonEmptyString(trimmedStringValue(d.Image), trimmedStringValue(fb.Image)); v != "" {
 		record.PassportOnBVN = &v
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.LGAOfOrigin); v != "" {
+	if v := firstNonEmptyString(d.LGAOfOrigin, fb.LGAOfOrigin); v != "" {
 		record.City = &v
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.ResidentialAddress); v != "" {
+	if v := firstNonEmptyString(d.ResidentialAddress, fb.ResidentialAddress); v != "" {
 		record.VerifiedFullHomeAddress = &v
 	}
-	if v := strings.TrimSpace(bvnDetails.Data.EnrollmentBank); v != "" {
+	if v := firstNonEmptyString(d.EnrollmentBank, fb.EnrollmentBank); v != "" {
 		record.BankName = v
 	}
 
-	if fullName == "" || bvnDetails.Data.DateOfBirth == "" || bvnDetails.Data.PhoneNumber1 == "" {
-		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, bvnDetails.Data.DateOfBirth, bvnDetails.Data.PhoneNumber1)
+	if fullName == "" || dobField == "" || phoneField == "" {
+		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, dobField, phoneField)
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -582,23 +590,24 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	}
 
 	bvnRecord := &models.BVNRecord{
-		ID:            uuid.NewString(),
-		UserID:        "",
-		FirstName:     firstName,
-		MiddleName:    middleName,
-		LastName:      lastName,
-		Gender:        strings.TrimSpace(bvnDetails.Data.Gender),
-		Nationality:   strings.TrimSpace(bvnDetails.Data.Nationality),
-		StateOfOrigin: strings.TrimSpace(bvnDetails.Data.StateOfOrigin),
-		DateOfBirth:   parseBVNRecordDOB(bvnDetails.Data.DateOfBirth),
-		MaritalStatus: strings.TrimSpace(bvnDetails.Data.MaritalStatus),
-		EmailAddress:  strings.TrimSpace(bvnDetails.Data.Email),
-		PassportOnBVN: trimmedStringValue(bvnDetails.Data.Image),
-		MobilePhone:   *record.VerifiedPhone,
-		BankName:      strings.TrimSpace(bvnDetails.Data.EnrollmentBank),
-		BVN:           strings.TrimSpace(firstNonEmptyString(bvnDetails.Data.BVN, bvn)),
+		ID:              uuid.NewString(),
+		UserID:          "",
+		FirstName:       firstName,
+		MiddleName:      middleName,
+		LastName:        lastName,
+		Gender:          firstNonEmptyString(d.Gender, fb.Gender),
+		Nationality:     firstNonEmptyString(d.Nationality, fb.Nationality),
+		StateOfOrigin:   firstNonEmptyString(d.StateOfOrigin, fb.StateOfOrigin),
+		DateOfBirth:     parseBVNRecordDOB(dobField),
+		MaritalStatus:   firstNonEmptyString(d.MaritalStatus, fb.MaritalStatus),
+		EmailAddress:    firstNonEmptyString(d.Email, fb.Email),
+		PassportOnBVN:   firstNonEmptyString(trimmedStringValue(d.Image), trimmedStringValue(fb.Image)),
+		FullHomeAddress: firstNonEmptyString(d.ResidentialAddress, fb.ResidentialAddress),
+		MobilePhone:     *record.VerifiedPhone,
+		BankName:        firstNonEmptyString(d.EnrollmentBank, fb.EnrollmentBank),
+		BVN:             strings.TrimSpace(firstNonEmptyString(d.BVN, fb.BVN, bvn)),
 	}
-	bvnRecord.City = trimmedStringPtr(bvnDetails.Data.LGAOfOrigin)
+	bvnRecord.City = trimmedStringPtr(firstNonEmptyString(d.LGAOfOrigin, fb.LGAOfOrigin))
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		log.Printf("ValidateBVNWithPrembly: saveVerifiedBVN failed: %v", err)
@@ -613,7 +622,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 
 	return &bvnInfo{
 		name:           fullName,
-		dob:            bvnDetails.Data.DateOfBirth,
+		dob:            dobField,
 		phone:          maskedPhone,
 		verificationID: verificationID,
 	}, nil
