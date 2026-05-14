@@ -3,6 +3,7 @@ package baas
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,25 +13,57 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 )
 
 type Optimus struct {
-	BaseURL      string
-	Username     string
-	Password     string
-	Client       *http.Client
-	mu           sync.Mutex
-	cachedToken  string
-	tokenExpiry  time.Time
+	WalletBaseURL string
+	AuthBaseURL   string
+	Username      string
+	Password      string
+	PublicKey     string
+	Client        *http.Client
+	mu            sync.Mutex
+	cachedToken   string
+	tokenExpiry   time.Time
 }
 
-func NewOptimus(baseURL, username, password string) *Optimus {
+func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey string) *Optimus {
 	return &Optimus{
-		BaseURL:  baseURL,
-		Username: username,
-		Password: password,
-		Client:   &http.Client{Timeout: time.Second * 15},
+		WalletBaseURL: walletBaseURL,
+		AuthBaseURL:   authBaseURL,
+		Username:      username,
+		Password:      password,
+		PublicKey:     publicKey,
+		Client:        &http.Client{Timeout: time.Second * 15},
 	}
+}
+
+// pgpEncrypt encrypts plaintext with an ASCII-armored PGP public key and
+// returns the raw ciphertext as a base64 string.
+func pgpEncrypt(armoredPublicKey, plaintext string) (string, error) {
+	keyRing, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armoredPublicKey))
+	if err != nil {
+		return "", fmt.Errorf("pgp: parse public key: %w", err)
+	}
+
+	var buf bytes.Buffer
+	encWriter, err := openpgp.Encrypt(&buf, keyRing, nil, nil, nil)
+	if err != nil {
+		return "", fmt.Errorf("pgp: encrypt: %w", err)
+	}
+
+	if _, err := io.WriteString(encWriter, plaintext); err != nil {
+		encWriter.Close()
+		return "", fmt.Errorf("pgp: write plaintext: %w", err)
+	}
+
+	if err := encWriter.Close(); err != nil {
+		return "", fmt.Errorf("pgp: finalize: %w", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 // getToken returns a valid access token, generating a new one if the cached
@@ -43,7 +76,7 @@ func (o *Optimus) getToken(ctx context.Context) (string, error) {
 		return o.cachedToken, nil
 	}
 
-	url := strings.TrimSpace(o.BaseURL) + "/tokens/generate"
+	url := strings.TrimSpace(o.AuthBaseURL) + "/tokens/generate"
 	body, err := json.Marshal(optimusTokenRequest{
 		Username: strings.TrimSpace(o.Username),
 		Password: strings.TrimSpace(o.Password),
@@ -90,7 +123,7 @@ func (o *Optimus) getToken(ctx context.Context) (string, error) {
 }
 
 func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {
-	baseURL := strings.TrimSpace(o.BaseURL)
+	baseURL := strings.TrimSpace(o.WalletBaseURL)
 	if baseURL == "" || strings.TrimSpace(o.Username) == "" {
 		log.Printf("Optimus is not configured")
 		return nil, fmt.Errorf("Optimus is not configured")
@@ -100,6 +133,14 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	if err != nil {
 		log.Printf("Optimus: failed to obtain access token: %v", err)
 		return nil, err
+	}
+
+	// TODO: confirm with Optimus API docs the exact plaintext to encrypt
+	// (likely the BVN, but could be a JSON blob of multiple fields).
+	encryptedString, err := pgpEncrypt(o.PublicKey, walletInfo.BVN)
+	if err != nil {
+		log.Printf("Optimus: failed to encrypt payload: %v", err)
+		return nil, fmt.Errorf("optimus: encrypt payload: %w", err)
 	}
 
 	url := baseURL + "/Customer/create-by-bvn"
@@ -114,6 +155,7 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		ProductId:         walletInfo.ProductId,
 		PhoneNumber:       walletInfo.PhoneNumber,
 		BVN:               walletInfo.BVN,
+		EncryptedString:   encryptedString,
 	}
 
 	body, err := json.Marshal(payload)
@@ -150,9 +192,15 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		return nil, fmt.Errorf("Optimus wallet generation failed: %s", extractErrorMessage(respBody))
 	}
 
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Optimus wallet generation: failed to read response body: %v", err)
+		return nil, fmt.Errorf("Optimus wallet generation: failed to read response body: %w", err)
+	}
+
 	var result auth.WalletResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("Failed to decode Optimus wallet generation response: %v", err)
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		log.Printf("Optimus wallet generation: failed to decode response body=%s err=%v", respBytes, err)
 		return nil, fmt.Errorf("Failed to decode Optimus wallet generation response: %w", err)
 	}
 

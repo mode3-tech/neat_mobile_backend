@@ -24,9 +24,9 @@ import (
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/providers/baas"
-	cardprovider "neat_mobile_app_backend/providers/card"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
+	cardprovider "neat_mobile_app_backend/providers/card"
 	"neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
@@ -121,7 +121,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		BlockDuration:    time.Duration(cfg.LoginRateLimitBlockMinutes) * time.Minute,
 	})
 
-	optimusWalletService := baas.NewOptimus(cfg.OptimusBaseURL, cfg.OptimusUsername, cfg.OptimusPassword)
+	optimusWalletService := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey)
 	optimusProductID := cfg.OptimusProductID
 	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
@@ -312,7 +312,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
 
-	optimusCardProvider := cardprovider.NewOptimus(cfg.OptimusBaseURL, cfg.OptimusSecretKey, nil)
+	optimusCardProvider := cardprovider.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusSecretKey, nil)
 	cardRepo := card.NewRepository(db)
 	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider)
 	cardHandler := card.NewHandler(cardService)

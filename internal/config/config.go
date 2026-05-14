@@ -30,10 +30,12 @@ type Config struct {
 	ProvidusBaseURL            string
 	ProvidusWebhookSecret      string
 	OptimusSecretKey           string
-	OptimusBaseURL             string
+	OptimusAuthBaseURL         string
+	OptimusWalletBaseURL       string
 	OptimusProductID           string
 	OptimusUsername            string
 	OptimusPassword            string
+	OptimusPublicKey           string
 	WalletPayloadSeedKey       string
 	LoanRepaymentAccountNumber string
 	LoanRepaymentBankCode      string
@@ -81,10 +83,12 @@ func Load() Config {
 		ProvidusBaseURL:            getEnv("PROVIDUS_BASE_URL", ""),
 		ProvidusWebhookSecret:      getEnv("PROVIDUS_WEBHOOK_SECRET", ""),
 		OptimusSecretKey:           getEnv("OPTIMUS_SECRET_KEY", ""),
-		OptimusBaseURL:             getEnv("OPTIMUS_BASE_URL", ""),
+		OptimusAuthBaseURL:         getEnv("OPTIMUS_AUTH_BASE_URL", ""),
+		OptimusWalletBaseURL:       getEnv("OPTIMUS_WALLET_BASE_URL", ""),
 		OptimusProductID:           getEnv("OPTIMUS_PRODUCT_ID", ""),
 		OptimusUsername:            getEnv("OPTIMUS_USERNAME", ""),
 		OptimusPassword:            getEnv("OPTIMUS_PASSWORD", ""),
+		OptimusPublicKey:           readFileEnv("OPTIMUS_PUBLIC_KEY_FILE"),
 		WalletPayloadSeedKey:       getEnv("WALLET_PAYLOAD_SEED_KEY", ""),
 		LoanRepaymentAccountNumber: getEnv("LOAN_REPAYMENT_ACCOUNT_NUMBER", ""),
 		LoanRepaymentBankCode:      getEnv("LOAN_REPAYMENT_BANK_CODE", ""),
@@ -107,11 +111,22 @@ func Load() Config {
 
 func getEnv(key string, fallback string) string {
 	value := os.Getenv(key)
-
 	if value == "" {
 		return fallback
 	}
 	return value
+}
+
+func readFileEnv(key string) string {
+	path := os.Getenv(key)
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func getEnvInt(key string, fallback int) int {

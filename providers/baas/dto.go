@@ -21,4 +21,5 @@ type OptimusPayload struct {
 	ProductId         string `json:"ProductId"`
 	PhoneNumber       string `json:"PhoneNumber"`
 	BVN               string `json:"Bvn"`
+	EncryptedString   string `json:"EncryptedString"`
 }
