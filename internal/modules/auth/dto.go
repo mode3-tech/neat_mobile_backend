@@ -265,14 +265,14 @@ type ResendNewDeviceOTPRequest struct {
 
 type WalletPayload struct {
 	RequestID         string
-	BVN               string
-	FirstName         string
-	LastName          string
+	BVN               string `json:"bvn"`
+	FirstName         string `json:"firstName"`
+	LastName          string `json:"lastName"`
 	MothersMaidenName string
-	DateOfBirth       string
-	PhoneNumber       string
-	Email             string
-	Address           string
+	DateOfBirth       string `json:"dateOfBirth"`
+	PhoneNumber       string `json:"phoneNumber"`
+	Email             string `json:"email"`
+	Address           string `json:"address"`
 	HouseNo           string
 	ProductId         string
 	Gender            string
