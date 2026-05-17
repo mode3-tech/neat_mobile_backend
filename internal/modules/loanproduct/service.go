@@ -405,7 +405,7 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 	}
 
 	if user == nil || user.CoreCustomerID == nil {
-		return nil, appErr.ErrNoLoansFound
+		return &ActiveLoansResponse{Loans: []ActiveLoanItem{}}, nil
 	}
 
 	activeLoans, err := s.repo.ListActiveLoansByCustomerID(ctx, *user.CoreCustomerID)
