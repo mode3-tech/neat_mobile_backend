@@ -5740,7 +5740,7 @@ components:
       required:
         - status
         - message
-        - products
+        - data
       properties:
         status:
           type: string
@@ -5748,7 +5748,7 @@ components:
         message:
           type: string
           example: loan products fetch was successful
-        products:
+        data:
           type: array
           items:
             $ref: "#/components/schemas/LoanProduct"
@@ -5829,21 +5829,26 @@ components:
     LoanApplicationResponse:
       type: object
       required:
+        - status
         - message
-        - application_ref
-        - loan_status
-        - summary
+        - data
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
           example: loan application was successful
-        application_ref:
-          type: string
-          example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
-        loan_status:
-          $ref: "#/components/schemas/LoanStatus"
-        summary:
-          $ref: "#/components/schemas/LoanSummaryResponse"
+        data:
+          type: object
+          properties:
+            application_ref:
+              type: string
+              example: 0ae0d8ef-5a60-4e18-9527-b96abd2d4731
+            loan_status:
+              $ref: "#/components/schemas/LoanStatus"
+            summary:
+              $ref: "#/components/schemas/LoanSummaryResponse"
     LoanListItem:
       type: object
       properties:
@@ -5869,6 +5874,13 @@ components:
           type: number
           format: double
           example: 15.0
+        outstanding_balance:
+          type: number
+          format: double
+          example: 180000.00
+        status:
+          type: string
+          example: active
     LoanHistoryItem:
       type: object
       properties:
@@ -5895,7 +5907,7 @@ components:
       required:
         - status
         - message
-        - history
+        - data
       properties:
         status:
           type: string
@@ -5903,10 +5915,13 @@ components:
         message:
           type: string
           example: Loan repayment history fetched successfully
-        history:
-          type: array
-          items:
-            $ref: "#/components/schemas/LoanHistoryItem"
+        data:
+          type: object
+          properties:
+            history:
+              type: array
+              items:
+                $ref: "#/components/schemas/LoanHistoryItem"
     LoanDetails:
       type: object
       properties:
@@ -5934,7 +5949,7 @@ components:
       required:
         - status
         - message
-        - details
+        - data
       properties:
         status:
           type: string
@@ -5942,8 +5957,11 @@ components:
         message:
           type: string
           example: Loan details fetched successfully
-        details:
-          $ref: "#/components/schemas/LoanDetails"
+        data:
+          type: object
+          properties:
+            details:
+              $ref: "#/components/schemas/LoanDetails"
     ActiveLoanItem:
       type: object
       properties:
@@ -5966,7 +5984,7 @@ components:
       required:
         - status
         - message
-        - loans
+        - data
       properties:
         status:
           type: string
@@ -5974,16 +5992,19 @@ components:
         message:
           type: string
           example: Active loan(s) fetched successfully
-        loans:
-          type: array
-          items:
-            $ref: "#/components/schemas/ActiveLoanItem"
+        data:
+          type: object
+          properties:
+            loans:
+              type: array
+              items:
+                $ref: "#/components/schemas/ActiveLoanItem"
     LoanListResponse:
       type: object
       required:
         - status
         - message
-        - loans
+        - data
       properties:
         status:
           type: string
@@ -5991,10 +6012,13 @@ components:
         message:
           type: string
           example: All loans fetched successfully
-        loans:
-          type: array
-          items:
-            $ref: "#/components/schemas/LoanListItem"
+        data:
+          type: object
+          properties:
+            loans:
+              type: array
+              items:
+                $ref: "#/components/schemas/LoanListItem"
     LoanRepayment:
       type: object
       properties:
@@ -6033,7 +6057,7 @@ components:
       required:
         - status
         - message
-        - repayment
+        - data
       properties:
         status:
           type: string
@@ -6041,8 +6065,11 @@ components:
         message:
           type: string
           example: "Loan repayment fetched successfully"
-        repayment:
-          $ref: "#/components/schemas/LoanRepayment"
+        data:
+          type: object
+          properties:
+            repayment:
+              $ref: "#/components/schemas/LoanRepayment"
     ManualRepaymentRequest:
       type: object
       required:
@@ -6460,16 +6487,26 @@ components:
       example: loan
     TogglePushNotificationsResponse:
       type: object
+      required:
+        - status
+        - message
+        - data
       properties:
         status:
           type: string
           example: success
         message:
           type: string
-          example: Push notifications enabled
-        is_enabled:
-          type: boolean
-          example: true
+          example: Push notifications toggled successfully
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Push notifications enabled
+            is_enabled:
+              type: boolean
+              example: true
     RegisterPushTokenRequest:
       type: object
       required:
@@ -6570,62 +6607,87 @@ components:
     NotificationsListResponse:
       type: object
       required:
-        - notifications
-        - page
-        - page_size
-        - total
-        - has_next
+        - status
+        - message
+        - data
       properties:
-        notifications:
-          type: array
-          items:
-            $ref: "#/components/schemas/NotificationHistoryItem"
-        page:
-          type: integer
-          example: 1
-        page_size:
-          type: integer
-          example: 20
-        total:
-          type: integer
-          format: int64
-          example: 37
-        has_next:
-          type: boolean
-          example: true
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Notifications fetched successfully
+        data:
+          type: object
+          properties:
+            notifications:
+              type: array
+              items:
+                $ref: "#/components/schemas/NotificationHistoryItem"
+            page:
+              type: integer
+              example: 1
+            page_size:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              format: int64
+              example: 37
+            has_next:
+              type: boolean
+              example: true
     UnreadCountResponse:
       type: object
       required:
-        - count
+        - status
+        - message
+        - data
       properties:
-        count:
-          type: integer
-          example: 5
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Unread count fetched successfully
+        data:
+          type: object
+          properties:
+            count:
+              type: integer
+              example: 5
     NotificationReadResponse:
       type: object
       required:
+        - status
         - message
-        - updated
+        - data
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
-          example: notification updated
-        updated:
-          type: boolean
-          example: true
+          example: Notification marked as read
+        data:
+          type: object
+          properties:
+            bool:
+              type: boolean
+              nullable: true
+              example: true
     NotificationsReadAllResponse:
       type: object
       required:
+        - status
         - message
-        - updated
       properties:
+        status:
+          type: string
+          example: success
         message:
           type: string
-          example: notifications updated
-        updated:
-          type: integer
-          format: int64
-          example: 12
+          example: All notifications marked as read
     MessageResponse:
       type: object
       required:
