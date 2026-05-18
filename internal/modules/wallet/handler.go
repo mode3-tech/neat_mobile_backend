@@ -100,7 +100,9 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 	}
 
 	resp := &BankDetailsResponse{
-		Account: *bankDetails,
+		BankCode:      bankDetails.BankCode,
+		AccountName:   bankDetails.AccountName,
+		AccountNumber: bankDetails.AccountNumber,
 	}
 
 	c.JSON(http.StatusOK, response.APIResponse[*BankDetailsResponse]{
@@ -150,11 +152,20 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 		})
 	}
 
-	dto := &TransferResponse{
-		Transfer: transferResponse.Transfer,
+	dto := &TransferResult{
+		Amount:               transferResponse.Transfer.Amount,
+		Charges:              transferResponse.Transfer.Charges,
+		Vat:                  transferResponse.Transfer.Vat,
+		Reference:            transferResponse.Transfer.Reference,
+		Total:                transferResponse.Transfer.Total,
+		Metadata:             transferResponse.Transfer.Metadata,
+		SessionID:            transferResponse.Transfer.SessionID,
+		Destination:          transferResponse.Transfer.Destination,
+		TransactionReference: transferResponse.Transfer.TransactionReference,
+		Description:          transferResponse.Transfer.Description,
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*TransferResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[*TransferResult]{
 		Status:  "success",
 		Message: "Transfer success",
 		Data:    &dto,

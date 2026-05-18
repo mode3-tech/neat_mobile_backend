@@ -436,12 +436,12 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	}
 	defer resp.Body.Close()
 
-	var result wallet.BankDetailsResponse
+	var result wallet.BankDetails
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bank details response: %w", err)
 	}
 
-	return &result.Account, nil
+	return &result, nil
 }
 
 func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {

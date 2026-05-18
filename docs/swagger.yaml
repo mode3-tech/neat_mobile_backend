@@ -3224,18 +3224,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BankListResponse"
-        "401":
-          description: Unauthorized or missing device ID
+        "400":
+          description: Missing user ID or device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
+        "401":
+          description: Invalid or expired access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API401Error"
+        "403":
+          description: Device not trusted or not recognised
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
         "500":
           description: Failed to fetch banks
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /wallet/bank/details:
     get:
       tags:
@@ -3271,23 +3283,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/BankDetailsResponse"
         "400":
-          description: Missing or invalid query parameters
+          description: Missing or invalid query parameters, or missing user/device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
-          description: Unauthorized or missing device ID
+          description: Invalid or expired access token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
+        "403":
+          description: Device not trusted or not recognised
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
         "500":
           description: Failed to fetch bank details
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /wallet/transfer:
     post:
       tags:
@@ -3317,29 +3335,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/TransferResponse"
         "400":
-          description: Invalid request body
+          description: Invalid request body or missing user/device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
-          description: Unauthorized, missing device ID, or wrong transaction PIN
+          description: Incorrect transaction PIN
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "429":
-          description: Transaction PIN locked after too many failed attempts
+                $ref: "#/components/schemas/API401Error"
+        "403":
+          description: Device not trusted or not recognised, or transaction PIN is locked
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API403Error"
+        "422":
+          description: Transfer amount is invalid (must be greater than 50 NGN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API422Error"
         "500":
           description: Failed to initiate transfer
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /wallet/transfer/bulk:
     post:
       tags:
@@ -3369,41 +3393,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/BulkTransferResponse"
         "400":
-          description: Invalid request body, empty transfer list, or one or more transfer entries are invalid
+          description: Invalid request body, empty transfer list, missing user/device ID, or one or more transfer entries are invalid
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
-          description: Unauthorized, missing device ID, wrong transaction PIN, or device verification failed
+          description: Incorrect transaction PIN
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Wallet not found
+                $ref: "#/components/schemas/API401Error"
+        "403":
+          description: Device not trusted or not recognised, or transaction PIN is locked
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "429":
-          description: Transaction PIN locked after too many failed attempts
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Transfer service is temporarily unavailable
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API403Error"
         "500":
           description: Failed to initiate bulk transfer
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /wallet/beneficiary:
     post:
       tags:
@@ -3433,23 +3445,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/AddBeneficiaryResponse"
         "400":
-          description: Invalid request body
+          description: Invalid request body or missing user/device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API400Error"
         "401":
-          description: Unauthorized or missing device ID
+          description: Invalid or expired access token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
+        "403":
+          description: Device not trusted or not recognised
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
         "500":
           description: Failed to add beneficiary
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /wallet/beneficiaries:
     get:
       tags:
@@ -3465,12 +3483,6 @@ paths:
           schema:
             type: string
           description: Stable device installation identifier from the mobile app.
-        - in: query
-          name: wallet_id
-          required: true
-          schema:
-            type: string
-          description: Wallet ID to fetch beneficiaries for.
       responses:
         "200":
           description: Beneficiaries fetched successfully
@@ -3478,24 +3490,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FetchBeneficiariesResponse"
-        "400":
-          description: Missing or invalid query parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Unauthorized or missing device ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API401Error"
         "500":
           description: Failed to fetch beneficiaries
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/API500Error"
   /transaction/recent:
     get:
       tags:
@@ -3511,12 +3517,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FetchRecentTransactionsResponse"
-        "400":
-          description: Missing or invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/API400Error"
         "401":
           description: Unauthorized or invalid token
           content:
@@ -4459,32 +4459,36 @@ components:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
-        banks:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Banks fetched successfully with sortcodes
+        data:
           type: array
           items:
             $ref: "#/components/schemas/Bank"
-    BankDetails:
-      type: object
-      properties:
-        bankCode:
-          type: string
-          example: "058"
-        accountName:
-          type: string
-          example: John Doe
-        accountNumber:
-          type: string
-          example: "0123456789"
     BankDetailsResponse:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
-        account:
-          $ref: "#/components/schemas/BankDetails"
+          type: string
+          example: success
+        message:
+          type: string
+          example: Bank details fetched successfully
+        data:
+          type: object
+          properties:
+            bank_code:
+              type: string
+              example: "058"
+            account_name:
+              type: string
+              example: John Doe
+            account_number:
+              type: string
+              example: "0123456789"
     TransferRequest:
       type: object
       required:
@@ -4565,12 +4569,12 @@ components:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
+          type: string
+          example: success
         message:
           type: string
-          example: Transfer initiated successfully
-        transfer:
+          example: Transfer success
+        data:
           $ref: "#/components/schemas/TransferResult"
     BulkTransferRequest:
       type: object
@@ -4718,13 +4722,31 @@ components:
       type: object
       properties:
         status:
-          type: boolean
-          example: true
+          type: string
+          example: success
         message:
           type: string
           example: Beneficiary added successfully
-        beneficiary:
-          $ref: "#/components/schemas/Beneficiary"
+        data:
+          type: object
+          properties:
+            beneficiary:
+              $ref: "#/components/schemas/Beneficiary"
+    BeneficiaryItem:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          example: WLT-001
+        bank_code:
+          type: string
+          example: "058"
+        account_number:
+          type: string
+          example: "0123456789"
+        account_name:
+          type: string
+          example: John Doe
     FetchBeneficiariesResponse:
       type: object
       properties:
@@ -4737,7 +4759,7 @@ components:
         beneficiaries:
           type: array
           items:
-            $ref: "#/components/schemas/Beneficiary"
+            $ref: "#/components/schemas/BeneficiaryItem"
     ActiveLoan:
       type: object
       properties:
@@ -6668,7 +6690,7 @@ components:
         message:
           type: string
           example: Recent transactions fetched successfully
-        transactions:
+        data:
           type: array
           items:
             $ref: "#/components/schemas/TransactionItem"
@@ -6693,20 +6715,23 @@ components:
         message:
           type: string
           example: Transactions fetched successfully
-        sections:
-          type: array
-          description: Transactions grouped by month, ordered newest-first.
-          items:
-            $ref: "#/components/schemas/TransactionSection"
-        next_cursor:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp to pass as `cursor` on the next request. Empty string when there are no more pages.
-          example: "2026-03-01T00:00:00Z"
-        has_more:
-          type: boolean
-          description: True if there are additional pages of transactions available.
-          example: true
+        data:
+          type: object
+          properties:
+            sections:
+              type: array
+              description: Transactions grouped by month, ordered newest-first.
+              items:
+                $ref: "#/components/schemas/TransactionSection"
+            next_cursor:
+              type: string
+              format: date-time
+              description: RFC3339 timestamp to pass as `cursor` on the next request. Empty string when there are no more pages.
+              example: "2026-03-01T00:00:00Z"
+            has_more:
+              type: boolean
+              description: True if there are additional pages of transactions available.
+              example: true
     ForgotTransactionPinResponse:
       type: object
       properties:

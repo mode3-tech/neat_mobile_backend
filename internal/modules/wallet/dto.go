@@ -8,7 +8,9 @@ type BankDetailsQuery struct {
 }
 
 type BankDetailsResponse struct {
-	Account BankDetails `json:"account"`
+	BankCode      string `json:"bank_code"`
+	AccountName   string `json:"account_name"`
+	AccountNumber string `json:"account_number"`
 }
 
 type TransferRequest struct {
