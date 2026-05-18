@@ -6,6 +6,8 @@ import (
 	"errors"
 	"hash/fnv"
 	"io"
+	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/response"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -65,6 +67,10 @@ type LoginRateLimiter struct {
 
 	ipAttempts    attemptStore
 	emailAttempts attemptStore
+}
+
+type LoginRateLimiterResponse struct {
+	RetryAfterSeconds int `json:"retry_after_seconds"`
 }
 
 func NewLoginRateLimiter(cfg LoginRateLimiterConfig) *LoginRateLimiter {
@@ -132,9 +138,13 @@ func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
 			retryAfter := max(int(blockedUntil.Sub(now).Seconds()), 1)
 
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":               defaultLoginRateLimitErrorMessage,
-				"retry_after_seconds": retryAfter,
+			mapped := response.MapError(appErr.ErrTooManyRequests)
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, response.APIResponse[LoginRateLimiterResponse]{
+				Status: "error",
+				Error:  &mapped.Error,
+				Data: &LoginRateLimiterResponse{
+					RetryAfterSeconds: retryAfter,
+				},
 			})
 			return
 		}
