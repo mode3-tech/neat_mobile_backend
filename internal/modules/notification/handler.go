@@ -161,10 +161,13 @@ func (h *Handler) GetNotifications(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*ListNotificationsResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[[]NotificationDTO]{
 		Status:  "success",
 		Message: "Notifications fetched successfully",
-		Data:    &resp,
+		Data:    &resp.Notifications,
+		Page:    &resp.Page,
+		Limit:   &resp.Limit,
+		Total:   &resp.Total,
 	})
 }
 

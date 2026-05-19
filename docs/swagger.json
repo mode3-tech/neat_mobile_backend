@@ -8915,14 +8915,9 @@
             "example": "Loan repayment history fetched successfully"
           },
           "data": {
-            "type": "object",
-            "properties": {
-              "history": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/LoanHistoryItem"
-                }
-              }
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoanHistoryItem"
             }
           }
         }
@@ -9023,14 +9018,9 @@
             "example": "Active loan(s) fetched successfully"
           },
           "data": {
-            "type": "object",
-            "properties": {
-              "loans": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ActiveLoanItem"
-                }
-              }
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveLoanItem"
             }
           }
         }
@@ -9052,14 +9042,9 @@
             "example": "All loans fetched successfully"
           },
           "data": {
-            "type": "object",
-            "properties": {
-              "loans": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/LoanListItem"
-                }
-              }
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoanListItem"
             }
           }
         }
@@ -9873,32 +9858,23 @@
             "example": "Notifications fetched successfully"
           },
           "data": {
-            "type": "object",
-            "properties": {
-              "notifications": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/NotificationHistoryItem"
-                }
-              },
-              "page": {
-                "type": "integer",
-                "example": 1
-              },
-              "page_size": {
-                "type": "integer",
-                "example": 20
-              },
-              "total": {
-                "type": "integer",
-                "format": "int64",
-                "example": 37
-              },
-              "has_next": {
-                "type": "boolean",
-                "example": true
-              }
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationHistoryItem"
             }
+          },
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "example": 37
           }
         }
       },

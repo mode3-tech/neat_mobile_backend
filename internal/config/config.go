@@ -52,6 +52,8 @@ type Config struct {
 	LoginRateLimitWindowMinutes    int
 	LoginRateLimitBlockMinutes     int
 
+	WalletProvider string
+
 	RunMigrations bool
 }
 
@@ -104,6 +106,8 @@ func Load() Config {
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),
 		LoginRateLimitWindowMinutes:    getEnvInt("LOGIN_RATE_LIMIT_WINDOW_MINUTES", 15),
 		LoginRateLimitBlockMinutes:     getEnvInt("LOGIN_RATE_LIMIT_BLOCK_MINUTES", 15),
+
+		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}

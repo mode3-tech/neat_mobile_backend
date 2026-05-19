@@ -121,9 +121,17 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		BlockDuration:    time.Duration(cfg.LoginRateLimitBlockMinutes) * time.Minute,
 	})
 
-	// optimusWalletService := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey)
 	optimusProductID := cfg.OptimusProductID
 	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+
+	var walletRegistrationService auth.WalletService
+	if cfg.WalletProvider == "optimus" {
+		walletRegistrationService = baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey)
+		log.Print("wallet provider: optimus")
+	} else {
+		walletRegistrationService = providusWalletService
+		log.Print("wallet provider: providus")
+	}
 
 	otpRepo := otp.NewRepository(db)
 	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper, cfg.AppName)
@@ -132,7 +140,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, providusWalletService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())

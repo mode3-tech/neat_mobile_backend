@@ -1,6 +1,9 @@
 package notification
 
-import "neat_mobile_app_backend/models"
+import (
+	"neat_mobile_app_backend/models"
+	"time"
+)
 
 type RegisterTokenRequest struct {
 	ExpoPushToken string `json:"expo_push_token" binding:"required"`
@@ -68,4 +71,37 @@ type NotificationParams struct {
 
 type MarkNotificationReadResponse struct {
 	Updated *bool `json:"bool"`
+}
+
+type NotificationDTO struct {
+	ID        string         `json:"id"`
+	UserID    string         `json:"user_id"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	Type      string         `json:"type"`
+	Data      map[string]any `json:"data"`
+	IsRead    bool           `json:"is_read"`
+	CreatedAt time.Time      `json:"created_at"`
+	ReadAt    *time.Time     `json:"read_at"`
+}
+
+type GetNotificationsResult struct {
+	Notifications []NotificationDTO
+	Page          int
+	Limit         int
+	Total         int64
+}
+
+func notificationToDTO(n models.Notification) NotificationDTO {
+	return NotificationDTO{
+		ID:        n.ID,
+		UserID:    n.UserID,
+		Title:     n.Title,
+		Body:      n.Body,
+		Type:      n.Type,
+		Data:      n.Data,
+		IsRead:    n.IsRead,
+		CreatedAt: n.CreatedAt,
+		ReadAt:    n.ReadAt,
+	}
 }

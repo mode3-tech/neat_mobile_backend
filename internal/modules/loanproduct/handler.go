@@ -117,7 +117,7 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*AllLoansResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[[]CoreCustomerLoanItem]{
 		Status:  "success",
 		Message: "Loans fetched successfully",
 		Data:    &resp,
@@ -167,7 +167,7 @@ func (h *Handler) GetActiveLoans(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*ActiveLoansResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[[]ActiveLoanItem]{
 		Status:  "success",
 		Message: "Active loans fetched successfully",
 		Data:    &resp,
@@ -205,7 +205,7 @@ func (h *Handler) GetLoanHistory(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*LoanHistoryResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[[]LoanHistoryItem]{
 		Status:  "success",
 		Message: "Loan history fetched successfully",
 		Data:    &resp,
@@ -301,7 +301,7 @@ func (h *Handler) GetLoanHistoryByLoanID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*LoanHistoryResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[[]LoanHistoryItem]{
 		Status:  "success",
 		Message: "Loan history fetched successfully",
 		Data:    &resp,

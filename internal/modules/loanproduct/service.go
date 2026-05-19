@@ -356,7 +356,7 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	return s.coreCustomerFinder.MatchCustomerByBVN(ctx, bvn)
 }
 
-func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string) (*AllLoansResponse, error) {
+func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string) ([]CoreCustomerLoanItem, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 
 	if mobileUserID == "" {
@@ -386,12 +386,10 @@ func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string
 		return nil, appErr.ErrApplyingForLoan
 	}
 
-	return &AllLoansResponse{
-		Loans: allLoans,
-	}, nil
+	return allLoans, nil
 }
 
-func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID string) (*ActiveLoansResponse, error) {
+func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID string) ([]ActiveLoanItem, error) {
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, err
 	}
@@ -405,7 +403,7 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 	}
 
 	if user == nil || user.CoreCustomerID == nil {
-		return &ActiveLoansResponse{Loans: []ActiveLoanItem{}}, nil
+		return []ActiveLoanItem{}, nil
 	}
 
 	activeLoans, err := s.repo.ListActiveLoansByCustomerID(ctx, *user.CoreCustomerID)
@@ -413,12 +411,10 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 		return nil, appErr.ErrFetchingActiveLoans
 	}
 
-	return &ActiveLoansResponse{
-		Loans: activeLoans,
-	}, nil
+	return activeLoans, nil
 }
 
-func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID string) (*LoanHistoryResponse, error) {
+func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID string) ([]LoanHistoryItem, error) {
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, appErr.ErrFetchingLoanHistory
 	}
@@ -442,9 +438,7 @@ func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID str
 		return nil, appErr.ErrFetchingLoanHistory
 	}
 
-	return &LoanHistoryResponse{
-		History: history,
-	}, nil
+	return history, nil
 }
 
 func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, deviceID, loanID string) (*LoanDetailsResponse, error) {
@@ -469,7 +463,7 @@ func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, deviceID, lo
 	}, nil
 }
 
-func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, deviceID, loanID string) (*LoanHistoryResponse, error) {
+func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, deviceID, loanID string) ([]LoanHistoryItem, error) {
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return nil, appErr.ErrFetchingLoanHistory
 	}
@@ -479,9 +473,7 @@ func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, devi
 		return nil, appErr.ErrFetchingLoanHistory
 	}
 
-	return &LoanHistoryResponse{
-		History: history,
-	}, nil
+	return history, nil
 }
 
 func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanID string) (*LoanRepaymentResponse, error) {

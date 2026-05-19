@@ -137,11 +137,6 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 
 	// TODO: confirm with Optimus API docs the exact plaintext to encrypt
 	// (likely the BVN, but could be a JSON blob of multiple fields).
-	encryptedString, err := pgpEncrypt(o.PublicKey, walletInfo.BVN)
-	if err != nil {
-		log.Printf("Optimus: failed to encrypt payload: %v", err)
-		return nil, fmt.Errorf("optimus: encrypt payload: %w", err)
-	}
 
 	url := baseURL + "/Customer/create-by-bvn"
 	payload := OptimusPayload{
@@ -155,7 +150,6 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		ProductId:         walletInfo.ProductId,
 		PhoneNumber:       walletInfo.PhoneNumber,
 		BVN:               walletInfo.BVN,
-		EncryptedString:   encryptedString,
 	}
 
 	body, err := json.Marshal(payload)
@@ -164,7 +158,22 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		return nil, fmt.Errorf("Failed to encode payload with json.Marshal: %s", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	payloadString := string(body)
+	log.Printf("Optimus wallet generation request payload: %s", payloadString)
+
+	encryptedString, err := pgpEncrypt(o.PublicKey, payloadString)
+	if err != nil {
+		log.Printf("Optimus: failed to encrypt payload: %v", err)
+		return nil, fmt.Errorf("optimus: encrypt payload: %w", err)
+	}
+
+	reqBody, err := json.Marshal(map[string]string{"encryptedString": encryptedString})
+	if err != nil {
+		log.Printf("Optimus: failed to marshal encrypted body: %s", err)
+		return nil, fmt.Errorf("optimus: marshal encrypted body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		log.Printf("Failed to create new request with context: %s", err)
 		return nil, fmt.Errorf("Failed to create new request with context: %s", err)

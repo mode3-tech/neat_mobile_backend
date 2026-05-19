@@ -336,7 +336,7 @@ func isDeviceNotRegistered(ticket ExpoPushTicket) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "DeviceNotRegistered")
 }
 
-func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID string, page, pageSize int) (*ListNotificationsResponse, error) {
+func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID string, page, pageSize int) (*GetNotificationsResult, error) {
 	if s.repo == nil {
 		return nil, errors.New("notification repository is not configured")
 	}
@@ -352,12 +352,16 @@ func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID s
 		return nil, appErr.ErrFetchingNotifications
 	}
 
-	return &ListNotificationsResponse{
-		Notifications: notifications,
+	dtos := make([]NotificationDTO, len(notifications))
+	for i, n := range notifications {
+		dtos[i] = notificationToDTO(n)
+	}
+
+	return &GetNotificationsResult{
+		Notifications: dtos,
 		Page:          page,
-		PageSize:      pageSize,
+		Limit:         pageSize,
 		Total:         total,
-		HasNext:       int64(offset+len(notifications)) < total,
 	}, nil
 }
 
