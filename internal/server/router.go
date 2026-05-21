@@ -126,7 +126,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	var walletRegistrationService auth.WalletService
 	if cfg.WalletProvider == "optimus" {
-		walletRegistrationService = baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey)
+		walletRegistrationService = baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
 		log.Print("wallet provider: optimus")
 	} else {
 		walletRegistrationService = providusWalletService

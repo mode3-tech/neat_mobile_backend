@@ -89,6 +89,20 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID s
 		return nil, appErr.ErrInvalidTransferAmount
 	}
 	req.Amount = req.Amount * 100 // convert Naira → kobo for storage and downstream use
+
+	user, err := s.repo.GetUserByMobileUserID(ctx, mobileUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrUnauthorized
+		}
+
+		return nil, appErr.ErrFundsTransfer
+	}
+
+	if user.CreatedAt.Add(24*time.Hour).After(time.Now()) && req.Amount > 20000*100 {
+		return nil, appErr.ErrNewUserTransferRestriction
+	}
+
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	accountName := ""
 	if req.AccountName != nil {
@@ -188,15 +202,15 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 	w, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrWalletNotFound
+			return appErr.ErrMissingUserWallet
 		}
-		return err
+		return appErr.ErrMakingLoanRepayment
 	}
 
 	amountKobo := amountNaira * 100
 	if w.AvailableBalance < amountKobo {
 		log.Println("insufficient balance")
-		return errors.New("insufficient balance")
+		return appErr.ErrInsufficientBalance
 	}
 
 	narration := "Loan repayment"

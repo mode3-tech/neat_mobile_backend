@@ -18,6 +18,15 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) GetUserByMobileUserID(ctx context.Context, mobileUserID string) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).Where("mobile_user_id = ?", mobileUserID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *Repository) CreateWallet(ctx context.Context, wallet *CustomerWallet) error {
 	if err := r.db.WithContext(ctx).Create(wallet).Error; err != nil {
 		return err

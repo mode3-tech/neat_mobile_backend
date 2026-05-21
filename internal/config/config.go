@@ -36,6 +36,7 @@ type Config struct {
 	OptimusUsername            string
 	OptimusPassword            string
 	OptimusPublicKey           string
+	OptimusPrivateKey          string
 	WalletPayloadSeedKey       string
 	LoanRepaymentAccountNumber string
 	LoanRepaymentBankCode      string
@@ -91,6 +92,7 @@ func Load() Config {
 		OptimusUsername:            getEnv("OPTIMUS_USERNAME", ""),
 		OptimusPassword:            getEnv("OPTIMUS_PASSWORD", ""),
 		OptimusPublicKey:           readFileEnv("OPTIMUS_PUBLIC_KEY_FILE"),
+		OptimusPrivateKey:          readFileEnv("OPTIMUS_PRIVATE_KEY_FILE"),
 		WalletPayloadSeedKey:       getEnv("WALLET_PAYLOAD_SEED_KEY", ""),
 		LoanRepaymentAccountNumber: getEnv("LOAN_REPAYMENT_ACCOUNT_NUMBER", ""),
 		LoanRepaymentBankCode:      getEnv("LOAN_REPAYMENT_BANK_CODE", ""),

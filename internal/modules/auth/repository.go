@@ -141,7 +141,7 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 func (r *Repository) GetValidationRow(ctx context.Context, verificationID string) (*models.VerificationRecord, error) {
 	var record models.VerificationRecord
 	err := r.db.WithContext(ctx).Table("wallet_verification_records").
-		Select("id, verified_name, verified_dob, verified_phone, verified_id").
+		Select("id, verified_name, verified_dob, verified_phone, verified_id, verified_gender, verified_marital_status, verified_full_home_address").
 		Where("id = ? AND status = ?", verificationID, models.VerificationStatusVerified).
 		First(&record).Error
 

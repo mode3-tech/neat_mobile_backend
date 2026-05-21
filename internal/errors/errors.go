@@ -92,4 +92,5 @@ var (
 	ErrSMSServiceNotConfigured         = errors.New("SMS service not configured")
 	ErrRequestingForCard               = errors.New("Failed to request for card")
 	ErrInsufficientBalance             = errors.New("Insufficient balance")
+	ErrNewUserTransferRestriction      = errors.New("New users are restricted from making transfers greater than NGN 20,000 for the first 24 hours after registration")
 )

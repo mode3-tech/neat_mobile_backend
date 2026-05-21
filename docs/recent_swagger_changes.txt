@@ -1,0 +1,22 @@
+Recent Swagger Changes (commit: fix: swagger fully updated)
+==============================================================
+
+All changes were response body flattening — nested wrapper objects removed
+so the `data` field now returns arrays directly.
+
+1. GET /loan/history
+   - Before: data: { history: [] }
+   - After:  data: []  (direct array of LoanHistoryItem)
+
+2. GET /loan/loans/active
+   - Before: data: { loans: [] }
+   - After:  data: []  (direct array of ActiveLoanItem)
+
+3. GET /loan/loans
+   - Before: data: { loans: [] }
+   - After:  data: []  (direct array of LoanListItem)
+
+4. GET /notifications
+   - Before: data: { notifications: [], page, page_size, total, has_next }
+   - After:  data: []  (direct array of NotificationHistoryItem)
+             page, page_size, total, has_next moved to top level of response

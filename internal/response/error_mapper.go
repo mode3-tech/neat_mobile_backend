@@ -795,6 +795,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrNewUserTransferRestriction:
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "NEW_USER_TRANSFER_RESTRICTION",
+				Message: appErr.ErrNewUserTransferRestriction.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

@@ -14,7 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/openpgp" //nolint:staticcheck
+	"os"
+
+	"golang.org/x/crypto/openpgp"       //nolint:staticcheck
+	"golang.org/x/crypto/openpgp/armor" //nolint:staticcheck
 )
 
 type Optimus struct {
@@ -23,33 +26,53 @@ type Optimus struct {
 	Username      string
 	Password      string
 	PublicKey     string
+	PrivateKey    string
 	Client        *http.Client
 	mu            sync.Mutex
 	cachedToken   string
 	tokenExpiry   time.Time
 }
 
-func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey string) *Optimus {
+func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey, privateKey string) *Optimus {
 	return &Optimus{
 		WalletBaseURL: walletBaseURL,
 		AuthBaseURL:   authBaseURL,
 		Username:      username,
 		Password:      password,
 		PublicKey:     publicKey,
+		PrivateKey:    privateKey,
 		Client:        &http.Client{Timeout: time.Second * 15},
 	}
 }
 
-// pgpEncrypt encrypts plaintext with an ASCII-armored PGP public key and
-// returns the raw ciphertext as a base64 string.
-func pgpEncrypt(armoredPublicKey, plaintext string) (string, error) {
+// pgpEncrypt serializes data to JSON (unless it is already a string), encrypts
+// the result with an ASCII-armored PGP public key, and returns the ciphertext
+// as a base64-encoded string.
+func pgpEncrypt(armoredPublicKey string, data any) (string, error) {
+	var plaintext string
+	switch v := data.(type) {
+	case string:
+		plaintext = v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("pgp: marshal data: %w", err)
+		}
+		plaintext = string(b)
+	}
+
 	keyRing, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armoredPublicKey))
 	if err != nil {
 		return "", fmt.Errorf("pgp: parse public key: %w", err)
 	}
 
 	var buf bytes.Buffer
-	encWriter, err := openpgp.Encrypt(&buf, keyRing, nil, nil, nil)
+	armorWriter, err := armor.Encode(&buf, "PGP MESSAGE", nil)
+	if err != nil {
+		return "", fmt.Errorf("pgp: create armor writer: %w", err)
+	}
+
+	encWriter, err := openpgp.Encrypt(armorWriter, keyRing, nil, nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("pgp: encrypt: %w", err)
 	}
@@ -63,7 +86,72 @@ func pgpEncrypt(armoredPublicKey, plaintext string) (string, error) {
 		return "", fmt.Errorf("pgp: finalize: %w", err)
 	}
 
+	// armorWriter must be closed to flush the PGP armor footer before we read buf
+	if err := armorWriter.Close(); err != nil {
+		return "", fmt.Errorf("pgp: close armor writer: %w", err)
+	}
+
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
+
+// pgpDecrypt base64-decodes ciphertextB64 then decrypts it using an
+// ASCII-armored PGP private key. If the private key is passphrase-protected,
+// the passphrase is read from the OPTIMUS_PASSPHRASE environment variable.
+// If the decrypted plaintext is a JSON-encoded string (e.g. `"value"`), the
+// outer quotes are stripped before returning — matching the behaviour of the
+// upstream C# implementation.
+func pgpDecrypt(armoredPrivateKey, ciphertextB64 string) (string, error) {
+	ciphertextBytes, err := base64.StdEncoding.DecodeString(ciphertextB64)
+	if err != nil {
+		return "", fmt.Errorf("pgp: decode base64: %w", err)
+	}
+
+	// Response is ASCII-armored PGP (-----BEGIN PGP MESSAGE-----); decode the
+	// armor envelope before handing the binary payload to ReadMessage.
+	armorBlock, err := armor.Decode(bytes.NewReader(ciphertextBytes))
+	if err != nil {
+		return "", fmt.Errorf("pgp: decode armor: %w", err)
+	}
+
+	keyRing, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armoredPrivateKey))
+	if err != nil {
+		return "", fmt.Errorf("pgp: parse private key: %w", err)
+	}
+
+	if passphrase := []byte(os.Getenv("OPTIMUS_PASSPHRASE")); len(passphrase) > 0 {
+		for _, entity := range keyRing {
+			if entity.PrivateKey != nil && entity.PrivateKey.Encrypted {
+				if err := entity.PrivateKey.Decrypt(passphrase); err != nil {
+					return "", fmt.Errorf("pgp: decrypt private key: %w", err)
+				}
+			}
+			for _, subkey := range entity.Subkeys {
+				if subkey.PrivateKey != nil && subkey.PrivateKey.Encrypted {
+					if err := subkey.PrivateKey.Decrypt(passphrase); err != nil {
+						return "", fmt.Errorf("pgp: decrypt subkey: %w", err)
+					}
+				}
+			}
+		}
+	}
+
+	md, err := openpgp.ReadMessage(armorBlock.Body, keyRing, nil, nil)
+	if err != nil {
+		return "", fmt.Errorf("pgp: decrypt: %w", err)
+	}
+
+	plaintext, err := io.ReadAll(md.UnverifiedBody)
+	if err != nil {
+		return "", fmt.Errorf("pgp: read plaintext: %w", err)
+	}
+
+	// Unwrap JSON-encoded strings: `"hello"` → `hello`
+	result := string(plaintext)
+	var unwrapped string
+	if err := json.Unmarshal([]byte(result), &unwrapped); err == nil {
+		return unwrapped, nil
+	}
+	return result, nil
 }
 
 // getToken returns a valid access token, generating a new one if the cached
@@ -139,6 +227,7 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	// (likely the BVN, but could be a JSON blob of multiple fields).
 
 	url := baseURL + "/Customer/create-by-bvn"
+	log.Printf("Optimus URL for creating customer account with BVN: %s", url)
 	payload := OptimusPayload{
 		RequestId:         walletInfo.RequestID,
 		Email:             walletInfo.Email,
@@ -192,13 +281,14 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		if len(respBody) == 0 {
-			log.Printf("Optimus wallet generation failed with status: %d", resp.StatusCode)
-			return nil, fmt.Errorf("Optimus wallet generation failed with status: %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		// Error bodies are also PGP-encrypted; attempt to decrypt before logging.
+		if plainErr, err := pgpDecrypt(o.PrivateKey, strings.TrimSpace(string(respBody))); err == nil {
+			log.Printf("Optimus wallet generation failed status=%d error=%s", resp.StatusCode, plainErr)
+		} else {
+			log.Printf("Optimus wallet generation failed status=%d body=%s", resp.StatusCode, respBody)
 		}
-		log.Printf("Optimus wallet generation failed: %s", extractErrorMessage(respBody))
-		return nil, fmt.Errorf("Optimus wallet generation failed: %s", extractErrorMessage(respBody))
+		return nil, fmt.Errorf("Optimus wallet generation failed with status: %d", resp.StatusCode)
 	}
 
 	respBytes, err := io.ReadAll(resp.Body)
@@ -207,9 +297,23 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		return nil, fmt.Errorf("Optimus wallet generation: failed to read response body: %w", err)
 	}
 
+	var encryptedResp struct {
+		EncryptedString string `json:"encryptedString"`
+	}
+	if err := json.Unmarshal(respBytes, &encryptedResp); err != nil || encryptedResp.EncryptedString == "" {
+		log.Printf("Optimus wallet generation: response is not an encryptedString envelope, body=%s", respBytes)
+		return nil, fmt.Errorf("optimus: unexpected response format (expected encryptedString envelope)")
+	}
+
+	plaintext, err := pgpDecrypt(o.PrivateKey, encryptedResp.EncryptedString)
+	if err != nil {
+		log.Printf("Optimus wallet generation: failed to decrypt response: %v", err)
+		return nil, fmt.Errorf("optimus: decrypt response: %w", err)
+	}
+
 	var result auth.WalletResponse
-	if err := json.Unmarshal(respBytes, &result); err != nil {
-		log.Printf("Optimus wallet generation: failed to decode response body=%s err=%v", respBytes, err)
+	if err := json.Unmarshal([]byte(plaintext), &result); err != nil {
+		log.Printf("Optimus wallet generation: failed to decode decrypted response body=%s err=%v", plaintext, err)
 		return nil, fmt.Errorf("Failed to decode Optimus wallet generation response: %w", err)
 	}
 

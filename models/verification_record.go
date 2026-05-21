@@ -36,7 +36,7 @@ type VerificationRecord struct {
 	VerifiedStateOfOrigin   *string    `gorm:"column:verified_state_of_origin;type:text"`
 	VerifiedPlaceOfBirth    *string    `gorm:"column:verified_place_of_birth;type:text"`
 	VerifiedOccupation      *string    `gorm:"column:verified_occupation;type:text"`
-	VerifiedMaritalStatus   *string    `gorm:"colimn:verified_marital_status;type:text"`
+	VerifiedMaritalStatus   *string    `gorm:"column:verified_marital_status;type:text"`
 	VerifiedEducation       *string    `gorm:"column:verified_education;type:text"`
 	VerifiedReligion        *string    `gorm:"column:verified_religion;type:text"`
 	PassportOnBVN           *string    `gorm:"column:passport_on_bvn"`

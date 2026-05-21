@@ -12,6 +12,7 @@ import (
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"neat_mobile_app_backend/internal/validators"
+	"strconv"
 	"strings"
 	"time"
 
@@ -248,7 +249,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			address = v
 		}
 	}
-	houseNo := strings.Split(address, ",")[0]
+	houseNo := extractHouseNumber(address)
 
 	gender := ""
 	if bvnRecord.VerifiedGender != nil {
@@ -311,6 +312,20 @@ func registrationIdempotencyKey(req RegisterationRequest, normalizedPhone string
 
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// extractHouseNumber parses the numeric house number out of a full address string.
+// It splits on the first comma to get the street segment (e.g. "15 Akin Close"),
+// then scans each whitespace-delimited token for the first one that is a pure integer.
+// Falls back to "1" when no numeric token is found.
+func extractHouseNumber(address string) string {
+	segment := strings.Split(address, ",")[0]
+	for _, token := range strings.Fields(segment) {
+		if _, err := strconv.Atoi(token); err == nil {
+			return token
+		}
+	}
+	return "1"
 }
 
 func walletRegistrationEmail(email, mobileUserID string) string {
