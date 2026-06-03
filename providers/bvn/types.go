@@ -110,3 +110,71 @@ type PremblyBVNValidationVerification struct {
 	Reference      string `json:"reference"`
 	VerificationID string `json:"verification_id"`
 }
+
+type BVNWithFace struct {
+	Number string `json:"number"`
+	Image  string `json:"image"`
+}
+
+type PremblyBVNWithFaceResponse struct {
+	Status       bool                           `json:"status"`
+	ResponseCode string                         `json:"response_code"`
+	Message      string                         `json:"message"`
+	Detail       string                         `json:"detail"`
+	Data         PremblyBVNWithFaceData         `json:"data"`
+	Meta         map[string]any                 `json:"meta"`
+	BillingInfo  PremblyBVNWithFaceBillingInfo  `json:"billing_info"`
+	Verification PremblyBVNWithFaceVerification `json:"verification"`
+	FaceData     PremblyBVNFaceData             `json:"face_data"`
+}
+
+type PremblyBVNWithFaceData struct {
+	Base64Image        string             `json:"base64Image"`
+	BVN                string             `json:"bvn"`
+	DateOfBirth        string             `json:"dateOfBirth"`
+	Email              string             `json:"email"`
+	EnrollmentBank     string             `json:"enrollmentBank"`
+	EnrollmentBranch   string             `json:"enrollmentBranch"`
+	FirstName          string             `json:"firstName"`
+	Gender             string             `json:"gender"`
+	LastName           string             `json:"lastName"`
+	LevelOfAccount     string             `json:"levelOfAccount"`
+	LGAOfOrigin        string             `json:"lgaOfOrigin"`
+	LGAOfResidence     string             `json:"lgaOfResidence"`
+	MaritalStatus      string             `json:"maritalStatus"`
+	MiddleName         string             `json:"middleName"`
+	NameOnCard         string             `json:"nameOnCard"`
+	Nationality        string             `json:"nationality"`
+	PhoneNumber1       string             `json:"phoneNumber1"`
+	PhoneNumber2       string             `json:"phoneNumber2"`
+	RegistrationDate   string             `json:"registrationDate"`
+	ResidentialAddress string             `json:"residentialAddress"`
+	StateOfOrigin      string             `json:"stateOfOrigin"`
+	StateOfResidence   string             `json:"stateOfResidence"`
+	Title              string             `json:"title"`
+	WatchListed        string             `json:"watchListed"`
+	NIN                string             `json:"nin"`
+	FaceData           PremblyBVNFaceData `json:"face_data"`
+}
+
+type PremblyBVNFaceData struct {
+	Status            bool    `json:"status"`
+	Message           string  `json:"message"`
+	Confidence        float64 `json:"confidence"`
+	ResponseCode      string  `json:"response_code"`
+	FaceImageProvided string  `json:"face_image_provided"`
+}
+
+type PremblyBVNWithFaceBillingInfo struct {
+	WasCharged    bool   `json:"was_charged"`
+	Amount        string `json:"amount"`
+	Currency      string `json:"currency"`
+	ReferenceID   string `json:"reference_id"`
+	TransactionID string `json:"transaction_id"`
+}
+
+type PremblyBVNWithFaceVerification struct {
+	Status         string `json:"status"`
+	Reference      string `json:"reference"`
+	VerificationID string `json:"verification_id"`
+}

@@ -143,7 +143,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
-	auth.RegisterRoutes(apiV1, authHandler, authGuard, loginRateLimiter.Middleware())
+	deviceValidator := middleware.DeviceValidator(deviceService)
+	auth.RegisterRoutes(apiV1, authHandler, authGuard, deviceValidator, loginRateLimiter.Middleware())
 
 	authService.ConfigureOTPManager(otpManager)
 
@@ -210,14 +211,14 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService, deviceService)
 	loanHandler := loanproduct.NewHandler(loanService)
-	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard)
+	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService)
-	wallet.RegisterRoutes(apiV1, walletHandler, authGuard)
+	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 
 	transactionRepo := transaction.NewRepository(db)
 	transactionService := transaction.NewServie(transactionRepo)
 	transactionHandler := transaction.NewHandler(transactionService)
-	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard)
+	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
 
 	webhooksGroup := r.Group("/webhooks")
 	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
@@ -229,12 +230,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationRepo := notification.NewRepository(db)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 	notificationHandler := notification.NewHandler(notificationService)
-	notification.RegisterRoutes(apiV1, notificationHandler, authGuard)
+	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService)
+	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount)
 	accountHandler := account.NewHandler(accountService)
-	account.RegisterRoutes(apiV1, accountHandler, authGuard)
+	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
 
 	const statementWorkerCount = 4
 
@@ -318,7 +319,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	neatsavePinVerifier := pinverifier.New(neatsaveRepo)
 	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
-	neatsave.RegisterRoutes(apiV1, authGuard, neatsaveHandler)
+	neatsave.RegisterRoutes(apiV1, authGuard, deviceValidator, neatsaveHandler)
 
 	optimusCardProvider := cardprovider.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusSecretKey, nil)
 	cardRepo := card.NewRepository(db)

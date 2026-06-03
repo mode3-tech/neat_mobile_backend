@@ -16,18 +16,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, deviceID string) (*ForgotTransactionPinResponse, error) {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID string) (*ForgotTransactionPinResponse, error) {
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -61,11 +52,7 @@ func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID, device
 	}, err
 }
 
-func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserID, deviceID string, req VerifyForgotTransactionPinOTPRequest) (*VerifyForgotTransactionPinOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserID string, req VerifyForgotTransactionPinOTPRequest) (*VerifyForgotTransactionPinOTPResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user is required")
 	}
@@ -80,10 +67,6 @@ func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserI
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
@@ -103,15 +86,7 @@ func (s *Service) VerifyForgotTransactionPinOTP(ctx context.Context, mobileUserI
 	}, nil
 }
 
-func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ResetTransactionPinRequest) error {
-	if strings.TrimSpace(deviceID) == "" {
-		return errors.New("device id is required")
-	}
-
-	if strings.TrimSpace(mobileUserID) == "" {
-		return errors.New("mobile user id is required")
-	}
-
+func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, req ResetTransactionPinRequest) error {
 	if strings.TrimSpace(req.VerificationID) == "" {
 		return errors.New("verification id is required")
 	}
@@ -122,10 +97,6 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceI
 
 	if req.NewPin != req.ConfirmNewPin {
 		return appErr.ErrTransactionPinMismatch
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -183,18 +154,9 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID, deviceI
 	})
 }
 
-func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserID, deviceID string) error {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return errors.New("device id is required")
-	}
-
+func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserID string) error {
 	if s.otpManager == nil {
 		return errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -222,21 +184,13 @@ func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserI
 	return nil
 }
 
-func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID, deviceID string) (*RequestTransactionPinChangeResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID string) (*RequestTransactionPinChangeResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -267,10 +221,7 @@ func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID,
 	}, nil
 }
 
-func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserID, deviceID string, req VerifyTransactionPinChangeOTPRequest) (*VerifyTransactionPinChangeOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
+func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserID string, req VerifyTransactionPinChangeOTPRequest) (*VerifyTransactionPinChangeOTPResponse, error) {
 
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
@@ -286,10 +237,6 @@ func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserI
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
@@ -309,11 +256,7 @@ func (s *Service) VerifyTransactionPinChangeOTP(ctx context.Context, mobileUserI
 	}, nil
 }
 
-func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, deviceID string, req ChangeTransactionPinRequest) error {
-	if strings.TrimSpace(deviceID) == "" {
-		return errors.New("device id is required")
-	}
-
+func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID string, req ChangeTransactionPinRequest) error {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return errors.New("mobile user id is required")
 	}
@@ -332,10 +275,6 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 
 	if req.NewPin != req.ConfirmNewPin {
 		return appErr.ErrTransactionPinMismatch
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -395,21 +334,13 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID, device
 	})
 }
 
-func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserID, deviceID string) (*ResendTransactionPinChangeOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserID string) (*ResendTransactionPinChangeOTPResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)

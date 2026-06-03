@@ -63,7 +63,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 	notificationHandler := notification.NewHandler(notificationService)
 
-	notification.RegisterRoutes(apiV1, notificationHandler, authGuard)
+	deviceValidator := middleware.DeviceValidator(deviceService)
+	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	internalAuth := middleware.InternalHMACAuth(cfg.NotificationInternalSecret)
 	if strings.TrimSpace(cfg.NotificationInternalSecret) == "" {

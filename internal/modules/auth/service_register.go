@@ -178,9 +178,19 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrBVNNotFound
 	}
 
+	faceCheck, err := repo.GetFaceCheckRecord(ctx, req.BVNWithFaceVerificationID)
+	if err != nil || !faceCheck.Matched || faceCheck.VerificationRecordID != bvnRecord.ID {
+		return nil, appErr.ErrBVNWithFaceVerificationNotFound
+	}
+
 	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
 	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil || ninRecord.VerifiedID == nil {
 		return nil, appErr.ErrNINNotFound
+	}
+
+	ninFaceCheck, err := repo.GetFaceCheckRecord(ctx, req.NINWithFaceVerificationID)
+	if err != nil || !ninFaceCheck.Matched || ninFaceCheck.VerificationRecordID != ninRecord.ID {
+		return nil, appErr.ErrNINWithFaceVerificationNotFound
 	}
 
 	var isEmailVerified bool
@@ -297,12 +307,14 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 func registrationIdempotencyKey(req RegisterationRequest, normalizedPhone string) (string, error) {
 	payload := registrationIdempotencyPayload{
-		PhoneNumber:         normalizedPhone,
-		Email:               strings.ToLower(strings.TrimSpace(req.Email)),
-		BVNVerificationID:   strings.TrimSpace(req.BVNVerificationID),
-		NINVerificationID:   strings.TrimSpace(req.NINVerificationID),
-		PhoneVerificationID: strings.TrimSpace(req.PhoneVerificationID),
-		EmailVerificationID: strings.TrimSpace(req.EmailVerificationID),
+		PhoneNumber:               normalizedPhone,
+		Email:                     strings.ToLower(strings.TrimSpace(req.Email)),
+		BVNVerificationID:         strings.TrimSpace(req.BVNVerificationID),
+		BVNWithFaceVerificationID: strings.TrimSpace(req.BVNWithFaceVerificationID),
+		NINVerificationID:         strings.TrimSpace(req.NINVerificationID),
+		NINWithFaceVerificationID: strings.TrimSpace(req.NINWithFaceVerificationID),
+		PhoneVerificationID:       strings.TrimSpace(req.PhoneVerificationID),
+		EmailVerificationID:       strings.TrimSpace(req.EmailVerificationID),
 	}
 
 	body, err := json.Marshal(payload)
