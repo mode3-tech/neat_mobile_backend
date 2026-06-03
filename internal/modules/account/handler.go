@@ -30,19 +30,7 @@ func (h *Handler) GetAccountSummary(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
-
-	summary, err := h.service.GetAccountSummary(c.Request.Context(), mobileUserID, deviceID)
+	summary, err := h.service.GetAccountSummary(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -72,18 +60,6 @@ func (h *Handler) GetAccountStatement(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
-
 	var req AccountStatementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
@@ -96,7 +72,7 @@ func (h *Handler) GetAccountStatement(c *gin.Context) {
 		return
 	}
 
-	jobID, err := h.service.RequestAccountStatement(c.Request.Context(), mobileUserID, deviceID, req)
+	jobID, err := h.service.RequestAccountStatement(c.Request.Context(), mobileUserID, req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -130,18 +106,6 @@ func (h *Handler) GetStatementJobStatus(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
-
 	jobID := strings.TrimSpace(c.Param("job_id"))
 	if jobID == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
@@ -154,7 +118,7 @@ func (h *Handler) GetStatementJobStatus(c *gin.Context) {
 		return
 	}
 
-	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, deviceID, jobID)
+	job, downloadURL, err := h.service.GetStatementJobStatus(c.Request.Context(), mobileUserID, jobID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -183,18 +147,6 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 			Status: "error",
 			Error: &response.APIError{
 				Code:    string(ErrCodeInvalidToken),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
-
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
 				Message: "Unauthorized",
 			},
 		})
@@ -269,7 +221,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		profilePictureURL = &empty
 	}
 
-	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, deviceID, profilePictureURL, req); err != nil {
+	if err := h.service.UpdateProfile(c.Request.Context(), mobileUserID, profilePictureURL, req); err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
@@ -297,19 +249,7 @@ func (h *Handler) GetLatestAccountStatement(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
-
-	resp, err := h.service.GetLatestAccountStatement(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.GetLatestAccountStatement(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{

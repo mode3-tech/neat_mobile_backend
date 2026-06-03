@@ -804,6 +804,42 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrBVNWithFaceVerificationNotFound:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "BVN_FACE_VERIFICATION_NOT_FOUND",
+				Message: "bvn with face verification not found or face did not match",
+			},
+		}
+
+	case appErr.ErrValidatingBVNWithFace:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "BVN_FACE_MISMATCH",
+				Message: "face verification did not match the provided bvn",
+			},
+		}
+
+	case appErr.ErrNINWithFaceVerificationNotFound:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "NIN_FACE_VERIFICATION_NOT_FOUND",
+				Message: "nin with face verification not found or face did not match",
+			},
+		}
+
+	case appErr.ErrValidatingNINWithFace:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "NIN_FACE_MISMATCH",
+				Message: "face verification did not match the provided nin",
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

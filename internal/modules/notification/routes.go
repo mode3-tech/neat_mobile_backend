@@ -2,9 +2,10 @@ package notification
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc) {
+func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceValidator gin.HandlerFunc) {
 	notifications := rg.Group("/notifications")
 	notifications.Use(authGuard)
+	notifications.Use(deviceValidator)
 
 	notifications.GET("", handler.GetNotifications)
 	notifications.GET("/unread-count", handler.GetUnreadCount)
