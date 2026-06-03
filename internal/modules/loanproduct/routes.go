@@ -2,8 +2,8 @@ package loanproduct
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc) {
-	loanProduct := rg.Group("/loan", authGuard)
+func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceValidator gin.HandlerFunc) {
+	loanProduct := rg.Group("/loan", authGuard, deviceValidator)
 
 	{
 		loanProduct.GET("", handler.GetLoanProducts)

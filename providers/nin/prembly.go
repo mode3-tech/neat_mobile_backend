@@ -73,3 +73,61 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 
 	return &result, nil
 }
+
+func (n *NIN) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
+	if n.apiKey == "" {
+		log.Printf("api key for validating nin with face is missing")
+		return nil, fmt.Errorf("api key for validating nin with face is missing")
+	}
+
+	url := "https://api.prembly.com/verification/nin_w_face"
+
+	payload := map[string]string{
+		"number_nin":    numberNin,
+		"image":         image,
+		"date_of_birth": dateOfBirth,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("error marshaling the nin with face validation payload: %s", err)
+		return nil, fmt.Errorf("error marshaling the nin with face validation payload: %s", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("x-api-key", strings.TrimSpace(n.apiKey))
+
+	resp, err := n.httpClient.Do(req)
+	if err != nil {
+		log.Printf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			log.Printf("prembly nin validation failed and response body could not be read: %v", readErr)
+		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
+			log.Printf("prembly nin validation failed body=%s", body)
+		}
+		log.Printf("prembly_nin non-2xx status=%d", resp.StatusCode)
+		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+	}
+
+	var result PremblyNINWithFaceValidationSuccessResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("failed to decode response body: %v", err)
+		return nil, fmt.Errorf("failed to decode response body: %v", err)
+	}
+
+	return &result, nil
+}

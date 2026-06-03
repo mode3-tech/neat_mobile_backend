@@ -178,6 +178,7 @@ func Migrate(db *gorm.DB) error {
 		&models.AuthSession{},
 		&models.RefreshToken{},
 		&models.VerificationRecord{},
+		&models.FaceCheckRecord{},
 		&auth.RegistrationJob{},
 		&models.PendingDeviceSession{},
 		&otp.OTPModel{},
@@ -363,6 +364,151 @@ func Migrate(db *gorm.DB) error {
 		CREATE UNIQUE INDEX IF NOT EXISTS uq_auto_repayment_attempts_success
 		ON wallet_auto_repayment_attempts (loan_repayment_id)
 		WHERE status = 'success'
+	`).Error; err != nil {
+		return err
+	}
+
+	// FK: wallet_face_check_records → wallet_verification_records (new table, no existing data)
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_face_check_records'
+			) AND NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = 'fk_wallet_face_check_records_verification'
+			) THEN
+				ALTER TABLE wallet_face_check_records
+				ADD CONSTRAINT fk_wallet_face_check_records_verification
+				FOREIGN KEY (verification_record_id) REFERENCES wallet_verification_records(id) ON DELETE CASCADE;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	// FK: wallet_auth_sessions → wallet_users
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_auth_sessions'
+			) THEN
+				DELETE FROM wallet_auth_sessions
+				WHERE NOT EXISTS (
+					SELECT 1 FROM wallet_users u WHERE u.id = wallet_auth_sessions.user_id
+				);
+
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_wallet_auth_sessions_user'
+				) THEN
+					ALTER TABLE wallet_auth_sessions
+					ADD CONSTRAINT fk_wallet_auth_sessions_user
+					FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+				END IF;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	// FK: wallet_user_devices → wallet_users
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_user_devices'
+			) THEN
+				DELETE FROM wallet_user_devices
+				WHERE NOT EXISTS (
+					SELECT 1 FROM wallet_users u WHERE u.id = wallet_user_devices.user_id
+				);
+
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_wallet_user_devices_user'
+				) THEN
+					ALTER TABLE wallet_user_devices
+					ADD CONSTRAINT fk_wallet_user_devices_user
+					FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+				END IF;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	// FK: wallet_device_challenges → wallet_users
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_device_challenges'
+			) THEN
+				DELETE FROM wallet_device_challenges
+				WHERE NOT EXISTS (
+					SELECT 1 FROM wallet_users u WHERE u.id = wallet_device_challenges.user_id
+				);
+
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_wallet_device_challenges_user'
+				) THEN
+					ALTER TABLE wallet_device_challenges
+					ADD CONSTRAINT fk_wallet_device_challenges_user
+					FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+				END IF;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	// FK: wallet_pending_device_sessions → wallet_users
+	// user_id was declared as uuid but wallet_users.id is text; cast column type first.
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_pending_device_sessions'
+			) THEN
+				IF EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_schema = current_schema()
+					  AND table_name = 'wallet_pending_device_sessions'
+					  AND column_name = 'user_id'
+					  AND data_type = 'uuid'
+				) THEN
+					ALTER TABLE wallet_pending_device_sessions
+					ALTER COLUMN user_id TYPE text;
+				END IF;
+
+				DELETE FROM wallet_pending_device_sessions
+				WHERE NOT EXISTS (
+					SELECT 1 FROM wallet_users u WHERE u.id = wallet_pending_device_sessions.user_id
+				);
+
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_wallet_pending_device_sessions_user'
+				) THEN
+					ALTER TABLE wallet_pending_device_sessions
+					ADD CONSTRAINT fk_wallet_pending_device_sessions_user
+					FOREIGN KEY (user_id) REFERENCES wallet_users(id) ON DELETE CASCADE;
+				END IF;
+			END IF;
+		END $$;
 	`).Error; err != nil {
 		return err
 	}

@@ -15,6 +15,14 @@ type bvnInfo struct {
 	verificationID string
 }
 
+type bvnWithFaceInfo struct {
+	faceCheckID string
+}
+
+type ninWithFaceInfo struct {
+	faceCheckID string
+}
+
 type ninInfo struct {
 	name           string
 	dob            string
@@ -48,6 +56,7 @@ type Service struct {
 	cbaSyncSem           chan struct{}
 	cbaWalletUpdateSem   chan struct{}
 	productID            string
+	optimusKYC           OptimusKYCValidation
 }
 
 func NewService(
@@ -97,4 +106,8 @@ func NewService(
 
 func (s *Service) ConfigureOTPManager(manager authotp.OTPManager) {
 	s.otpManager = manager
+}
+
+func (s *Service) ConfigureOptimusKYC(kyc OptimusKYCValidation) {
+	s.optimusKYC = kyc
 }
