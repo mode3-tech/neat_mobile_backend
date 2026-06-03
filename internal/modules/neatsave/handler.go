@@ -29,16 +29,6 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	var req CreateGoalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
@@ -49,7 +39,7 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.service.CreateGoal(c.Request.Context(), mobileUserID, deviceID, req); err != nil {
+	if _, err := h.service.CreateGoal(c.Request.Context(), mobileUserID, req); err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
@@ -75,17 +65,7 @@ func (h *Handler) GetUserGoals(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	resp, err := h.service.GetUserGoals(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.GetUserGoals(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -113,16 +93,6 @@ func (h *Handler) GetGoalSummary(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetHeader("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	var query GetGoalSummaryQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidQueryParameter)
@@ -133,7 +103,7 @@ func (h *Handler) GetGoalSummary(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetGoalSummary(c.Request.Context(), mobileUserID, deviceID, strings.TrimSpace(query.GoalID))
+	resp, err := h.service.GetGoalSummary(c.Request.Context(), mobileUserID, strings.TrimSpace(query.GoalID))
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{

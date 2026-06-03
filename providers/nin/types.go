@@ -76,3 +76,68 @@ type PremblyNINValidationVerification struct {
 	Reference      string `json:"reference"`
 	VerificationID string `json:"verification_id"`
 }
+
+type PremblyNINWithFaceValidationSuccessResponse struct {
+	Status       bool                      `json:"status"`
+	Detail       string                    `json:"detail"`
+	ResponseCode string                    `json:"response_code"`
+	NINData      PremblyNINWithFaceNINData `json:"nin_data"`
+	FaceData     PremblyNINFaceData        `json:"face_data"`
+}
+
+type PremblyNINWithFaceNINData struct {
+	Title            string             `json:"title"`
+	Surname          string             `json:"surname"`
+	FirstName        string             `json:"firstname"`
+	MiddleName       string             `json:"middlename"`
+	Gender           string             `json:"gender"`
+	BirthCountry     string             `json:"birthcountry"`
+	BirthDate        string             `json:"birthdate"`
+	BirthLGA         string             `json:"birthlga"`
+	BirthState       string             `json:"birthstate"`
+	CentralID        string             `json:"centralID"`
+	EducationalLevel string             `json:"educationallevel"`
+	Email            *string            `json:"email"`
+	NIN              string             `json:"nin"`
+	EmploymentStatus string             `json:"employmentstatus"`
+	Height           string             `json:"heigth"`
+	MaritalStatus    *string            `json:"maritalstatus"`
+	Photo            string             `json:"photo"`
+	Religion         string             `json:"religion"`
+	TelephoneNo      string             `json:"telephoneno"`
+	ResidenceAddress string             `json:"residence_address"`
+	ResidenceLGA     string             `json:"residence_lga"`
+	ResidenceState   string             `json:"residence_state"`
+	ResidenceTown    string             `json:"residence_town"`
+	ResidenceStatus  string             `json:"residencestatus"`
+	SelfOriginLGA    string             `json:"self_origin_lga"`
+	SelfOriginPlace  string             `json:"self_origin_place"`
+	SelfOriginState  *string            `json:"self_origin_state"`
+	Signature        string             `json:"signature"`
+	SpokenLanguage   string             `json:"spoken_language"`
+	NOKAddress1      string             `json:"nok_address1"`
+	NOKAddress2      string             `json:"nok_address2"`
+	NOKFirstName     string             `json:"nok_firstname"`
+	NOKLGA           string             `json:"nok_lga"`
+	NOKMiddleName    string             `json:"nok_middlename"`
+	NOKPostalCode    string             `json:"nok_postalcode"`
+	NOKState         string             `json:"nok_state"`
+	NOKSurname       string             `json:"nok_surname"`
+	NOKTown          string             `json:"nok_town"`
+	OSpokenLang      string             `json:"ospokenlang"`
+	PFirstName       string             `json:"pfirstname"`
+	PMiddleName      string             `json:"pmiddlename"`
+	Profession       *string            `json:"profession"`
+	PSurname         string             `json:"psurname"`
+	TrackingID       string             `json:"trackingId"`
+	UserID           string             `json:"userid"`
+	VNIN             string             `json:"vnin"`
+	FaceData         PremblyNINFaceData `json:"face_data"`
+}
+
+type PremblyNINFaceData struct {
+	Status       bool    `json:"status"`
+	ResponseCode string  `json:"response_code"`
+	Message      string  `json:"message"`
+	Confidence   float64 `json:"confidence"`
+}

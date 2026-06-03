@@ -23,23 +23,20 @@ import (
 )
 
 type Service struct {
-	repo           *Repository
-	b2             UploadService
-	notifier       *notification.Service
-	pdfShiftAPIKey string
-	deviceVerifier DeviceVerifier
+	Repo           *Repository
+	B2             UploadService
+	Notifier       *notification.Service
+	PDFShiftAPIKey string
+	DeviceVerifier DeviceVerifier
+	TrfLimitAmount string
 }
 
-func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier) *Service {
-	return &Service{repo: repo, b2: b2, notifier: notifier, pdfShiftAPIKey: pdfShiftAPIKey, deviceVerifier: deviceVerifier}
+func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier, trfLimitAmount string) *Service {
+	return &Service{Repo: repo, B2: b2, Notifier: notifier, PDFShiftAPIKey: pdfShiftAPIKey, DeviceVerifier: deviceVerifier, TrfLimitAmount: trfLimitAmount}
 }
 
-func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID string) (*AccountSummary, error) {
-	if _, err := s.repo.GetDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, appErr.ErrUnauthorized //401
-	}
-
-	accountInfo, err := s.repo.GetAccountSummary(ctx, mobileUserID)
+func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*AccountSummary, error) {
+	accountInfo, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
 		return nil, appErr.ErrFetchingAccountSummary //500
 	}
@@ -48,7 +45,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	var activeLoans []ActiveLoan
 
 	if accountInfo.CoreCustomerID != nil {
-		loans, err := s.repo.GetLoansByCustomerID(ctx, *accountInfo.CoreCustomerID)
+		loans, err := s.Repo.GetLoansByCustomerID(ctx, *accountInfo.CoreCustomerID)
 		if err == nil {
 			for _, loan := range loans {
 				loanBalance += loan.OutstandingBalance
@@ -88,7 +85,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID, deviceID 
 	}, nil
 }
 
-func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, deviceID string, req AccountStatementRequest) (string, error) {
+func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID string, req AccountStatementRequest) (string, error) {
 	if req.DateFrom.IsZero() {
 		log.Printf("date_from is required")
 		return "", appErr.ErrInvalidDateFrom
@@ -115,13 +112,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		return "", appErr.ErrInvalidDateRange
 	}
 
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		log.Printf("failed to verify device for account statement request: %v", err)
-		return "", appErr.ErrUnauthorized
-	}
-
-	user, err := s.repo.GetUser(ctx, mobileUserID)
+	user, err := s.Repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("failed to retrieve user for account statement request: %v", err)
 		return "", appErr.ErrUnauthorized
@@ -129,7 +120,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 
 	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.%s", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"), req.Format)
 
-	job, err := s.repo.CreateAccountReportJob(ctx, &AccountReportJob{
+	job, err := s.Repo.CreateAccountReportJob(ctx, &AccountReportJob{
 		ID:           uuid.NewString(),
 		MobileUserID: mobileUserID,
 		WalletID:     user.WalletID,
@@ -141,7 +132,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 		Format:       req.Format,
 	})
 	if err != nil {
-		log.Printf("failed to create account report job: %v", err)
+		log.Printf("failed to create account Report job: %v", err)
 		return "", appErr.ErrGeneratingAccountStatement //500
 	}
 
@@ -150,7 +141,7 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID, dev
 }
 
 func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
-	jobs, err := s.repo.ClaimPendingAccountReportJobs(ctx, 1)
+	jobs, err := s.Repo.ClaimPendingAccountReportJobs(ctx, 1)
 	if err != nil {
 		return
 	}
@@ -161,7 +152,7 @@ func (s *Service) ProcessPendingStatementJobs(ctx context.Context) {
 }
 
 func (s *Service) ClaimPendingStatementJobs(ctx context.Context, limit int) ([]AccountReportJob, error) {
-	return s.repo.ClaimPendingAccountReportJobs(ctx, limit)
+	return s.Repo.ClaimPendingAccountReportJobs(ctx, limit)
 }
 
 func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob) {
@@ -170,13 +161,13 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 		DateTo:   *job.DateTo,
 		Format:   job.Format,
 	}); err != nil {
-		s.repo.MarkJobFailed(ctx, job.ID, err.Error())
+		s.Repo.MarkJobFailed(ctx, job.ID, err.Error())
 		return
 	}
 
-	s.repo.MarkJobReady(ctx, job.ID)
+	s.Repo.MarkJobReady(ctx, job.ID)
 
-	s.notifier.SendToUser(
+	s.Notifier.SendToUser(
 		ctx,
 		job.MobileUserID,
 		"Your statement is ready",
@@ -190,8 +181,8 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 	)
 }
 
-func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, deviceID, jobID string) (*AccountReportJob, string, error) {
-	job, err := s.repo.GetAccountReportJob(ctx, jobID)
+func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, jobID string) (*AccountReportJob, string, error) {
+	job, err := s.Repo.GetAccountReportJob(ctx, jobID)
 	if err != nil {
 		return nil, "", appErr.ErrFetchingAccountStatement
 	}
@@ -204,12 +195,12 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, devic
 	if job.Status == ReportStatusReady && job.FilePath != "" {
 		if job.DownloadURL == "" || job.URLExpiresAt == nil || time.Until(*job.URLExpiresAt) < 5*time.Minute {
 			expiry := 15 * time.Minute
-			downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, expiry)
+			downloadURL, err = s.B2.PresignURL(ctx, job.FilePath, expiry)
 			if err != nil {
 				return nil, "", appErr.ErrFetchingAccountStatement
 			}
 			expiresAt := time.Now().Add(expiry)
-			if err := s.repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
+			if err := s.Repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
 				return nil, "", appErr.ErrFetchingAccountStatement
 			}
 		} else {
@@ -219,12 +210,8 @@ func (s *Service) GetStatementJobStatus(ctx context.Context, mobileUserID, devic
 	return job, downloadURL, nil
 }
 
-func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID, deviceID string) (*GetLatestAccountStatementResponse, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
-	job, err := s.repo.GetLastestAccountStatement(ctx, mobileUserID)
+func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID string) (*GetLatestAccountStatementResponse, error) {
+	job, err := s.Repo.GetLastestAccountStatement(ctx, mobileUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -233,12 +220,12 @@ func (s *Service) GetLatestAccountStatement(ctx context.Context, mobileUserID, d
 	if job.Status == ReportStatusReady && job.FilePath != "" {
 		if job.DownloadURL == "" || job.URLExpiresAt == nil || time.Until(*job.URLExpiresAt) < 5*time.Minute {
 			expiry := 15 * time.Minute
-			downloadURL, err = s.b2.PresignURL(ctx, job.FilePath, expiry)
+			downloadURL, err = s.B2.PresignURL(ctx, job.FilePath, expiry)
 			if err != nil {
 				return nil, appErr.ErrFetchingAccountStatement
 			}
 			expiresAt := time.Now().Add(expiry)
-			if err := s.repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
+			if err := s.Repo.SaveDownloadURL(ctx, job.ID, downloadURL, expiresAt); err != nil {
 				return nil, appErr.ErrFetchingAccountStatement
 			}
 		} else {
@@ -271,18 +258,14 @@ func (s *Service) processAccountStatementRequest(ctx context.Context, key, walle
 	}
 }
 
-func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID string, profilePictureURL *string, req UpdateProfileRequest) error {
-	if _, device := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); device == nil {
-		return appErr.ErrUnauthorized //401
-	}
-
+func (s *Service) UpdateProfile(ctx context.Context, mobileUserID string, profilePictureURL *string, req UpdateProfileRequest) error {
 	data := UpdateProfileData{
 		Address:           req.Address,
 		Email:             req.Email,
 		ProfilePictureURL: profilePictureURL,
 	}
 
-	if err := s.repo.UpdateProfile(ctx, mobileUserID, data); err != nil {
+	if err := s.Repo.UpdateProfile(ctx, mobileUserID, data); err != nil {
 		return appErr.ErrUpdatingProfile //500
 	}
 
@@ -290,7 +273,7 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID stri
 }
 
 // func (s *Service) generateCSV(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
-// 	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+// 	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 // 	if err != nil {
 // 		return fmt.Errorf("failed to retrieve transactions: %w", err)
 // 	}
@@ -327,7 +310,7 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID stri
 // 		return fmt.Errorf("failed to write transactions to csv: %w", err)
 // 	}
 
-// 	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
+// 	if err := s.B2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "text/csv"); err != nil {
 // 		return fmt.Errorf("failed to upload account statement to storage: %w", err)
 // 	}
 
@@ -335,13 +318,13 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID, deviceID stri
 // }
 
 func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
-	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
 		log.Printf("failed to retrieve transactions for XLSX generation: %v", err)
 		return appErr.ErrGeneratingAccountStatement
 	}
 
-	account, err := s.repo.GetAccountSummary(ctx, mobileUserID)
+	account, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("failed to retrieve account info for XLSX generation: %v", err)
 		return appErr.ErrGeneratingAccountStatement
@@ -457,7 +440,7 @@ func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID 
 		return appErr.ErrGeneratingAccountStatement
 	}
 
-	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+	if err := s.B2.UploadDocument(ctx, key, bytes.NewReader(buf.Bytes()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
 		log.Printf("failed to upload XLSX to storage: %v", err)
 		return appErr.ErrGeneratingAccountStatement
 	}
@@ -466,17 +449,17 @@ func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID 
 }
 
 func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
-	if s.pdfShiftAPIKey == "" {
+	if s.PDFShiftAPIKey == "" {
 		return errors.New("PDF generation is not configured")
 	}
 
-	transactions, err := s.repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
 	if err != nil {
 		log.Printf("failed to retrieve transactions for PDF generation: %v", err)
 		return appErr.ErrGeneratingAccountStatement
 	}
 
-	account, err := s.repo.GetAccountSummary(ctx, mobileUserID)
+	account, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("failed to retrieve account info for PDF generation: %v", err)
 		return appErr.ErrGeneratingAccountStatement
@@ -572,7 +555,7 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 		return appErr.ErrGeneratingAccountStatement
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.SetBasicAuth("api", s.pdfShiftAPIKey)
+	httpReq.SetBasicAuth("api", s.PDFShiftAPIKey)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
@@ -595,7 +578,7 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 
 	log.Printf("generatePDF: size=%d bytes for key=%s", len(pdfBytes), key)
 
-	if err := s.b2.UploadDocument(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
+	if err := s.B2.UploadDocument(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
 		log.Printf("failed to upload account statement PDF to storage: %v", err)
 		return appErr.ErrGeneratingAccountStatement
 	}
@@ -605,11 +588,13 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 
 func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File, header multipart.FileHeader, mobileUserID string) (string, error) {
 	key := fmt.Sprintf("profile-pictures/%s/%s", mobileUserID, header.Filename)
-	if err := s.b2.UploadProfilePicture(ctx, key, file, header.Header.Get("Content-Type")); err != nil {
+	if err := s.B2.UploadProfilePicture(ctx, key, file, header.Header.Get("Content-Type")); err != nil {
 		log.Printf("failed to upload profile picture to storage: %v", err)
 		return "", appErr.ErrUpdatingProfile
 	}
 
-	url := s.b2.ProfilePictureURL(key)
+	url := s.B2.ProfilePictureURL(key)
 	return url, nil
 }
+
+// func (s *Service)

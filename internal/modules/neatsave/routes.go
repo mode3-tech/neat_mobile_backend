@@ -2,8 +2,8 @@ package neatsave
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, authGuard gin.HandlerFunc, handler *Handler) {
-	savings := rg.Group("/savings", authGuard)
+func RegisterRoutes(rg *gin.RouterGroup, authGuard, deviceValidator gin.HandlerFunc, handler *Handler) {
+	savings := rg.Group("/savings", authGuard, deviceValidator)
 
 	{
 		savings.POST("/goal/create", handler.CreateGoal)

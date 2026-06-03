@@ -41,14 +41,7 @@ func NewService(repo *Repository, providusService ProvidusService, pinVerifier *
 	}
 }
 
-func (s *Service) FetchBanks(ctx context.Context, mobileUserID, deviceID string) ([]Bank, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) FetchBanks(ctx context.Context) ([]Bank, error) {
 	banks, err := s.providusService.FetchBanks(ctx)
 	if err != nil {
 		return nil, appErr.ErrFetchingBanks
@@ -57,14 +50,7 @@ func (s *Service) FetchBanks(ctx context.Context, mobileUserID, deviceID string)
 	return banks, nil
 }
 
-func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode, mobileUserID, deviceID string) (*BankDetails, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error) {
 	bankDetails, err := s.providusService.FetchBankDetails(ctx, accountNumber, bankCode)
 	if err != nil {
 		return nil, appErr.ErrFetchingBankDetails
@@ -73,14 +59,7 @@ func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode,
 	return bankDetails, nil
 }
 
-func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID, deviceID string, req *TransferRequest) (*TransferResponse, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req *TransferRequest) (*TransferResponse, error) {
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
 	}
@@ -260,15 +239,10 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit)
 }
 
-func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, deviceID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
+func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
 	if mobileUserID == "" {
 		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
-	}
-
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return nil, fmt.Errorf("%w: device ID is required", ErrInvalidTransferRequest)
 	}
 
 	if req == nil || len(req.RecipientInfo) == 0 {
@@ -277,14 +251,6 @@ func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, device
 
 	if s.providusService == nil {
 		return nil, errors.New("transfer service is not configured")
-	}
-
-	_, err := s.repo.GetDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("%w: device not found", ErrDeviceVerificationFailed)
-		}
-		return nil, fmt.Errorf("failed to verify device: %w", err)
 	}
 
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
@@ -333,13 +299,8 @@ func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID, device
 	}, nil
 }
 
-func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID, deviceID string, req *AddBeneficiaryRequest) (*Beneficiary, error) {
+func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID string, req *AddBeneficiaryRequest) (*Beneficiary, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
 
 	user, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
@@ -505,14 +466,7 @@ func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCred
 	return nil
 }
 
-func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID, deviceID string) ([]Beneficiary, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	deviceID = strings.TrimSpace(deviceID)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]Beneficiary, error) {
 	beneficiaries, err := s.repo.GetBeneficiaries(ctx, mobileUserID)
 	if err != nil {
 		return nil, appErr.ErrFetchingBeneficiaries

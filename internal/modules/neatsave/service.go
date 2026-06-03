@@ -21,7 +21,7 @@ func NewService(repository *Repository, pinVerifier *pinverifier.Verifier, devic
 	return &Service{repository: repository, pinVerifier: pinVerifier, deviceVerifier: deviceVerifier}
 }
 
-func (s *Service) CreateGoal(ctx context.Context, mobileUserID, deviceID string, req CreateGoalRequest) (*CreateGoalResponse, error) {
+func (s *Service) CreateGoal(ctx context.Context, mobileUserID string, req CreateGoalRequest) (*CreateGoalResponse, error) {
 	targetAmount := req.TargetAmount
 	autoSaveAmount := req.AutoSaveAmount
 	name := strings.TrimSpace(req.Name)
@@ -38,10 +38,6 @@ func (s *Service) CreateGoal(ctx context.Context, mobileUserID, deviceID string,
 	preferredTime := req.PreferredTime
 	if preferredTime == "" {
 		preferredTime = "08:00"
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	goalID := uuid.NewString()
@@ -91,12 +87,7 @@ func nextRunDate(frequency AutoSaveFrequency) time.Time {
 	}
 }
 
-func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID string) (*GetUserSavingsResponse, error) {
-	_, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Service) GetUserGoals(ctx context.Context, mobileUserID string) (*GetUserSavingsResponse, error) {
 	result, err := s.repository.GetUserGoals(ctx, mobileUserID)
 	if err != nil {
 		return nil, appErr.ErrFetchingUserGoals
@@ -120,7 +111,7 @@ func (s *Service) GetUserGoals(ctx context.Context, mobileUserID, deviceID strin
 	}, nil
 }
 
-func (s *Service) GetGoalSummary(ctx context.Context, mobileUserID, deviceID, goalID string) (*GetGoalSummaryResponse, error) {
+func (s *Service) GetGoalSummary(ctx context.Context, mobileUserID, goalID string) (*GetGoalSummaryResponse, error) {
 	result, err := s.repository.GetGoalSummary(ctx, mobileUserID, goalID)
 	if err != nil {
 		return nil, appErr.ErrFetchingGoalSummary

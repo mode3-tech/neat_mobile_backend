@@ -467,19 +467,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 	})
 }
 
-func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID, deviceID string) (*ToggleBiometricsResponse, error) {
-	if strings.TrimSpace(mobileUserID) == "" {
-		return nil, errors.New("mobile user id is required")
-	}
-
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, appErr.ErrMissingDeviceID
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) ToggleBiometrics(ctx context.Context, mobileUserID string) (*ToggleBiometricsResponse, error) {
 	enabled, err := s.repo.ToggleBiometrics(ctx, mobileUserID)
 	if err != nil {
 		return nil, errors.New("unable to toggle biometrics")

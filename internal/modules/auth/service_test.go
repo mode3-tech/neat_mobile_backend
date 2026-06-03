@@ -49,6 +49,10 @@ func (s *stubPremblyValidation) ValidateBVNWithPrembly(context.Context, string) 
 	return s.resp, nil
 }
 
+func (s *stubPremblyValidation) ValidateBVNWithFace(context.Context, string, string) (*bvn.PremblyBVNWithFaceResponse, error) {
+	return nil, nil
+}
+
 func TestService_ValidateBVN_UsesCurrentProviderFromSource(t *testing.T) {
 	wantErr := errors.New("tendar invoked")
 	tendarValidator := &stubTendarValidation{
