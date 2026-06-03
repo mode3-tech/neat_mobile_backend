@@ -10,6 +10,13 @@ type optimusTokenResponse struct {
 	RefreshToken any    `json:"refreshToken"`
 }
 
+type optimusVerifyOTPRequest struct {
+	PhoneNumber string `json:"phoneNumber"`
+	OTPToken    string `json:"otpToken"`
+	Email       string `json:"email"`
+	ReferenceID string `json:"referenceId"`
+}
+
 type OptimusPayload struct {
 	RequestId         string `json:"RequestId"`
 	Email             string `json:"Email"`

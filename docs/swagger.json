@@ -1364,6 +1364,128 @@
         }
       }
     },
+    "/auth/validate/bvn-with-face": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validate BVN with face",
+        "description": "Performs a liveness check by matching the provided face image against the BVN on record. Requires a prior BVN verification ID. Returns a `bvn_w_face_verification_id` that must be supplied at registration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BVNWithFaceValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Face matched the BVN successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BVNWithFaceValidationSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Face did not match the BVN or BVN verification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/validate/nin-with-face": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validate NIN with face",
+        "description": "Performs a liveness check by matching the provided face image against the NIN on record. Requires a prior NIN verification ID. Returns a `nin_w_face_verification_id` that must be supplied at registration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NINWithFaceValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Face matched the NIN successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NINWithFaceValidationSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Face did not match the NIN or NIN verification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/password/forgot": {
       "post": {
         "tags": [
@@ -7892,7 +8014,9 @@
           "transaction_pin",
           "confirm_transaction_pin",
           "bvn_verification_id",
+          "bvn_w_face_verification_id",
           "nin_verification_id",
+          "nin_w_face_verification_id",
           "phone_verification_id",
           "is_biometrics_enabled",
           "device"
@@ -7930,8 +8054,18 @@
             "type": "string",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           },
+          "bvn_w_face_verification_id": {
+            "type": "string",
+            "description": "Face check ID returned by `/auth/validate/bvn-with-face`.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
           "nin_verification_id": {
             "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "nin_w_face_verification_id": {
+            "type": "string",
+            "description": "Face check ID returned by `/auth/validate/nin-with-face`.",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           },
           "phone_verification_id": {
@@ -9584,6 +9718,118 @@
           },
           "data": {
             "$ref": "#/components/schemas/NINValidationResponse"
+          }
+        }
+      },
+      "BVNWithFaceValidationRequest": {
+        "type": "object",
+        "required": [
+          "verification_id",
+          "bvn",
+          "image"
+        ],
+        "properties": {
+          "verification_id": {
+            "type": "string",
+            "description": "Verification ID returned by `/auth/validate/bvn`.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "bvn": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 11,
+            "example": "12345678901"
+          },
+          "image": {
+            "type": "string",
+            "description": "Base64-encoded face image.",
+            "example": "/9j/4AAQSkZJRgAB..."
+          }
+        }
+      },
+      "BVNWithFaceValidationResponse": {
+        "type": "object",
+        "properties": {
+          "bvn_w_face_verification_id": {
+            "type": "string",
+            "description": "Face check ID to supply at registration as `bvn_w_face_verification_id`.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "BVNWithFaceValidationSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "BVN with face verification was successful."
+          },
+          "data": {
+            "$ref": "#/components/schemas/BVNWithFaceValidationResponse"
+          }
+        }
+      },
+      "NINWithFaceValidationRequest": {
+        "type": "object",
+        "required": [
+          "verification_id",
+          "nin",
+          "image"
+        ],
+        "properties": {
+          "verification_id": {
+            "type": "string",
+            "description": "Verification ID returned by `/auth/validate/nin`.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "nin": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 11,
+            "example": "12345678901"
+          },
+          "image": {
+            "type": "string",
+            "description": "Base64-encoded face image.",
+            "example": "/9j/4AAQSkZJRgAB..."
+          }
+        }
+      },
+      "NINWithFaceValidationResponse": {
+        "type": "object",
+        "properties": {
+          "nin_w_face_verification_id": {
+            "type": "string",
+            "description": "Face check ID to supply at registration as `nin_w_face_verification_id`.",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "NINWithFaceValidationSuccessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "NIN with face verification was successful."
+          },
+          "data": {
+            "$ref": "#/components/schemas/NINWithFaceValidationResponse"
           }
         }
       },

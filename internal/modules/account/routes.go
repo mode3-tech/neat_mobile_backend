@@ -2,8 +2,8 @@ package account
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc) {
-	account := rg.Group("/account", authGuard)
+func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceValidator gin.HandlerFunc) {
+	account := rg.Group("/account", authGuard, deviceValidator)
 	{
 		account.GET("/summary", handler.GetAccountSummary)
 		account.PATCH("/profile", handler.UpdateProfile)

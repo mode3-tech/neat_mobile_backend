@@ -32,6 +32,7 @@ type Provider string
 const (
 	ProviderTendar  Provider = "tendar"
 	ProviderPrembly Provider = "prembly"
+	ProviderOptimus Provider = "optimus"
 )
 
 type PendingSyncUser struct {

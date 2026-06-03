@@ -2,7 +2,7 @@ package auth
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.HandlerFunc, loginMiddlewares ...gin.HandlerFunc) {
+func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceValidator gin.HandlerFunc, loginMiddlewares ...gin.HandlerFunc) {
 
 	auth := rg.Group("/auth")
 
@@ -19,7 +19,9 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 		auth.POST("/device/otp/resend", handler.ResendNewDeviceOTP)
 		auth.POST("/refresh", handler.RefreshAccessToken)
 		auth.POST("/validate/bvn", handler.VerifyBVN)
+		auth.POST("/validate/bvn-with-face", handler.VerifyBVNWithFace)
 		auth.POST("/validate/nin", handler.VerifyNIN)
+		auth.POST("/validate/nin-with-face", handler.VerifyNINWithFace)
 		auth.POST("/password/forgot", handler.ForgotPassword)
 		auth.POST("/password/forgot/resend", handler.ResendForgotPasswordOTP)
 		auth.POST("/password/forgot/verify", handler.VerifyForgotPasswordOTP)
@@ -29,19 +31,19 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard gin.Handler
 	{
 		// Protected routes
 		auth.POST("/logout", authGuard, handler.Logout)
-		auth.POST("/pin/forgot", authGuard, handler.ForgotTransactionPin)
-		auth.POST("/pin/forgot/resend", authGuard, handler.ResendForgotTransactionPinOTP)
-		auth.POST("/pin/forgot/verify", authGuard, handler.VerifyForgotTransactionPinOTP)
-		auth.PATCH("/pin/reset", authGuard, handler.ResetTransactionPin)
-		auth.POST("/pin/change/request", authGuard, handler.RequestTransactionPinChange)
-		auth.POST("/pin/change/resend", authGuard, handler.ResendRequestTransactionPinChangeOTP)
-		auth.POST("/pin/change/verify", authGuard, handler.VerifyTransactionPinChangeOTP)
-		auth.PATCH("/pin/change", authGuard, handler.ChangeTransactionPin)
-		auth.POST("/password/change/request", authGuard, handler.RequestPasswordChange)
-		auth.POST("/password/change/resend", authGuard, handler.ResendPasswordChangeOTP)
-		auth.POST("/password/change/verify", authGuard, handler.VerifyPasswordChangeOTP)
-		auth.PATCH("/password/change", authGuard, handler.ChangePassword)
-		auth.PATCH("/biometrics/toggle", authGuard, handler.ToggleBiometrics)
-		auth.POST("/challenge/request", handler.ChallengeRequest)
+		auth.POST("/pin/forgot", authGuard, deviceValidator, handler.ForgotTransactionPin)
+		auth.POST("/pin/forgot/resend", authGuard, deviceValidator, handler.ResendForgotTransactionPinOTP)
+		auth.POST("/pin/forgot/verify", authGuard, deviceValidator, handler.VerifyForgotTransactionPinOTP)
+		auth.PATCH("/pin/reset", authGuard, deviceValidator, handler.ResetTransactionPin)
+		auth.POST("/pin/change/request", authGuard, deviceValidator, handler.RequestTransactionPinChange)
+		auth.POST("/pin/change/resend", authGuard, deviceValidator, handler.ResendRequestTransactionPinChangeOTP)
+		auth.POST("/pin/change/verify", authGuard, deviceValidator, handler.VerifyTransactionPinChangeOTP)
+		auth.PATCH("/pin/change", authGuard, deviceValidator, handler.ChangeTransactionPin)
+		auth.POST("/password/change/request", authGuard, deviceValidator, handler.RequestPasswordChange)
+		auth.POST("/password/change/resend", authGuard, deviceValidator, handler.ResendPasswordChangeOTP)
+		auth.POST("/password/change/verify", authGuard, deviceValidator, handler.VerifyPasswordChangeOTP)
+		auth.PATCH("/password/change", authGuard, deviceValidator, handler.ChangePassword)
+		auth.PATCH("/biometrics/toggle", authGuard, deviceValidator, handler.ToggleBiometrics)
+		auth.POST("/challenge/request", deviceValidator, handler.ChallengeRequest)
 	}
 }

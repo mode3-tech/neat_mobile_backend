@@ -47,6 +47,7 @@ type Config struct {
 	B2AssetsBucketName         string
 	PDFShiftAPIKey             string
 	AppName                    string
+	TransferLimitAmount        string
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -103,6 +104,7 @@ func Load() Config {
 		B2AssetsBucketName:         getEnv("B2_ASSETS_BUCKET", ""),
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 		AppName:                    getEnv("APPNAME", "NeatPay"),
+		TransferLimitAmount:        getEnv("TRF_LIMIT_AMOUNT", ""),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

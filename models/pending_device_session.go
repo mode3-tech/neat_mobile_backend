@@ -5,8 +5,8 @@ import (
 )
 
 type PendingDeviceSession struct {
-	ID               string     `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	UserID           string     `gorm:"type:uuid;not null;index" json:"user_id"`
+	ID               string     `gorm:"type:text;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID           string     `gorm:"type:text;not null;index" json:"user_id"`
 	DeviceID         string     `gorm:"type:varchar(128);not null;index" json:"device_id"`
 	SessionTokenHash string     `gorm:"type:char(64);not null;uniqueIndex" json:"-"`
 	OTPRef           string     `gorm:"type:varchar(128)" json:"otp_ref,omitempty"`

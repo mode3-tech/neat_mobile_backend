@@ -319,3 +319,18 @@ func (r *Repository) CheckSession(ctx context.Context, sid, mobileUserID, device
 	}
 	return true, nil
 }
+
+func (r *Repository) CreateFaceCheckRecord(ctx context.Context, record *models.FaceCheckRecord) error {
+	return r.db.WithContext(ctx).Create(record).Error
+}
+
+func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models.FaceCheckRecord, error) {
+	var record models.FaceCheckRecord
+	err := r.db.WithContext(ctx).
+		Where("id = ?", id).
+		First(&record).Error
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}

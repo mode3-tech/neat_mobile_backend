@@ -30,15 +30,6 @@ func (h *Handler) RegisterToken(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-	}
-
 	var req RegisterTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
@@ -75,15 +66,7 @@ func (h *Handler) DeleteToken(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+	deviceID := strings.TrimSpace(c.GetString(middleware.DeviceIDContextKey))
 
 	if err := h.service.DeleteToken(c.Request.Context(), mobileUserID, deviceID); err != nil {
 		mapped := response.MapError(err)
@@ -133,15 +116,6 @@ func (h *Handler) GetNotifications(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-	}
-
 	var query ListNotificationsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
@@ -151,7 +125,7 @@ func (h *Handler) GetNotifications(c *gin.Context) {
 		})
 		return
 	}
-	resp, err := h.service.GetNotifications(c.Request.Context(), mobileUserID, deviceID, query.Page, query.PageSize)
+	resp, err := h.service.GetNotifications(c.Request.Context(), mobileUserID, query.Page, query.PageSize)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -182,16 +156,7 @@ func (h *Handler) GetUnreadCount(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-	}
-
-	count, err := h.service.GetUnreadCount(c.Request.Context(), mobileUserID, deviceID)
+	count, err := h.service.GetUnreadCount(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -223,18 +188,7 @@ func (h *Handler) MarkNotificationRead(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	var params NotificationParams
-
 	if err := c.ShouldBindUri(&params); err != nil {
 		mapped := response.MapError(appErr.ErrMissingRequiredPathParameter)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -243,7 +197,7 @@ func (h *Handler) MarkNotificationRead(c *gin.Context) {
 		})
 	}
 
-	updated, err := h.service.MarkNotificationRead(c.Request.Context(), mobileUserID, deviceID, strings.TrimSpace(params.ID))
+	updated, err := h.service.MarkNotificationRead(c.Request.Context(), mobileUserID, strings.TrimSpace(params.ID))
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -275,16 +229,7 @@ func (h *Handler) MarkAllNotificationsRead(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-	}
-
-	err := h.service.MarkAllNotificationsRead(c.Request.Context(), mobileUserID, deviceID)
+	err := h.service.MarkAllNotificationsRead(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -311,17 +256,7 @@ func (h *Handler) TogglePushNotification(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	resp, err := h.service.TogglePushNotifications(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.TogglePushNotifications(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{

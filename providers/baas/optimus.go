@@ -336,3 +336,54 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 func (o *Optimus) LookupWalletByCustomerID(ctx context.Context, customerID string) (*auth.WalletResponse, bool, error) {
 	return nil, true, nil
 }
+
+func (o *Optimus) VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, email, referenceID string) error {
+	token, err := o.getToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	payload := optimusVerifyOTPRequest{
+		PhoneNumber: phone,
+		OTPToken:    otpToken,
+		Email:       email,
+		ReferenceID: referenceID,
+	}
+
+	encryptedString, err := pgpEncrypt(o.PublicKey, payload)
+	if err != nil {
+		return fmt.Errorf("optimus: encrypt otp payload: %w", err)
+	}
+
+	reqBody, err := json.Marshal(map[string]string{"encryptedString": encryptedString})
+	if err != nil {
+		return fmt.Errorf("optimus: marshal otp request: %w", err)
+	}
+
+	url := strings.TrimSpace(o.AuthBaseURL) + "/otp/verify"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return fmt.Errorf("optimus: build otp verify request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := o.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("optimus: otp verify request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		if plainErr, decErr := pgpDecrypt(o.PrivateKey, strings.TrimSpace(string(respBody))); decErr == nil {
+			log.Printf("optimus: otp verify failed status=%d error=%s", resp.StatusCode, plainErr)
+			return fmt.Errorf("optimus: otp verification failed: %s", plainErr)
+		}
+		log.Printf("optimus: otp verify failed status=%d body=%s", resp.StatusCode, respBody)
+		return fmt.Errorf("optimus: otp verification failed with status %d", resp.StatusCode)
+	}
+
+	return nil
+}

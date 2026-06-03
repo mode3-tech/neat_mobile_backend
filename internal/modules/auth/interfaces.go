@@ -35,6 +35,7 @@ type TendarValidation interface {
 
 type PremblyValidation interface {
 	ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.PremblyBVNValidationSuccessResponse, error)
+	ValidateBVNWithFace(ctx context.Context, number, image string) (*bvn.PremblyBVNWithFaceResponse, error)
 }
 
 type BVNProviderSource interface {
@@ -43,6 +44,7 @@ type BVNProviderSource interface {
 
 type NINValidation interface {
 	ValidateNIN(ctx context.Context, nin string) (*nin.PremblyNINValidationSuccessResponse, error)
+	ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*nin.PremblyNINWithFaceValidationSuccessResponse, error)
 }
 
 type CoreCustomerFinder interface {
@@ -55,4 +57,8 @@ type CBACustomerUpdater interface {
 
 type DeviceVerifier interface {
 	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
+}
+
+type OptimusKYCValidation interface {
+	VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, email, referenceID string) error
 }

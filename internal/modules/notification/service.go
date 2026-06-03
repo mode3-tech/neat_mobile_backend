@@ -82,10 +82,6 @@ func (s *Service) DeleteToken(ctx context.Context, mobileUserID, deviceID string
 		return errors.New("notification repository is not configured")
 	}
 
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
-	}
-
 	if err := s.repo.DeleteTokenByUserAndDevice(ctx, mobileUserID, deviceID); err != nil {
 		return appErr.ErrDeletingPushToken
 	}
@@ -336,13 +332,9 @@ func isDeviceNotRegistered(ticket ExpoPushTicket) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "DeviceNotRegistered")
 }
 
-func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID string, page, pageSize int) (*GetNotificationsResult, error) {
+func (s *Service) GetNotifications(ctx context.Context, mobileUserID string, page, pageSize int) (*GetNotificationsResult, error) {
 	if s.repo == nil {
 		return nil, errors.New("notification repository is not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	page, pageSize, offset := normalizeNotificationPagination(page, pageSize)
@@ -365,13 +357,9 @@ func (s *Service) GetNotifications(ctx context.Context, mobileUserID, deviceID s
 	}, nil
 }
 
-func (s *Service) GetUnreadCount(ctx context.Context, mobileUserID, deviceID string) (int, error) {
+func (s *Service) GetUnreadCount(ctx context.Context, mobileUserID string) (int, error) {
 	if s.repo == nil {
 		return 0, errors.New("notification repository is not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return 0, err
 	}
 
 	unreadCount, err := s.repo.CountUnreadByUserID(ctx, mobileUserID)
@@ -382,13 +370,9 @@ func (s *Service) GetUnreadCount(ctx context.Context, mobileUserID, deviceID str
 	return unreadCount, nil
 }
 
-func (s *Service) MarkNotificationRead(ctx context.Context, mobileUserID, deviceID, notificationID string) (bool, error) {
+func (s *Service) MarkNotificationRead(ctx context.Context, mobileUserID, notificationID string) (bool, error) {
 	if s.repo == nil {
 		return false, errors.New("notification repository is not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return false, err
 	}
 
 	read, err := s.repo.MarkNotificationRead(ctx, mobileUserID, notificationID)
@@ -399,23 +383,15 @@ func (s *Service) MarkNotificationRead(ctx context.Context, mobileUserID, device
 	return read, nil
 }
 
-func (s *Service) MarkAllNotificationsRead(ctx context.Context, mobileUserID, deviceID string) error {
+func (s *Service) MarkAllNotificationsRead(ctx context.Context, mobileUserID string) error {
 	if s.repo == nil {
 		return errors.New("notification repository is not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return err
 	}
 
 	return s.repo.MarkAllNotificationsRead(ctx, mobileUserID)
 }
 
-func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID, deviceID string) (*TogglePushNotificationsResponse, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID string) (*TogglePushNotificationsResponse, error) {
 	enabled, err := s.repo.TogglePushNotifications(ctx, mobileUserID)
 	if err != nil {
 		return nil, appErr.ErrTogglingPushNotification

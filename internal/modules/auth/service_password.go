@@ -16,21 +16,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, deviceID string) (*RequestChangePasswordResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID string) (*RequestChangePasswordResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
@@ -64,11 +56,7 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID, devic
 	}, nil
 }
 
-func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID, deviceID string, req VerifyPasswordChangeOTPRequest) (*VerifyPasswordChangeOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID string, req VerifyPasswordChangeOTPRequest) (*VerifyPasswordChangeOTPResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
@@ -83,10 +71,6 @@ func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	result, err := s.otpManager.Verify(ctx, authotp.VerifyOTPInput{
@@ -106,11 +90,7 @@ func (s *Service) VerifyPasswordChangeOTP(ctx context.Context, mobileUserID, dev
 	}, nil
 }
 
-func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID string, req ChangePasswordRequest) error {
-	if strings.TrimSpace(deviceID) == "" {
-		return errors.New("device id is required")
-	}
-
+func (s *Service) ChangePassword(ctx context.Context, mobileUserID string, req ChangePasswordRequest) error {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return errors.New("mobile user id is required")
 	}
@@ -124,10 +104,6 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 	}
 
 	if err := validators.ValidatePassword(req.ConfirmNewPassword); err != nil {
-		return err
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
 		return err
 	}
 
@@ -195,21 +171,13 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID, deviceID str
 	})
 }
 
-func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID, deviceID string) (*ResendPasswordChangeOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID string) (*ResendPasswordChangeOTPResponse, error) {
 	if strings.TrimSpace(mobileUserID) == "" {
 		return nil, errors.New("mobile user id is required")
 	}
 
 	if s.otpManager == nil {
 		return nil, errors.New("otp manager not configured")
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)

@@ -74,3 +74,59 @@ func (p *Prembly) ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.
 
 	return &result, nil
 }
+
+func (p *Prembly) ValidateBVNWithFace(ctx context.Context, number, image string) (*bvn.PremblyBVNWithFaceResponse, error) {
+	if p.apiKey == "" {
+		log.Printf("can't validate bvn with face because api key is missing")
+		return nil, fmt.Errorf("api key for bvn validation with face is missing")
+	}
+	url := "https://api.prembly.com/verification/bvn_w_face"
+
+	payload := map[string]string{
+		"number": number,
+		"image":  image,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("error occured while marshaling payload: %v", err)
+		return nil, fmt.Errorf("error occured while marshaling payload: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("an error occured: %v", err)
+		return nil, fmt.Errorf("an error occured: %v", err)
+	}
+
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("x-api-key", p.apiKey)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		log.Printf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			log.Printf("prembly bvn validation failed and response body could not be read: %v", readErr)
+		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
+			log.Printf("prembly bvn validation failed body=%s", body)
+		}
+		log.Printf("prembly_bvn non-2xx status=%d", resp.StatusCode)
+		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+	}
+
+	var result bvn.PremblyBVNWithFaceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("failed to decode response body: %v", err)
+		return nil, fmt.Errorf("failed to decode response body: %v", err)
+	}
+
+	return &result, nil
+}

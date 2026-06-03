@@ -356,15 +356,10 @@ func (s *Service) MatchCoreCustomerByBVN(ctx context.Context, bvn string) (*Core
 	return s.coreCustomerFinder.MatchCustomerByBVN(ctx, bvn)
 }
 
-func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string) ([]CoreCustomerLoanItem, error) {
+func (s *Service) GetAllLoans(ctx context.Context, mobileUserID string) ([]CoreCustomerLoanItem, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)
-
 	if mobileUserID == "" {
 		return nil, appErr.ErrUnauthorized
-	}
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
 	}
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
@@ -389,11 +384,7 @@ func (s *Service) GetAllLoans(ctx context.Context, mobileUserID, deviceID string
 	return allLoans, nil
 }
 
-func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID string) ([]ActiveLoanItem, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID string) ([]ActiveLoanItem, error) {
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -414,11 +405,7 @@ func (s *Service) GetActiveLoans(ctx context.Context, mobileUserID, deviceID str
 	return activeLoans, nil
 }
 
-func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID string) ([]LoanHistoryItem, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, appErr.ErrFetchingLoanHistory
-	}
-
+func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID string) ([]LoanHistoryItem, error) {
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -441,10 +428,7 @@ func (s *Service) GetLoanHistory(ctx context.Context, mobileUserID, deviceID str
 	return history, nil
 }
 
-func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, deviceID, loanID string) (*LoanDetailsResponse, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, err
-	}
+func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, loanID string) (*LoanDetailsResponse, error) {
 
 	details, err := s.repo.GetLoanDetailsByID(ctx, loanID)
 	if err != nil {
@@ -463,11 +447,7 @@ func (s *Service) GetLoanDetails(ctx context.Context, mobileUserID, deviceID, lo
 	}, nil
 }
 
-func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, deviceID, loanID string) ([]LoanHistoryItem, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		return nil, appErr.ErrFetchingLoanHistory
-	}
-
+func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, loanID string) ([]LoanHistoryItem, error) {
 	history, err := s.repo.GetLoanRepaymentHistoryByLoanID(ctx, loanID)
 	if err != nil {
 		return nil, appErr.ErrFetchingLoanHistory
@@ -476,11 +456,7 @@ func (s *Service) GetLoanHistoryByLoanID(ctx context.Context, mobileUserID, devi
 	return history, nil
 }
 
-func (s *Service) GetLoanRepayments(ctx context.Context, userID, deviceID, loanID string) (*LoanRepaymentResponse, error) {
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, userID, deviceID); err != nil {
-		return nil, err
-	}
-
+func (s *Service) GetLoanRepayments(ctx context.Context, userID, loanID string) (*LoanRepaymentResponse, error) {
 	repaymentSummary, err := s.repo.GetLoanRepaymentSummary(ctx, loanID)
 	if err != nil {
 		return nil, err
@@ -521,14 +497,7 @@ func (s *Service) GetCoreLoanDetail(ctx context.Context, loanID string) (*CoreLo
 	return s.coreLoanFinder.GetLoanDetail(ctx, loanID)
 }
 
-func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID, deviceID string, req ManualRepaymentRequest) error {
-	log.Printf("manual repayment user=%s loan_id=%s amount=%d", mobileUserID, req.LoanID, req.Amount)
-
-	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
-		log.Printf("manual repayment device verification failed user=%s err=%v", mobileUserID, err)
-		return err
-	}
-
+func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, req ManualRepaymentRequest) error {
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		log.Printf("manual repayment pin verification failed user=%s err=%v", mobileUserID, err)
 		return err

@@ -47,7 +47,6 @@ func (h *Handler) GetLoanProducts(c *gin.Context) {
 }
 
 func (h *Handler) ApplyForLoan(c *gin.Context) {
-	var req LoanRequest
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 
 	if mobileUserID == "" {
@@ -59,6 +58,7 @@ func (h *Handler) ApplyForLoan(c *gin.Context) {
 		return
 	}
 
+	var req LoanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
@@ -96,17 +96,7 @@ func (h *Handler) GetAllLoans(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	resp, err := h.service.GetAllLoans(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.GetAllLoans(c.Request.Context(), mobileUserID)
 
 	if err != nil {
 		mapped := response.MapError(err)
@@ -147,17 +137,7 @@ func (h *Handler) GetActiveLoans(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	resp, err := h.service.GetActiveLoans(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.GetActiveLoans(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -185,17 +165,7 @@ func (h *Handler) GetLoanHistory(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	resp, err := h.service.GetLoanHistory(c.Request.Context(), mobileUserID, deviceID)
+	resp, err := h.service.GetLoanHistory(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -223,16 +193,6 @@ func (h *Handler) GetLoanDetails(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	loanID := strings.TrimSpace(c.Param("loan_id"))
 	if loanID == "" {
 		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
@@ -243,7 +203,7 @@ func (h *Handler) GetLoanDetails(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanDetails(c.Request.Context(), mobileUserID, deviceID, loanID)
+	resp, err := h.service.GetLoanDetails(c.Request.Context(), mobileUserID, loanID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -271,16 +231,6 @@ func (h *Handler) GetLoanHistoryByLoanID(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	loanID := strings.TrimSpace(c.Param("loan_id"))
 	if loanID == "" {
 		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
@@ -291,7 +241,7 @@ func (h *Handler) GetLoanHistoryByLoanID(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanHistoryByLoanID(c.Request.Context(), mobileUserID, deviceID, loanID)
+	resp, err := h.service.GetLoanHistoryByLoanID(c.Request.Context(), mobileUserID, loanID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -319,16 +269,6 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	loanID := strings.TrimSpace(c.Query("loan_id"))
 
 	if loanID == "" {
@@ -340,7 +280,7 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetLoanRepayments(c.Request.Context(), mobileUserID, deviceID, loanID)
+	resp, err := h.service.GetLoanRepayments(c.Request.Context(), mobileUserID, loanID)
 
 	if err != nil {
 		mapped := response.MapError(err)
@@ -369,16 +309,6 @@ func (h *Handler) HandleManualRepayment(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		mapped := response.MapError(appErr.ErrMissingDeviceID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	var req ManualRepaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
@@ -389,7 +319,7 @@ func (h *Handler) HandleManualRepayment(c *gin.Context) {
 		return
 	}
 
-	err := h.service.MakeManualRepayment(c.Request.Context(), mobileUserID, deviceID, req)
+	err := h.service.MakeManualRepayment(c.Request.Context(), mobileUserID, req)
 	if err != nil {
 		mapped := response.MapError(err)
 		if strings.Contains(mapped.Error.Message, appErr.ErrIncorrectTransactionPin.Error()) {
