@@ -2993,6 +2993,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /account/limits:
+    get:
+      tags:
+        - Account
+      summary: Get account limits
+      description: Returns the CBN activation cap status for the authenticated user. New users are capped at ₦20,000 (2,000,000 kobo) inflow and outflow for the first 24 hours after registration. Once the window expires, `activation_cap.active` is false and all limit fields are zero.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      responses:
+        "200":
+          description: Account limits fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountLimitResponse"
+        "401":
+          description: Unauthorized or missing device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch account limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /account/profile:
     patch:
       tags:
@@ -4922,6 +4956,79 @@ components:
           example: "Account summary fetched successfully"
         data:
           $ref: "#/components/schemas/AccountSummary"
+    AccountLimitResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Account limits fetched successfully
+        data:
+          type: object
+          properties:
+            activation_cap:
+              $ref: "#/components/schemas/ActivationCap"
+            out_flow:
+              $ref: "#/components/schemas/Outflow"
+            in_flow:
+              $ref: "#/components/schemas/Inflow"
+    ActivationCap:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: True while the 24-hour CBN new-user cap window is open.
+          example: true
+        expires_at:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp when the cap window closes.
+          example: "2026-06-05T10:33:00Z"
+        cap_amount:
+          type: integer
+          format: int64
+          description: Cap ceiling in kobo (₦20,000 = 2,000,000 kobo).
+          example: 2000000
+        currency:
+          type: string
+          example: NGN
+    Outflow:
+      type: object
+      properties:
+        limit:
+          type: integer
+          format: int64
+          description: Maximum outflow allowed in kobo during the cap window.
+          example: 2000000
+        spent:
+          type: integer
+          format: int64
+          description: Total successful debits in kobo during the cap window.
+          example: 500000
+        remaining:
+          type: integer
+          format: int64
+          description: Remaining outflow allowance in kobo. Validate transfers against this value.
+          example: 1500000
+    Inflow:
+      type: object
+      properties:
+        capped:
+          type: boolean
+          description: True while the activation cap window is open.
+          example: true
+        limit:
+          type: integer
+          format: int64
+          description: Maximum inflow allowed in kobo during the cap window.
+          example: 2000000
+        remaining:
+          type: integer
+          format: int64
+          description: Remaining inflow allowance in kobo.
+          example: 2000000
     UpdateProfileRequest:
       type: object
       properties:

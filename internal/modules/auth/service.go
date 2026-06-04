@@ -57,6 +57,7 @@ type Service struct {
 	cbaWalletUpdateSem   chan struct{}
 	productID            string
 	optimusKYC           OptimusKYCValidation
+	activationCapKobo    int64
 }
 
 func NewService(
@@ -79,6 +80,7 @@ func NewService(
 	deviceVerifier DeviceVerifier,
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
 	productID string,
+	activationCapKobo int64,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -101,6 +103,7 @@ func NewService(
 		cbaSyncSem:           cbaSyncSem,
 		cbaWalletUpdateSem:   cbaWalletUpdateSem,
 		productID:            productID,
+		activationCapKobo:    activationCapKobo,
 	}
 }
 
