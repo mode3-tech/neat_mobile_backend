@@ -597,4 +597,55 @@ func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File,
 	return url, nil
 }
 
-// func (s *Service)
+func (s *Service) AccountLimits(ctx context.Context, mobileUserID string) (*AccountLimitResponse, error) {
+	user, err := s.Repo.GetUser(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrUnauthorized
+	}
+
+	now := time.Now().UTC()
+	capActive := user.ActivationCapExpiresAt != nil && now.Before(*user.ActivationCapExpiresAt)
+
+	if !capActive {
+		return &AccountLimitResponse{
+			ActivationCap: ActivationCap{Active: false},
+			Outflow:       Outflow{},
+			Inflow:        Inflow{Capped: false},
+		}, nil
+	}
+
+	capAmount := user.ActivationCapAmount
+	capStart := user.CreatedAt
+	capEnd := *user.ActivationCapExpiresAt
+
+	outflowSpent, _ := s.Repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeDebit, capStart, capEnd)
+	inflowSpent, _ := s.Repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeCredit, capStart, capEnd)
+
+	outflowRemaining := capAmount - outflowSpent
+	if outflowRemaining < 0 {
+		outflowRemaining = 0
+	}
+	inflowRemaining := capAmount - inflowSpent
+	if inflowRemaining < 0 {
+		inflowRemaining = 0
+	}
+
+	return &AccountLimitResponse{
+		ActivationCap: ActivationCap{
+			Active:    true,
+			ExpiresAt: capEnd,
+			CapAmount: capAmount,
+			Currency:  "NGN",
+		},
+		Outflow: Outflow{
+			Limit:     capAmount,
+			Spent:     outflowSpent,
+			Remaining: outflowRemaining,
+		},
+		Inflow: Inflow{
+			Capped:    true,
+			Limit:     capAmount,
+			Remaining: inflowRemaining,
+		},
+	}, nil
+}

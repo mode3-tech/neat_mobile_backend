@@ -140,7 +140,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	deviceValidator := middleware.DeviceValidator(deviceService)

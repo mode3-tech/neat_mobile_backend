@@ -236,6 +236,36 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetAccountLimits(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
+			Status: "error",
+			Error: &response.APIError{
+				Code:    string(ErrCodeInvalidToken),
+				Message: "Unauthorized",
+			},
+		})
+		return
+	}
+
+	limits, err := h.service.AccountLimits(c.Request.Context(), mobileUserID)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[AccountLimitResponse]{
+		Status:  "success",
+		Message: "Account limits fetched successfully",
+		Data:    limits,
+	})
+}
+
 func (h *Handler) GetLatestAccountStatement(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
