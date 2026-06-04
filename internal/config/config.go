@@ -48,6 +48,7 @@ type Config struct {
 	PDFShiftAPIKey             string
 	AppName                    string
 	TransferLimitAmount        string
+	ActivationCapKobo          int64
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -105,6 +106,7 @@ func Load() Config {
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 		AppName:                    getEnv("APPNAME", "NeatPay"),
 		TransferLimitAmount:        getEnv("TRF_LIMIT_AMOUNT", ""),
+		ActivationCapKobo:          int64(getEnvInt("ACTIVATION_CAP_KOBO", 2_000_000)),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

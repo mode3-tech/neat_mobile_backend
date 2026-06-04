@@ -227,6 +227,15 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrTransactionPinMismatch
 	}
 
+	passwordHash, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+	pinHash, err := HashPassword(req.TransactionPin)
+	if err != nil {
+		return nil, err
+	}
+
 	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
 	if err != nil {
 		return nil, errors.New(err.Error())
@@ -273,6 +282,8 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	return &registrationJobSnapshot{
 		Phone:               normalizedPhone,
 		Email:               trimmedEmail,
+		PasswordHash:        passwordHash,
+		PinHash:             pinHash,
 		RequestID:           requestID,
 		FirstName:           firstName,
 		MiddleName:          strings.TrimSpace(middleName),
