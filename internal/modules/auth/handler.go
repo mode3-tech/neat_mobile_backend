@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
 	"net/http"
@@ -1228,11 +1230,20 @@ func (h *Handler) ChallengeRequest(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.GetString(middleware.DeviceIDContextKey))
+	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	if deviceID == "" {
+		mapped := response.MapError(appErr.ErrMissingDeviceID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
 
 	resp, err := h.service.CreateChallenge(c.Request.Context(), strings.TrimSpace(req.RefreshToken), deviceID)
 	if err != nil {
 		mapped := response.MapError(err)
+		log.Printf("from the handler: %s", err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
 			Error:  &mapped.Error,

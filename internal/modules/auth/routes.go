@@ -44,6 +44,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 		auth.POST("/password/change/verify", authGuard, deviceValidator, handler.VerifyPasswordChangeOTP)
 		auth.PATCH("/password/change", authGuard, deviceValidator, handler.ChangePassword)
 		auth.PATCH("/biometrics/toggle", authGuard, deviceValidator, handler.ToggleBiometrics)
-		auth.POST("/challenge/request", deviceValidator, handler.ChallengeRequest)
+		auth.POST("/challenge/request", handler.ChallengeRequest)
 	}
 }
