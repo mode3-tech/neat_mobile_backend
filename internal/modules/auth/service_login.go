@@ -79,24 +79,29 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID string) (*ChallengeRequestResponse, error) {
 	sub, _, jti, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
 	if err != nil {
+		log.Printf("%s", err)
 		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	tokenRow, err := s.repo.GetRefreshTokenWithJTI(ctx, jti)
 	if err != nil {
+		log.Printf("%s", err)
 		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	receivedHash := sha256.Sum256([]byte(refreshToken))
 	if tokenRow.TokenHash != hex.EncodeToString(receivedHash[:]) {
+		log.Printf("%s", err)
 		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	if tokenRow.RevokedAt != nil {
+		log.Printf("%s", err)
 		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	if time.Now().UTC().After(tokenRow.ExpiresAt) {
+		log.Printf("%s", err)
 		return nil, appErr.ErrDeviceNotAllowed
 	}
 
