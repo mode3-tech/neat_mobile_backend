@@ -840,6 +840,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrInvalidISPAmount:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_VAS_AMOUNT",
+				Message: appErr.ErrInvalidISPAmount.Error(),
+			},
+		}
+
+	case appErr.ErrGettingAirtime:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FAILED_TO_GET_AIRTIME",
+				Message: appErr.ErrGettingAirtime.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

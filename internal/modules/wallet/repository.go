@@ -34,9 +34,9 @@ func (r *Repository) CreateWallet(ctx context.Context, wallet *CustomerWallet) e
 	return nil
 }
 
-func (r *Repository) GetWallet(ctx context.Context, mobileUserID, walletID string) (*CustomerWallet, error) {
+func (r *Repository) GetWallet(ctx context.Context, mobileUserID string) (*CustomerWallet, error) {
 	var wallet CustomerWallet
-	err := r.db.WithContext(ctx).Where("mobile_user_id = ? AND internal_wallet_id = ?", mobileUserID, walletID).First(&wallet).Error
+	err := r.db.WithContext(ctx).Where("mobile_user_id = ?", mobileUserID).First(&wallet).Error
 	if err != nil {
 		return nil, err
 	}
