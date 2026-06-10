@@ -15,9 +15,9 @@ const (
 type TransactionStatus string
 
 const (
-	TransactionStatusPending    TransactionStatus = "pending"
-	TransactionStatusSuccessful TransactionStatus = "successful"
-	TransactionStatusFailed     TransactionStatus = "failed"
+	TransactionStatusPending         TransactionStatus = "pending"
+	TransactionStatusSuccessful      TransactionStatus = "successful"
+	TransactionStatusFailed          TransactionStatus = "failed"
 	TransactionStatusReversed        TransactionStatus = "reversed"
 	TransactionStatusReversalPending TransactionStatus = "reversal_pending"
 )
@@ -126,3 +126,5 @@ type CustomerWallet struct {
 	CreatedAt        time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
 	UpdatedAt        *time.Time    `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
 }
+
+func (CustomerWallet) TableName() string { return "wallet_customer_wallets" }

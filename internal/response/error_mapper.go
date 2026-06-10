@@ -912,6 +912,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrFetchingAllCategories:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ALL_CATEGORIES_ERROR",
+				Message: appErr.ErrFetchingAllCategories.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidPhoneNumber:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_PHONE_NUMBER",
+				Message: appErr.ErrInvalidPhoneNumber.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,

@@ -105,4 +105,6 @@ var (
 	ErrValidatingCable                 = errors.New("Failed to validate cable account")
 	ErrPayingCableBill                 = errors.New("Failed to pay cable bill")
 	ErrVASAmbiguous                    = errors.New("VAS request outcome unknown — possible timeout")
+	ErrFetchingAllCategories           = errors.New("Failed to fetch all categories")
+	ErrInvalidPhoneNumber              = errors.New("Invalid nigerian phone number")
 )

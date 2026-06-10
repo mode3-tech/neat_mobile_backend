@@ -3,9 +3,11 @@ package vas
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/providers/vas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"strings"
 	"time"
@@ -23,6 +25,125 @@ type Service struct {
 
 func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS) *Service {
 	return &Service{Repo: repo, XpressPayments: xpressPayments, WalletService: walletService, Txr: txr, Baas: baas}
+}
+
+func (s *Service) FetchAllCategories(ctx context.Context) ([]vas.Category, error) {
+	xPayCats, err := s.XpressPayments.FetchAllCategories(ctx)
+	if err != nil {
+		return nil, appErr.ErrFetchingAllCategories
+	}
+
+	cats := make([]vas.Category, 0, len(xPayCats.Data.CategoryDTOList))
+
+	for _, cat := range xPayCats.Data.CategoryDTOList {
+		cats = append(cats, cat)
+	}
+
+	return cats, nil
+}
+
+const (
+	defaultBillingsPageSize = 10
+	maxBillingsPageSize     = 50
+)
+
+func normalizeBillingsPagination(page, size int) (requestedPage, providerPage, pageSize int) {
+	if size <= 0 {
+		size = defaultBillingsPageSize
+	} else if size > maxBillingsPageSize {
+		size = maxBillingsPageSize
+	}
+
+	if page <= 0 {
+		page = 1
+	}
+
+	return page, page - 1, size
+}
+
+func calculateTotalPages(totalCount, size int) int {
+	if totalCount <= 0 {
+		return 0
+	}
+	return (totalCount + size - 1) / size
+}
+
+func (s *Service) FetchBillingsByCategoryID(ctx context.Context, payload BillingsByCategoryIDPayload, size, page int) (*BillingsByCategoryIDResponse, int, int, int, int, bool, bool, error) {
+	requestedPage, providerPage, pageSize := normalizeBillingsPagination(page, size)
+
+	result, err := s.XpressPayments.FetchBillersByCategoryID(ctx, payload.CategoryID, providerPage, pageSize)
+	if err != nil {
+		log.Printf("vas service: failed to fetch billers by category - %s\n", err)
+		return nil, 0, 0, 0, 0, false, false, err
+	}
+
+	totalCount := result.Data.TotalCount
+	totalPages := calculateTotalPages(totalCount, pageSize)
+
+	if totalPages > 0 && requestedPage > totalPages {
+		return nil, 0, 0, 0, 0, false, false, fmt.Errorf("page %d out of range, total pages: %d", requestedPage, totalPages)
+	}
+
+	hasPrev := requestedPage > 1
+	hasNext := requestedPage < totalPages
+
+	billers := make([]Biller, 0, len(result.Data.BillerDTOList))
+	for _, b := range result.Data.BillerDTOList {
+		categories := make([]BillerCategory, 0, len(b.CategoryDTOs))
+		for _, c := range b.CategoryDTOs {
+			categories = append(categories, BillerCategory{ID: c.ID, Name: c.Name})
+		}
+		billers = append(billers, Biller{
+			ID:           b.ID,
+			Name:         b.Name,
+			BillerCode:   b.BillerCode,
+			Description:  b.Description,
+			CategoryDTOs: categories,
+			Image:        b.Image,
+		})
+	}
+
+	response := BillingsByCategoryIDResponse(billers)
+	return &response, requestedPage, pageSize, totalCount, totalPages, hasNext, hasPrev, nil
+}
+
+func (s *Service) FetchProductsByCategoryIDAndBillerID(ctx context.Context, payload FetchProductsByCategoryIDAndBillerIDPayload, size, page int) (*ProductsResponse, int, int, int, int, bool, bool, error) {
+	requestPage, providerPage, pageSize := normalizeBillingsPagination(page, size)
+
+	result, err := s.XpressPayments.FetchProductsByCategoryIDAndBillerID(ctx, payload.CategoryID, payload.BillerID, providerPage, pageSize)
+	if err != nil {
+		log.Printf("vas service: failed to fetch products by category and biller - %s\n", err)
+		return nil, 0, 0, 0, 0, false, false, err
+	}
+
+	totalCount := result.Data.TotalCount
+	totalPages := calculateTotalPages(totalCount, pageSize)
+
+	if totalPages > 0 && requestPage > totalPages {
+		return nil, 0, 0, 0, 0, false, false, fmt.Errorf("page %d out of range, total pages: %d", requestPage, totalPages)
+	}
+
+	hasPrev := requestPage > 1
+	hasNext := requestPage < totalPages
+
+	products := make([]Product, 0, len(result.Data.CategoryDTOList))
+	for _, p := range result.Data.CategoryDTOList {
+		products = append(products, Product{
+			Name:        p.Name,
+			UniqueCode:  p.UniqueCode,
+			LookUp:      p.LookUp,
+			FixedAmount: p.FixedAmount,
+			Amount:      p.Amount,
+			MinAmount:   p.MinAmount,
+			MaxAmount:   p.MaxAmount,
+			ImageURL:    p.ImageURL,
+			BillerName:  p.BillerName,
+			CategoryDTO: p.CategoryDTO,
+		})
+	}
+
+	response := ProductsResponse(products)
+	return &response, requestPage, pageSize, totalCount, totalPages, hasNext, hasPrev, nil
 }
 
 func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
@@ -55,6 +176,8 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		"isp":  ExtractBillingCompanyName(uniqueCode),
 		"type": "airtime",
 	}
+
+	log.Printf("extracted company name: %s\n", ExtractBillingCompanyName(uniqueCode))
 
 	txID, ref := uuid.NewString(), uuid.NewString()
 
