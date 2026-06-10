@@ -57,6 +57,9 @@ type Config struct {
 
 	WalletProvider string
 
+	XpressPublicKey  string
+	XpressPrivateKey string
+
 	RunMigrations bool
 }
 
@@ -114,6 +117,9 @@ func Load() Config {
 		LoginRateLimitBlockMinutes:     getEnvInt("LOGIN_RATE_LIMIT_BLOCK_MINUTES", 15),
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
+
+		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
+		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}

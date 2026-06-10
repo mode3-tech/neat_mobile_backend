@@ -497,7 +497,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	return &result, nil
 }
 
-func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.BulkTransferRecipientInfo) (*wallet.ProvidusBatchTransferResponse, error) {
+func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []wallet.BulkTransferRecipientInfo) (*wallet.ProvidusBatchTransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -513,8 +513,8 @@ func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.BulkTr
 		Metadata      map[string]any `json:"metadata,omitempty"`
 	}
 
-	payload := make([]transferItem, 0, len(req))
-	for _, trfReq := range req {
+	payload := make([]transferItem, 0, len(info))
+	for _, trfReq := range info {
 		payload = append(payload, transferItem{
 			Amount:        float64(trfReq.Amount) / 100,
 			SortCode:      trfReq.SortCode,
@@ -530,16 +530,16 @@ func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.BulkTr
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
 
-	resp, err := p.Client.Do(httpReq)
+	resp, err := p.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("providus bulk transfer request failed: %w", err)
 	}
@@ -556,6 +556,102 @@ func (p *Providus) InitiateBulkTransfer(ctx context.Context, req []wallet.BulkTr
 	var result wallet.ProvidusBatchTransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bulk transfer response: %w", err)
+	}
+
+	return &result, nil
+}
+
+func (p *Providus) DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) (*ProvidusWalletDebitResponse, error) {
+	url := p.BaseURL + "/wallet/debit"
+
+	payload := ProvidusWalletActionPayload{
+		Amount:     amount,
+		Reference:  referenceID,
+		CustomerID: customerID,
+		Metadata:   metadata,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("providus: failed to marshal payload for customer debit - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
+		return nil, err
+	}
+
+	var result ProvidusWalletDebitResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("providus: failed to decode response body into a json - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (p *Providus) CreditCustomer(ctx context.Context, amount int64, referenceID, customerID string, metadata interface{}) (*ProvidusWalletCreditResponse, error) {
+	url := p.BaseURL + "/wallet/credit"
+
+	payload := ProvidusWalletActionPayload{
+		Amount:     amount,
+		Reference:  referenceID,
+		CustomerID: customerID,
+		Metadata:   metadata,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("providus: failed to marshal payload for customer debit - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
+		return nil, err
+	}
+
+	var result ProvidusWalletCreditResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("providus: failed to decode response body into a json - %s\n", err)
+		return nil, err
 	}
 
 	return &result, nil

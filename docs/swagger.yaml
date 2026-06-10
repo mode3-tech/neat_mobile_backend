@@ -31,6 +31,8 @@ tags:
     description: Development-only signer helper endpoints for Postman/device simulation
   - name: NeatSave
     description: Savings goal and auto-save rule endpoints
+  - name: VAS
+    description: Value-added services: airtime, data, electricity, and cable TV
 paths:
   /auth/register:
     post:
@@ -4436,6 +4438,332 @@ paths:
                     error:
                       code: FETCHING_GOAL_SUMMARY_ERROR
                       message: Failed to fetch goal summary
+  /vas/airtime:
+    post:
+      tags:
+        - VAS
+      summary: Buy airtime
+      description: Debits the customer's wallet and purchases airtime for the given phone number.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token. Example `Bearer <access_token>`.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AirtimePurchaseRequest"
+      responses:
+        "200":
+          description: Airtime purchased successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ISPSuccessResponse"
+              examples:
+                success:
+                  value:
+                    status: success
+                    message: Airtime purchased successfully
+                    data:
+                      requestId: req-123
+                      referenceId: ref-456
+                      responseCode: "00"
+                      responseMessage: Success
+                      data:
+                        channel: api
+                        amount: 100
+                        phoneNumber: "08012345678"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Amount below NGN 50 minimum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /vas/data:
+    post:
+      tags:
+        - VAS
+      summary: Buy mobile data
+      description: Debits the customer's wallet and purchases a mobile data bundle for the given phone number.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataPurchaseRequest"
+      responses:
+        "200":
+          description: Data purchased successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ISPSuccessResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Amount below NGN 50 minimum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /vas/electricity/validate:
+    post:
+      tags:
+        - VAS
+      summary: Validate electricity meter/account
+      description: Validates a meter number or prepaid account with the electricity provider. No wallet debit.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElectricityValidationRequest"
+      responses:
+        "200":
+          description: Account validated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElectricityValidationSuccessResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /vas/electricity/pay:
+    post:
+      tags:
+        - VAS
+      summary: Pay electricity bill
+      description: Debits the customer's wallet and pays an electricity bill. The prepaid token is returned in the response and stored in the transaction metadata.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayElectricityRequest"
+      responses:
+        "200":
+          description: Electricity bill paid successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayElectricitySuccessResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /vas/cable/validate:
+    post:
+      tags:
+        - VAS
+      summary: Validate cable/TV account
+      description: Validates a smartcard or IUC number with the cable provider. No wallet debit.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CableValidationRequest"
+      responses:
+        "200":
+          description: Cable account validated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CableValidationSuccessResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /vas/cable/pay:
+    post:
+      tags:
+        - VAS
+      summary: Pay cable/TV subscription
+      description: Debits the customer's wallet and renews a cable TV subscription.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayCableRequest"
+      responses:
+        "200":
+          description: Cable bill paid successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayCableSuccessResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -7580,3 +7908,375 @@ components:
           example: Goal summary fetched successfully
         data:
           $ref: "#/components/schemas/GetGoalSummaryResponse"
+    AirtimePurchaseRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - phone_number
+        - amount
+      properties:
+        request_id:
+          type: string
+          example: req-001
+        unique_code:
+          type: string
+          example: MTN_AIRTIME
+          description: Provider unique code e.g. MTN_AIRTIME, AIRTEL_AIRTIME
+        phone_number:
+          type: string
+          example: "08012345678"
+        amount:
+          type: integer
+          example: 200
+          description: Amount in Naira (minimum NGN 50)
+    DataPurchaseRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - phone_number
+        - amount
+      properties:
+        request_id:
+          type: string
+          example: req-002
+        unique_code:
+          type: string
+          example: MTN_DATA
+          description: Provider unique code e.g. MTN_DATA, AIRTEL_DATA
+        phone_number:
+          type: string
+          example: "08012345678"
+        amount:
+          type: integer
+          example: 500
+          description: Amount in Naira (minimum NGN 50)
+    ElectricityValidationRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - account_number
+        - account_type
+      properties:
+        request_id:
+          type: string
+          example: req-003
+        unique_code:
+          type: string
+          example: EKEDC_PREPAID
+          description: Provider unique code e.g. EKEDC_PREPAID, EKEDC_POSTPAID
+        account_number:
+          type: string
+          example: "1234567890"
+          description: Meter number
+        account_type:
+          type: string
+          enum:
+            - prepaid
+            - postpaid
+          example: prepaid
+    PayElectricityRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - account_number
+        - account_type
+        - amount
+        - name
+        - address
+        - phone_number
+      properties:
+        request_id:
+          type: string
+          example: req-004
+        unique_code:
+          type: string
+          example: EKEDC_PREPAID
+        account_number:
+          type: string
+          example: "1234567890"
+          description: Meter number
+        account_type:
+          type: string
+          enum:
+            - prepaid
+            - postpaid
+          example: prepaid
+        amount:
+          type: integer
+          example: 5000
+          description: Amount in Naira
+        name:
+          type: string
+          example: John Doe
+          description: Account holder name from validation
+        address:
+          type: string
+          example: "12 Marina Street, Lagos"
+          description: Account address from validation
+        phone_number:
+          type: string
+          example: "08012345678"
+    CableValidationRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - account_number
+        - no_of_month
+      properties:
+        request_id:
+          type: string
+          example: req-005
+        unique_code:
+          type: string
+          example: DSTV
+          description: Provider unique code e.g. DSTV, GOTV, STARTIMES
+        account_number:
+          type: string
+          example: "7012345678"
+          description: Smartcard or IUC number
+        no_of_month:
+          type: integer
+          example: 1
+          description: Number of months to validate for
+    PayCableRequest:
+      type: object
+      required:
+        - request_id
+        - unique_code
+        - account_number
+        - account_type
+        - name
+        - phone_number
+        - no_of_month
+        - amount
+      properties:
+        request_id:
+          type: string
+          example: req-006
+        unique_code:
+          type: string
+          example: DSTV
+        account_number:
+          type: string
+          example: "7012345678"
+          description: Smartcard or IUC number
+        account_type:
+          type: string
+          example: DSTV
+          description: Account type from validation response
+        name:
+          type: string
+          example: John Doe
+          description: Account holder name from validation
+        phone_number:
+          type: string
+          example: "08012345678"
+        no_of_month:
+          type: integer
+          example: 1
+        amount:
+          type: integer
+          example: 2500
+          description: Amount in Naira from validation response
+    ISPSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Airtime purchased successfully
+        data:
+          type: object
+          properties:
+            requestId:
+              type: string
+            referenceId:
+              type: string
+            responseCode:
+              type: string
+              example: "00"
+            responseMessage:
+              type: string
+              example: Success
+            data:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  example: api
+                amount:
+                  type: integer
+                  example: 200
+                phoneNumber:
+                  type: string
+                  example: "08012345678"
+    ElectricityValidationSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Electricity account validated successfully
+        data:
+          type: object
+          properties:
+            requestId:
+              type: string
+            referenceId:
+              type: string
+            responseCode:
+              type: string
+              example: "00"
+            responseMessage:
+              type: string
+            data:
+              type: object
+              properties:
+                accountNumber:
+                  type: string
+                  example: "1234567890"
+                accountType:
+                  type: string
+                  example: prepaid
+                name:
+                  type: string
+                  example: John Doe
+                address:
+                  type: string
+                  example: "12 Marina Street, Lagos"
+                minimumVending:
+                  type: string
+                  example: "500"
+    PayElectricitySuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Electricity bill paid successfully
+        data:
+          type: object
+          properties:
+            requestId:
+              type: string
+            referenceId:
+              type: string
+            responseCode:
+              type: string
+              example: "00"
+            responseMessage:
+              type: string
+            data:
+              type: object
+              properties:
+                amount:
+                  type: string
+                  example: "5000"
+                unit:
+                  type: string
+                  example: "45.20 kWh"
+                address:
+                  type: string
+                arrears:
+                  type: string
+                  example: "0.00"
+                tariffName:
+                  type: string
+                rate:
+                  type: string
+                vat:
+                  type: string
+                accountNumber:
+                  type: string
+                token:
+                  type: string
+                  example: "1234-5678-9012-3456-7890"
+                  description: Prepaid token to load on the meter
+    CableValidationSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Cable account validated successfully
+        data:
+          type: object
+          properties:
+            requestId:
+              type: string
+            referenceId:
+              type: string
+            responseCode:
+              type: string
+              example: "00"
+            responseMessage:
+              type: string
+            data:
+              type: object
+              properties:
+                accountNumber:
+                  type: string
+                  example: "7012345678"
+                accountType:
+                  type: string
+                  example: DSTV
+                name:
+                  type: string
+                  example: John Doe
+                amount:
+                  type: string
+                  example: "2500"
+                balance:
+                  type: string
+                  nullable: true
+                md:
+                  type: boolean
+    PayCableSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Cable bill paid successfully
+        data:
+          type: object
+          properties:
+            requestId:
+              type: string
+            referenceId:
+              type: string
+            responseCode:
+              type: string
+              example: "00"
+            responseMessage:
+              type: string
+            data:
+              type: object
+              properties:
+                accountNumber:
+                  type: string
+                package:
+                  type: string
+                  example: DStv Compact
+                noOfMonth:
+                  type: integer
+                  nullable: true
+                name:
+                  type: string
+                amount:
+                  type: string

@@ -21,9 +21,11 @@ import (
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/reporting"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/providers/baas"
+	vasprovider "neat_mobile_app_backend/providers/vas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	cardprovider "neat_mobile_app_backend/providers/card"
@@ -219,6 +221,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	transactionService := transaction.NewServie(transactionRepo)
 	transactionHandler := transaction.NewHandler(transactionService)
 	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+
+	xpressPayments, xpressErr := vasprovider.NewXpressPayments(cfg.XpressPublicKey, cfg.XpressPrivateKey)
+	if xpressErr != nil {
+		log.Printf("xpress payments not configured: %v — VAS endpoints will be unavailable", xpressErr)
+	}
+	vasRepo := vas.NewRepository(db)
+	vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService)
+	vasHandler := vas.NewHandler(vasService)
+	vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 
 	webhooksGroup := r.Group("/webhooks")
 	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
