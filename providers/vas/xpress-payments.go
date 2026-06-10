@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +35,158 @@ func NewXpressPayments(publicKey, privateKey string) (*XpressPayments, error) {
 		PrivateKey: privateKey,
 		Client:     &http.Client{Timeout: 15 * time.Second},
 	}, nil
+}
+
+func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesResponse, error) {
+	url := "https://billerstest.xpresspayments.com:9603/api/v1/products"
+
+	payload := map[string]int{
+		"size": 10,
+		"page": 0,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("xpress pay: failed to marshal payload - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("xpress pay: failed to create new request - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
+
+	resp, err := x.Client.Do(req)
+	if err != nil {
+		log.Printf("xpress pay: request failed - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("xpress pay: request failed with status code: %d\n", resp.StatusCode)
+		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode)
+	}
+
+	var result CategoriesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("xpress pay: failed to decode body into json - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryID, page, size int) (*BillersByCategoryIDResponse, error) {
+	baseURL := "https://billerstest.xpresspayments.com:9603/api/v1/billers"
+
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		log.Printf("xpress pay: failed to parse billers url - %s\n", err)
+		return nil, err
+	}
+
+	q := u.Query()
+	q.Set("categoryId", strconv.Itoa(categoryID))
+	u.RawQuery = q.Encode()
+
+	payload := map[string]int{
+		"page": page,
+		"size": size,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("xpress pay: failed to marshal billers payload - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("xpress pay: failed to create billers request - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := x.Client.Do(req)
+	if err != nil {
+		log.Printf("xpress pay: billers request failed - %s\n", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("xpress pay: billers request failed with status code: %d\n", resp.StatusCode)
+		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode)
+	}
+
+	var result BillersByCategoryIDResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("xpress pay: failed to decode billers response - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Context, categoryID, billerID, page, size int) (*ProductResponse, error) {
+	reqURL := "https://billerstest.xpresspayments.com:9603/api/v1/products"
+	u, err := url.Parse(reqURL)
+	if err != nil {
+		log.Printf("xpress pay: failed to parse products url - %s\n", err)
+		return nil, err
+	}
+
+	q := u.Query()
+	q.Set("categoryId", strconv.Itoa(categoryID))
+	q.Set("billerId", strconv.Itoa(billerID))
+	u.RawQuery = q.Encode()
+
+	payload := map[string]int{
+		"page": page,
+		"size": size,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("xpress pay: failed to marshal category products payload - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("xpress pay: failed to create category products request - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := x.Client.Do(req)
+	if err != nil {
+		log.Printf("xpress pay: request failed - %s\n", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("xpress pay: request failed with status code: %d\n", resp.StatusCode)
+		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode)
+	}
+
+	var result ProductResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("xpress pay: failed to decode body into json - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, phoneNumber string, amount int64) (*ISPResponse, error) {
