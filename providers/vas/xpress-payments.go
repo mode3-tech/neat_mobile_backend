@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	appErr "neat_mobile_app_backend/internal/errors"
 )
 
 type XpressPayments struct {
@@ -65,13 +67,21 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, appErr.ErrVASAmbiguous
+		}
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 500 {
+		log.Printf("xpress payments: server error %d — outcome unknown\n", resp.StatusCode)
+		return nil, appErr.ErrVASAmbiguous
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("Received non-OK response: %d\n", resp.StatusCode)
+		log.Printf("xpress payments: non-OK response %d\n", resp.StatusCode)
 		return nil, fmt.Errorf("request failed")
 	}
 
@@ -118,20 +128,28 @@ func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, pho
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
-		log.Printf("paymetn hash: failed to make request - %s\n", err)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, appErr.ErrVASAmbiguous
+		}
+		log.Printf("xpress payments: failed to make data request - %s\n", err)
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 500 {
+		log.Printf("xpress payments: server error %d on data request — outcome unknown\n", resp.StatusCode)
+		return nil, appErr.ErrVASAmbiguous
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("payment hash: returned with a status code %s", resp.StatusCode)
+		log.Printf("xpress payments: non-OK response %d on data request\n", resp.StatusCode)
 		return nil, errors.New("failed to make request")
 	}
 
 	var result ISPResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("payment hash: failed to decode response body into json - %s", err)
+		log.Printf("xpress payments: failed to decode data response body - %s", err)
 		return nil, err
 	}
 
@@ -238,14 +256,22 @@ func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniq
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, appErr.ErrVASAmbiguous
+		}
 		log.Printf("xpress pay: failed to get a response from the provider - %s\n", err)
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 500 {
+		log.Printf("xpress pay: server error %d on electricity payment — outcome unknown\n", resp.StatusCode)
+		return nil, appErr.ErrVASAmbiguous
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("xpress pay: request failed with status code: %d\n", resp.StatusCode)
+		log.Printf("xpress pay: electricity payment failed with status code: %d\n", resp.StatusCode)
 		return nil, fmt.Errorf("xpress pay: request failed with status code: %d", resp.StatusCode)
 	}
 
@@ -351,10 +377,18 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, appErr.ErrVASAmbiguous
+		}
 		log.Printf("xpress pay: failed to send cable bill request - %s\n", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 {
+		log.Printf("xpress pay: server error %d on cable payment — outcome unknown\n", resp.StatusCode)
+		return nil, appErr.ErrVASAmbiguous
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("xpress pay: cable bill failed with status code: %d\n", resp.StatusCode)

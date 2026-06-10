@@ -462,12 +462,11 @@ func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]
 	return beneficiaries, nil
 }
 
-func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string) (int64, error) {
+func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string) (*CustomerWallet, error) {
 	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("wallet service: failed to get user wallet - %s", err)
-		return 0, err
+		return nil, err
 	}
-
-	return wallet.AvailableBalance, nil
+	return wallet, nil
 }

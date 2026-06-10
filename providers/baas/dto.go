@@ -29,3 +29,32 @@ type OptimusPayload struct {
 	PhoneNumber       string `json:"PhoneNumber"`
 	BVN               string `json:"Bvn"`
 }
+
+type ProvidusWalletActionPayload struct {
+	Amount     int64       `json:"amount"`
+	Reference  string      `json:"reference"`
+	CustomerID string      `json:"customerId"`
+	Metadata   interface{} `json:"metadata"`
+}
+
+type ProvidusWalletDebitResponse struct {
+	Status  bool                            `json:"status"`
+	Message string                          `json:"message"`
+	Data    ProvidusWalletDebitResponseData `json:"data"`
+}
+
+type ProvidusWalletDebitResponseData struct {
+	Amount           int64       `json:"amount"`
+	Reference        string      `json:"reference"`
+	CustomerID       string      `json:"customerId"`
+	Metadata         interface{} `json:"metadata"`
+	TransactionFee   int         `json:"transaction_fee"`
+	CustomerWalletID string      `json:"customer_wallet_id"`
+}
+
+type ProvidusWalletCreditResponse struct {
+	Status    bool   `json:"status"`
+	Message   string `json:"message"`
+	Reference string `json:"reference"`
+	Amount    int64  `json:"amount"`
+}
