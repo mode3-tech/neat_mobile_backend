@@ -7,6 +7,9 @@ import (
 )
 
 type VASService interface {
+	FetchAllCategories(ctx context.Context) (*vasprovider.CategoriesResponse, error)
+	FetchBillersByCategoryID(ctx context.Context, categoryID, page, size int) (*vasprovider.BillersByCategoryIDResponse, error)
+	FetchProductsByCategoryIDAndBillerID(ctx context.Context, categoryID, billerID, page, size int) (*vasprovider.ProductResponse, error)
 	GetAirtime(ctx context.Context, requestID, uniqueCode, phoneNumber string, amount int64) (*vasprovider.ISPResponse, error)
 	GetData(ctx context.Context, requestID, uniqueCode, phoneNumber string, amount int64) (*vasprovider.ISPResponse, error)
 	ValidateElectricity(ctx context.Context, requestID, uniqueCode, accountNumber string, accountType vasprovider.AccountType) (*vasprovider.ElectricityValidationResponse, error)

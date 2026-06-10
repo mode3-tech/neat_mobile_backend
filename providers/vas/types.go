@@ -13,8 +13,8 @@ type Payload struct {
 }
 
 type Response struct {
-	RequestID       string `json:"requestId"`
-	ReferenceID     string `json:"referenceId"`
+	RequestID       string `json:"requestId,omitempty"`
+	ReferenceID     string `json:"referenceId,omitempty"`
 	ResponseCode    string `json:"responseCode"`
 	ResponseMessage string `json:"responseMessage"`
 }
@@ -143,4 +143,70 @@ type payCableResponseData struct {
 	NoOfMonth     *int   `json:"noOfMonth"`
 	Name          string `json:"name"`
 	Amount        string `json:"amount"`
+}
+
+type CategoriesResponse struct {
+	Response
+	Data categoriesResponseData
+}
+
+type categoriesResponseData struct {
+	HasNextRecord   bool       `json:"hasNextRecord"`
+	TotalCount      int        `json:"totalCount"`
+	CategoryDTOList []Category `json:"categoryDTOList"`
+}
+
+type Category struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type ProductResponse struct {
+	Response
+	Data productResponseData `json:"data"`
+}
+
+type productResponseData struct {
+	HasNextRecord   bool      `json:"hasNextRecord"`
+	TotalCount      int       `json:"totalCount"`
+	CategoryDTOList []Product `json:"categoryDTOList"`
+}
+
+type Product struct {
+	Name        string  `json:"name"`
+	UniqueCode  string  `json:"uniqueCode"`
+	LookUp      bool    `json:"lookUp"`
+	FixedAmount bool    `json:"fixedAmount"`
+	Amount      float32 `json:"amount"`
+	MinAmount   float32 `json:"minimumAmount"`
+	MaxAmount   float32 `json:"maximumAmount"`
+	ImageURL    string  `json:"imageUrl"`
+	BillerName  string  `json:"billerName"`
+	CategoryDTO struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"categoryDTO"`
+}
+
+type BillersByCategoryIDResponse struct {
+	Response
+	Data billersByCategoryIDResponseData `json:"data"`
+}
+
+type billersByCategoryIDResponseData struct {
+	HasNextRecord bool     `json:"hasNextRecord"`
+	TotalCount    int      `json:"totalCount"`
+	BillerDTOList []Biller `json:"billerDTOList"`
+}
+
+type Biller struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	BillerCode   string `json:"billerCode"`
+	Description  string `json:"description"`
+	CategoryDTOs []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"categoryDTOS"`
+	Image string `json:"image"`
 }

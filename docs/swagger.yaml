@@ -4440,6 +4440,194 @@ paths:
                       message: Failed to fetch goal summary
   /vas/airtime:
     post:
+  /vas/categories:
+    get:
+      tags:
+        - VAS
+      summary: Fetch VAS categories
+      description: Returns available VAS categories.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token. Example `Bearer <access_token>`.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categories fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoriesResponse"
+        "401":
+          description: Unauthorized — missing user ID or device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API400Error"
+        "500":
+          description: Failed to fetch categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API500Error"
+
+  /vas/billers:
+    get:
+      tags:
+        - VAS
+      summary: Fetch billers by category
+      description: Returns a paginated list of billers for the specified VAS category.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token. Example `Bearer <access_token>`.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+        - in: query
+          name: category_id
+          required: true
+          schema:
+            type: integer
+          description: VAS category identifier
+        - in: query
+          name: page
+          required: true
+          schema:
+            type: integer
+          description: 1-indexed page number
+        - in: query
+          name: size
+          required: true
+          schema:
+            type: integer
+          description: Page size (limit)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Billers fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillersResponse"
+        "400":
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized — missing user ID or device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API400Error"
+        "403":
+          description: Device not trusted or not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
+        "500":
+          description: Failed to fetch billers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API500Error"
+
+  /vas/products:
+    get:
+      tags:
+        - VAS
+      summary: Fetch products by category and biller
+      description: Returns a paginated list of products for the specified category and biller.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer access token. Example `Bearer <access_token>`.
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Trusted device ID.
+        - in: query
+          name: category_id
+          required: true
+          schema:
+            type: integer
+          description: VAS category identifier
+        - in: query
+          name: biller_id
+          required: true
+          schema:
+            type: integer
+          description: Biller identifier
+        - in: query
+          name: page
+          required: true
+          schema:
+            type: integer
+          description: 1-indexed page number
+        - in: query
+          name: size
+          required: true
+          schema:
+            type: integer
+          description: Page size (limit)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Products fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductsResponse"
+        "400":
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized — missing user ID or device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API400Error"
+        "403":
+          description: Device not trusted or not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API403Error"
+        "500":
+          description: Failed to fetch products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API500Error"
       tags:
         - VAS
       summary: Buy airtime
@@ -5196,6 +5384,125 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BeneficiaryItem"
+    Biller:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        name:
+          type: string
+          example: Electricity Biller
+        biller_code:
+          type: string
+          example: "ELEC123"
+        description:
+          type: string
+          example: "Electricity bill payments"
+        category_dtos:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 1
+              name:
+                type: string
+                example: Utilities
+        image:
+          type: string
+          example: "https://example.com/logo.png"
+    BillersResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Billers fetched successfully
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Biller"
+    Product:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Prepaid Meter Topup"
+        unique_code:
+          type: string
+          example: "PRD-001"
+        look_up:
+          type: boolean
+          example: false
+        fixed_amount:
+          type: boolean
+          example: true
+        amount:
+          type: number
+          format: float
+          example: 100.0
+        min_amount:
+          type: number
+          format: float
+          example: 50.0
+        max_amount:
+          type: number
+          format: float
+          example: 1000.0
+        image_url:
+          type: string
+          example: "https://example.com/product.png"
+        biller_name:
+          type: string
+          example: "Electricity Biller"
+        category_dto:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: Utilities
+    ProductsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Products fetched successfully
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Utilities"
+    CategoriesResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Categories fetched successfully
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
     ActiveLoan:
       type: object
       properties:
@@ -7911,14 +8218,10 @@ components:
     AirtimePurchaseRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - phone_number
         - amount
       properties:
-        request_id:
-          type: string
-          example: req-001
         unique_code:
           type: string
           example: MTN_AIRTIME
@@ -7933,14 +8236,10 @@ components:
     DataPurchaseRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - phone_number
         - amount
       properties:
-        request_id:
-          type: string
-          example: req-002
         unique_code:
           type: string
           example: MTN_DATA
@@ -7955,14 +8254,10 @@ components:
     ElectricityValidationRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - account_number
         - account_type
       properties:
-        request_id:
-          type: string
-          example: req-003
         unique_code:
           type: string
           example: EKEDC_PREPAID
@@ -7980,7 +8275,6 @@ components:
     PayElectricityRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - account_number
         - account_type
@@ -7989,9 +8283,6 @@ components:
         - address
         - phone_number
       properties:
-        request_id:
-          type: string
-          example: req-004
         unique_code:
           type: string
           example: EKEDC_PREPAID
@@ -8023,14 +8314,10 @@ components:
     CableValidationRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - account_number
         - no_of_month
       properties:
-        request_id:
-          type: string
-          example: req-005
         unique_code:
           type: string
           example: DSTV
@@ -8046,7 +8333,6 @@ components:
     PayCableRequest:
       type: object
       required:
-        - request_id
         - unique_code
         - account_number
         - account_type
@@ -8055,9 +8341,6 @@ components:
         - no_of_month
         - amount
       properties:
-        request_id:
-          type: string
-          example: req-006
         unique_code:
           type: string
           example: DSTV
