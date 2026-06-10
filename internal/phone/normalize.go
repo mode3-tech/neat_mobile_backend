@@ -26,3 +26,16 @@ func NormalizeNigerianNumber(input string) (string, error) {
 	return "", errors.New("invalid Nigerian number")
 
 }
+
+func ToLocalFormat(input string) (string, error) {
+	cleaned := nonDigit.ReplaceAllString(strings.TrimSpace(input), "")
+	switch {
+	case strings.HasPrefix(cleaned, "0") && len(cleaned) == 11:
+		return cleaned, nil
+	case strings.HasPrefix(cleaned, "234") && len(cleaned) == 13:
+		return "0" + cleaned[3:], nil
+	case len(cleaned) == 10:
+		return "0" + cleaned, nil
+	}
+	return "", errors.New("invalid Nigerian number")
+}

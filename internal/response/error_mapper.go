@@ -840,6 +840,78 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrInvalidISPAmount:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_VAS_AMOUNT",
+				Message: appErr.ErrInvalidISPAmount.Error(),
+			},
+		}
+
+	case appErr.ErrGettingAirtime:
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FAILED_TO_GET_AIRTIME",
+				Message: appErr.ErrGettingAirtime.Error(),
+			},
+		}
+
+	case appErr.ErrVASAmbiguous:
+		return ErrorMapping{
+			Status: http.StatusRequestTimeout,
+			Error: APIError{
+				Code:    "REQUEST_TIMEOUT",
+				Message: appErr.ErrVASAmbiguous.Error(),
+			},
+		}
+
+	case appErr.ErrGettingData:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "FAILED_TO_GET_DATA",
+				Message: appErr.ErrGettingData.Error(),
+			},
+		}
+
+	case appErr.ErrValidatingElectricity:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "FAILED_TO_VALIDATE_ELECTRICITY",
+				Message: appErr.ErrValidatingElectricity.Error(),
+			},
+		}
+
+	case appErr.ErrPayingElectricityBill:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "FAILED_TO_PAY_ELECTRICITY_BILL",
+				Message: appErr.ErrPayingElectricityBill.Error(),
+			},
+		}
+
+	case appErr.ErrValidatingCable:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "FAILED_TO_VALIDATE_CABLE",
+				Message: appErr.ErrValidatingCable.Error(),
+			},
+		}
+
+	case appErr.ErrPayingCableBill:
+		return ErrorMapping{
+			Status: http.StatusBadGateway,
+			Error: APIError{
+				Code:    "FAILED_TO_PAY_CABLE_BILL",
+				Message: appErr.ErrPayingCableBill.Error(),
+			},
+		}
+
 	default:
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
