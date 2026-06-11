@@ -618,6 +618,7 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+hash)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
@@ -637,6 +638,59 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 
 	return &result, nil
 }
+
+func (x *XpressPayments) ValidateWAECRegistration(ctx context.Context, requestId, uniqueCode string, numberOfCandidate int) (*WAECRegistrationValidationResponse, error) {
+	url := x.BaseURL + "/api/v1/education/waec/registration/validate"
+
+	payload := map[string]interface{}{
+		"requestId":  requestId,
+		"uniqueCode": uniqueCode,
+		"details": map[string]int{
+			"noOfCandidate": numberOfCandidate,
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("xpress pay: failed to marshal payload - %s\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("xpress pay: failed to create request - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
+
+	resp, err := x.Client.Do(req)
+	if err != nil {
+		log.Printf("xpress pay: failed to send request - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("xpress pay: failed to read response body - %s\n", err)
+		return nil, err
+	}
+
+	var result WAECRegistrationValidationResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		log.Printf("xpress pay: failed to unmarshal response body - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// func (x *XpressPayments) PayForWAECRegistration(ctx context.Context, requestId, uniqueCode, email, phoneNumber string, numberOfCandidate int) (*WAECRegistrationValidationResponse, error) {
+
+// }
 
 func generatePaymentHash(payload []byte, privateKey string) (string, error) {
 	mac := hmac.New(sha512.New, []byte(privateKey))
