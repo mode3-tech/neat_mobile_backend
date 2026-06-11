@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -44,7 +45,7 @@ func NewXpressPayments(publicKey, privateKey, baseURL string) (*XpressPayments, 
 }
 
 func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesResponse, error) {
-	url := x.BaseURL + "/api/v1/products"
+	url := x.BaseURL + "/api/v1/categories"
 
 	payload := map[string]int{
 		"size": 10,
@@ -57,6 +58,8 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 		return nil, err
 	}
 
+	log.Printf("xpress pay body: %s\n", string(body))
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		log.Printf("xpress pay: failed to create new request - %s\n", err)
@@ -64,6 +67,11 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 	}
 
 	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	log.Printf("xpress pay auth header: Bearer %s\n", x.PublicKey)
+	log.Printf("xpress pay request URL: %s\n", url)
 
 	resp, err := x.Client.Do(req)
 	if err != nil {
@@ -74,15 +82,31 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("xpress pay: request failed with status code: %d\n", resp.StatusCode)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("xpress pay: request failed with status code: %d, but failed to read response body: %s\n", resp.StatusCode, err)
+		} else {
+			log.Printf("xpress pay: request failed with status code: %d, response body length: %d, response: %s\n", resp.StatusCode, len(respBody), string(respBody))
+		}
+		log.Printf("xpress pay: response headers: %+v\n", resp.Header)
 		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode)
 	}
 
 	var result CategoriesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("xpress pay: failed to read response body - %s\n", err)
+		return nil, err
+	}
+
+	log.Printf("xpress pay: raw response body: %s\n", string(respBodyBytes))
+
+	if err := json.Unmarshal(respBodyBytes, &result); err != nil {
 		log.Printf("xpress pay: failed to decode body into json - %s\n", err)
 		return nil, err
 	}
+
+	log.Printf("xpress pay: decoded response - status: %s, message: %s, total categories: %d, categories list length: %d\n", result.ResponseCode, result.ResponseMessage, result.Data.TotalCount, len(result.Data.CategoryDTOList))
 
 	return &result, nil
 }
