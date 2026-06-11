@@ -167,9 +167,9 @@ type ProductResponse struct {
 }
 
 type productResponseData struct {
-	HasNextRecord   bool      `json:"hasNextRecord"`
-	TotalCount      int       `json:"totalCount"`
-	CategoryDTOList []Product `json:"categoryDTOList"`
+	HasNextRecord  bool      `json:"hasNextRecord"`
+	TotalCount     int       `json:"totalCount"`
+	ProductDTOList []Product `json:"productDTOList"`
 }
 
 type Product struct {
@@ -211,14 +211,13 @@ type Biller struct {
 	Image string `json:"image"`
 }
 
-// {
-//   "requestId": "1109991201",
-//   "referenceId": "MATT14539722120213323215051212",
-//   "responseCode": "00",
-//   "responseMessage": "Successful",
-//   "data": {
-//     "pin": "758324096129",
-//     "serial": "W12A0001981",
-//     "transactionDate": "20221202 13:32:28.856"
-//   }
-// }
+type WAECResultCheckerPinResponse struct {
+	Response
+	Data WAECResultCheckerPinResponseData `json:"data"`
+}
+
+type WAECResultCheckerPinResponseData struct {
+	Pin             string `json:"pin"`
+	Serial          string `json:"serial"`
+	TransactionDate string `json:"transactionDate"`
+}
