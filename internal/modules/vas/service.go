@@ -236,6 +236,17 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrGettingAirtime
 	}
 
+	beneficiary := VASBeneficiary{
+		ID:             uuid.NewString(),
+		MobileUserID:   mobileUserID,
+		PhoneNumber:    localizedPhone,
+		BillingCompany: strings.ToLower(ExtractBillingCompanyName(strings.TrimSpace(payload.UniqueCode))),
+	}
+
+	if err := s.Repo.StoreVASAsBeneficiary(ctx, &beneficiary); err != nil {
+		log.Printf("vas service: failed to store vas beneficiary - %s", err)
+	}
+
 	return result, nil
 }
 
@@ -321,6 +332,22 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
 		return nil, appErr.ErrGettingData
 	}
+
+	go func() {
+		bgCtx := context.Background()
+		ctx, cancel := context.WithTimeout(bgCtx, time.Second*5)
+		defer cancel()
+		beneficiary := VASBeneficiary{
+			ID:             uuid.NewString(),
+			MobileUserID:   mobileUserID,
+			PhoneNumber:    localizedPhone,
+			BillingCompany: strings.ToLower(ExtractBillingCompanyName(strings.TrimSpace(payload.UniqueCode))),
+		}
+
+		if err := s.Repo.StoreVASAsBeneficiary(ctx, &beneficiary); err != nil {
+			log.Printf("vas service: failed to store vas beneficiary - %s", err)
+		}
+	}()
 
 	return result, nil
 }
@@ -535,3 +562,5 @@ func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount i
 		log.Printf("vas service: failed to mark transaction as reversed - %s\n", updateErr)
 	}
 }
+
+func (s *Service) FetchBeneficiaries(ctx context.Context)
