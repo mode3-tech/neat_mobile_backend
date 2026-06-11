@@ -1,15 +1,17 @@
 package vas
 
 type AirtimePayload struct {
-	UniqueCode  string `json:"unique_code" validate:"required"`
-	PhoneNumber string `json:"phone_number" validate:"required"`
-	Amount      int64  `json:"amount" validate:"amount,gt=0"`
+	UniqueCode  string `json:"unique_code" binding:"required"`
+	PhoneNumber string `json:"phone_number" binding:"required"`
+	Amount      int64  `json:"amount" binding:"amount,gt=0"`
+	Pin         string `json:"pin" binding:"required"`
 }
 
 type DataPayload struct {
 	UniqueCode  string `json:"unique_code" validate:"required"`
 	PhoneNumber string `json:"phone_number" validate:"required"`
 	Amount      int64  `json:"amount" validate:"amount,gt=0"`
+	Pin         string `json:"pin" binding:"required"`
 }
 
 type ElectricityValidationPayload struct {

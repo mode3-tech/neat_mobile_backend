@@ -3,11 +3,11 @@ package auth
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	phoneutil "neat_mobile_app_backend/internal/phone"
-	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -99,11 +99,11 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID string, req C
 		return errors.New("verification id is required")
 	}
 
-	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+	if err := authchecker.ValidatePassword(req.NewPassword); err != nil {
 		return err
 	}
 
-	if err := validators.ValidatePassword(req.ConfirmNewPassword); err != nil {
+	if err := authchecker.ValidatePassword(req.ConfirmNewPassword); err != nil {
 		return err
 	}
 
@@ -315,11 +315,11 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 		return errors.New("verification id is required")
 	}
 
-	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+	if err := authchecker.ValidatePassword(req.NewPassword); err != nil {
 		return errors.New(err.Error())
 	}
 
-	if err := validators.ValidatePassword(req.ConfirmNewPassword); err != nil {
+	if err := authchecker.ValidatePassword(req.ConfirmNewPassword); err != nil {
 		return errors.New(err.Error())
 	}
 

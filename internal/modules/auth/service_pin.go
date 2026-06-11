@@ -3,11 +3,11 @@ package auth
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	phoneutil "neat_mobile_app_backend/internal/phone"
-	"neat_mobile_app_backend/internal/validators"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -91,7 +91,7 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, 
 		return errors.New("verification id is required")
 	}
 
-	if err := validators.ValidatePin(req.NewPin); err != nil {
+	if err := authchecker.ValidatePin(req.NewPin); err != nil {
 		return err
 	}
 
@@ -265,11 +265,11 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID string,
 		return errors.New("verification id is required")
 	}
 
-	if err := validators.ValidatePin(req.NewPin); err != nil {
+	if err := authchecker.ValidatePin(req.NewPin); err != nil {
 		return err
 	}
 
-	if err := validators.ValidatePin(req.ConfirmNewPin); err != nil {
+	if err := authchecker.ValidatePin(req.ConfirmNewPin); err != nil {
 		return err
 	}
 
