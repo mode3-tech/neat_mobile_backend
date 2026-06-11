@@ -65,7 +65,7 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 		AccountNumber: bankDetails.AccountNumber,
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*BankDetailsResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[*BankDetails]{
 		Status:  "success",
 		Message: "Bank details fetched successfully",
 		Data:    &resp,
