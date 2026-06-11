@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
+	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
@@ -23,7 +24,6 @@ import (
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
-	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -203,7 +203,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	walletRepo := wallet.NewRepository(db)
-	walletPinVerifier := pinverifier.New(walletRepo)
+	walletPinVerifier := authchecker.New(walletRepo)
 	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
@@ -211,7 +211,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}, deviceService)
 
 	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService, deviceService)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService)
@@ -227,7 +227,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Printf("xpress payments not configured: %v — VAS endpoints will be unavailable", xpressErr)
 	} else {
 		vasRepo := vas.NewRepository(db)
-		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService)
+		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService)
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 	}
@@ -328,7 +328,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}()
 
 	neatsaveRepo := neatsave.NewRepository(db)
-	neatsavePinVerifier := pinverifier.New(neatsaveRepo)
+	neatsavePinVerifier := authchecker.New(neatsaveRepo)
 	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, deviceValidator, neatsaveHandler)

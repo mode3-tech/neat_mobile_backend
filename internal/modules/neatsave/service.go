@@ -3,8 +3,8 @@ package neatsave
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
-	"neat_mobile_app_backend/internal/pinverifier"
 	"strings"
 	"time"
 
@@ -13,11 +13,11 @@ import (
 
 type Service struct {
 	repository     *Repository
-	pinVerifier    *pinverifier.Verifier
+	pinVerifier    *authchecker.Verifier
 	deviceVerifier DeviceVerifier
 }
 
-func NewService(repository *Repository, pinVerifier *pinverifier.Verifier, deviceVerifier DeviceVerifier) *Service {
+func NewService(repository *Repository, pinVerifier *authchecker.Verifier, deviceVerifier DeviceVerifier) *Service {
 	return &Service{repository: repository, pinVerifier: pinVerifier, deviceVerifier: deviceVerifier}
 }
 

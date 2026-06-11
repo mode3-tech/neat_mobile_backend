@@ -334,3 +334,27 @@ func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models
 	}
 	return &record, nil
 }
+
+func (r *Repository) IncrementFailedPinAttempts(ctx context.Context, userID string) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("failed_transaction_pin_attempts", gorm.Expr("failed_transaction_pin_attempts + 1")).Error
+}
+
+func (r *Repository) LockTransactionPin(ctx context.Context, userID string, until time.Time) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"failed_transaction_pin_attempts": 0,
+			"transaction_pin_locked_until":    until,
+		}).Error
+}
+
+func (r *Repository) ResetPinAttempts(ctx context.Context, userID string) error {
+	return r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"failed_transaction_pin_attempts": 0,
+			"transaction_pin_locked_until":    nil,
+		}).Error
+}

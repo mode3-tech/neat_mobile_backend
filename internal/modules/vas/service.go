@@ -21,10 +21,11 @@ type Service struct {
 	Txr            TransactionService
 	Baas           BAAS
 	XpressPayments VASService
+	PinVerifier    AuthService
 }
 
-func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS) *Service {
-	return &Service{Repo: repo, XpressPayments: xpressPayments, WalletService: walletService, Txr: txr, Baas: baas}
+func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService) *Service {
+	return &Service{Repo: repo, XpressPayments: xpressPayments, WalletService: walletService, Txr: txr, Baas: baas, PinVerifier: pinVerifier}
 }
 
 func (s *Service) FetchAllCategories(ctx context.Context) ([]vas.Category, error) {
@@ -157,8 +158,13 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 	amount := payload.Amount
 
-	if amount < 50 {
-		log.Println("vas service: amount is less than NGN 50")
+	if amount < 100 {
+		log.Println("vas service: amount is less than NGN 100")
+		return nil, appErr.ErrInvalidISPAmount
+	}
+
+	if amount > 10000 {
+		log.Println("vas service: amount is greater than NGN 10,000")
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
@@ -179,6 +185,10 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 
 	log.Printf("extracted company name: %s\n", ExtractBillingCompanyName(uniqueCode))
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
 
 	txID, ref := uuid.NewString(), uuid.NewString()
 
@@ -239,7 +249,11 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	}
 	amount := payload.Amount
 
-	if amount < 50 {
+	if amount < 100 {
+		return nil, appErr.ErrInvalidISPAmount
+	}
+
+	if amount > 10000 {
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
@@ -256,6 +270,10 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	metadata := map[string]any{
 		"isp":  ExtractBillingCompanyName(uniqueCode),
 		"type": "data",
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
 	}
 
 	txID, ref := uuid.NewString(), uuid.NewString()

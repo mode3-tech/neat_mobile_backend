@@ -31,3 +31,7 @@ type BAAS interface {
 	DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) (*baas.ProvidusWalletDebitResponse, error)
 	CreditCustomer(ctx context.Context, amount int64, referenceID, customerID string, metadata interface{}) (*baas.ProvidusWalletCreditResponse, error)
 }
+
+type AuthService interface {
+	VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error
+}

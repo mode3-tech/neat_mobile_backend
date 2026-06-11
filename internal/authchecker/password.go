@@ -1,6 +1,15 @@
-package validators
+package authchecker
 
-import "errors"
+import (
+	"errors"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+func CheckPassword(storedHash, plainPassword string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(plainPassword))
+	return err == nil
+}
 
 func ValidatePassword(pw string) error {
 	if len(pw) < 8 {
@@ -27,18 +36,4 @@ func ValidatePassword(pw string) error {
 	}
 
 	return errors.New("password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
-}
-
-func ValidatePin(pin string) error {
-	if len(pin) != 4 {
-		return errors.New("transaction pin must be exactly 4 digits long")
-	}
-
-	for _, r := range pin {
-		if r < '0' || r > '9' {
-			return errors.New("transaction pin must contain only digits")
-		}
-	}
-
-	return nil
 }

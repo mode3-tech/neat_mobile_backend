@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
-	"neat_mobile_app_backend/internal/pinverifier"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
 	"strings"
@@ -23,7 +23,7 @@ type Service struct {
 	coreCustomerFinder   CoreCustomerFinder
 	coreLoanFinder       CoreLoanFinder
 	manualRepayer        ManualRepayer
-	pinVerifier          *pinverifier.Verifier
+	pinVerifier          *authchecker.Verifier
 	repaymentTransferrer RepaymentFundTransferrer
 	deviceVerifier       DeviceVerifier
 }
@@ -39,7 +39,7 @@ var (
 	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
 )
 
-func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *pinverifier.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *authchecker.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:                 repo,
 		coreCustomerFinder:   coreCustomerFinder,
@@ -84,7 +84,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		}
 	}
 
-	if !CheckPassword(user.PinHash, req.TransactionPin) {
+	if !authchecker.CheckPassword(user.PinHash, req.TransactionPin) {
 		failedAttempts := user.FailedTransactionAttempts + 1
 		var lockedUntil *time.Time
 		if failedAttempts >= maxTransactionPinAttempts {
