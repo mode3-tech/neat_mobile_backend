@@ -97,7 +97,7 @@ var (
 	ErrBVNWithFaceVerificationNotFound = errors.New("BVN with face verification not found or incomplete")
 	ErrValidatingNINWithFace           = errors.New("Failed to match nin with face")
 	ErrNINWithFaceVerificationNotFound = errors.New("NIN with face verification not found or incomplete")
-	ErrInvalidISPAmount                = errors.New("Amount for airtime or data must be greater than NGN 50")
+	ErrInvalidISPAmount                = errors.New("Amount for airtime or data must be greater than NGN 100 and less than NGN 10,000")
 	ErrGettingAirtime                  = errors.New("Failed to get airtime")
 	ErrGettingData                     = errors.New("Failed to get data")
 	ErrValidatingElectricity           = errors.New("Failed to validate electricity account")

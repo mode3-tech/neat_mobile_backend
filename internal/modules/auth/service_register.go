@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
-	"neat_mobile_app_backend/internal/validators"
 	"strconv"
 	"strings"
 	"time"
@@ -218,7 +218,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	if req.Password != req.ConfirmPassword {
 		return nil, appErr.ErrPasswordMismatch
 	}
-	if err = validators.ValidatePassword(req.Password); err != nil {
+	if err = authchecker.ValidatePassword(req.Password); err != nil {
 		log.Printf("invalid password: %v", err)
 		return nil, errors.New(err.Error())
 	}

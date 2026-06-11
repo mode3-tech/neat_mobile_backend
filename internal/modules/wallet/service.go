@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/transaction"
-	"neat_mobile_app_backend/internal/pinverifier"
 	"strconv"
 	"strings"
 	"time"
@@ -26,12 +26,12 @@ type SettlementAccount struct {
 type Service struct {
 	repo              *Repository
 	providusService   ProvidusService
-	pinVerifier       *pinverifier.Verifier
+	pinVerifier       *authchecker.Verifier
 	settlementAccount SettlementAccount
 	deviceVerifier    DeviceVerifier
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:              repo,
 		providusService:   providusService,
