@@ -22,23 +22,29 @@ import (
 type XpressPayments struct {
 	PublicKey  string
 	PrivateKey string
+	BaseURL    string
 	Client     *http.Client
 }
 
-func NewXpressPayments(publicKey, privateKey string) (*XpressPayments, error) {
+func NewXpressPayments(publicKey, privateKey, baseURL string) (*XpressPayments, error) {
 	if strings.TrimSpace(publicKey) == "" || strings.TrimSpace(privateKey) == "" {
 		log.Println("xpress payments: public and private keys are required")
 		return nil, errors.New("xpress payments: public and private keys are required")
 	}
+	if strings.TrimSpace(baseURL) == "" {
+		log.Println("xpress payments: base URL is required")
+		return nil, errors.New("xpress payments: base URL is required")
+	}
 	return &XpressPayments{
 		PublicKey:  publicKey,
 		PrivateKey: privateKey,
+		BaseURL:    baseURL,
 		Client:     &http.Client{Timeout: 15 * time.Second},
 	}, nil
 }
 
 func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/products"
+	url := x.BaseURL + "/api/v1/products"
 
 	payload := map[string]int{
 		"size": 10,
@@ -82,7 +88,7 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 }
 
 func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryID, page, size int) (*BillersByCategoryIDResponse, error) {
-	baseURL := "https://billerstest.xpresspayments.com:9603/api/v1/billers"
+	baseURL := x.BaseURL + "/api/v1/billers"
 
 	u, err := url.Parse(baseURL)
 	if err != nil {
@@ -136,7 +142,7 @@ func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryI
 }
 
 func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Context, categoryID, billerID, page, size int) (*ProductResponse, error) {
-	reqURL := "https://billerstest.xpresspayments.com:9603/api/v1/products"
+	reqURL := x.BaseURL + "/api/v1/products"
 	u, err := url.Parse(reqURL)
 	if err != nil {
 		log.Printf("xpress pay: failed to parse products url - %s\n", err)
@@ -190,7 +196,7 @@ func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Contex
 }
 
 func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, phoneNumber string, amount int64) (*ISPResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/airtime/fulfil"
+	url := x.BaseURL + "/api/v1/airtime/fulfil"
 
 	payload := ISPPayload{
 		Payload: Payload{RequestID: requestID, UniqueCode: uniqueCode},
@@ -248,7 +254,7 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 }
 
 func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, phoneNumber string, amount int64) (*ISPResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/data/fulfil"
+	url := x.BaseURL + "/api/v1/data/fulfil"
 
 	payload := ISPPayload{
 		Payload: Payload{RequestID: requestId, UniqueCode: uniqueCode},
@@ -311,7 +317,7 @@ func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, pho
 }
 
 func (x *XpressPayments) ValidateElectricity(ctx context.Context, requestId, uniqueCode, accountNumber string, accountType AccountType) (*ElectricityValidationResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/electricity/validate"
+	url := x.BaseURL + "/api/v1/electricity/validate"
 
 	payload := ElectricityValidationPayload{
 		Payload: Payload{
@@ -369,7 +375,7 @@ func (x *XpressPayments) ValidateElectricity(ctx context.Context, requestId, uni
 }
 
 func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniqueCode, accountNumber, name, address, phoneNumber string, accountType AccountType, amount int64) (*PayElectricityResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/electricity/fulfil"
+	url := x.BaseURL + "/api/v1/electricity/fulfil"
 
 	payload := PayElectricityBillPayload{
 		Payload: Payload{
@@ -439,7 +445,7 @@ func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniq
 }
 
 func (x *XpressPayments) ValidateCable(ctx context.Context, requestId, uniqueCode, accountNumber string, noOfMonth int) (*CableValidationResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/cable/validate"
+	url := x.BaseURL + "/api/v1/cable/validate"
 
 	payload := CableValidationPayload{
 		Payload: Payload{RequestID: requestId, UniqueCode: uniqueCode},
@@ -493,7 +499,7 @@ func (x *XpressPayments) ValidateCable(ctx context.Context, requestId, uniqueCod
 }
 
 func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode, accountNumber, accountType, name, phoneNumber string, noOfMonth int, amount int64) (*PayCableResponse, error) {
-	url := "https://billerstest.xpresspayments.com:9603/api/v1/cable/fulfil"
+	url := x.BaseURL + "/api/v1/cable/fulfil"
 
 	payload := PayCableBillPayload{
 		Payload: Payload{RequestID: requestId, UniqueCode: uniqueCode},
@@ -557,6 +563,8 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 
 	return &result, nil
 }
+
+func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId, uniqueCode, email, phoneNumber, amount string)
 
 func generatePaymentHash(payload []byte, privateKey string) (string, error) {
 	mac := hmac.New(sha512.New, []byte(privateKey))
