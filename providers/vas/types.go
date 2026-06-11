@@ -208,7 +208,7 @@ type Biller struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	} `json:"categoryDTOS"`
-	Image string `json:"image"`
+	Image string `json:"imageUrl"`
 }
 
 type WAECResultCheckerPinResponse struct {
@@ -220,4 +220,13 @@ type WAECResultCheckerPinResponseData struct {
 	Pin             string `json:"pin"`
 	Serial          string `json:"serial"`
 	TransactionDate string `json:"transactionDate"`
+}
+
+type WAECRegistrationValidationResponse struct {
+	Response
+	Data WAECRegistrationValidationData `json:"data"`
+}
+
+type WAECRegistrationValidationData struct {
+	TotalAmount int64 `json:"totalAmount"`
 }
