@@ -59,7 +59,7 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 		return
 	}
 
-	resp := &BankDetailsResponse{
+	resp := &BankDetails{
 		BankCode:      bankDetails.BankCode,
 		AccountName:   bankDetails.AccountName,
 		AccountNumber: bankDetails.AccountNumber,
