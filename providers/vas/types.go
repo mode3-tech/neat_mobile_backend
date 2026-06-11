@@ -147,7 +147,7 @@ type payCableResponseData struct {
 
 type CategoriesResponse struct {
 	Response
-	Data categoriesResponseData
+	Data categoriesResponseData `json:"data"`
 }
 
 type categoriesResponseData struct {
@@ -210,3 +210,15 @@ type Biller struct {
 	} `json:"categoryDTOS"`
 	Image string `json:"image"`
 }
+
+// {
+//   "requestId": "1109991201",
+//   "referenceId": "MATT14539722120213323215051212",
+//   "responseCode": "00",
+//   "responseMessage": "Successful",
+//   "data": {
+//     "pin": "758324096129",
+//     "serial": "W12A0001981",
+//     "transactionDate": "20221202 13:32:28.856"
+//   }
+// }
