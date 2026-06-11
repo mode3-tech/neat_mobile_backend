@@ -3,51 +3,51 @@ package vas
 type AirtimePayload struct {
 	UniqueCode  string `json:"unique_code" binding:"required"`
 	PhoneNumber string `json:"phone_number" binding:"required"`
-	Amount      int64  `json:"amount" binding:"amount,gt=0"`
+	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
 }
 
 type DataPayload struct {
-	UniqueCode  string `json:"unique_code" validate:"required"`
-	PhoneNumber string `json:"phone_number" validate:"required"`
-	Amount      int64  `json:"amount" validate:"amount,gt=0"`
+	UniqueCode  string `json:"unique_code" binding:"required"`
+	PhoneNumber string `json:"phone_number" binding:"required"`
+	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
 }
 
 type ElectricityValidationPayload struct {
-	UniqueCode    string      `json:"unique_code" validate:"required"`
-	AccountNumber string      `json:"account_number" validate:"required"`
-	AccountType   AccountType `json:"account_type" validate:"required"`
+	UniqueCode    string      `json:"unique_code" binding:"required"`
+	AccountNumber string      `json:"account_number" binding:"required"`
+	AccountType   AccountType `json:"account_type" binding:"required"`
 }
 
 type PayElectricityPayload struct {
-	UniqueCode    string      `json:"unique_code" validate:"required"`
-	AccountNumber string      `json:"account_number" validate:"required"`
-	AccountType   AccountType `json:"account_type" validate:"required"`
-	Amount        int64       `json:"amount" validate:"required,gt=0"`
-	Name          string      `json:"name" validate:"required"`
-	Address       string      `json:"address" validate:"required"`
-	PhoneNumber   string      `json:"phone_number" validate:"required"`
+	UniqueCode    string      `json:"unique_code" binding:"required"`
+	AccountNumber string      `json:"account_number" binding:"required"`
+	AccountType   AccountType `json:"account_type" binding:"required"`
+	Amount        int64       `json:"amount" binding:"required,gt=0"`
+	Name          string      `json:"name" binding:"required"`
+	Address       string      `json:"address" binding:"required"`
+	PhoneNumber   string      `json:"phone_number" binding:"required"`
 }
 
 type ValidateCablePayload struct {
-	UniqueCode    string `json:"unique_code" validate:"required"`
-	AccountNumber string `json:"account_number" validate:"required"`
-	NoOfMonth     int    `json:"no_of_month" validate:"required,gt=0"`
+	UniqueCode    string `json:"unique_code" binding:"required"`
+	AccountNumber string `json:"account_number" binding:"required"`
+	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
 }
 
 type PayCablePayload struct {
-	UniqueCode    string `json:"unique_code" validate:"required"`
-	AccountNumber string `json:"account_number" validate:"required"`
-	AccountType   string `json:"account_type" validate:"required"`
-	Name          string `json:"name" validate:"required"`
-	PhoneNumber   string `json:"phone_number" validate:"required"`
-	NoOfMonth     int    `json:"no_of_month" validate:"required,gt=0"`
-	Amount        int64  `json:"amount" validate:"required,gt=0"`
+	UniqueCode    string `json:"unique_code" binding:"required"`
+	AccountNumber string `json:"account_number" binding:"required"`
+	AccountType   string `json:"account_type" binding:"required"`
+	Name          string `json:"name" binding:"required"`
+	PhoneNumber   string `json:"phone_number" binding:"required"`
+	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
+	Amount        int64  `json:"amount" binding:"required,gt=0"`
 }
 
 type BillingsByCategoryIDPayload struct {
-	CategoryID int `json:"category_id" validate:"required,gt=0"`
+	CategoryID int `json:"category_id" binding:"required,gt=0"`
 }
 
 type FetchProductsQuery struct {
@@ -80,8 +80,8 @@ type BillerCategory struct {
 }
 
 type FetchProductsByCategoryIDAndBillerIDPayload struct {
-	CategoryID int `json:"category_id" validate:"required,gt=0"`
-	BillerID   int `json:"biller_id" validate:"required,gt=0"`
+	CategoryID int `json:"category_id" binding:"required,gt=0"`
+	BillerID   int `json:"biller_id" binding:"required,gt=0"`
 }
 
 type ProductsResponse []Product

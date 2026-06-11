@@ -49,3 +49,5 @@ func (r *Repository) UpdateTransactionMetadata(ctx context.Context, txID string,
 		Where("id = ?", txID).
 		Update("metadata", metadata).Error
 }
+
+func (r *Repository) StoreVASAsBeneficiary(ctx context.Context, vas *VAS) error {}
