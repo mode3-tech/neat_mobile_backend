@@ -59,6 +59,7 @@ type Config struct {
 
 	XpressPublicKey  string
 	XpressPrivateKey string
+	XpressBaseURL    string
 
 	RunMigrations bool
 }
@@ -120,6 +121,7 @@ func Load() Config {
 
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
+		XpressBaseURL:    getEnv("XPRESS_BASE_URL", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}
