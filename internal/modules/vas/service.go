@@ -563,4 +563,4 @@ func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount i
 	}
 }
 
-func (s *Service) FetchBeneficiaries(ctx context.Context)
+// func (s *Service) FetchBeneficiaries(ctx context.Context)
