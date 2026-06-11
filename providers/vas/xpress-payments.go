@@ -588,7 +588,55 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 	return &result, nil
 }
 
-// func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId, uniqueCode, email, phoneNumber, amount string)
+func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId, uniqueCode, email, phoneNumber, amount string) (*WAECResultCheckerPinResponse, error) {
+	url := x.BaseURL + "api/v1/education/waec/pin/fulfil"
+
+	payload := map[string]any{
+		"requestId":  requestId,
+		"uniqueCode": uniqueCode,
+		"details": map[string]string{
+			"email":       email,
+			"phoneNumber": phoneNumber,
+			"amount":      amount,
+		},
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := generatePaymentHash(jsonPayload, x.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+hash)
+
+	resp, err := x.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result WAECResultCheckerPinResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
 
 func generatePaymentHash(payload []byte, privateKey string) (string, error) {
 	mac := hmac.New(sha512.New, []byte(privateKey))

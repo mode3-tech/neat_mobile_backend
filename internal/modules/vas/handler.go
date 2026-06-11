@@ -85,6 +85,7 @@ func (h *Handler) FetchProducts(c *gin.Context) {
 
 	var req FetchProductsQuery
 	if err := c.ShouldBindQuery(&req); err != nil {
+		log.Printf("vas handler: %s\n", err)
 		mapped := response.MapError(appErr.ErrInvalidQueryParameter)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
 		return
