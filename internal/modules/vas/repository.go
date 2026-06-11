@@ -50,6 +50,6 @@ func (r *Repository) UpdateTransactionMetadata(ctx context.Context, txID string,
 		Update("metadata", metadata).Error
 }
 
-func (r *Repository) StoreVASAsBeneficiary(ctx context.Context, vas *VASBeneficiary) error {
-	return r.db.WithContext(ctx).Create(vas).Error
+func (r *Repository) StoreVASAsBeneficiary(ctx context.Context, beneficiary *VASBeneficiary) error {
+	return r.db.WithContext(ctx).Create(beneficiary).Error
 }
