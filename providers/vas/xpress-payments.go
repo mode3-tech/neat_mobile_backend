@@ -564,7 +564,7 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 	return &result, nil
 }
 
-func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId, uniqueCode, email, phoneNumber, amount string)
+// func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId, uniqueCode, email, phoneNumber, amount string)
 
 func generatePaymentHash(payload []byte, privateKey string) (string, error) {
 	mac := hmac.New(sha512.New, []byte(privateKey))
