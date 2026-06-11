@@ -54,11 +54,12 @@ func normalizeBillingsPagination(page, size int) (requestedPage, providerPage, p
 		size = maxBillingsPageSize
 	}
 
-	if page <= 0 {
-		page = 1
+	providerPage = page - 1
+	if providerPage < 0 {
+		providerPage = 0
 	}
 
-	return page, page - 1, size
+	return page, providerPage, size
 }
 
 func calculateTotalPages(totalCount, size int) int {
@@ -126,8 +127,8 @@ func (s *Service) FetchProductsByCategoryIDAndBillerID(ctx context.Context, payl
 	hasPrev := requestPage > 1
 	hasNext := requestPage < totalPages
 
-	products := make([]Product, 0, len(result.Data.CategoryDTOList))
-	for _, p := range result.Data.CategoryDTOList {
+	products := make([]Product, 0, len(result.Data.ProductDTOList))
+	for _, p := range result.Data.ProductDTOList {
 		products = append(products, Product{
 			Name:        p.Name,
 			UniqueCode:  p.UniqueCode,
