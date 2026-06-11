@@ -15,6 +15,11 @@ type Bank struct {
 	Name string `json:"name"`
 }
 
+type BankDetailsResponse struct {
+	Status  bool        `json:"status"`
+	Account BankDetails `json:"account"`
+}
+
 type BankDetails struct {
 	BankCode      string `json:"bankCode"`
 	AccountName   string `json:"accountName"`

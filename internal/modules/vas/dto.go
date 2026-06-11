@@ -101,3 +101,12 @@ type Product struct {
 		Name string `json:"name"`
 	} `json:"category_dto"`
 }
+
+type VAS struct {
+	ID             string `json:"id"`
+	PhoneNumber    string `json:"phone_number,omitempty"`
+	Email          string `json:"email,omitempty"`
+	BillingCompany string `json:"billing_company,omitempty"`
+	AccountNumber  string `json:"account_number,omitempty"`
+	AccountType    string `json:"account_type,omitempty"`
+}

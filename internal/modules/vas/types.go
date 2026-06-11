@@ -128,13 +128,3 @@ type CustomerWallet struct {
 }
 
 func (CustomerWallet) TableName() string { return "wallet_customer_wallets" }
-
-type VAS struct {
-	ID             string
-	MobileUserID   string
-	PhoneNumber    string
-	Email          string
-	BillingCompany string
-	AccountNumber  string
-	AccountType    string
-}
