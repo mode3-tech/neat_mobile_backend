@@ -150,7 +150,11 @@ func (s *Service) FetchProductsByCategoryIDAndBillerID(ctx context.Context, payl
 
 func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
 	requestID := uuid.NewString()
+	log.Printf("vas service: request ID: %s\n", requestID)
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
+	// categoryID := strings.TrimSpace(payload.CategoryID)
+	// billerID := strings.TrimSpace(payload.BillerID)
+
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
 	if err != nil {
 		log.Printf("vas service: failed to normalize phone number - %s\n", err)
@@ -167,6 +171,41 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		log.Println("vas service: amount is greater than NGN 10,000")
 		return nil, appErr.ErrInvalidISPAmount
 	}
+
+	// result, err := s.XpressPayments.FetchProductsByCategoryIDAndBillerID(ctx, categoryID, billerID)
+	// if err != nil {
+	// 	log.Printf("vas service: failed to fetch products by category ID and biller ID - %s\n", err)
+	// 	return nil, appErr.ErrGettingAirtime
+	// }
+
+	// if result == nil {
+	// 	log.Println("vas service: no products found")
+	// 	return nil, appErr.ErrGettingAirtime
+	// }
+
+	// if len(result.Data.ProductDTOList) == 0 {
+	// 	log.Println("vas service: no products found")
+	// 	return nil, appErr.ErrGettingAirtime
+	// }
+
+	// var product vasprovider.Product
+
+	// for _, p := range result.Data.ProductDTOList {
+	// 	if p.UniqueCode == uniqueCode {
+	// 		product = p
+	// 		break
+	// 	}
+	// }
+
+	// if product == (vasprovider.Product{}) {
+	// 	log.Println("vas service: no products found")
+	// 	return nil, appErr.ErrGettingAirtime
+	// }
+
+	// if int64(product.Amount) != amount {
+	// 	log.Printf("vas service: product amount mismatch - expected %d, got %d\n", amount, product.Amount)
+	// 	return nil, appErr.ErrInvalidProductAmount
+	// }
 
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
@@ -352,7 +391,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	return result, nil
 }
 
-func (s *Service) ValidateElectricity(ctx context.Context, payload ElectricityValidationPayload, mobileUserID string) (*vasprovider.ElectricityValidationResponse, error) {
+func (s *Service) ValidateElectricity(ctx context.Context, payload ElectricityValidationPayload) (*vasprovider.ElectricityValidationResponse, error) {
 	result, err := s.XpressPayments.ValidateElectricity(
 		ctx,
 		uuid.NewString(),
@@ -386,6 +425,26 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	metadata := map[string]any{
 		"provider": ExtractBillingCompanyName(uniqueCode),
 		"type":     "electricity",
+	}
+
+	validateElectricityPayload := ElectricityValidationPayload{
+		UniqueCode:    uniqueCode,
+		AccountNumber: accountNumber,
+		AccountType:   payload.AccountType,
+	}
+
+	validationResult, err := s.ValidateElectricity(ctx, validateElectricityPayload)
+	if err != nil {
+		log.Printf("vas service: failed to validate electricity account - %s\n", err)
+		return nil, appErr.ErrValidatingElectricity
+	}
+
+	if validationResult.Data.AccountNumber != accountNumber {
+		return nil, appErr.ErrInvalidAccountNumber
+	}
+
+	if string(validationResult.Data.AccountType) != string(payload.AccountType) {
+		return nil, appErr.ErrInvalidAccountType
 	}
 
 	txID, ref := uuid.NewString(), uuid.NewString()
@@ -563,4 +622,6 @@ func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount i
 	}
 }
 
-// func (s *Service) FetchBeneficiaries(ctx context.Context)
+func (s *Service) FetchBeneficiaries(ctx context.Context, mobileUserID, biller string) ([]VAS, error) {
+	return s.Repo.FetchVASBeneficiaries(ctx, mobileUserID, biller)
+}

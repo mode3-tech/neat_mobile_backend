@@ -72,9 +72,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	user, err := s.repo.GetUserByMobileUserID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("wallet service: user record not found: %v", err)
 			return nil, appErr.ErrUnauthorized
 		}
-
+		log.Printf("wallet service: failed to get user: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -97,6 +98,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	}
 	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
+		log.Printf("wallet service: failed to get user wallet id: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -110,6 +112,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErr.ErrMissingUserWallet
 		}
+		log.Printf("wallet service: failed to get wallet: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -132,17 +135,20 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	}
 
 	if err := s.repo.AddTransaction(ctx, txRecord); err != nil {
+		log.Printf("wallet service: failed to add transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		log.Printf("wallet service: failed to initiate transfer: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	if resp == nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		log.Printf("wallet service: provider returned an unsuccessful transfer response")
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -152,17 +158,18 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		if message == "" {
 			message = "provider returned an unsuccessful transfer response"
 		}
+		log.Printf("wallet service: provider returned an unsuccessful transfer response: %s", message)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 
 	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
+		log.Printf("wallet service: failed to complete debit transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	return resp, nil
-
 }
 
 func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error {

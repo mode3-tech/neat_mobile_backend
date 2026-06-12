@@ -2,7 +2,8 @@ package middleware
 
 import (
 	"log"
-	"net/http"
+	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/response"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -16,21 +17,33 @@ func AuthGuard(signer AccessTokenSigner, checker SessionChecker) gin.HandlerFunc
 
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 			log.Println("auth guard: missing or invalid authorization header")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
+			mapped := response.MapError(appErr.ErrMissingUserID)
+			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+				Status: "error",
+				Error:  &mapped.Error,
+			})
 			return
 		}
 
 		token := strings.TrimSpace(parts[1])
 		if token == "" || !signer.ValidAccessToken(token) {
 			log.Println("auth guard: invalid access token")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+			mapped := response.MapError(appErr.ErrUnauthorized)
+			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+				Status: "error",
+				Error:  &mapped.Error,
+			})
 			return
 		}
 
 		sub, sid, err := signer.ExtractAccessTokenIdentifiers(token)
 		if err != nil || strings.TrimSpace(sub) == "" || strings.TrimSpace(sid) == "" {
 			log.Printf("auth guard: failed to extract token identifiers: %v", err)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+			mapped := response.MapError(appErr.ErrUnauthorized)
+			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+				Status: "error",
+				Error:  &mapped.Error,
+			})
 			return
 		}
 
@@ -38,7 +51,11 @@ func AuthGuard(signer AccessTokenSigner, checker SessionChecker) gin.HandlerFunc
 			ok, err := checker.IsSessionActive(c.Request.Context(), sid, sub, deviceID)
 			if err != nil || !ok {
 				log.Printf("auth guard: session not active or checker error: %v", err)
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session is not active"})
+				mapped := response.MapError(appErr.ErrInvalidSession)
+				c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+					Status: "error",
+					Error:  &mapped.Error,
+				})
 				return
 			}
 		}
