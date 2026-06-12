@@ -32,7 +32,7 @@ tags:
   - name: NeatSave
     description: Savings goal and auto-save rule endpoints
   - name: VAS
-    description: Value-added services: airtime, data, electricity, and cable TV
+    description: airtime, data, electricity, and cable TV
 paths:
   /auth/register:
     post:
@@ -4628,76 +4628,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/API500Error"
-      tags:
-        - VAS
-      summary: Buy airtime
-      description: Debits the customer's wallet and purchases airtime for the given phone number.
-      parameters:
-        - in: header
-          name: Authorization
-          required: true
-          schema:
-            type: string
-          description: Bearer access token. Example `Bearer <access_token>`.
-        - in: header
-          name: X-Device-ID
-          required: true
-          schema:
-            type: string
-          description: Trusted device ID.
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/AirtimePurchaseRequest"
-      responses:
-        "200":
-          description: Airtime purchased successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ISPSuccessResponse"
-              examples:
-                success:
-                  value:
-                    status: success
-                    message: Airtime purchased successfully
-                    data:
-                      requestId: req-123
-                      referenceId: ref-456
-                      responseCode: "00"
-                      responseMessage: Success
-                      data:
-                        channel: api
-                        amount: 100
-                        phoneNumber: "08012345678"
-        "400":
-          description: Invalid request body
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Insufficient balance
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
-          description: Amount below NGN 50 minimum
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Provider error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   /vas/data:
     post:
       tags:
