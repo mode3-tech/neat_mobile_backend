@@ -82,13 +82,6 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("xpress pay: request failed with status code: %d, but failed to read response body: %s\n", resp.StatusCode, err)
-		} else {
-			log.Printf("xpress pay: request failed with status code: %d, response body length: %d, response: %s\n", resp.StatusCode, len(respBody), string(respBody))
-		}
-		log.Printf("xpress pay: response headers: %+v\n", resp.Header)
 		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode)
 	}
 
@@ -99,14 +92,10 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 		return nil, err
 	}
 
-	log.Printf("xpress pay: raw response body: %s\n", string(respBodyBytes))
-
 	if err := json.Unmarshal(respBodyBytes, &result); err != nil {
 		log.Printf("xpress pay: failed to decode body into json - %s\n", err)
 		return nil, err
 	}
-
-	log.Printf("xpress pay: decoded response - status: %s, message: %s, total categories: %d, categories list length: %d\n", result.ResponseCode, result.ResponseMessage, result.Data.TotalCount, len(result.Data.CategoryDTOList))
 
 	return &result, nil
 }
@@ -248,6 +237,7 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
 	req.Header.Set("Channel", "api")
 	req.Header.Set("PaymentHash", paymentHash)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := x.Client.Do(req)
 	if err != nil {

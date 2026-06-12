@@ -123,7 +123,7 @@ func (s *Service) ConfigureOptimusKYC(kyc OptimusKYCValidation) {
 	s.optimusKYC = kyc
 }
 
-func (s *Service) VerifyTransactionPin(ctx context.Context, pin, mobileUserID string) error {
+func (s *Service) VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error {
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
 		return appErr.ErrIncorrectTransactionPin

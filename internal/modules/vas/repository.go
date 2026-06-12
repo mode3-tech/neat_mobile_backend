@@ -53,3 +53,14 @@ func (r *Repository) UpdateTransactionMetadata(ctx context.Context, txID string,
 func (r *Repository) StoreVASAsBeneficiary(ctx context.Context, beneficiary *VASBeneficiary) error {
 	return r.db.WithContext(ctx).Create(beneficiary).Error
 }
+
+func (r *Repository) FetchVASBeneficiaries(ctx context.Context, mobileUserID, biller string) ([]VAS, error) {
+	var beneficiaries []VAS
+	err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND billing_company = ?", mobileUserID, biller).
+		Find(&beneficiaries).Error
+	if err != nil {
+		return nil, err
+	}
+	return beneficiaries, nil
+}

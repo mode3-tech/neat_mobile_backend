@@ -57,6 +57,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case appErr.ErrInvalidProductAmount:
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_PRODUCT_AMOUNT",
+				Message: "product amount mismatch",
+			},
+		}
+
 	case appErr.ErrBVNNotFound:
 		return ErrorMapping{
 			Status: http.StatusNotFound,
@@ -927,6 +936,24 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "INVALID_PHONE_NUMBER",
 				Message: appErr.ErrInvalidPhoneNumber.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidAccountNumber:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_ACCOUNT_NUMBER",
+				Message: appErr.ErrInvalidAccountNumber.Error(),
+			},
+		}
+
+	case appErr.ErrInvalidAccountType:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "INVALID_ACCOUNT_TYPE",
+				Message: appErr.ErrInvalidAccountType.Error(),
 			},
 		}
 
