@@ -64,9 +64,7 @@
   "paths": {
     "/auth/register": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Register a user",
         "description": "Accepts a registration request, consumes the verification records locally, and creates a durable registration job.\nReturns a `job_id` plus a one-time `claim_token` that can later be exchanged for access and refresh tokens\nafter the job reaches `completed`. Registration no longer returns auth tokens directly.\n",
         "requestBody": {
@@ -230,9 +228,7 @@
     },
     "/auth/register/{job_id}/status": {
       "get": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Get registration job status",
         "description": "Returns the current status of a registration job. This endpoint is intentionally token-free:\nit never returns access or refresh tokens. Use the one-time `claim_token` from `/auth/register`\nwith `/auth/register/{job_id}/claim` after the job is complete.\n",
         "parameters": [
@@ -352,9 +348,7 @@
     },
     "/auth/register/{job_id}/claim": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Claim registration session",
         "description": "Exchanges the one-time `claim_token` returned by `/auth/register` for access and refresh tokens\nafter the registration job is `completed`. The request must include the original `X-Device-ID`\nsubmitted during registration. A claim token can only be used once.\n",
         "parameters": [
@@ -521,9 +515,7 @@
     },
     "/auth/login": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Login a user",
         "description": "Authenticates a user by phone and password, then starts the device verification flow.\nReturns a success envelope with a `data` object containing `challenge` and `session_token`.\n",
         "parameters": [
@@ -659,9 +651,7 @@
     },
     "/auth/device/challenge/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify device challenge",
         "description": "Verifies a signed login challenge for a recognized trusted device and returns tokens.",
         "requestBody": {
@@ -766,9 +756,7 @@
     },
     "/auth/device/otp/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify new device with OTP",
         "description": "Completes login for a pending device-verification session using the `session_token`\nfrom `/auth/login` and the OTP sent to the user. If the OTP expires or is not received,\nrequest another code with `/auth/device/otp/resend` using the same `session_token` and `device_id`.\n",
         "requestBody": {
@@ -873,9 +861,7 @@
     },
     "/auth/device/otp/resend": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Resend OTP for new device login",
         "description": "Resends the login OTP for an active pending device-verification session created by `/auth/login`.\nThe same `session_token` remains valid and the pending session expiry is extended.\n",
         "requestBody": {
@@ -981,9 +967,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "Dev Signer"
-        ],
+        "tags": ["Dev Signer"],
         "summary": "Dev signer health check",
         "description": "Development-only endpoint served by `cmd/devsigner`.\n",
         "servers": [
@@ -1007,9 +991,7 @@
     },
     "/sign": {
       "post": {
-        "tags": [
-          "Dev Signer"
-        ],
+        "tags": ["Dev Signer"],
         "summary": "Sign challenge (development only)",
         "description": "Development-only endpoint served by `cmd/devsigner` to help Postman flows.\nIt signs `SHA-256(challenge)` using the configured ECDSA P-256 private key for `device_id`.\n",
         "servers": [
@@ -1073,9 +1055,7 @@
     },
     "/auth/logout": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Logout a user",
         "description": "Revokes the current auth session and refresh token record.",
         "parameters": [
@@ -1167,9 +1147,7 @@
     },
     "/auth/refresh": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Refresh access token",
         "description": "Validates a refresh token and device binding from request body, rotates the refresh token, and returns new access and refresh tokens.",
         "requestBody": {
@@ -1228,9 +1206,7 @@
     },
     "/auth/validate/bvn": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Validate BVN",
         "description": "Validates a BVN using Tendar only. Provider preference from CBA is ignored for this endpoint.",
         "requestBody": {
@@ -1299,9 +1275,7 @@
     },
     "/auth/validate/nin": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Validate NIN",
         "description": "Validates a NIN using the configured NIN provider and compares it with a previously verified BVN using `bvn_validation_id`.",
         "requestBody": {
@@ -1370,9 +1344,7 @@
     },
     "/auth/validate/bvn-with-face": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Validate BVN with face",
         "description": "Performs a liveness check by matching the provided face image against the BVN on record. Requires a prior BVN verification ID. Returns a `bvn_w_face_verification_id` that must be supplied at registration.",
         "requestBody": {
@@ -1431,9 +1403,7 @@
     },
     "/auth/validate/nin-with-face": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Validate NIN with face",
         "description": "Performs a liveness check by matching the provided face image against the NIN on record. Requires a prior NIN verification ID. Returns a `nin_w_face_verification_id` that must be supplied at registration.",
         "requestBody": {
@@ -1492,9 +1462,7 @@
     },
     "/auth/password/forgot": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Request password reset OTP",
         "description": "Sends a password reset OTP to the account phone number for a recognized device.",
         "parameters": [
@@ -1574,9 +1542,7 @@
     },
     "/auth/password/forgot/resend": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Resend password reset OTP",
         "description": "Resends the password reset OTP to the account phone number for a recognized device.",
         "parameters": [
@@ -1656,9 +1622,7 @@
     },
     "/auth/password/forgot/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify password reset OTP",
         "description": "Verifies the password reset OTP using the `otp_id` returned from the forgot step. Returns a `verification_id` (valid for 15 minutes) to be passed to the reset step.",
         "parameters": [
@@ -1728,9 +1692,7 @@
     },
     "/auth/password/reset": {
       "patch": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Reset password with verification ID",
         "description": "Consumes the `verification_id` obtained from the verify step and updates the user's password. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
@@ -1770,34 +1732,35 @@
                     }
                   }
                 }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, phone required, verification id required, or invalid password format",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid request body, phone required, verification id required, or invalid password format",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
                 }
               }
-            }
-          },
-          "401": {
-            "description": "Device not found, device not allowed, invalid verification id, verification id expired, or no account exists under this phone number",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "401": {
+              "description": "Device not found, device not allowed, invalid verification id, verification id expired, or no account exists under this phone number",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
                 }
               }
-            }
-          },
-          "500": {
-            "description": "Password reset failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "500": {
+              "description": "Password reset failed",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
                 }
               }
             }
@@ -1807,9 +1770,7 @@
     },
     "/auth/pin/forgot": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Request transaction PIN reset OTP",
         "description": "Sends a transaction PIN reset OTP to the account phone number. Returns an `otp_id` to be passed to the verify step.",
         "parameters": [
@@ -1883,9 +1844,7 @@
     },
     "/auth/pin/forgot/resend": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Resend transaction PIN reset OTP",
         "description": "Resends the transaction PIN reset OTP to the authenticated user's phone number.",
         "parameters": [
@@ -1962,9 +1921,7 @@
     },
     "/auth/pin/forgot/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify transaction PIN reset OTP",
         "description": "Verifies the PIN reset OTP using the `otp_id` returned from the forgot step. Returns a `verification_id` (valid for 15 minutes) to be passed to the reset step.",
         "parameters": [
@@ -2048,9 +2005,7 @@
     },
     "/auth/pin/reset": {
       "patch": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Reset transaction PIN with verification ID",
         "description": "Consumes the `verification_id` obtained from the verify step and updates the user's transaction PIN. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
@@ -2107,34 +2062,33 @@
               }
             }
           }
-          },
-          "400": {
-            "description": "Device id required, verification id required, pin validation failed, or pins don't match",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+        },
+        "400": {
+          "description": "Device id required, verification id required, pin validation failed, or pins don't match",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
               }
             }
-          },
-          "401": {
-            "description": "Device not found, device not allowed, user not found, invalid verification id, or verification id expired",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+          }
+        },
+        "401": {
+          "description": "Device not found, device not allowed, user not found, invalid verification id, or verification id expired",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
               }
             }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+          }
+        },
+        "500": {
+          "description": "Internal server error",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
               }
             }
           }
@@ -2143,9 +2097,7 @@
     },
     "/auth/pin/change/request": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Request transaction PIN change OTP",
         "description": "Sends a transaction PIN change OTP to the account phone number. Returns an `otp_id` to be passed to the verify step. Requires the device to be active and allowed.",
         "parameters": [
@@ -2229,9 +2181,7 @@
     },
     "/auth/pin/change/resend": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Resend transaction PIN change OTP",
         "description": "Resends the transaction PIN change OTP to the authenticated user's phone number.",
         "parameters": [
@@ -2315,9 +2265,7 @@
     },
     "/auth/pin/change/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify transaction PIN change OTP",
         "description": "Verifies the PIN change OTP using the `otp_id` returned from the request step. Returns a `verification_id` (valid for 15 minutes) to be passed to the change step.",
         "parameters": [
@@ -2401,9 +2349,7 @@
     },
     "/auth/pin/change": {
       "patch": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Change transaction PIN",
         "description": "Replaces the user's current transaction PIN with a new one using a `verification_id` obtained from the verify step. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
@@ -2497,9 +2443,7 @@
     },
     "/auth/password/change/request": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Request password change OTP",
         "description": "Sends a password change OTP to the account phone number. Returns an `otp_id` to be passed to the verify step. Requires the device to be active.",
         "parameters": [
@@ -2573,9 +2517,7 @@
     },
     "/auth/password/change/resend": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Resend password change OTP",
         "description": "Resends the password change OTP to the authenticated user's phone number. Returns the same `otp_id` as the original request.",
         "parameters": [
@@ -2659,9 +2601,7 @@
     },
     "/auth/password/change/verify": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Verify password change OTP",
         "description": "Verifies the password change OTP using the `otp_id` returned from the request step. Returns a `verification_id` (valid for 15 minutes) to be passed to the change step.",
         "parameters": [
@@ -2745,9 +2685,7 @@
     },
     "/auth/password/change": {
       "patch": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Change password with verification ID",
         "description": "Consumes the `verification_id` obtained from the verify step and replaces the user's current password. The verification_id expires 15 minutes after the OTP was verified.",
         "parameters": [
@@ -2841,9 +2779,7 @@
     },
     "/auth/biometrics/toggle": {
       "patch": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Toggle biometric authentication for the current device",
         "description": "Enable or disable biometric authentication for the authenticated user's current device.",
         "parameters": [
@@ -2937,9 +2873,7 @@
     },
     "/auth/challenge/request": {
       "post": {
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "summary": "Request a biometric challenge",
         "description": "Generates a new cryptographic challenge for the authenticated user's device to sign for biometric login. Authenticated via refresh token — no access token required.",
         "parameters": [
@@ -2959,9 +2893,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "refresh_token"
-                ],
+                "required": ["refresh_token"],
                 "properties": {
                   "refresh_token": {
                     "type": "string",
@@ -3018,9 +2950,7 @@
     },
     "/auth/otp/request": {
       "post": {
-        "tags": [
-          "OTP"
-        ],
+        "tags": ["OTP"],
         "summary": "Request OTP",
         "description": "Sends an OTP for login, signup, or password reset via SMS or email.",
         "requestBody": {
@@ -3070,7 +3000,10 @@
                   "invalid_request": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" }
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body"
+                      }
                     }
                   }
                 }
@@ -3086,7 +3019,10 @@
                   "too_many_requests": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "TOO_MANY_REQUESTS", "message": "Too many requests, please try again later" }
+                      "error": {
+                        "code": "TOO_MANY_REQUESTS",
+                        "message": "Too many requests, please try again later"
+                      }
                     }
                   }
                 }
@@ -3102,7 +3038,10 @@
                   "sms_delivery_failed": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "SMS_DELIVERY_FAILED", "message": "SMS delivery failed" }
+                      "error": {
+                        "code": "SMS_DELIVERY_FAILED",
+                        "message": "SMS delivery failed"
+                      }
                     }
                   }
                 }
@@ -3118,7 +3057,10 @@
                   "sms_not_configured": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "SMS_SERVICE_NOT_CONFIGURED", "message": "SMS service not configured" }
+                      "error": {
+                        "code": "SMS_SERVICE_NOT_CONFIGURED",
+                        "message": "SMS service not configured"
+                      }
                     }
                   }
                 }
@@ -3134,7 +3076,10 @@
                   "server_error": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred, please try again later" }
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "An unexpected error occurred, please try again later"
+                      }
                     }
                   }
                 }
@@ -3146,9 +3091,7 @@
     },
     "/auth/otp/verify": {
       "post": {
-        "tags": [
-          "OTP"
-        ],
+        "tags": ["OTP"],
         "summary": "Verify OTP",
         "description": "Verifies a previously issued OTP.",
         "requestBody": {
@@ -3192,7 +3135,10 @@
                   "invalid_request": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" }
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body"
+                      }
                     }
                   }
                 }
@@ -3208,7 +3154,10 @@
                   "invalid_otp": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "INVALID_OTP", "message": "invalid otp" }
+                      "error": {
+                        "code": "INVALID_OTP",
+                        "message": "invalid otp"
+                      }
                     }
                   }
                 }
@@ -3224,7 +3173,10 @@
                   "server_error": {
                     "value": {
                       "status": "error",
-                      "error": { "code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred, please try again later" }
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "An unexpected error occurred, please try again later"
+                      }
                     }
                   }
                 }
@@ -3236,9 +3188,7 @@
     },
     "/loan": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "List loan products",
         "description": "Returns the currently available loan products from storage.",
         "responses": {
@@ -3252,7 +3202,7 @@
               }
             }
           },
-          "401":{
+          "401": {
             "description": "Unauthorized access",
             "content": {
               "application/json": {
@@ -3277,9 +3227,7 @@
     },
     "/loan/apply": {
       "post": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Apply for a loan",
         "description": "Creates an embryo loan application after validating\nthe selected product, business data, transaction pin,\nuser verification state, and core-banking loan checks.\n",
         "requestBody": {
@@ -3398,9 +3346,7 @@
     },
     "/loan/loans": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "List customer loans",
         "description": "Returns all loans for the authenticated user.",
         "security": [
@@ -3475,9 +3421,7 @@
     },
     "/loan/history": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Loan repayment history",
         "description": "Returns the repayment installment history across all loans for the customer.",
         "security": [
@@ -3552,9 +3496,7 @@
     },
     "/loan/history/{loan_id}": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Loan repayment history by loan ID",
         "description": "Returns the repayment installment history for a specific loan.",
         "security": [
@@ -3628,9 +3570,7 @@
     },
     "/loan/loans/{loan_id}": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Get loan details",
         "description": "Returns total loan amount, amount repaid, outstanding balance, next due date, and the last 3 repayment installments for a specific loan.",
         "security": [
@@ -3704,9 +3644,7 @@
     },
     "/loan/loans/active": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "List active loans",
         "description": "Returns the authenticated user's active loans directly from the database.",
         "security": [
@@ -3781,9 +3719,7 @@
     },
     "/loan/repayment-schedule": {
       "get": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Get repayment schedule",
         "description": "Returns the repayment schedule for a specific core-banking loan id.",
         "security": [
@@ -3857,9 +3793,7 @@
     },
     "/loan/repayment/manual": {
       "post": {
-        "tags": [
-          "Loan"
-        ],
+        "tags": ["Loan"],
         "summary": "Make a manual loan repayment",
         "description": "Verifies the device and transaction PIN, debits the customer's wallet,\nthen submits the repayment to the core-banking system atomically.\n",
         "security": [
@@ -3974,9 +3908,7 @@
     },
     "/notifications": {
       "get": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "List notifications",
         "description": "Returns the authenticated user's in-app notification history in newest-first order.",
         "security": [
@@ -4045,9 +3977,7 @@
     },
     "/notifications/unread-count": {
       "get": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Get unread notification count",
         "description": "Returns the current unread notification count for the authenticated user.",
         "security": [
@@ -4091,9 +4021,7 @@
     },
     "/notifications/read-all": {
       "patch": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Mark all notifications as read",
         "description": "Marks all unread notifications for the authenticated user as read.",
         "security": [
@@ -4137,9 +4065,7 @@
     },
     "/notifications/{id}/read": {
       "patch": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Mark one notification as read",
         "description": "Marks a single notification owned by the authenticated user as read.",
         "security": [
@@ -4204,9 +4130,7 @@
     },
     "/notifications/token": {
       "post": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Register push token",
         "description": "Upserts the Expo push token for the authenticated user and device.",
         "security": [
@@ -4268,9 +4192,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Delete push token",
         "description": "Deletes the push token associated with the authenticated user and the supplied `X-Device-ID`.",
         "security": [
@@ -4335,9 +4257,7 @@
     },
     "/notifications/toggle": {
       "post": {
-        "tags": [
-          "Notification"
-        ],
+        "tags": ["Notification"],
         "summary": "Toggle push notifications",
         "description": "Toggles push notifications on or off for the authenticated user. Returns the updated enabled state.",
         "security": [
@@ -4402,9 +4322,7 @@
     },
     "/notifications/send": {
       "post": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Send notification internally",
         "description": "Internal endpoint used by trusted backend callers to create notification history, send Expo push messages,\nand persist accepted Expo ticket ids for later receipt polling. This endpoint is served under `/internal/v1`\nand is protected by HMAC headers.\n",
         "servers": [
@@ -4499,9 +4417,7 @@
     },
     "/reporting/users": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "List signed users",
         "description": "Returns a paginated list of signed users for internal reporting. This endpoint is served under `/internal/v1` and is protected by HMAC headers.",
         "servers": [
@@ -4599,9 +4515,7 @@
     },
     "/reporting/user/transaction": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Get user transaction history",
         "description": "Returns transactions for a specific mobile user id for internal reporting. This endpoint is served under `/internal/v1` and is protected by HMAC headers.",
         "servers": [
@@ -4708,9 +4622,7 @@
     },
     "/account/summary": {
       "get": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Get account summary",
         "description": "Returns the authenticated user's full name, account number, available balance, total loan balance, and a list of active loans with repayment details.",
         "security": [
@@ -4746,10 +4658,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -4769,10 +4678,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -4791,9 +4697,7 @@
     },
     "/account/limits": {
       "get": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Get account limits",
         "description": "Returns the CBN activation cap status for the authenticated user. New users are capped at ₦20,000 (2,000,000 kobo) inflow and outflow for the first 24 hours after registration. Once the window expires, `activation_cap.active` is false and all limit fields are zero.",
         "security": [
@@ -4848,9 +4752,7 @@
     },
     "/account/profile": {
       "patch": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Update profile",
         "description": "Updates the authenticated user's email and/or address. Both fields are optional; only supplied fields are updated.",
         "security": [
@@ -4896,10 +4798,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -4919,10 +4818,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -4942,10 +4838,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -4964,9 +4857,7 @@
     },
     "/account/statement": {
       "post": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Request account statement",
         "description": "Generates an account statement for the authenticated user for the requested date range and format.",
         "security": [
@@ -5012,10 +4903,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -5034,11 +4922,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                 "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "type": "object",
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -5058,10 +4943,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "error"
-                  ],
+                  "required": ["status", "error"],
                   "properties": {
                     "status": {
                       "type": "string",
@@ -5080,9 +4962,7 @@
     },
     "/account/statement/{job_id}/status": {
       "get": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Get account statement job status",
         "description": "Returns the status and download URL for a previously requested account statement job.",
         "security": [
@@ -5166,9 +5046,7 @@
     },
     "/account/statement/latest": {
       "get": {
-        "tags": [
-          "Account"
-        ],
+        "tags": ["Account"],
         "summary": "Get latest account statement",
         "description": "Returns the download URL for the most recently completed account statement for the authenticated user.",
         "security": [
@@ -5204,16 +5082,13 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "status",
-                    "code"
-                  ],
+                  "required": ["status", "code"],
                   "properties": {
                     "status": {
                       "type": "string",
                       "example": "error"
                     },
-                    "error":{
+                    "error": {
                       "$ref": "#/components/schemas/API401Error"
                     }
                   }
@@ -5237,16 +5112,13 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required":[
-                    "status",
-                    "error"
-                  ],
-                  "properties":{
+                  "required": ["status", "error"],
+                  "properties": {
                     "status": {
                       "type": "string",
                       "example": "error"
                     },
-                    "error":{
+                    "error": {
                       "$ref": "#/components/schemas/API500Error"
                     }
                   }
@@ -5259,9 +5131,7 @@
     },
     "/wallet/banks": {
       "get": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "List supported banks",
         "description": "Returns the list of banks supported for transfers, sourced from Providus.",
         "security": [
@@ -5336,9 +5206,7 @@
     },
     "/wallet/bank/details": {
       "get": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "Get bank account details",
         "description": "Resolves an account number and bank code to the account holder's name and bank details via Providus.",
         "security": [
@@ -5431,9 +5299,7 @@
     },
     "/wallet/transfer": {
       "post": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "Initiate a bank transfer",
         "description": "Initiates a transfer from the authenticated user's wallet to the specified bank account via Providus.",
         "security": [
@@ -5528,9 +5394,7 @@
     },
     "/wallet/transfer/bulk": {
       "post": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "Initiate a bulk bank transfer",
         "description": "Initiates multiple transfers from the authenticated user's wallet to specified bank accounts via Providus. Returns all, accepted, and rejected results.",
         "security": [
@@ -5615,9 +5479,7 @@
     },
     "/wallet/beneficiary": {
       "post": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "Add a beneficiary",
         "description": "Saves a bank account as a beneficiary for future transfers on the given wallet.",
         "security": [
@@ -5702,9 +5564,7 @@
     },
     "/wallet/beneficiaries": {
       "get": {
-        "tags": [
-          "Wallet"
-        ],
+        "tags": ["Wallet"],
         "summary": "List beneficiaries",
         "description": "Returns all saved beneficiaries for the given wallet.",
         "security": [
@@ -5759,9 +5619,7 @@
     },
     "/transaction/recent": {
       "get": {
-        "tags": [
-          "Transaction"
-        ],
+        "tags": ["Transaction"],
         "summary": "Fetch recent transactions",
         "description": "Returns the most recent transactions for the authenticated user's wallet.",
         "security": [
@@ -5805,9 +5663,7 @@
     },
     "/transaction/all": {
       "get": {
-        "tags": [
-          "Transaction"
-        ],
+        "tags": ["Transaction"],
         "summary": "Fetch all transactions (paginated)",
         "description": "Returns all transactions for the authenticated user's wallet, grouped by\nmonth and paginated via a cursor. Pass the `next_cursor` from the previous\nresponse as the `cursor` query parameter to fetch the next page. Omit\n`cursor` on the first request.\n",
         "security": [
@@ -5884,9 +5740,7 @@
     },
     "/webhooks/providus/credit": {
       "post": {
-        "tags": [
-          "Webhook"
-        ],
+        "tags": ["Webhook"],
         "summary": "Providus credit notification",
         "description": "Receives inbound credit notifications from Providus when money lands on a\nuser's virtual account. Protected by a shared secret sent in the\n`X-Notification-Secret` header. Always returns 200 — errors are logged\ninternally and do not trigger Providus retries.\n",
         "servers": [
@@ -5947,9 +5801,7 @@
     },
     "/cba/loan-applications": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Get latest embryo loan application for a user",
         "description": "Returns the most recent loan application for the supplied wallet user id\nwhere either the loan status is `embryo` or the customer status is\n`embryo`.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6033,9 +5885,7 @@
     },
     "/cba/loan-applications/embryo": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "List embryo loan application summaries",
         "description": "Returns applicant summaries for rows where either the loan status is\n`embryo` or the customer status is `embryo`, for internal CBA consumption.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6110,9 +5960,7 @@
     },
     "/cba/loan-applications/{application_ref}": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Get loan application by reference for CBA",
         "description": "Returns one locally stored loan application by `application_ref`.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6206,9 +6054,7 @@
     },
     "/cba/loan-applications/{application_ref}/status": {
       "patch": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Update loan application status from CBA",
         "description": "Callback endpoint used by CBA to update the local status of a loan application after review or booking.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6322,9 +6168,7 @@
     },
     "/cba/customers/bvn-record": {
       "get": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Get loan applicant BVN record for CBA",
         "description": "Returns the linked BVN record for the supplied wallet user id together\nwith the matched application reference.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6418,9 +6262,7 @@
     },
     "/cba/customers/link-by-bvn": {
       "post": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Link wallet users to a core customer by BVN",
         "description": "Updates local wallet users that share the supplied BVN so they point to the supplied core customer id.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6505,9 +6347,7 @@
     },
     "/cba/customers/{customer_id}/status": {
       "patch": {
-        "tags": [
-          "Internal"
-        ],
+        "tags": ["Internal"],
         "summary": "Update customer status from CBA",
         "description": "Callback endpoint used by CBA to update the local customer status for a core customer id.\nAllowed values are `embryo`, `pending`, and `approved`.\nThis endpoint is served under `/internal/v1` and is protected by HMAC headers.\n",
         "servers": [
@@ -6621,9 +6461,7 @@
     },
     "/savings/create/goal": {
       "post": {
-        "tags": [
-          "NeatSave"
-        ],
+        "tags": ["NeatSave"],
         "summary": "Create a savings goal",
         "description": "Creates a new savings goal for the authenticated user. If `auto_save` is true, an auto-save rule is created atomically with the goal.",
         "security": [
@@ -6657,10 +6495,15 @@
             "description": "Savings goal created successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CreateGoalSuccessResponse" },
+                "schema": {
+                  "$ref": "#/components/schemas/CreateGoalSuccessResponse"
+                },
                 "examples": {
                   "success": {
-                    "value": { "status": "success", "message": "savings goal creation was successful" }
+                    "value": {
+                      "status": "success",
+                      "message": "savings goal creation was successful"
+                    }
                   }
                 }
               }
@@ -6673,7 +6516,13 @@
                 "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "invalid_request": {
-                    "value": { "status": "error", "error": { "code": "INVALID_REQUEST_BODY", "message": "Invalid request body" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body"
+                      }
+                    }
                   }
                 }
               }
@@ -6686,7 +6535,13 @@
                 "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "missing_user": {
-                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "missing user id"
+                      }
+                    }
                   }
                 }
               }
@@ -6699,7 +6554,13 @@
                 "schema": { "$ref": "#/components/schemas/API403Error" },
                 "examples": {
                   "device_not_allowed": {
-                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "DEVICE_NOT_ALLOWED",
+                        "message": "Device is inactive or not trusted, please contact support to resolve this issue"
+                      }
+                    }
                   }
                 }
               }
@@ -6712,10 +6573,22 @@
                 "schema": { "$ref": "#/components/schemas/API422Error" },
                 "examples": {
                   "invalid_amount": {
-                    "value": { "status": "error", "error": { "code": "INVALID_SAVINGS_AMOUNT", "message": "savings amount must be at least 50 NGN" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_SAVINGS_AMOUNT",
+                        "message": "savings amount must be at least 50 NGN"
+                      }
+                    }
                   },
                   "invalid_date": {
-                    "value": { "status": "error", "error": { "code": "INVALID_DATE", "message": "invalid date range" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_DATE",
+                        "message": "invalid date range"
+                      }
+                    }
                   }
                 }
               }
@@ -6728,7 +6601,13 @@
                 "schema": { "$ref": "#/components/schemas/API500Error" },
                 "examples": {
                   "creation_failed": {
-                    "value": { "status": "error", "error": { "code": "SAVINGS_GOAL_CREATION_ERROR", "message": "Failed to create savings goal" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "SAVINGS_GOAL_CREATION_ERROR",
+                        "message": "Failed to create savings goal"
+                      }
+                    }
                   }
                 }
               }
@@ -6739,9 +6618,7 @@
     },
     "/savings/goals": {
       "get": {
-        "tags": [
-          "NeatSave"
-        ],
+        "tags": ["NeatSave"],
         "summary": "List user savings goals",
         "description": "Returns all savings goals for the authenticated user, each including the timestamp of the last deposit.",
         "security": [
@@ -6765,7 +6642,9 @@
             "description": "Goals fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetUserGoalsSuccessResponse" },
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserGoalsSuccessResponse"
+                },
                 "examples": {
                   "success": {
                     "value": {
@@ -6774,7 +6653,14 @@
                       "data": {
                         "status": "success",
                         "message": "User's goals fetched successfully",
-                        "goals": [{ "goal_id": "3f7b1c2a-...", "name": "Emergency Fund", "start_date": "2026-01-01T00:00:00Z", "last_deposit": null }]
+                        "goals": [
+                          {
+                            "goal_id": "3f7b1c2a-...",
+                            "name": "Emergency Fund",
+                            "start_date": "2026-01-01T00:00:00Z",
+                            "last_deposit": null
+                          }
+                        ]
                       }
                     }
                   }
@@ -6789,7 +6675,13 @@
                 "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "missing_user": {
-                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "missing user id"
+                      }
+                    }
                   }
                 }
               }
@@ -6802,7 +6694,13 @@
                 "schema": { "$ref": "#/components/schemas/API403Error" },
                 "examples": {
                   "device_not_allowed": {
-                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "DEVICE_NOT_ALLOWED",
+                        "message": "Device is inactive or not trusted, please contact support to resolve this issue"
+                      }
+                    }
                   }
                 }
               }
@@ -6815,7 +6713,13 @@
                 "schema": { "$ref": "#/components/schemas/API500Error" },
                 "examples": {
                   "fetch_failed": {
-                    "value": { "status": "error", "error": { "code": "FETCHING_USER_GOALS_ERROR", "message": "Failed to fetch user goals" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "FETCHING_USER_GOALS_ERROR",
+                        "message": "Failed to fetch user goals"
+                      }
+                    }
                   }
                 }
               }
@@ -6826,9 +6730,7 @@
     },
     "/savings/goals/summary": {
       "get": {
-        "tags": [
-          "NeatSave"
-        ],
+        "tags": ["NeatSave"],
         "summary": "Get goal summary",
         "description": "Returns the title, start date, target amount, total savings, and last deposit for a specific goal.",
         "security": [
@@ -6861,7 +6763,9 @@
             "description": "Goal summary fetched successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetGoalSummarySuccessResponse" },
+                "schema": {
+                  "$ref": "#/components/schemas/GetGoalSummarySuccessResponse"
+                },
                 "examples": {
                   "success": {
                     "value": {
@@ -6870,7 +6774,13 @@
                       "data": {
                         "status": "success",
                         "message": "Goal summary fetched successfully",
-                        "summary": { "name": "Emergency Fund", "start_date": "2026-01-01T00:00:00Z", "target_amount": 500000, "total_savings": 120000, "last_deposit": "2026-04-15T10:00:00Z" }
+                        "summary": {
+                          "name": "Emergency Fund",
+                          "start_date": "2026-01-01T00:00:00Z",
+                          "target_amount": 500000,
+                          "total_savings": 120000,
+                          "last_deposit": "2026-04-15T10:00:00Z"
+                        }
                       }
                     }
                   }
@@ -6885,7 +6795,13 @@
                 "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "invalid_query": {
-                    "value": { "status": "error", "error": { "code": "INVALID_QUERY_PARAMETER", "message": "Invalid query parameter" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMETER",
+                        "message": "Invalid query parameter"
+                      }
+                    }
                   }
                 }
               }
@@ -6898,7 +6814,13 @@
                 "schema": { "$ref": "#/components/schemas/API400Error" },
                 "examples": {
                   "missing_user": {
-                    "value": { "status": "error", "error": { "code": "MISSING_REQUIRED_FIELD", "message": "missing user id" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "MISSING_REQUIRED_FIELD",
+                        "message": "missing user id"
+                      }
+                    }
                   }
                 }
               }
@@ -6911,7 +6833,13 @@
                 "schema": { "$ref": "#/components/schemas/API403Error" },
                 "examples": {
                   "device_not_allowed": {
-                    "value": { "status": "error", "error": { "code": "DEVICE_NOT_ALLOWED", "message": "Device is inactive or not trusted, please contact support to resolve this issue" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "DEVICE_NOT_ALLOWED",
+                        "message": "Device is inactive or not trusted, please contact support to resolve this issue"
+                      }
+                    }
                   }
                 }
               }
@@ -6924,7 +6852,13 @@
                 "schema": { "$ref": "#/components/schemas/API500Error" },
                 "examples": {
                   "fetch_failed": {
-                    "value": { "status": "error", "error": { "code": "FETCHING_GOAL_SUMMARY_ERROR", "message": "Failed to fetch goal summary" } }
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "FETCHING_GOAL_SUMMARY_ERROR",
+                        "message": "Failed to fetch goal summary"
+                      }
+                    }
                   }
                 }
               }
@@ -6939,14 +6873,47 @@
         "summary": "Fetch VAS categories",
         "description": "Returns available VAS categories.",
         "parameters": [
-          { "in": "header", "name": "Authorization", "required": true, "schema": { "type": "string" }, "description": "Bearer access token. Example: `Bearer <access_token>`." },
-          { "in": "header", "name": "X-Device-ID", "required": true, "schema": { "type": "string" }, "description": "Trusted device ID." }
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Trusted device ID."
+          }
         ],
         "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": { "description": "Categories fetched successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoriesResponse" } } } },
-          "401": { "description": "Unauthorized — missing user ID or device ID", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
-          "500": { "description": "Failed to fetch categories", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API500Error" } } } }
+          "200": {
+            "description": "Categories fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CategoriesResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing user ID or device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch categories",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          }
         }
       }
     },
@@ -6956,19 +6923,84 @@
         "summary": "Fetch billers by category",
         "description": "Returns a paginated list of billers for the specified VAS category.",
         "parameters": [
-          { "in": "header", "name": "Authorization", "required": true, "schema": { "type": "string" }, "description": "Bearer access token. Example: `Bearer <access_token>`." },
-          { "in": "header", "name": "X-Device-ID", "required": true, "schema": { "type": "string" }, "description": "Trusted device ID." },
-          { "in": "query", "name": "category_id", "required": true, "schema": { "type": "integer" }, "description": "VAS category identifier" },
-          { "in": "query", "name": "page", "required": true, "schema": { "type": "integer" }, "description": "1-indexed page number" },
-          { "in": "query", "name": "size", "required": true, "schema": { "type": "integer" }, "description": "Page size (limit)" }
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Trusted device ID."
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "VAS category identifier"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "1-indexed page number"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Page size (limit)"
+          }
         ],
         "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": { "description": "Billers fetched successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BillersResponse" } } } },
-          "400": { "description": "Invalid query parameter", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized — missing user ID or device ID", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
-          "403": { "description": "Device not trusted or not allowed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API403Error" } } } },
-          "500": { "description": "Failed to fetch billers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API500Error" } } } }
+          "200": {
+            "description": "Billers fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BillersResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing user ID or device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch billers",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          }
         }
       }
     },
@@ -6978,20 +7010,91 @@
         "summary": "Fetch products by category and biller",
         "description": "Returns a paginated list of products for the specified category and biller.",
         "parameters": [
-          { "in": "header", "name": "Authorization", "required": true, "schema": { "type": "string" }, "description": "Bearer access token. Example: `Bearer <access_token>`." },
-          { "in": "header", "name": "X-Device-ID", "required": true, "schema": { "type": "string" }, "description": "Trusted device ID." },
-          { "in": "query", "name": "category_id", "required": true, "schema": { "type": "integer" }, "description": "VAS category identifier" },
-          { "in": "query", "name": "biller_id", "required": true, "schema": { "type": "integer" }, "description": "Biller identifier" },
-          { "in": "query", "name": "page", "required": true, "schema": { "type": "integer" }, "description": "1-indexed page number" },
-          { "in": "query", "name": "size", "required": true, "schema": { "type": "integer" }, "description": "Page size (limit)" }
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Bearer access token. Example: `Bearer <access_token>`."
+          },
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Trusted device ID."
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "VAS category identifier"
+          },
+          {
+            "in": "query",
+            "name": "biller_id",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Biller identifier"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "1-indexed page number"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Page size (limit)"
+          }
         ],
         "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": { "description": "Products fetched successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductsResponse" } } } },
-          "400": { "description": "Invalid query parameter", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized — missing user ID or device ID", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
-          "403": { "description": "Device not trusted or not allowed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API403Error" } } } },
-          "500": { "description": "Failed to fetch products", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API500Error" } } } }
+          "200": {
+            "description": "Products fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProductsResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing user ID or device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not allowed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch products",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          }
         }
       }
     },
@@ -7021,7 +7124,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AirtimePurchaseRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/AirtimePurchaseRequest"
+              }
             }
           }
         },
@@ -7036,17 +7141,55 @@
                     "value": {
                       "status": "success",
                       "message": "Airtime purchased successfully",
-                      "data": { "requestId": "req-123", "referenceId": "ref-456", "responseCode": "00", "responseMessage": "Success", "data": { "channel": "api", "amount": 100, "phoneNumber": "08012345678" } }
+                      "data": {
+                        "requestId": "req-123",
+                        "referenceId": "ref-456",
+                        "responseCode": "00",
+                        "responseMessage": "Success",
+                        "data": {
+                          "channel": "api",
+                          "amount": 100,
+                          "phoneNumber": "08012345678"
+                        }
+                      }
                     }
                   }
                 }
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "403": { "description": "Insufficient balance", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "422": { "description": "Amount below NGN 50 minimum", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Amount below NGN 50 minimum",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -7089,10 +7232,38 @@
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "403": { "description": "Insufficient balance", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "422": { "description": "Amount below NGN 50 minimum", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Amount below NGN 50 minimum",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -7122,7 +7293,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ElectricityValidationRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ElectricityValidationRequest"
+              }
             }
           }
         },
@@ -7131,12 +7304,28 @@
             "description": "Account validated successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ElectricityValidationSuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ElectricityValidationSuccessResponse"
+                }
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -7175,13 +7364,36 @@
             "description": "Electricity bill paid successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PayElectricitySuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PayElectricitySuccessResponse"
+                }
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "403": { "description": "Insufficient balance", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -7211,7 +7423,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CableValidationRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CableValidationRequest"
+              }
             }
           }
         },
@@ -7220,12 +7434,28 @@
             "description": "Cable account validated successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CableValidationSuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CableValidationSuccessResponse"
+                }
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -7264,13 +7494,36 @@
             "description": "Cable bill paid successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PayCableSuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PayCableSuccessResponse"
+                }
               }
             }
           },
-          "400": { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "403": { "description": "Insufficient balance", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "502": { "description": "Provider error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     }
@@ -7371,12 +7624,7 @@
       },
       "CreateGoalRequest": {
         "type": "object",
-        "required": [
-          "name",
-          "target_amount",
-          "target_date",
-          "savings_type"
-        ],
+        "required": ["name", "target_amount", "target_date", "savings_type"],
         "properties": {
           "name": {
             "type": "string",
@@ -7395,10 +7643,7 @@
           },
           "savings_type": {
             "type": "string",
-            "enum": [
-              "flexible",
-              "locked"
-            ],
+            "enum": ["flexible", "locked"],
             "example": "flexible"
           },
           "auto_save": {
@@ -7408,11 +7653,7 @@
           },
           "frequency": {
             "type": "string",
-            "enum": [
-              "daily",
-              "weekly",
-              "monthly"
-            ],
+            "enum": ["daily", "weekly", "monthly"],
             "description": "Required when auto_save is true",
             "example": "weekly"
           },
@@ -7619,10 +7860,7 @@
       },
       "BulkTransferRequest": {
         "type": "object",
-        "required": [
-          "recipient_info",
-          "transaction_pin"
-        ],
+        "required": ["recipient_info", "transaction_pin"],
         "properties": {
           "recipient_info": {
             "type": "array",
@@ -7639,12 +7877,7 @@
       },
       "BulkTransferRecipientInfo": {
         "type": "object",
-        "required": [
-          "amount",
-          "sort_code",
-          "account_number",
-          "account_name"
-        ],
+        "required": ["amount", "sort_code", "account_number", "account_name"],
         "properties": {
           "amount": {
             "type": "integer",
@@ -7793,11 +8026,7 @@
       },
       "AddBeneficiaryRequest": {
         "type": "object",
-        "required": [
-          "bank_code",
-          "account_number",
-          "account_name"
-        ],
+        "required": ["bank_code", "account_number", "account_name"],
         "properties": {
           "bank_code": {
             "type": "string",
@@ -7880,17 +8109,38 @@
           "id": { "type": "integer", "example": 123 },
           "name": { "type": "string", "example": "Electricity Biller" },
           "biller_code": { "type": "string", "example": "ELEC123" },
-          "description": { "type": "string", "example": "Electricity bill payments" },
-          "category_dtos": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "integer", "example": 1 }, "name": { "type": "string", "example": "Utilities" } } } },
-          "image": { "type": "string", "example": "https://example.com/logo.png" }
+          "description": {
+            "type": "string",
+            "example": "Electricity bill payments"
+          },
+          "category_dtos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "integer", "example": 1 },
+                "name": { "type": "string", "example": "Utilities" }
+              }
+            }
+          },
+          "image": {
+            "type": "string",
+            "example": "https://example.com/logo.png"
+          }
         }
       },
       "BillersResponse": {
         "type": "object",
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Billers fetched successfully" },
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Biller" } }
+          "message": {
+            "type": "string",
+            "example": "Billers fetched successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Biller" }
+          }
         }
       },
       "Product": {
@@ -7901,36 +8151,65 @@
           "look_up": { "type": "boolean", "example": false },
           "fixed_amount": { "type": "boolean", "example": true },
           "amount": { "type": "number", "format": "float", "example": 100.0 },
-          "min_amount": { "type": "number", "format": "float", "example": 50.0 },
-          "max_amount": { "type": "number", "format": "float", "example": 1000.0 },
-          "image_url": { "type": "string", "example": "https://example.com/product.png" },
+          "min_amount": {
+            "type": "number",
+            "format": "float",
+            "example": 50.0
+          },
+          "max_amount": {
+            "type": "number",
+            "format": "float",
+            "example": 1000.0
+          },
+          "image_url": {
+            "type": "string",
+            "example": "https://example.com/product.png"
+          },
           "biller_name": { "type": "string", "example": "Electricity Biller" },
-          "category_dto": { "type": "object", "properties": { "id": { "type": "integer", "example": 1 }, "name": { "type": "string", "example": "Utilities" } } }
+          "category_dto": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "integer", "example": 1 },
+              "name": { "type": "string", "example": "Utilities" }
+            }
+          }
         }
       },
       "ProductsResponse": {
         "type": "object",
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Products fetched successfully" },
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } }
+          "message": {
+            "type": "string",
+            "example": "Products fetched successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Product" }
+          }
         }
       },
-        "Category": {
-          "type": "object",
-          "properties": {
-            "id": { "type": "integer", "example": 1 },
-            "name": { "type": "string", "example": "Utilities" }
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Utilities" }
+        }
+      },
+      "CategoriesResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Categories fetched successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Category" }
           }
-        },
-        "CategoriesResponse": {
-          "type": "object",
-          "properties": {
-            "status": { "type": "string", "example": "success" },
-            "message": { "type": "string", "example": "Categories fetched successfully" },
-            "data": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
-          }
-        },
+        }
+      },
       "ActiveLoan": {
         "type": "object",
         "properties": {
@@ -8007,7 +8286,7 @@
             "type": "number",
             "format": "double",
             "description": "Available wallet balance.",
-            "example": 2500.00
+            "example": 2500.0
           },
           "loan_balance": {
             "type": "number",
@@ -8187,18 +8466,11 @@
       },
       "AccountStatementRequest": {
         "type": "object",
-        "required": [
-          "format",
-          "date_from",
-          "date_to"
-        ],
+        "required": ["format", "date_from", "date_to"],
         "properties": {
           "format": {
             "type": "string",
-            "enum": [
-              "csv",
-              "pdf"
-            ],
+            "enum": ["csv", "pdf"],
             "example": "pdf"
           },
           "date_from": {
@@ -8239,19 +8511,19 @@
             "type": "boolean",
             "example": true
           },
-        "data": {
-          "job_status": {
-            "type": "string",
-            "example": "ready"
-          },
-          "download_url": {
-            "type": "string",
-            "format": "uri",
-            "example": "https://storage.example.com/statements/9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f.pdf"
+          "data": {
+            "job_status": {
+              "type": "string",
+              "example": "ready"
+            },
+            "download_url": {
+              "type": "string",
+              "format": "uri",
+              "example": "https://storage.example.com/statements/9f1e2d3c-4b5a-6c7d-8e9f-0a1b2c3d4e5f.pdf"
+            }
           }
         }
-      }
-    },
+      },
       "GetLatestAccountStatementResponse": {
         "type": "object",
         "properties": {
@@ -8265,10 +8537,10 @@
           },
           "data": {
             "download_url": {
-            "type": "string",
-            "format": "uri",
-            "example": "https://storage.example.com/statements/John_Doe_20260101_to_20260331.pdf"
-          }
+              "type": "string",
+              "format": "uri",
+              "example": "https://storage.example.com/statements/John_Doe_20260101_to_20260331.pdf"
+            }
           }
         }
       },
@@ -8488,10 +8760,7 @@
       },
       "DevSignRequest": {
         "type": "object",
-        "required": [
-          "device_id",
-          "challenge"
-        ],
+        "required": ["device_id", "challenge"],
         "properties": {
           "device_id": {
             "type": "string",
@@ -8505,10 +8774,7 @@
       },
       "DevSignResponse": {
         "type": "object",
-        "required": [
-          "signature",
-          "algorithm"
-        ],
+        "required": ["signature", "algorithm"],
         "properties": {
           "signature": {
             "type": "string",
@@ -8659,12 +8925,7 @@
           },
           "registration_status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "processing",
-              "completed",
-              "failed"
-            ],
+            "enum": ["pending", "processing", "completed", "failed"],
             "example": "pending"
           },
           "can_login": {
@@ -8695,10 +8956,7 @@
       },
       "RegistrationJobSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -8715,9 +8973,7 @@
       },
       "RegistrationSessionClaimRequest": {
         "type": "object",
-        "required": [
-          "claim_token"
-        ],
+        "required": ["claim_token"],
         "properties": {
           "claim_token": {
             "type": "string",
@@ -8728,10 +8984,7 @@
       },
       "LoginRequest": {
         "type": "object",
-        "required": [
-          "phone",
-          "password"
-        ],
+        "required": ["phone", "password"],
         "properties": {
           "phone": {
             "type": "string",
@@ -8766,10 +9019,7 @@
       },
       "LoginInitResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -8799,10 +9049,7 @@
       },
       "LoginSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -8819,11 +9066,7 @@
       },
       "VerifyDeviceRequest": {
         "type": "object",
-        "required": [
-          "challenge",
-          "signature",
-          "device_id"
-        ],
+        "required": ["challenge", "signature", "device_id"],
         "properties": {
           "challenge": {
             "type": "string",
@@ -8844,10 +9087,7 @@
       },
       "VerifyDeviceResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -8864,11 +9104,7 @@
       },
       "VerifiedDeviceData": {
         "type": "object",
-        "required": [
-          "access_token",
-          "refresh_token",
-          "is_biometrics_enabled"
-        ],
+        "required": ["access_token", "refresh_token", "is_biometrics_enabled"],
         "properties": {
           "access_token": {
             "type": "string",
@@ -8886,11 +9122,7 @@
       },
       "NewDeviceRequest": {
         "type": "object",
-        "required": [
-          "session_token",
-          "otp",
-          "device"
-        ],
+        "required": ["session_token", "otp", "device"],
         "properties": {
           "session_token": {
             "type": "string",
@@ -8910,10 +9142,7 @@
       },
       "ResendNewDeviceOTPRequest": {
         "type": "object",
-        "required": [
-          "session_token",
-          "device_id"
-        ],
+        "required": ["session_token", "device_id"],
         "properties": {
           "session_token": {
             "type": "string",
@@ -8929,9 +9158,7 @@
       },
       "LogoutRequest": {
         "type": "object",
-        "required": [
-          "refresh_token"
-        ],
+        "required": ["refresh_token"],
         "properties": {
           "refresh_token": {
             "type": "string",
@@ -8941,10 +9168,7 @@
       },
       "RefreshTokenRequest": {
         "type": "object",
-        "required": [
-          "device_id",
-          "refresh_token"
-        ],
+        "required": ["device_id", "refresh_token"],
         "properties": {
           "device_id": {
             "type": "string",
@@ -8958,9 +9182,7 @@
       },
       "ForgotPasswordRequest": {
         "type": "object",
-        "required": [
-          "phone"
-        ],
+        "required": ["phone"],
         "properties": {
           "phone": {
             "type": "string",
@@ -8980,10 +9202,7 @@
       },
       "ForgotPasswordSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9000,10 +9219,7 @@
       },
       "ForgotPasswordResendSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9020,10 +9236,7 @@
       },
       "VerifyForgotPasswordOTPRequest": {
         "type": "object",
-        "required": [
-          "otp_id",
-          "otp_code"
-        ],
+        "required": ["otp_id", "otp_code"],
         "properties": {
           "otp_id": {
             "type": "string",
@@ -9050,10 +9263,7 @@
       },
       "VerifyForgotPasswordOTPSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9080,10 +9290,7 @@
       },
       "RequestChangePasswordSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9110,10 +9317,7 @@
       },
       "VerifyPasswordChangeOTPRequest": {
         "type": "object",
-        "required": [
-          "otp_id",
-          "otp_code"
-        ],
+        "required": ["otp_id", "otp_code"],
         "properties": {
           "otp_id": {
             "type": "string",
@@ -9140,10 +9344,7 @@
       },
       "VerifyPasswordChangeOTPSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9190,9 +9391,7 @@
       },
       "BVNValidationRequest": {
         "type": "object",
-        "required": [
-          "bvn"
-        ],
+        "required": ["bvn"],
         "properties": {
           "bvn": {
             "type": "string",
@@ -9225,10 +9424,7 @@
       },
       "BVNValidationSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9245,10 +9441,7 @@
       },
       "NINValidationRequest": {
         "type": "object",
-        "required": [
-          "nin",
-          "bvn_verification_id"
-        ],
+        "required": ["nin", "bvn_verification_id"],
         "properties": {
           "nin": {
             "type": "string",
@@ -9276,30 +9469,17 @@
       },
       "LoanFrequency": {
         "type": "string",
-        "enum": [
-          "weekly",
-          "monthly"
-        ],
+        "enum": ["weekly", "monthly"],
         "example": "weekly"
       },
       "LoanStatus": {
         "type": "string",
-        "enum": [
-          "embryo",
-          "pending",
-          "approved",
-          "decline",
-          "active"
-        ],
+        "enum": ["embryo", "pending", "approved", "decline", "active"],
         "example": "embryo"
       },
       "CustomerStatus": {
         "type": "string",
-        "enum": [
-          "embryo",
-          "pending",
-          "approved"
-        ],
+        "enum": ["embryo", "pending", "approved"],
         "example": "embryo"
       },
       "LoanProduct": {
@@ -9364,11 +9544,7 @@
       },
       "LoanProductsResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9484,11 +9660,7 @@
       },
       "LoanApplicationResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9575,11 +9747,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "paid",
-              "overdue",
-              "upcoming"
-            ],
+            "enum": ["paid", "overdue", "upcoming"],
             "example": "paid"
           },
           "amount_paid": {
@@ -9591,11 +9759,7 @@
       },
       "LoanHistoryResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9645,11 +9809,7 @@
       },
       "LoanDetailsResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9694,11 +9854,7 @@
       },
       "ActiveLoanListResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9718,11 +9874,7 @@
       },
       "LoanListResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9785,11 +9937,7 @@
       },
       "LoanRepaymentsResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -9811,11 +9959,7 @@
       },
       "ManualRepaymentRequest": {
         "type": "object",
-        "required": [
-          "loan_id",
-          "amount",
-          "transaction_pin"
-        ],
+        "required": ["loan_id", "amount", "transaction_pin"],
         "properties": {
           "loan_id": {
             "type": "string",
@@ -9835,10 +9979,7 @@
       },
       "ManualRepaymentResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -9852,10 +9993,7 @@
       },
       "InternalLoanApplicationsResponse": {
         "type": "object",
-        "required": [
-          "count",
-          "applications"
-        ],
+        "required": ["count", "applications"],
         "properties": {
           "count": {
             "type": "integer",
@@ -9871,9 +10009,7 @@
       },
       "InternalLoanApplicationResponse": {
         "type": "object",
-        "required": [
-          "application"
-        ],
+        "required": ["application"],
         "properties": {
           "application": {
             "$ref": "#/components/schemas/InternalLoanApplicationItem"
@@ -9882,13 +10018,7 @@
       },
       "InternalEmbryoLoanApplicationsResponse": {
         "type": "object",
-        "required": [
-          "count",
-          "page",
-          "limit",
-          "total",
-          "applications"
-        ],
+        "required": ["count", "page", "limit", "total", "applications"],
         "properties": {
           "count": {
             "type": "integer",
@@ -9956,10 +10086,7 @@
       },
       "InternalLoanApplicationItem": {
         "type": "object",
-        "required": [
-          "application_ref",
-          "loan"
-        ],
+        "required": ["application_ref", "loan"],
         "properties": {
           "application_ref": {
             "type": "string",
@@ -10135,9 +10262,7 @@
       },
       "InternalBVNRecordResponse": {
         "type": "object",
-        "required": [
-          "customer_record"
-        ],
+        "required": ["customer_record"],
         "properties": {
           "customer_record": {
             "$ref": "#/components/schemas/InternalBVNRecord"
@@ -10146,10 +10271,7 @@
       },
       "UpdateLoanApplicationStatusRequest": {
         "type": "object",
-        "required": [
-          "event_id",
-          "status"
-        ],
+        "required": ["event_id", "status"],
         "properties": {
           "event_id": {
             "type": "string",
@@ -10157,11 +10279,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "approved",
-              "decline",
-              "active"
-            ],
+            "enum": ["approved", "decline", "active"],
             "example": "approved"
           },
           "core_loan_id": {
@@ -10173,10 +10291,7 @@
       },
       "UpdateCustomerStatusRequest": {
         "type": "object",
-        "required": [
-          "event_id",
-          "status"
-        ],
+        "required": ["event_id", "status"],
         "properties": {
           "event_id": {
             "type": "string",
@@ -10189,10 +10304,7 @@
       },
       "LinkWalletUserByBVNRequest": {
         "type": "object",
-        "required": [
-          "customer_id",
-          "bvn"
-        ],
+        "required": ["customer_id", "bvn"],
         "properties": {
           "customer_id": {
             "type": "string",
@@ -10210,9 +10322,7 @@
       },
       "LinkWalletUserByBVNResponse": {
         "type": "object",
-        "required": [
-          "linked_users"
-        ],
+        "required": ["linked_users"],
         "properties": {
           "linked_users": {
             "type": "integer",
@@ -10223,10 +10333,7 @@
       },
       "LinkWalletUserByBVNEnvelope": {
         "type": "object",
-        "required": [
-          "message",
-          "data"
-        ],
+        "required": ["message", "data"],
         "properties": {
           "message": {
             "type": "string",
@@ -10260,10 +10367,7 @@
       },
       "NINValidationSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10280,11 +10384,7 @@
       },
       "BVNWithFaceValidationRequest": {
         "type": "object",
-        "required": [
-          "verification_id",
-          "bvn",
-          "image"
-        ],
+        "required": ["verification_id", "bvn", "image"],
         "properties": {
           "verification_id": {
             "type": "string",
@@ -10316,10 +10416,7 @@
       },
       "BVNWithFaceValidationSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10336,11 +10433,7 @@
       },
       "NINWithFaceValidationRequest": {
         "type": "object",
-        "required": [
-          "verification_id",
-          "nin",
-          "image"
-        ],
+        "required": ["verification_id", "nin", "image"],
         "properties": {
           "verification_id": {
             "type": "string",
@@ -10372,10 +10465,7 @@
       },
       "NINWithFaceValidationSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10392,28 +10482,16 @@
       },
       "RequestOTPRequest": {
         "type": "object",
-        "required": [
-          "purpose",
-          "channel",
-          "verification_id"
-        ],
+        "required": ["purpose", "channel", "verification_id"],
         "properties": {
           "purpose": {
             "type": "string",
-            "enum": [
-              "login",
-              "signup",
-              "password_reset",
-              "pin_reset"
-            ],
+            "enum": ["login", "signup", "password_reset", "pin_reset"],
             "example": "login"
           },
           "channel": {
             "type": "string",
-            "enum": [
-              "sms",
-              "email"
-            ],
+            "enum": ["sms", "email"],
             "example": "email"
           },
           "verification_id": {
@@ -10424,29 +10502,16 @@
       },
       "VerifyOTPRequest": {
         "type": "object",
-        "required": [
-          "purpose",
-          "channel",
-          "verification_id",
-          "otp"
-        ],
+        "required": ["purpose", "channel", "verification_id", "otp"],
         "properties": {
           "purpose": {
             "type": "string",
-            "enum": [
-              "login",
-              "signup",
-              "password_reset",
-              "pin_reset"
-            ],
+            "enum": ["login", "signup", "password_reset", "pin_reset"],
             "example": "login"
           },
           "channel": {
             "type": "string",
-            "enum": [
-              "sms",
-              "email"
-            ],
+            "enum": ["sms", "email"],
             "example": "email"
           },
           "verification_id": {
@@ -10463,9 +10528,7 @@
       },
       "VerifyOTPResponse": {
         "type": "object",
-        "required": [
-          "verification_id"
-        ],
+        "required": ["verification_id"],
         "properties": {
           "verification_id": {
             "type": "string",
@@ -10475,21 +10538,12 @@
       },
       "NotificationType": {
         "type": "string",
-        "enum": [
-          "loan",
-          "transaction",
-          "security",
-          "promo"
-        ],
+        "enum": ["loan", "transaction", "security", "promo"],
         "example": "loan"
       },
       "TogglePushNotificationsResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -10516,11 +10570,7 @@
       },
       "RegisterPushTokenRequest": {
         "type": "object",
-        "required": [
-          "expo_push_token",
-          "device_id",
-          "platform"
-        ],
+        "required": ["expo_push_token", "device_id", "platform"],
         "properties": {
           "expo_push_token": {
             "type": "string",
@@ -10532,22 +10582,14 @@
           },
           "platform": {
             "type": "string",
-            "enum": [
-              "ios",
-              "android"
-            ],
+            "enum": ["ios", "android"],
             "example": "android"
           }
         }
       },
       "SendNotificationRequest": {
         "type": "object",
-        "required": [
-          "user_id",
-          "title",
-          "body",
-          "type"
-        ],
+        "required": ["user_id", "title", "body", "type"],
         "properties": {
           "user_id": {
             "type": "string",
@@ -10646,11 +10688,7 @@
       },
       "NotificationsListResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -10683,11 +10721,7 @@
       },
       "UnreadCountResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -10710,11 +10744,7 @@
       },
       "NotificationReadResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "data"
-        ],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -10738,10 +10768,7 @@
       },
       "NotificationsReadAllResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10755,10 +10782,7 @@
       },
       "MessageResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10788,10 +10812,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "credit",
-              "debit"
-            ],
+            "enum": ["credit", "debit"],
             "example": "credit"
           },
           "description": {
@@ -10809,12 +10830,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "successful",
-              "failed",
-              "reversed"
-            ],
+            "enum": ["pending", "successful", "failed", "reversed"],
             "example": "successful"
           },
           "amount": {
@@ -10917,10 +10933,7 @@
       },
       "ForgotTransactionPinSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10937,10 +10950,7 @@
       },
       "VerifyForgotTransactionPinOTPRequest": {
         "type": "object",
-        "required": [
-          "otp_id",
-          "otp_code"
-        ],
+        "required": ["otp_id", "otp_code"],
         "properties": {
           "otp_id": {
             "type": "string",
@@ -10967,10 +10977,7 @@
       },
       "VerifyForgotTransactionPinOTPSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -10987,11 +10994,7 @@
       },
       "ResetTransactionPinRequest": {
         "type": "object",
-        "required": [
-          "verification_id",
-          "new_pin",
-          "confirm_new_pin"
-        ],
+        "required": ["verification_id", "new_pin", "confirm_new_pin"],
         "properties": {
           "verification_id": {
             "type": "string",
@@ -11021,10 +11024,7 @@
       },
       "RequestTransactionPinChangeSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -11052,10 +11052,7 @@
       },
       "ResendTransactionPinChangeOTPSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -11072,10 +11069,7 @@
       },
       "VerifyTransactionPinChangeOTPRequest": {
         "type": "object",
-        "required": [
-          "otp_id",
-          "otp_code"
-        ],
+        "required": ["otp_id", "otp_code"],
         "properties": {
           "otp_id": {
             "type": "string",
@@ -11105,10 +11099,7 @@
       },
       "VerifyTransactionPinChangeOTPSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -11184,9 +11175,7 @@
       },
       "ToggleBiometricsRequest": {
         "type": "object",
-        "required": [
-          "is_enabled"
-        ],
+        "required": ["is_enabled"],
         "properties": {
           "is_enabled": {
             "type": "boolean",
@@ -11206,10 +11195,7 @@
       },
       "ToggleBiometricsSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -11251,10 +11237,7 @@
       },
       "ChallengeRequestSuccessResponse": {
         "type": "object",
-        "required": [
-          "status",
-          "message"
-        ],
+        "required": ["status", "message"],
         "properties": {
           "status": {
             "type": "string",
@@ -11344,10 +11327,7 @@
       },
       "APIError": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "properties": {
           "code": {
             "type": "string",
@@ -11460,7 +11440,10 @@
         "required": ["status", "message", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "OTP verified successfully" },
+          "message": {
+            "type": "string",
+            "example": "OTP verified successfully"
+          },
           "data": { "$ref": "#/components/schemas/VerifyOTPResponse" }
         }
       },
@@ -11469,7 +11452,10 @@
         "required": ["status", "message"],
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "savings goal creation was successful" }
+          "message": {
+            "type": "string",
+            "example": "savings goal creation was successful"
+          }
         }
       },
       "GetUserGoalsSuccessResponse": {
@@ -11477,7 +11463,10 @@
         "required": ["status", "message", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "User's goals fetched successfully" },
+          "message": {
+            "type": "string",
+            "example": "User's goals fetched successfully"
+          },
           "data": { "$ref": "#/components/schemas/GetUserSavingsResponse" }
         }
       },
@@ -11486,7 +11475,10 @@
         "required": ["status", "message", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Goal summary fetched successfully" },
+          "message": {
+            "type": "string",
+            "example": "Goal summary fetched successfully"
+          },
           "data": { "$ref": "#/components/schemas/GetGoalSummaryResponse" }
         }
       },
@@ -11494,87 +11486,194 @@
         "type": "object",
         "required": ["request_id", "unique_code", "phone_number", "amount"],
         "properties": {
-          "request_id":   { "type": "string", "example": "req-001" },
-          "unique_code":  { "type": "string", "example": "MTN_AIRTIME", "description": "Provider unique code e.g. MTN_AIRTIME, AIRTEL_AIRTIME" },
+          "request_id": { "type": "string", "example": "req-001" },
+          "unique_code": {
+            "type": "string",
+            "example": "MTN_AIRTIME",
+            "description": "Provider unique code e.g. MTN_AIRTIME, AIRTEL_AIRTIME"
+          },
           "phone_number": { "type": "string", "example": "08012345678" },
-          "amount":       { "type": "integer", "example": 200, "description": "Amount in Naira (minimum NGN 50)" }
+          "amount": {
+            "type": "integer",
+            "example": 200,
+            "description": "Amount in Naira (minimum NGN 50)"
+          }
         }
       },
       "DataPurchaseRequest": {
         "type": "object",
         "required": ["request_id", "unique_code", "phone_number", "amount"],
         "properties": {
-          "request_id":   { "type": "string", "example": "req-002" },
-          "unique_code":  { "type": "string", "example": "MTN_DATA", "description": "Provider unique code e.g. MTN_DATA, AIRTEL_DATA" },
+          "request_id": { "type": "string", "example": "req-002" },
+          "unique_code": {
+            "type": "string",
+            "example": "MTN_DATA",
+            "description": "Provider unique code e.g. MTN_DATA, AIRTEL_DATA"
+          },
           "phone_number": { "type": "string", "example": "08012345678" },
-          "amount":       { "type": "integer", "example": 500, "description": "Amount in Naira (minimum NGN 50)" }
+          "amount": {
+            "type": "integer",
+            "example": 500,
+            "description": "Amount in Naira (minimum NGN 50)"
+          }
         }
       },
       "ElectricityValidationRequest": {
         "type": "object",
-        "required": ["request_id", "unique_code", "account_number", "account_type"],
+        "required": [
+          "request_id",
+          "unique_code",
+          "account_number",
+          "account_type"
+        ],
         "properties": {
-          "request_id":     { "type": "string", "example": "req-003" },
-          "unique_code":    { "type": "string", "example": "EKEDC_PREPAID", "description": "Provider unique code e.g. EKEDC_PREPAID, EKEDC_POSTPAID" },
-          "account_number": { "type": "string", "example": "1234567890", "description": "Meter number" },
-          "account_type":   { "type": "string", "enum": ["prepaid", "postpaid"], "example": "prepaid" }
+          "request_id": { "type": "string", "example": "req-003" },
+          "unique_code": {
+            "type": "string",
+            "example": "EKEDC_PREPAID",
+            "description": "Provider unique code e.g. EKEDC_PREPAID, EKEDC_POSTPAID"
+          },
+          "account_number": {
+            "type": "string",
+            "example": "1234567890",
+            "description": "Meter number"
+          },
+          "account_type": {
+            "type": "string",
+            "enum": ["prepaid", "postpaid"],
+            "example": "prepaid"
+          }
         }
       },
       "PayElectricityRequest": {
         "type": "object",
-        "required": ["request_id", "unique_code", "account_number", "account_type", "amount", "name", "address", "phone_number"],
+        "required": [
+          "request_id",
+          "unique_code",
+          "account_number",
+          "account_type",
+          "amount",
+          "name",
+          "address",
+          "phone_number"
+        ],
         "properties": {
-          "request_id":     { "type": "string", "example": "req-004" },
-          "unique_code":    { "type": "string", "example": "EKEDC_PREPAID" },
-          "account_number": { "type": "string", "example": "1234567890", "description": "Meter number" },
-          "account_type":   { "type": "string", "enum": ["prepaid", "postpaid"], "example": "prepaid" },
-          "amount":         { "type": "integer", "example": 5000, "description": "Amount in Naira" },
-          "name":           { "type": "string", "example": "John Doe", "description": "Account holder name from validation" },
-          "address":        { "type": "string", "example": "12 Marina Street, Lagos", "description": "Account address from validation" },
-          "phone_number":   { "type": "string", "example": "08012345678" }
+          "request_id": { "type": "string", "example": "req-004" },
+          "unique_code": { "type": "string", "example": "EKEDC_PREPAID" },
+          "account_number": {
+            "type": "string",
+            "example": "1234567890",
+            "description": "Meter number"
+          },
+          "account_type": {
+            "type": "string",
+            "enum": ["prepaid", "postpaid"],
+            "example": "prepaid"
+          },
+          "amount": {
+            "type": "integer",
+            "example": 5000,
+            "description": "Amount in Naira"
+          },
+          "name": {
+            "type": "string",
+            "example": "John Doe",
+            "description": "Account holder name from validation"
+          },
+          "address": {
+            "type": "string",
+            "example": "12 Marina Street, Lagos",
+            "description": "Account address from validation"
+          },
+          "phone_number": { "type": "string", "example": "08012345678" }
         }
       },
       "CableValidationRequest": {
         "type": "object",
-        "required": ["request_id", "unique_code", "account_number", "no_of_month"],
+        "required": [
+          "request_id",
+          "unique_code",
+          "account_number",
+          "no_of_month"
+        ],
         "properties": {
-          "request_id":     { "type": "string", "example": "req-005" },
-          "unique_code":    { "type": "string", "example": "DSTV", "description": "Provider unique code e.g. DSTV, GOTV, STARTIMES" },
-          "account_number": { "type": "string", "example": "7012345678", "description": "Smartcard or IUC number" },
-          "no_of_month":    { "type": "integer", "example": 1, "description": "Number of months to validate for" }
+          "request_id": { "type": "string", "example": "req-005" },
+          "unique_code": {
+            "type": "string",
+            "example": "DSTV",
+            "description": "Provider unique code e.g. DSTV, GOTV, STARTIMES"
+          },
+          "account_number": {
+            "type": "string",
+            "example": "7012345678",
+            "description": "Smartcard or IUC number"
+          },
+          "no_of_month": {
+            "type": "integer",
+            "example": 1,
+            "description": "Number of months to validate for"
+          }
         }
       },
       "PayCableRequest": {
         "type": "object",
-        "required": ["request_id", "unique_code", "account_number", "account_type", "name", "phone_number", "no_of_month", "amount"],
+        "required": [
+          "request_id",
+          "unique_code",
+          "account_number",
+          "account_type",
+          "name",
+          "phone_number",
+          "no_of_month",
+          "amount"
+        ],
         "properties": {
-          "request_id":     { "type": "string", "example": "req-006" },
-          "unique_code":    { "type": "string", "example": "DSTV" },
-          "account_number": { "type": "string", "example": "7012345678", "description": "Smartcard or IUC number" },
-          "account_type":   { "type": "string", "example": "DSTV", "description": "Account type from validation response" },
-          "name":           { "type": "string", "example": "John Doe", "description": "Account holder name from validation" },
-          "phone_number":   { "type": "string", "example": "08012345678" },
-          "no_of_month":    { "type": "integer", "example": 1 },
-          "amount":         { "type": "integer", "example": 2500, "description": "Amount in Naira from validation response" }
+          "request_id": { "type": "string", "example": "req-006" },
+          "unique_code": { "type": "string", "example": "DSTV" },
+          "account_number": {
+            "type": "string",
+            "example": "7012345678",
+            "description": "Smartcard or IUC number"
+          },
+          "account_type": {
+            "type": "string",
+            "example": "DSTV",
+            "description": "Account type from validation response"
+          },
+          "name": {
+            "type": "string",
+            "example": "John Doe",
+            "description": "Account holder name from validation"
+          },
+          "phone_number": { "type": "string", "example": "08012345678" },
+          "no_of_month": { "type": "integer", "example": 1 },
+          "amount": {
+            "type": "integer",
+            "example": 2500,
+            "description": "Amount in Naira from validation response"
+          }
         }
       },
       "ISPSuccessResponse": {
         "type": "object",
         "properties": {
-          "status":  { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Airtime purchased successfully" },
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Airtime purchased successfully"
+          },
           "data": {
             "type": "object",
             "properties": {
-              "requestId":       { "type": "string" },
-              "referenceId":     { "type": "string" },
-              "responseCode":    { "type": "string", "example": "00" },
+              "requestId": { "type": "string" },
+              "referenceId": { "type": "string" },
+              "responseCode": { "type": "string", "example": "00" },
               "responseMessage": { "type": "string", "example": "Success" },
               "data": {
                 "type": "object",
                 "properties": {
-                  "channel":     { "type": "string", "example": "api" },
-                  "amount":      { "type": "integer", "example": 200 },
+                  "channel": { "type": "string", "example": "api" },
+                  "amount": { "type": "integer", "example": 200 },
                   "phoneNumber": { "type": "string", "example": "08012345678" }
                 }
               }
@@ -11585,8 +11684,11 @@
       "ElectricityValidationSuccessResponse": {
         "type": "object",
         "properties": {
-          "status":  { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Electricity account validated successfully" },
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Electricity account validated successfully"
+          },
           "data": {
             "type": "object",
             "properties": {
@@ -11597,10 +11699,16 @@
               "data": {
                 "type": "object",
                 "properties": {
-                  "accountNumber":  { "type": "string", "example": "1234567890" },
-                  "accountType":    { "type": "string", "example": "prepaid" },
-                  "name":           { "type": "string", "example": "John Doe" },
-                  "address":        { "type": "string", "example": "12 Marina Street, Lagos" },
+                  "accountNumber": {
+                    "type": "string",
+                    "example": "1234567890"
+                  },
+                  "accountType": { "type": "string", "example": "prepaid" },
+                  "name": { "type": "string", "example": "John Doe" },
+                  "address": {
+                    "type": "string",
+                    "example": "12 Marina Street, Lagos"
+                  },
                   "minimumVending": { "type": "string", "example": "500" }
                 }
               }
@@ -11611,8 +11719,11 @@
       "PayElectricitySuccessResponse": {
         "type": "object",
         "properties": {
-          "status":  { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Electricity bill paid successfully" },
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Electricity bill paid successfully"
+          },
           "data": {
             "type": "object",
             "properties": {
@@ -11623,15 +11734,19 @@
               "data": {
                 "type": "object",
                 "properties": {
-                  "amount":        { "type": "string", "example": "5000" },
-                  "unit":          { "type": "string", "example": "45.20 kWh" },
-                  "address":       { "type": "string" },
-                  "arrears":       { "type": "string", "example": "0.00" },
-                  "tariffName":    { "type": "string" },
-                  "rate":          { "type": "string" },
-                  "vat":           { "type": "string" },
+                  "amount": { "type": "string", "example": "5000" },
+                  "unit": { "type": "string", "example": "45.20 kWh" },
+                  "address": { "type": "string" },
+                  "arrears": { "type": "string", "example": "0.00" },
+                  "tariffName": { "type": "string" },
+                  "rate": { "type": "string" },
+                  "vat": { "type": "string" },
                   "accountNumber": { "type": "string" },
-                  "token":         { "type": "string", "example": "1234-5678-9012-3456-7890", "description": "Prepaid token to load on the meter" }
+                  "token": {
+                    "type": "string",
+                    "example": "1234-5678-9012-3456-7890",
+                    "description": "Prepaid token to load on the meter"
+                  }
                 }
               }
             }
@@ -11641,8 +11756,11 @@
       "CableValidationSuccessResponse": {
         "type": "object",
         "properties": {
-          "status":  { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Cable account validated successfully" },
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Cable account validated successfully"
+          },
           "data": {
             "type": "object",
             "properties": {
@@ -11653,12 +11771,15 @@
               "data": {
                 "type": "object",
                 "properties": {
-                  "accountNumber": { "type": "string", "example": "7012345678" },
-                  "accountType":   { "type": "string", "example": "DSTV" },
-                  "name":          { "type": "string", "example": "John Doe" },
-                  "amount":        { "type": "string", "example": "2500" },
-                  "balance":       { "type": "string", "nullable": true },
-                  "md":            { "type": "boolean" }
+                  "accountNumber": {
+                    "type": "string",
+                    "example": "7012345678"
+                  },
+                  "accountType": { "type": "string", "example": "DSTV" },
+                  "name": { "type": "string", "example": "John Doe" },
+                  "amount": { "type": "string", "example": "2500" },
+                  "balance": { "type": "string", "nullable": true },
+                  "md": { "type": "boolean" }
                 }
               }
             }
@@ -11668,8 +11789,11 @@
       "PayCableSuccessResponse": {
         "type": "object",
         "properties": {
-          "status":  { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "Cable bill paid successfully" },
+          "status": { "type": "string", "example": "success" },
+          "message": {
+            "type": "string",
+            "example": "Cable bill paid successfully"
+          },
           "data": {
             "type": "object",
             "properties": {
@@ -11681,10 +11805,10 @@
                 "type": "object",
                 "properties": {
                   "accountNumber": { "type": "string" },
-                  "package":       { "type": "string", "example": "DStv Compact" },
-                  "noOfMonth":     { "type": "integer", "nullable": true },
-                  "name":          { "type": "string" },
-                  "amount":        { "type": "string" }
+                  "package": { "type": "string", "example": "DStv Compact" },
+                  "noOfMonth": { "type": "integer", "nullable": true },
+                  "name": { "type": "string" },
+                  "amount": { "type": "string" }
                 }
               }
             }

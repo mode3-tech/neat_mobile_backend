@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/models"
 	"time"
@@ -215,6 +216,7 @@ func Migrate(db *gorm.DB) error {
 		&neatsave.SavingsActivity{},
 		&autorepayment.AutoRepaymentAttempt{},
 		&card.Card{},
+		&vas.VASBeneficiary{},
 	); err != nil {
 		return err
 	}
