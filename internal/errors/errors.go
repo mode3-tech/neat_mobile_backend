@@ -107,4 +107,7 @@ var (
 	ErrVASAmbiguous                    = errors.New("VAS request outcome unknown — possible timeout")
 	ErrFetchingAllCategories           = errors.New("Failed to fetch all categories")
 	ErrInvalidPhoneNumber              = errors.New("Invalid nigerian phone number")
+	ErrInvalidProductAmount            = errors.New("Product amount mismatch")
+	ErrInvalidAccountNumber            = errors.New("Invalid electricity account number")
+	ErrInvalidAccountType              = errors.New("Invalid electricity account type")
 )

@@ -102,6 +102,10 @@ type Product struct {
 	} `json:"category_dto"`
 }
 
+type BeneficiaryRequestQuery struct {
+	Biller string `form:"biller" binding:"required"`
+}
+
 type VAS struct {
 	ID             string `json:"id"`
 	PhoneNumber    string `json:"phone_number,omitempty"`

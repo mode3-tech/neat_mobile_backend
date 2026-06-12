@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
@@ -101,6 +102,7 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, 
 
 	user, err := s.repo.GetUserByID(ctx, mobileUserID)
 	if err != nil {
+		log.Printf("auth service: failed to get user by id - %s\n", err)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appErr.ErrUnauthorized
 		}
@@ -125,23 +127,28 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, 
 		}
 
 		if rec == nil {
+			log.Println("auth service: verification not found")
 			return appErr.ErrUnauthorized
 		}
 
 		if rec.Status != models.VerificationStatusVerified {
+			log.Println("auth service: verification not verified")
 			return appErr.ErrUnauthorized
 		}
 
-		if rec.VerifiedPhone == nil || rec.VerifiedPhone != &normalizedPhone {
+		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
+			log.Println("auth service: verification phone not verified")
 			return appErr.ErrUnauthorized
 		}
 
 		now := time.Now().UTC()
 		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
+			log.Println("auth service: verification expired")
 			return appErr.ErrUnauthorized
 		}
 
 		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
+			log.Println("auth service: failed to mark verification used")
 			return appErr.ErrUnauthorized
 		}
 

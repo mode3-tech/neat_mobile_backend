@@ -190,7 +190,7 @@ func (h *Handler) ValidateElectricity(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.ValidateElectricity(c.Request.Context(), req, mobileUserID)
+	result, err := h.service.ValidateElectricity(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
@@ -292,5 +292,45 @@ func (h *Handler) PayCable(c *gin.Context) {
 		Status:  "success",
 		Message: "Cable bill paid successfully",
 		Data:    &result,
+	})
+}
+
+func (h *Handler) FetchBeneficiaries(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		log.Println("vas handler: missing user id in context for FetchBeneficiaries")
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	var query BeneficiaryRequestQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		mapped := response.MapError(appErr.ErrInvalidQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	biller := strings.TrimSpace(query.Biller)
+	if biller == "" {
+		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	beneficiaries, err := h.service.FetchBeneficiaries(c.Request.Context(), mobileUserID, biller)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[[]VAS]{
+		Status:  "success",
+		Message: "Beneficiaries fetched successfully",
+		Data:    &beneficiaries,
 	})
 }

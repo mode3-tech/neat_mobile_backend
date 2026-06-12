@@ -59,7 +59,6 @@ type FetchBeneficiariesResponse struct {
 }
 
 type BeneficiaryResponseStruct struct {
-	WalletID      string `json:"wallet_id"`
 	BankCode      string `json:"bank_code"`
 	AccountNumber string `json:"account_number"`
 	AccountName   string `json:"account_name"`

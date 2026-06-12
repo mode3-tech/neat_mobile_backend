@@ -100,6 +100,7 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 			Status: "error",
 			Error:  &mapped.Error,
 		})
+		return
 	}
 
 	dto := &TransferResult{
@@ -197,11 +198,6 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 		return
 	}
 
-	// var query FetchBeneficiariesQuery
-	// if err := c.ShouldBindQuery(&query); err != nil {
-	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
-	// 	return
-	// }
 	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID)
 
 	if err != nil {
@@ -212,7 +208,6 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	result := make([]BeneficiaryResponseStruct, len(beneficiaries))
 	for i, b := range beneficiaries {
 		result[i] = BeneficiaryResponseStruct{
-			WalletID:      b.WalletID,
 			BankCode:      b.BankCode,
 			AccountNumber: b.AccountNumber,
 			AccountName:   b.AccountName,

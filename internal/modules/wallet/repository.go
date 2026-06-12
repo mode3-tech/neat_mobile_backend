@@ -20,7 +20,7 @@ func NewRepository(db *gorm.DB) *Repository {
 
 func (r *Repository) GetUserByMobileUserID(ctx context.Context, mobileUserID string) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).Where("mobile_user_id = ?", mobileUserID).First(&user).Error
+	err := r.db.WithContext(ctx).Where("id = ?", mobileUserID).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, provide
 
 		var wallet CustomerWallet
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").
-			Where("wallet_id = ?", walletID).
+			Where("internal_wallet_id = ?", walletID).
 			First(&wallet).Error; err != nil {
 			return err
 		}
@@ -140,7 +140,7 @@ func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, provide
 			return err
 		}
 		return tx.Model(&CustomerWallet{}).
-			Where("wallet_id = ?", walletID).
+			Where("internal_wallet_id = ?", walletID).
 			Updates(map[string]interface{}{
 				"booked_balance":    gorm.Expr("booked_balance - ?", totalDebit),
 				"available_balance": gorm.Expr("available_balance - ?", totalDebit),
