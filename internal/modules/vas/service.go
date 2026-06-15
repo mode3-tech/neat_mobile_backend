@@ -265,7 +265,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	result, err := s.XpressPayments.GetAirtime(ctx, requestID, uniqueCode, localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase airtime - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.InternalWalletID, err)
 		return nil, appErr.ErrGettingAirtime
 	}
 

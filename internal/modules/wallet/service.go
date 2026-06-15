@@ -79,8 +79,15 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	if user.CreatedAt.Add(24*time.Hour).After(time.Now()) && req.Amount > 20000*100 {
-		return nil, appErr.ErrNewUserTransferRestriction
+	if user.ActivationCapExpiresAt != nil && time.Now().Before(*user.ActivationCapExpiresAt) {
+		spent, err := s.repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeDebit, user.CreatedAt, *user.ActivationCapExpiresAt)
+		if err != nil {
+			log.Printf("wallet service: failed to sum transactions in window: %v", err)
+			return nil, appErr.ErrFundsTransfer
+		}
+		if err := checkActivationCap(time.Now().UTC(), user, req.Amount, spent); err != nil {
+			return nil, err
+		}
 	}
 
 	accountNumber := strings.TrimSpace(req.AccountNumber)

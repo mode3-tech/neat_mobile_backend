@@ -597,7 +597,7 @@ func (p *Providus) DebitCustomer(ctx context.Context, amount int64, customerID, 
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
-		return nil, err
+		return nil, fmt.Errorf("providus: request failed with status code: %s", resp.StatusCode)
 	}
 
 	var result ProvidusWalletDebitResponse

@@ -110,8 +110,28 @@ func (r *Repository) CreateEOI(ctx context.Context, eoi *LoanApplication) error 
 	return r.db.WithContext(ctx).Create(eoi).Error
 }
 
-func (r *Repository) GetCoreUser(ctx context.Context, bvn string) error {
-	return r.db.WithContext(ctx).Table("customer_account_info").Where("bvn = ?", bvn).Error
+func (r *Repository) GetCoreUser(ctx context.Context, bvn string) (*Customer, error) {
+	var customer Customer
+	if err := r.db.WithContext(ctx).
+		Table("account_customer_info").
+		Select("id").
+		Where("bvn = ?", bvn).
+		First(&customer).
+		Error; err != nil {
+		return nil, err
+	}
+	return &customer, nil
+}
+
+func (r *Repository) CountActiveLoans(ctx context.Context, customerID int64) (count int64, err error) {
+	if err := r.db.WithContext(ctx).
+		Table("loan_loan").
+		Where("customer_id = ? AND status <> paid", customerID).
+		Count(&count).
+		Error; err != nil {
+		return count, err
+	}
+	return count, nil
 }
 
 func (r *Repository) GetRuleByProductID(ctx context.Context, productID string) (*LoanProductRule, error) {
@@ -240,6 +260,31 @@ func (r *Repository) ListLoansByCustomerID(ctx context.Context, coreCustomerID s
 		return nil, err
 	}
 	return loans, nil
+}
+
+func (r *Repository) ListEmbryoLoanApplications(ctx context.Context, mobileUserID string) ([]CoreCustomerLoanItem, error) {
+	var items []CoreCustomerLoanItem
+	err := r.db.WithContext(ctx).
+		Table("wallet_loan_applications la").
+		Select(`
+            la.application_ref AS loan_id,
+            la.requested_amount AS loan_amount,
+            0 AS balance_remaining,
+            0 AS periodic_payment,
+            CONCAT(la.tenure_value, ' ', CASE la.tenure
+                WHEN 'weekly' THEN 'Weeks'
+                WHEN 'monthly' THEN 'months'
+                ELSE la.tenure
+            END) AS tenure,
+            COALESCE(lp.interest_rate_bps / 100.0, 0) AS interest_rate,
+            0 AS outstanding_balance,
+            la.loan_status AS status
+        `).
+		Joins("LEFT JOIN wallet_loan_products lp ON lp.code = la.loan_product_type").
+		Where("la.mobile_user_id = ? AND la.loan_status = ?", mobileUserID, LoanStatusEmbryo).
+		Order("la.created_at DESC").
+		Scan(&items).Error
+	return items, err
 }
 
 const loanHistoryQuery = `

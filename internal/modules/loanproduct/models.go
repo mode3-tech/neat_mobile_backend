@@ -68,7 +68,7 @@ func (LoanProductEvaluation) TableName() string {
 type LoanApplication struct {
 	ID                string        `gorm:"column:id;type:text;primaryKey"`
 	MobileUserID      string        `gorm:"column:mobile_user_id;type:text;not null;index"`
-	CoreCustomerID    *string       `gorm:"column:core_customer_id"`
+	CoreCustomerID    string        `gorm:"column:core_customer_id"`
 	PhoneNumber       string        `gorm:"column:phone_number;not null"`
 	ApplicationRef    string        `gorm:"column:application_ref;not null;uniqueIndex"`
 	CoreLoanID        *string       `gorm:"column:core_loan_id"`
@@ -116,4 +116,99 @@ type CustomerEvent struct {
 
 func (CustomerEvent) TableName() string {
 	return "wallet_customer_events"
+}
+
+type Customer struct {
+	Id                       int64     `gorm:"column:id"`
+	Dob                      string    `gorm:"column:dob"`
+	IdType                   string    `gorm:"column:id_type"`
+	IdNumber                 string    `gorm:"column:id_number"`
+	Nationalty               string    `gorm:"column:Nationalty"`
+	StateOfOrigin            string    `gorm:"column:state_of_origin"`
+	Religion                 string    `gorm:"column:Religion"`
+	Occupation               string    `gorm:"column:Occupation"`
+	Gender                   string    `gorm:"column:gender"`
+	NextOfKinPhone           string    `gorm:"column:next_of_kin_phone"`
+	NextOfKinAddress         string    `gorm:"column:next_of_kin_address"`
+	NextOfKinRelationship    string    `gorm:"column:next_of_kin_Relationship"`
+	CreatedAt                string    `gorm:"column:date"`
+	UserId                   int64     `gorm:"column:user_id"`
+	City                     string    `gorm:"column:city"`
+	Education                string    `gorm:"column:education"`
+	FullAddress              string    `gorm:"column:full_address"`
+	HomeAddressState         string    `gorm:"column:home_address_state"`
+	Landmark                 string    `gorm:"column:landmark"`
+	LivingSince              string    `gorm:"column:living_since"`
+	MaritalStatus            string    `gorm:"column:marital_status"`
+	MobilePhone              string    `gorm:"column:mobile_phone"`
+	Bvn                      string    `gorm:"column:bvn"`
+	NextOfKinBvn             string    `gorm:"column:next_of_kin_bvn"`
+	NextOfKinFirstName       string    `gorm:"column:next_of_kin_firstname"`
+	NextOfKinLastName        string    `gorm:"column:next_of_kin_lastname"`
+	NextOfKinMiddleName      string    `gorm:"column:next_of_kin_middlename"`
+	NextOfKinPassport        string    `gorm:"column:next_of_kin_passport"`
+	PlaceOfBirth             string    `gorm:"column:place_of_birth"`
+	TypeOfHouse              string    `gorm:"column:type_of_house"`
+	AccountName              string    `gorm:"column:account_name"`
+	AccountNumber            string    `gorm:"column:account_number"`
+	Bank                     string    `gorm:"column:bank"`
+	NextOfKinLandmark        string    `gorm:"column:next_of_kin_landmark"`
+	LastSentDate             time.Time `gorm:"column:last_sent_date"`
+	LatitudeAddress          float64   `gorm:"column:latitude_address"`
+	LongitudeAddress         float64   `gorm:"column:longitude_address"`
+	AlternativeMobilePhone   string    `gorm:"column:alternative_mobile_phone"`
+	BankCode                 string    `gorm:"column:bank_code"`
+	DirectDebitMandateId     string    `gorm:"column:direct_debit_mandate_id"`
+	DirectDebitMandateStatus string    `gorm:"column:direct_debit_mandate_status"`
+	Deleted                  bool      `gorm:"column:deleted;default:false"`
+}
+
+type Loan struct {
+	Id                          int64      `gorm:"column:id"`
+	RefNo                       string     `gorm:"column:ref_no"`
+	ExternalApplicationRef      *string    `gorm:"column:external_application_ref;type:varchar(100);uniqueIndex"`
+	Amount                      float64    `gorm:"column:amount"`
+	Frequency                   string     `gorm:"column:frequency"`
+	LoanTerm                    string     `gorm:"column:loan_term"`
+	LoanPurpose                 string     `gorm:"column:loan_purpose"`
+	ReasonForRejection          string     `gorm:"column:reason_for_rejection"`
+	PaymentDue                  bool       `gorm:"column:payment_due"`
+	LastPayment                 *string    `gorm:"column:last_payment"`
+	Status                      string     `gorm:"column:status"`
+	Date                        string     `gorm:"column:date"`
+	CustomerId                  int64      `gorm:"column:customer_id"`
+	MadeById                    int64      `gorm:"column:made_by_id"`
+	ValidationLevel             int64      `gorm:"column:validation_level"`
+	ActualMoneyCollected        float64    `gorm:"column:actual_money_collected"`
+	AmountToBePaid              float64    `gorm:"column:amount_to_be_paid"`
+	ExpectedMoneyCollected      float64    `gorm:"column:expected_money_collected"`
+	Installment                 float64    `gorm:"column:installment"`
+	Profit                      float64    `gorm:"column:profit"`
+	DisburseDate                *time.Time `gorm:"column:disburse_date"`
+	Declined                    bool       `gorm:"column:declined"`
+	DatePaid                    *string    `gorm:"column:date_paid"`
+	DefaultAmount               float64    `gorm:"column:defaultamount"`
+	ActualMoneyCollectedCapital float64    `gorm:"column:actual_money_collected_capital"`
+	ActualMoneyCollectedProfit  float64    `gorm:"column:actual_money_collected_profit"`
+	DefaultedDatePaid           *string    `gorm:"column:defaulted_date_paid"`
+	LastChecked                 *string    `gorm:"column:last_checked"`
+	CollectionDate              *string    `gorm:"column:collectionDate"`
+	InitialCollectionDate       *string    `gorm:"column:initialcollectionDate"`
+	LoanLiquidity               bool       `gorm:"column:loan_liquidity"`
+	NonPerforming               bool       `gorm:"column:non_performing"`
+	RatePercentage              string     `gorm:"column:ratePercentage"`
+	TransferFromId              *int64     `gorm:"column:transfer_from_id"`
+	CheckupApproved             bool       `gorm:"column:checkup_approved"`
+	CheckupDate                 *string    `gorm:"column:checkup_date"`
+	LastSentDate                *string    `gorm:"column:last_sent_date"`
+	IsCreatorApproved           bool       `gorm:"column:is_creator_approved"`
+	PaymentDueDate              string     `gorm:"column:payment_due_date;default:null"`
+	ProductId                   int64      `gorm:"column:product_id"`
+	ProcessingFeePaid           bool       `gorm:"column:processing_fee_paid"`
+
+	InitialCollectionDateLagos *time.Time `gorm:"column:initialcollectionDate_lagos"`
+	CollectionDateLagos        *time.Time `gorm:"column:collectionDate_lagos"`
+	ProcessingFeeAmount        float64    `gorm:"column:processing_fee_amount"`
+	ProcessingFeeDate          *time.Time `gorm:"column:processing_fee_date"`
+	ProcessingFeePercentage    float64    `gorm:"column:processing_fee_percentage"`
 }
