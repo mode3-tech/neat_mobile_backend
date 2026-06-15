@@ -4692,53 +4692,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /vas/electricity/validate:
-    post:
-      tags:
-        - VAS
-      summary: Validate electricity meter/account
-      description: Validates a meter number or prepaid account with the electricity provider. No wallet debit.
-      parameters:
-        - in: header
-          name: Authorization
-          required: true
-          schema:
-            type: string
-          description: Bearer access token.
-        - in: header
-          name: X-Device-ID
-          required: true
-          schema:
-            type: string
-          description: Trusted device ID.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ElectricityValidationRequest"
-      responses:
-        "200":
-          description: Account validated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ElectricityValidationSuccessResponse"
-        "400":
-          description: Invalid request body
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Provider validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /vas/electricity/pay:
+  /vas/electricity:
     post:
       tags:
         - VAS
@@ -4790,53 +4744,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /vas/cable/validate:
-    post:
-      tags:
-        - VAS
-      summary: Validate cable/TV account
-      description: Validates a smartcard or IUC number with the cable provider. No wallet debit.
-      parameters:
-        - in: header
-          name: Authorization
-          required: true
-          schema:
-            type: string
-          description: Bearer access token.
-        - in: header
-          name: X-Device-ID
-          required: true
-          schema:
-            type: string
-          description: Trusted device ID.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CableValidationRequest"
-      responses:
-        "200":
-          description: Cable account validated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CableValidationSuccessResponse"
-        "400":
-          description: Invalid request body
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Provider validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /vas/cable/pay:
+  /vas/cable:
     post:
       tags:
         - VAS

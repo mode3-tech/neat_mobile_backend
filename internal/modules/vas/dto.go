@@ -28,6 +28,7 @@ type PayElectricityPayload struct {
 	Name          string      `json:"name" binding:"required"`
 	Address       string      `json:"address" binding:"required"`
 	PhoneNumber   string      `json:"phone_number" binding:"required"`
+	Pin           string      `json:"pin" binding:"required"`
 }
 
 type ValidateCablePayload struct {
@@ -44,6 +45,7 @@ type PayCablePayload struct {
 	PhoneNumber   string `json:"phone_number" binding:"required"`
 	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
 	Amount        int64  `json:"amount" binding:"required,gt=0"`
+	Pin           string `json:"pin" binding:"required"`
 }
 
 type BillingsByCategoryIDPayload struct {

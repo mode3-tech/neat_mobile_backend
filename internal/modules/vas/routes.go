@@ -10,10 +10,8 @@ func RegisterRoutes(rg *gin.RouterGroup, authGuard, deviceValidator gin.HandlerF
 		vas.GET("/products", handler.FetchProducts)
 		vas.POST("/airtime", handler.GetAirtime)
 		vas.POST("/data", handler.GetData)
-		vas.POST("/electricity/validate", handler.ValidateElectricity)
-		vas.POST("/electricity/pay", handler.PayElectricity)
-		vas.POST("/cable/validate", handler.ValidateCable)
-		vas.POST("/cable/pay", handler.PayCable)
+		vas.POST("/electricity", handler.PayElectricity)
+		vas.POST("/cable", handler.PayCable)
 		vas.GET("/beneficiaries", handler.FetchBeneficiaries)
 	}
 }
