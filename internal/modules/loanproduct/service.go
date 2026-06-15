@@ -8,6 +8,7 @@ import (
 	"math"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
 	"strings"
@@ -26,6 +27,8 @@ type Service struct {
 	pinVerifier          *authchecker.Verifier
 	repaymentTransferrer RepaymentFundTransferrer
 	deviceVerifier       DeviceVerifier
+	smsSender            SMSSender
+	appName              string
 }
 
 const (
@@ -39,7 +42,7 @@ var (
 	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
 )
 
-func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *authchecker.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *authchecker.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier, smsSender SMSSender, appName string) *Service {
 	return &Service{
 		repo:                 repo,
 		coreCustomerFinder:   coreCustomerFinder,
@@ -48,6 +51,8 @@ func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoa
 		pinVerifier:          pinVerifier,
 		repaymentTransferrer: repaymentTransferrer,
 		deviceVerifier:       deviceVerifier,
+		smsSender:            smsSender,
+		appName:              appName,
 	}
 }
 
@@ -180,6 +185,15 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		return nil, appErr.ErrIneligibleBusinessAge
 	}
 
+	appliedLoan, err := s.repo.GetAppliedLoans(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrApplyingForLoan
+	}
+
+	if appliedLoan != nil {
+		return nil, appErr.ErrUnprocessedAppliedLoanExists
+	}
+
 	customer, err := s.repo.GetCoreUser(ctx, user.BVN)
 	if err != nil {
 		return nil, appErr.ErrApplyingForLoan
@@ -222,6 +236,17 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	if err := s.repo.CreateEOI(ctx, eoi); err != nil {
 		return nil, err
+	}
+
+	normalizedPhone, err := phone.NormalizeNigerianNumber(user.Phone)
+	if err != nil {
+		log.Printf("loan service: failed to normalize phone number - %s\n", err)
+		return nil, appErr.ErrApplyingForLoan
+	}
+
+	message := fmt.Sprintf("%s:Your loan application has been received. Reference: %s", s.appName, eoi.ApplicationRef)
+	if err := s.smsSender.Send(ctx, normalizedPhone, message); err != nil {
+		log.Printf("loan service: failed to send sms - %s\n", err)
 	}
 
 	return &ApplyForLoanResponse{

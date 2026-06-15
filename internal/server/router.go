@@ -33,7 +33,7 @@ import (
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
-	"neat_mobile_app_backend/providers/sms"
+	termii "neat_mobile_app_backend/providers/sms"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"net/http"
 	"strings"
@@ -97,7 +97,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
 
-	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
+	smsSender := termii.NewSMSService(smsApiKey, smsSenderID)
 	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
@@ -211,7 +211,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}, deviceService)
 
 	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService)

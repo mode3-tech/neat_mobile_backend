@@ -37,6 +37,7 @@ var (
 	ErrIncompleteKYC                   = errors.New("incomplete kyc")
 	ErrIneligibleBusinessAge           = errors.New("ineligible business age")
 	ErrIneligibleForLoan               = errors.New("ineligible for loan")
+	ErrUnprocessedAppliedLoanExists    = errors.New("unprocessed applied loan exists")
 	ErrInvalidBusinessValue            = errors.New("invalid business value")
 	ErrInvalidLoanTerm                 = errors.New("invalid loan term")
 	ErrInvalidSavingsAmount            = errors.New("invalid savings amount")

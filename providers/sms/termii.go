@@ -1,4 +1,4 @@
-package sms
+package termii
 
 import (
 	"bytes"
