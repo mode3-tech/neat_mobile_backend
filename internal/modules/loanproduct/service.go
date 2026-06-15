@@ -57,7 +57,7 @@ func (s *Service) GetAllLoanProducts(ctx context.Context) ([]PartialLoanProduct,
 
 func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserID string) (*ApplyForLoanResponse, error) {
 	now := time.Now()
-	var coreCustomerID *string
+	var coreCustomerID int64
 
 	user, err := s.repo.GetUser(ctx, mobileUserID)
 	if err != nil {
@@ -180,45 +180,34 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		return nil, appErr.ErrIneligibleBusinessAge
 	}
 
-	// Core matching is best-effort. A locally registered user may not exist in CBA yet.
-	coreCustomerID, err = s.resolveCoreCustomerIDIfAvailable(ctx, mobileUserID, user)
+	customer, err := s.repo.GetCoreUser(ctx, user.BVN)
 	if err != nil {
 		return nil, appErr.ErrApplyingForLoan
 	}
 
-	if coreCustomerID != nil {
-		customerLoans, err := s.getCoreCustomerLoans(ctx, *coreCustomerID)
-		if err != nil {
-			customerLoans = []CoreCustomerLoanItem{}
-		}
+	if customer.Id > 0 {
+		coreCustomerID = customer.Id
 
-		activeLoanCount := countActiveCoreLoans(customerLoans)
-		if exceedsMaxActiveLoans(activeLoanCount, loanRule.MaxActiveLoans) {
+		activeLoans, err := s.repo.CountActiveLoans(ctx, coreCustomerID)
+		if err != nil {
+			return nil, appErr.ErrApplyingForLoan
+		}
+		// Product doesn't allow concurrent loans and one already exists
+		if !loanProduct.AllowsConcurrentLoans && activeLoans > 0 {
 			return nil, appErr.ErrIneligibleForLoan
 		}
 
-		if loanRule.RequireNoOutstandingDefault != nil && *loanRule.RequireNoOutstandingDefault {
-			for _, loan := range customerLoans {
-				if !shouldInspectLoanForOutstandingDefault(loan) {
-					continue
-				}
-
-				loanDetail, err := s.GetCoreLoanDetail(ctx, loan.LoanID)
-				if err != nil {
-					return nil, appErr.ErrApplyingForLoan
-				}
-
-				if hasOutstandingDefaultLoan(loanDetail) {
-					return nil, appErr.ErrIneligibleForLoan
-				}
-			}
+		// Rule limits max active loans and user is at or above it
+		if loanRule.MaxActiveLoans > 0 && activeLoans >= int64(loanRule.MaxActiveLoans) {
+			return nil, appErr.ErrIneligibleForLoan
 		}
+
 	}
 
 	eoi := &LoanApplication{
 		ID:                uuid.NewString(),
 		ApplicationRef:    uuid.NewString(),
-		CoreCustomerID:    coreCustomerID,
+		CoreCustomerID:    strconv.FormatInt(coreCustomerID, 10),
 		PhoneNumber:       user.Phone,
 		MobileUserID:      mobileUserID,
 		LoanProductType:   req.LoanProductType,
@@ -240,56 +229,6 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		LoanStatus:     eoi.LoanStatus,
 		Summary:        *summary,
 	}, nil
-}
-
-func (s *Service) resolveCoreCustomerIDIfAvailable(ctx context.Context, userID string, user *row) (*string, error) {
-	if user == nil {
-		return nil, nil
-	}
-
-	if user.CoreCustomerID != nil && strings.TrimSpace(*user.CoreCustomerID) != "" {
-		coreCustomerID := strings.TrimSpace(*user.CoreCustomerID)
-		return &coreCustomerID, nil
-	}
-
-	if !user.IsBVNVerified || strings.TrimSpace(user.BVN) == "" || s.coreCustomerFinder == nil {
-		return nil, nil
-	}
-
-	match, err := s.MatchCoreCustomerByBVN(ctx, user.BVN)
-	if err != nil {
-		log.Printf("error matching core customer by BVN user_id=%s bvn=%s err=%v", userID, user.BVN, err)
-		return nil, appErr.ErrApplyingForLoan
-	}
-	if match == nil {
-		log.Printf("no core customer match found for user_id=%s bvn=%s", userID, user.BVN)
-		return nil, appErr.ErrApplyingForLoan
-	}
-
-	switch match.MatchStatus {
-	case CoreCustomerNoMatch, CoreCustomerMultipleMatches:
-		return nil, nil
-	case CoreCustomerSingleMatch:
-		if match.Customer == nil || strings.TrimSpace(match.Customer.CustomerID) == "" {
-			log.Printf("core customer match has no customer id user_id=%s bvn=%s", userID, user.BVN)
-			return nil, appErr.ErrApplyingForLoan
-		}
-
-		coreCustomerID := strings.TrimSpace(match.Customer.CustomerID)
-		if err := s.repo.UpdateUserCoreCustomerID(ctx, userID, coreCustomerID); err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				log.Printf("core customer match found but user not found when updating core customer id user_id=%s bvn=%s err=%v", userID, user.BVN, err)
-				return nil, appErr.ErrUnauthorized
-			}
-			log.Printf("error updating user core customer id user_id=%s err=%v", userID, err)
-			return nil, appErr.ErrApplyingForLoan
-		}
-
-		return &coreCustomerID, nil
-	default:
-		log.Printf("unknown core customer match status user_id=%s bvn=%s status=%s", userID, user.BVN, match.MatchStatus)
-		return nil, appErr.ErrApplyingForLoan
-	}
 }
 
 func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now time.Time) (*LoanSummaryResponse, int64, int64, int, error) {
@@ -372,13 +311,27 @@ func (s *Service) GetAllLoans(ctx context.Context, mobileUserID string) ([]CoreC
 		return nil, err
 	}
 
-	if user == nil || user.CoreCustomerID == nil {
-		return nil, appErr.ErrNoLoansFound
-	}
+	var allLoans []CoreCustomerLoanItem
 
-	allLoans, err := s.repo.ListLoansByCustomerID(ctx, *user.CoreCustomerID)
+	embryoLoans, err := s.repo.ListEmbryoLoanApplications(ctx, mobileUserID)
 	if err != nil {
 		return nil, appErr.ErrApplyingForLoan
+	}
+
+	allLoans = append(allLoans, embryoLoans...)
+
+	if user.CoreCustomerID != nil {
+
+		cbaLoans, err := s.repo.ListLoansByCustomerID(ctx, *user.CoreCustomerID)
+		if err != nil {
+			return nil, appErr.ErrApplyingForLoan
+		}
+
+		allLoans = append(allLoans, cbaLoans...)
+	}
+
+	if len(allLoans) <= 0 {
+		return nil, appErr.ErrNoLoansFound
 	}
 
 	return allLoans, nil
@@ -465,36 +418,6 @@ func (s *Service) GetLoanRepayments(ctx context.Context, userID, loanID string) 
 	return &LoanRepaymentResponse{
 		Repayment: *repaymentSummary,
 	}, nil
-}
-
-func (s *Service) getCoreCustomerLoans(ctx context.Context, customerID string) ([]CoreCustomerLoanItem, error) {
-	customerID = strings.TrimSpace(customerID)
-	if customerID == "" {
-		return nil, errors.New("customer id is required")
-	}
-	if !ascii.IsDigits([]byte(customerID)) {
-		return nil, errors.New("invalid customer id")
-	}
-	if s.coreLoanFinder == nil {
-		return nil, errors.New("core loan finder is not configured")
-	}
-
-	return s.coreLoanFinder.GetCustomerLoans(ctx, customerID)
-}
-
-func (s *Service) GetCoreLoanDetail(ctx context.Context, loanID string) (*CoreLoanDetail, error) {
-	loanID = strings.TrimSpace(loanID)
-	if loanID == "" {
-		return nil, errors.New("loan id is required")
-	}
-	if !ascii.IsDigits([]byte(loanID)) {
-		return nil, errors.New("invalid loan id")
-	}
-	if s.coreLoanFinder == nil {
-		return nil, errors.New("core loan finder is not configured")
-	}
-
-	return s.coreLoanFinder.GetLoanDetail(ctx, loanID)
 }
 
 func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, req ManualRepaymentRequest) error {

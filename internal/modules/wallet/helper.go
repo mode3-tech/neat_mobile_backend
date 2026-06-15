@@ -4,8 +4,11 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/models"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -99,4 +102,15 @@ func parseExcel(reader io.Reader) ([]BulkTransferRecipientInfo, error) {
 	}
 
 	return recipients, nil
+}
+
+func checkActivationCap(now time.Time, user *models.User, amount, alreadySpent int64) error {
+	if user.ActivationCapExpiresAt == nil || !now.Before(*user.ActivationCapExpiresAt) {
+		return nil
+	}
+	if alreadySpent+amount > user.ActivationCapAmount {
+		return appErr.ErrNewUserTransferRestriction
+	}
+	return nil
+
 }
