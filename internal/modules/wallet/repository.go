@@ -198,3 +198,14 @@ func (r *Repository) CreditWalletAtomically(ctx context.Context, tx *transaction
 func (r *Repository) CreateExpectedDeposit(ctx context.Context, expectedDeposit *ExpectedDeposit) error {
 	return r.db.WithContext(ctx).Create(expectedDeposit).Error
 }
+
+func (r *Repository) SumTransactionsInWindow(ctx context.Context, mobileUserID string, txType transaction.TransactionType, from, to time.Time) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Model(&transaction.Transaction{}).
+		Select("COALESCE(SUM(amount), 0)").
+		Where("mobile_user_id = ? AND type = ? AND created_at >= ? AND created_at < ? AND status = ?",
+			mobileUserID, txType, from, to, transaction.TransactionStatusSuccessful).
+		Scan(&total).Error
+	return total, err
+}
