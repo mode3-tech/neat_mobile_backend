@@ -174,36 +174,6 @@ func (h *Handler) GetData(c *gin.Context) {
 	})
 }
 
-func (h *Handler) ValidateElectricity(c *gin.Context) {
-	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if mobileUserID == "" {
-		log.Println("vas handler: missing user id in context for ValidateElectricity")
-		mapped := response.MapError(appErr.ErrMissingUserID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	var req ElectricityValidationPayload
-	if err := c.ShouldBindJSON(&req); err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	result, err := h.service.ValidateElectricity(c.Request.Context(), req)
-	if err != nil {
-		mapped := response.MapError(err)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.ElectricityValidationResponse]{
-		Status:  "success",
-		Message: "Electricity account validated successfully",
-		Data:    &result,
-	})
-}
-
 func (h *Handler) PayElectricity(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
@@ -231,36 +201,6 @@ func (h *Handler) PayElectricity(c *gin.Context) {
 	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.PayElectricityResponse]{
 		Status:  "success",
 		Message: "Electricity bill paid successfully",
-		Data:    &result,
-	})
-}
-
-func (h *Handler) ValidateCable(c *gin.Context) {
-	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if mobileUserID == "" {
-		log.Println("vas handler: missing user id in context for ValidateCable")
-		mapped := response.MapError(appErr.ErrMissingUserID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	var req ValidateCablePayload
-	if err := c.ShouldBindJSON(&req); err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	result, err := h.service.ValidateCable(c.Request.Context(), req, mobileUserID)
-	if err != nil {
-		mapped := response.MapError(err)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
-		return
-	}
-
-	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.CableValidationResponse]{
-		Status:  "success",
-		Message: "Cable account validated successfully",
 		Data:    &result,
 	})
 }
