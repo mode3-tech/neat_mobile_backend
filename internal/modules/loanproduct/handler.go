@@ -1,6 +1,7 @@
 package loanproduct
 
 import (
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
@@ -60,6 +61,7 @@ func (h *Handler) ApplyForLoan(c *gin.Context) {
 
 	var req LoanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("loan handler: Error binding JSON: %v", err)
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
 			Status: "error",

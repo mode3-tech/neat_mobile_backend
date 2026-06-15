@@ -187,7 +187,9 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	appliedLoan, err := s.repo.GetAppliedLoans(ctx, mobileUserID)
 	if err != nil {
-		return nil, appErr.ErrApplyingForLoan
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrApplyingForLoan
+		}
 	}
 
 	if appliedLoan != nil {
