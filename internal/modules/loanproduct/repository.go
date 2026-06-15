@@ -276,7 +276,7 @@ func (r *Repository) ListEmbryoLoanApplications(ctx context.Context, mobileUserI
                 WHEN 'monthly' THEN 'months'
                 ELSE la.tenure
             END) AS tenure,
-            COALESCE(lp.interest_rate_bps / 100.0, 0) AS interest_rate,
+            COALESCE(lp.interest_rate_bps, 0) AS interest_rate,
             0 AS outstanding_balance,
             la.loan_status AS status
         `).
