@@ -226,6 +226,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	log.Printf("extracted company name: %s\n", ExtractBillingCompanyName(uniqueCode))
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		log.Printf("vas service: failed to verify transaction pin - %s\n", err)
 		return nil, err
 	}
 

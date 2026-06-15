@@ -1,6 +1,7 @@
 package response
 
 import (
+	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
 )
@@ -11,8 +12,8 @@ type ErrorMapping struct {
 }
 
 func MapError(err error) ErrorMapping {
-	switch err {
-	case appErr.ErrInvalidCredentials:
+	switch {
+	case errors.Is(err, appErr.ErrInvalidCredentials):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -21,7 +22,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnauthorized:
+	case errors.Is(err, appErr.ErrUnauthorized):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -30,7 +31,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUserExists:
+	case errors.Is(err, appErr.ErrUserExists):
 		return ErrorMapping{
 			Status: http.StatusConflict,
 			Error: APIError{
@@ -39,7 +40,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrRegistrationAlreadyInProgress:
+	case errors.Is(err, appErr.ErrRegistrationAlreadyInProgress):
 		return ErrorMapping{
 			Status: http.StatusConflict,
 			Error: APIError{
@@ -48,7 +49,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNotFound:
+	case errors.Is(err, appErr.ErrNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -57,7 +58,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidProductAmount:
+	case errors.Is(err, appErr.ErrInvalidProductAmount):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -66,7 +67,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrBVNNotFound:
+	case errors.Is(err, appErr.ErrBVNNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -75,7 +76,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNINNotFound:
+	case errors.Is(err, appErr.ErrNINNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -84,7 +85,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidBVN:
+	case errors.Is(err, appErr.ErrInvalidBVN):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -93,7 +94,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidNIN:
+	case errors.Is(err, appErr.ErrInvalidNIN):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -102,7 +103,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrPhoneNotFound:
+	case errors.Is(err, appErr.ErrPhoneNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -111,7 +112,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrPhoneMismatch:
+	case errors.Is(err, appErr.ErrPhoneMismatch):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -120,7 +121,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrEmailNotFound:
+	case errors.Is(err, appErr.ErrEmailNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -129,7 +130,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrEmailPhoneMismatch:
+	case errors.Is(err, appErr.ErrEmailPhoneMismatch):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -138,7 +139,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNINAndBVNMismatch:
+	case errors.Is(err, appErr.ErrNINAndBVNMismatch):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -147,7 +148,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrPasswordMismatch:
+	case errors.Is(err, appErr.ErrPasswordMismatch):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -156,7 +157,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrTransactionPinMismatch:
+	case errors.Is(err, appErr.ErrTransactionPinMismatch):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -165,7 +166,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidSession:
+	case errors.Is(err, appErr.ErrInvalidSession):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -174,7 +175,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidOTP:
+	case errors.Is(err, appErr.ErrInvalidOTP):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -183,7 +184,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidPhone:
+	case errors.Is(err, appErr.ErrInvalidPhone):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -192,7 +193,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidDateFrom, appErr.ErrInvalidDateTo, appErr.ErrInvalidDateRange:
+	case errors.Is(err, appErr.ErrInvalidDateFrom) || errors.Is(err, appErr.ErrInvalidDateTo) || errors.Is(err, appErr.ErrInvalidDateRange):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -201,7 +202,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnderaged:
+	case errors.Is(err, appErr.ErrUnderaged):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -210,7 +211,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidLoanAmount:
+	case errors.Is(err, appErr.ErrInvalidLoanAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -219,7 +220,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidLoanProduct:
+	case errors.Is(err, appErr.ErrInvalidLoanProduct):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -228,7 +229,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrIncompleteKYC:
+	case errors.Is(err, appErr.ErrIncompleteKYC):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -237,7 +238,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrIneligibleBusinessAge:
+	case errors.Is(err, appErr.ErrIneligibleBusinessAge):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -246,7 +247,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrIneligibleForLoan:
+	case errors.Is(err, appErr.ErrIneligibleForLoan):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -255,7 +256,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnprocessedAppliedLoanExists:
+	case errors.Is(err, appErr.ErrUnprocessedAppliedLoanExists):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -264,7 +265,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidBusinessValue:
+	case errors.Is(err, appErr.ErrInvalidBusinessValue):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -273,7 +274,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidLoanTerm:
+	case errors.Is(err, appErr.ErrInvalidLoanTerm):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -282,7 +283,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidSavingsAmount:
+	case errors.Is(err, appErr.ErrInvalidSavingsAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -291,7 +292,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidVerificationID:
+	case errors.Is(err, appErr.ErrInvalidVerificationID):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -300,7 +301,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidChannel:
+	case errors.Is(err, appErr.ErrInvalidChannel):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -309,7 +310,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrTooManyRequests:
+	case errors.Is(err, appErr.ErrTooManyRequests):
 		return ErrorMapping{
 			Status: http.StatusTooManyRequests,
 			Error: APIError{
@@ -318,7 +319,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidEmail:
+	case errors.Is(err, appErr.ErrInvalidEmail):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -327,7 +328,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnableToGenerateOTP:
+	case errors.Is(err, appErr.ErrUnableToGenerateOTP):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -336,7 +337,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnableToHashOTP:
+	case errors.Is(err, appErr.ErrUnableToHashOTP):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -345,7 +346,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidFileFormat:
+	case errors.Is(err, appErr.ErrInvalidFileFormat):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -354,7 +355,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingAccountSummary:
+	case errors.Is(err, appErr.ErrFetchingAccountSummary):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -363,7 +364,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUpdatingProfile:
+	case errors.Is(err, appErr.ErrUpdatingProfile):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -372,7 +373,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrGeneratingAccountStatement:
+	case errors.Is(err, appErr.ErrGeneratingAccountStatement):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -381,7 +382,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingAccountStatement:
+	case errors.Is(err, appErr.ErrFetchingAccountStatement):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -390,7 +391,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingLastestAccountStatement:
+	case errors.Is(err, appErr.ErrFetchingLastestAccountStatement):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -399,7 +400,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingTransactions:
+	case errors.Is(err, appErr.ErrFetchingTransactions):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -408,7 +409,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidRequestBody:
+	case errors.Is(err, appErr.ErrInvalidRequestBody):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -417,7 +418,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidQueryParameter:
+	case errors.Is(err, appErr.ErrInvalidQueryParameter):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -426,7 +427,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMissingRequiredQueryParameter:
+	case errors.Is(err, appErr.ErrMissingRequiredQueryParameter):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -435,7 +436,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNoTransactionsFound:
+	case errors.Is(err, appErr.ErrNoTransactionsFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -444,7 +445,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidCursor:
+	case errors.Is(err, appErr.ErrInvalidCursor):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -453,7 +454,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrDeviceNotAllowed:
+	case errors.Is(err, appErr.ErrDeviceNotAllowed):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
@@ -462,7 +463,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnrecognizedDevice:
+	case errors.Is(err, appErr.ErrUnrecognizedDevice):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
@@ -471,7 +472,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNoLoansFound:
+	case errors.Is(err, appErr.ErrNoLoansFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
@@ -480,16 +481,16 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrIncorrectTransactionPin:
+	case errors.Is(err, appErr.ErrIncorrectTransactionPin):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
 				Code:    "INCORRECT_TRANSACTION_PIN",
-				Message: appErr.ErrIncorrectTransactionPin.Error(),
+				Message: err.Error(),
 			},
 		}
 
-	case appErr.ErrInvalidDOB:
+	case errors.Is(err, appErr.ErrInvalidDOB):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -498,7 +499,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrApplyingForLoan:
+	case errors.Is(err, appErr.ErrApplyingForLoan):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -507,7 +508,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingActiveLoans:
+	case errors.Is(err, appErr.ErrFetchingActiveLoans):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -516,7 +517,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingLoanHistory:
+	case errors.Is(err, appErr.ErrFetchingLoanHistory):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -525,7 +526,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingLoanDetails:
+	case errors.Is(err, appErr.ErrFetchingLoanDetails):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -534,7 +535,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMissingDeviceID, appErr.ErrMissingUserID:
+	case errors.Is(err, appErr.ErrMissingDeviceID) || errors.Is(err, appErr.ErrMissingUserID):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -543,7 +544,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidSession:
+	case errors.Is(err, appErr.ErrInvalidSession):
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -552,7 +553,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMissingOTP:
+	case errors.Is(err, appErr.ErrMissingOTP):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -561,7 +562,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrUnableToGenerateResetToken:
+	case errors.Is(err, appErr.ErrUnableToGenerateResetToken):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -570,7 +571,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidRequestBody:
+	case errors.Is(err, appErr.ErrInvalidRequestBody):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -579,7 +580,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrTransactionPinLocked:
+	case errors.Is(err, appErr.ErrTransactionPinLocked):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
@@ -588,7 +589,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMakingRepayment:
+	case errors.Is(err, appErr.ErrMakingRepayment):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -597,7 +598,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidNotificationPlatform:
+	case errors.Is(err, appErr.ErrInvalidNotificationPlatform):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -606,7 +607,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidExpoToken:
+	case errors.Is(err, appErr.ErrInvalidExpoToken):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -615,7 +616,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrSendingPushNotification:
+	case errors.Is(err, appErr.ErrSendingPushNotification):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -624,7 +625,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingNotifications:
+	case errors.Is(err, appErr.ErrFetchingNotifications):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -633,7 +634,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingUnreadNotifications:
+	case errors.Is(err, appErr.ErrFetchingUnreadNotifications):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -642,7 +643,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMarkingNotifications:
+	case errors.Is(err, appErr.ErrMarkingNotifications):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -651,7 +652,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrDeletingPushToken:
+	case errors.Is(err, appErr.ErrDeletingPushToken):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -660,7 +661,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMissingRequiredPathParameter:
+	case errors.Is(err, appErr.ErrMissingRequiredPathParameter):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
 			Error: APIError{
@@ -669,7 +670,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrTogglingPushNotification:
+	case errors.Is(err, appErr.ErrTogglingPushNotification):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -678,7 +679,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingBanks:
+	case errors.Is(err, appErr.ErrFetchingBanks):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -687,7 +688,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingBankDetails:
+	case errors.Is(err, appErr.ErrFetchingBankDetails):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -696,7 +697,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidTransferAmount:
+	case errors.Is(err, appErr.ErrInvalidTransferAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -705,7 +706,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFundsTransfer:
+	case errors.Is(err, appErr.ErrFundsTransfer):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -714,7 +715,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMissingUserWallet:
+	case errors.Is(err, appErr.ErrMissingUserWallet):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -723,7 +724,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrAddingBeneficiary:
+	case errors.Is(err, appErr.ErrAddingBeneficiary):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -732,7 +733,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrMakingLoanRepayment:
+	case errors.Is(err, appErr.ErrMakingLoanRepayment):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -741,7 +742,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingBeneficiaries:
+	case errors.Is(err, appErr.ErrFetchingBeneficiaries):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -750,7 +751,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrCreatingSavingsGoal:
+	case errors.Is(err, appErr.ErrCreatingSavingsGoal):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -759,7 +760,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingUserGoals:
+	case errors.Is(err, appErr.ErrFetchingUserGoals):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -768,7 +769,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingGoalSummary:
+	case errors.Is(err, appErr.ErrFetchingGoalSummary):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -777,7 +778,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrSMSDeliveryFailed:
+	case errors.Is(err, appErr.ErrSMSDeliveryFailed):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -786,7 +787,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrSMSServiceNotConfigured:
+	case errors.Is(err, appErr.ErrSMSServiceNotConfigured):
 		return ErrorMapping{
 			Status: http.StatusServiceUnavailable,
 			Error: APIError{
@@ -795,7 +796,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrRequestingForCard:
+	case errors.Is(err, appErr.ErrRequestingForCard):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -804,7 +805,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInsufficientBalance:
+	case errors.Is(err, appErr.ErrInsufficientBalance):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
@@ -813,7 +814,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNewUserTransferRestriction:
+	case errors.Is(err, appErr.ErrNewUserTransferRestriction):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
@@ -822,7 +823,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrBVNWithFaceVerificationNotFound:
+	case errors.Is(err, appErr.ErrBVNWithFaceVerificationNotFound):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -831,7 +832,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrValidatingBVNWithFace:
+	case errors.Is(err, appErr.ErrValidatingBVNWithFace):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -840,7 +841,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrNINWithFaceVerificationNotFound:
+	case errors.Is(err, appErr.ErrNINWithFaceVerificationNotFound):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -849,7 +850,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrValidatingNINWithFace:
+	case errors.Is(err, appErr.ErrValidatingNINWithFace):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -858,7 +859,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidISPAmount:
+	case errors.Is(err, appErr.ErrInvalidISPAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -867,7 +868,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrGettingAirtime:
+	case errors.Is(err, appErr.ErrGettingAirtime):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -876,7 +877,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrVASAmbiguous:
+	case errors.Is(err, appErr.ErrVASAmbiguous):
 		return ErrorMapping{
 			Status: http.StatusRequestTimeout,
 			Error: APIError{
@@ -885,7 +886,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrGettingData:
+	case errors.Is(err, appErr.ErrGettingData):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -894,7 +895,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrValidatingElectricity:
+	case errors.Is(err, appErr.ErrValidatingElectricity):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -903,7 +904,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrPayingElectricityBill:
+	case errors.Is(err, appErr.ErrPayingElectricityBill):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -912,7 +913,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrValidatingCable:
+	case errors.Is(err, appErr.ErrValidatingCable):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -921,7 +922,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrPayingCableBill:
+	case errors.Is(err, appErr.ErrPayingCableBill):
 		return ErrorMapping{
 			Status: http.StatusBadGateway,
 			Error: APIError{
@@ -930,7 +931,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrFetchingAllCategories:
+	case errors.Is(err, appErr.ErrFetchingAllCategories):
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -939,7 +940,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidPhoneNumber:
+	case errors.Is(err, appErr.ErrInvalidPhoneNumber):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -948,7 +949,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidAccountNumber:
+	case errors.Is(err, appErr.ErrInvalidAccountNumber):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
@@ -957,7 +958,7 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case appErr.ErrInvalidAccountType:
+	case errors.Is(err, appErr.ErrInvalidAccountType):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{

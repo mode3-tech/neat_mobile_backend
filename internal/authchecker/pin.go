@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 
@@ -37,8 +38,10 @@ func (v *Verifier) Verify(ctx context.Context, mobileUserID, pin string) error {
 	user, err := v.repo.GetUserForPinVerification(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("pin verifier: failed to retrieve user for pin verification - %s\n", err)
 			return appErr.ErrUnauthorized
 		}
+		log.Printf("pin verifier: failed to retrieve user for pin verification - %s\n", err)
 		return fmt.Errorf("failed to retrieve user for pin verification: %w", err)
 	}
 
