@@ -251,7 +251,16 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
 				Code:    "INELIGIBLE_FOR_LOAN",
-				Message: "user has active loan or has defaulted on a previous loan",
+				Message: "you have active loan or has defaulted on a previous loan",
+			},
+		}
+
+	case appErr.ErrUnprocessedAppliedLoanExists:
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "UNPROCESSED_APPLIED_LOAN_EXISTS",
+				Message: "you have applied loans that have not been processed yet",
 			},
 		}
 

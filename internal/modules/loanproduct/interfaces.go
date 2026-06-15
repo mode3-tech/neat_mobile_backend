@@ -26,3 +26,7 @@ type RepaymentFundTransferrer interface {
 type DeviceVerifier interface {
 	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }
+
+type SMSSender interface {
+	Send(ctx context.Context, destination, message string) error
+}

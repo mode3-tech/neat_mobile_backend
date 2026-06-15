@@ -126,12 +126,24 @@ func (r *Repository) GetCoreUser(ctx context.Context, bvn string) (*Customer, er
 func (r *Repository) CountActiveLoans(ctx context.Context, customerID int64) (count int64, err error) {
 	if err := r.db.WithContext(ctx).
 		Table("loan_loan").
-		Where("customer_id = ? AND status <> paid", customerID).
+		Where("customer_id = ? AND status <> 'paid'", customerID).
 		Count(&count).
 		Error; err != nil {
 		return count, err
 	}
 	return count, nil
+}
+
+func (r *Repository) GetAppliedLoans(ctx context.Context, mobileUserID string) (*LoanApplication, error) {
+	var loanApplication LoanApplication
+	if err := r.db.WithContext(ctx).
+		Model(&LoanApplication{}).
+		Where("mobile_user_id = ?", mobileUserID).
+		First(&loanApplication).
+		Error; err != nil {
+		return nil, err
+	}
+	return &loanApplication, nil
 }
 
 func (r *Repository) GetRuleByProductID(ctx context.Context, productID string) (*LoanProductRule, error) {
