@@ -114,7 +114,7 @@ func (r *Repository) GetCoreUser(ctx context.Context, bvn string) (*Customer, er
 	var customer Customer
 	if err := r.db.WithContext(ctx).
 		Table("account_customer_info").
-		Select("id").
+		Select("user_id").
 		Where("bvn = ?", bvn).
 		First(&customer).
 		Error; err != nil {
