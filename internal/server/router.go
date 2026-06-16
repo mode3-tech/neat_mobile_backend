@@ -214,7 +214,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
-	walletHandler := wallet.NewHandler(walletService)
+	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 
 	transactionRepo := transaction.NewRepository(db)
