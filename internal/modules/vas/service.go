@@ -7,7 +7,6 @@ import (
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
-	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/vas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"strings"
@@ -23,10 +22,10 @@ type Service struct {
 	Baas           BAAS
 	XpressPayments VASService
 	PinVerifier    AuthService
-	User           *user.Repository
+	User           UserFinder
 }
 
-func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService, userRepo *user.Repository) *Service {
+func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService, userRepo UserFinder) *Service {
 	return &Service{
 		Repo:           repo,
 		XpressPayments: xpressPayments,
