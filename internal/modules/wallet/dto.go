@@ -177,3 +177,6 @@ type BulkTransferResult struct {
 	AccountNumber string `json:"accoun_number"`
 	Total         int64  `json:"total"`
 }
+
+type XpressWalletEvent struct {
+}

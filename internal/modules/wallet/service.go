@@ -9,7 +9,6 @@ import (
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/transaction"
-	"strconv"
 	"strings"
 	"time"
 
@@ -414,56 +413,7 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 
 }
 
-func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
-	if strings.TrimSpace(payload.TranType) != "C" {
-		return fmt.Errorf("unexpected tranType: %s", payload.TranType)
-	}
-
-	amountFloat, err := strconv.ParseFloat(strings.TrimSpace(payload.TransactionAmount), 64)
-	if err != nil || amountFloat <= 0 {
-		return fmt.Errorf("invalid transaction amount: %s", payload.TransactionAmount)
-	}
-	amountKobo := int64(math.Round(amountFloat * 100))
-
-	providerRef := strings.TrimSpace(payload.TranID)
-	if providerRef == "" {
-		providerRef = strings.TrimSpace(payload.SessionID)
-	}
-	if providerRef == "" {
-		return errors.New("no usable provider reference in payload")
-	}
-
-	wallet, err := s.repo.GetWalletByAccountNumber(ctx, strings.TrimSpace(payload.AccountNumber))
-	if err != nil {
-		// account not ours — log upstream and return nil so handler responds 200
-		return nil
-	}
-
-	// existing, _ := s.repo.GetTransferByProviderRef(ctx, providerRef)
-	// if existing != nil {
-	// 	return nil // duplicate webhook, already processed
-	// }
-
-	narration := strings.TrimSpace(payload.TranRemarks)
-	transfer := &transaction.Transaction{
-		ID:                  uuid.NewString(),
-		MobileUserID:        wallet.MobileUserID,
-		WalletID:            wallet.WalletID,
-		Reference:           uuid.NewString(),
-		ProviderReference:   providerRef,
-		SessionID:           payload.SessionID,
-		Amount:              amountKobo,
-		Narration:           &narration,
-		CounterpartyAccount: payload.AccountNumber,
-		Description:         payload.TranRemarks,
-		Status:              transaction.TransactionStatusSuccessful,
-		Type:                transaction.TransactionTypeCredit,
-	}
-
-	if err := s.repo.CreditWalletAtomically(ctx, transfer, amountKobo); err != nil {
-		return fmt.Errorf("failed to credit wallet: %w", err)
-	}
-
+func (s *Service) ProcessCreditWebhook(ctx context.Context, event XpressWalletEvent) error {
 	return nil
 }
 

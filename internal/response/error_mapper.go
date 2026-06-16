@@ -31,6 +31,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrBadRequest):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "BAD_REQUEST",
+				Message: "bad request",
+			},
+		}
+
 	case errors.Is(err, appErr.ErrUserExists):
 		return ErrorMapping{
 			Status: http.StatusConflict,
