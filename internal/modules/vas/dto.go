@@ -41,8 +41,6 @@ type PayCablePayload struct {
 	UniqueCode    string `json:"unique_code" binding:"required"`
 	AccountNumber string `json:"account_number" binding:"required"`
 	AccountType   string `json:"account_type" binding:"required"`
-	Name          string `json:"name" binding:"required"`
-	PhoneNumber   string `json:"phone_number" binding:"required"`
 	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
 	Amount        int64  `json:"amount" binding:"required,gt=0"`
 	Pin           string `json:"pin" binding:"required"`

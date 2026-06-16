@@ -24,6 +24,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
+	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -227,7 +228,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Printf("xpress payments not configured: %v — VAS endpoints will be unavailable", xpressErr)
 	} else {
 		vasRepo := vas.NewRepository(db)
-		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService)
+		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 	}

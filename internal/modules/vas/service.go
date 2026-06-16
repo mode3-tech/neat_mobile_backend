@@ -7,6 +7,7 @@ import (
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/vas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"strings"
@@ -22,10 +23,19 @@ type Service struct {
 	Baas           BAAS
 	XpressPayments VASService
 	PinVerifier    AuthService
+	User           *user.Repository
 }
 
-func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService) *Service {
-	return &Service{Repo: repo, XpressPayments: xpressPayments, WalletService: walletService, Txr: txr, Baas: baas, PinVerifier: pinVerifier}
+func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService, userRepo *user.Repository) *Service {
+	return &Service{
+		Repo:           repo,
+		XpressPayments: xpressPayments,
+		WalletService:  walletService,
+		Txr:            txr,
+		Baas:           baas,
+		PinVerifier:    pinVerifier,
+		User:           userRepo,
+	}
 }
 
 func (s *Service) FetchAllCategories(ctx context.Context) ([]vas.Category, error) {
@@ -511,6 +521,15 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrPayingCableBill
 	}
 
+	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get user - %s\n", err)
+		return nil, appErr.ErrPayingCableBill
+	}
+	if user == nil {
+		return nil, appErr.ErrPayingCableBill
+	}
+
 	if wallet.AvailableBalance < amount*100 {
 		return nil, appErr.ErrInsufficientBalance
 	}
@@ -568,9 +587,15 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrPayingCableBill
 	}
 
+	normalizedPhone, err := phone.ToLocalFormat(user.Phone)
+	if err != nil {
+		log.Printf("vas service: failed to normalize phone number - %s\n", err)
+		return nil, appErr.ErrPayingCableBill
+	}
+
 	result, err := s.XpressPayments.PayCableBill(
 		ctx, requestID, uniqueCode, accountNumber,
-		payload.AccountType, payload.Name, payload.PhoneNumber,
+		payload.AccountType, user.FirstName+" "+user.LastName, normalizedPhone,
 		payload.NoOfMonth, amount,
 	)
 	if err != nil {
