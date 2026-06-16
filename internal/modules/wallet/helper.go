@@ -1,7 +1,10 @@
 package wallet
 
 import (
+	"crypto/hmac"
+	"crypto/sha512"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"io"
 	appErr "neat_mobile_app_backend/internal/errors"
@@ -113,4 +116,11 @@ func checkActivationCap(now time.Time, user *models.User, amount, alreadySpent i
 	}
 	return nil
 
+}
+
+func verifySignature(payload []byte, signature, apiKey string) bool {
+	mac := hmac.New(sha512.New, []byte(apiKey))
+	mac.Write(payload)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
 }

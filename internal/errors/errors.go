@@ -9,6 +9,7 @@ var (
 	ErrEmailPhoneMismatch              = errors.New("email and phone verification do not match")
 	ErrNotFound                        = errors.New("not found")
 	ErrUnauthorized                    = errors.New("unauthorized")
+	ErrBadRequest                      = errors.New("bad request")
 	ErrBVNNotFound                     = errors.New("bvn not found")
 	ErrNINNotFound                     = errors.New("nin not found")
 	ErrInvalidNIN                      = errors.New("invalid nin")
