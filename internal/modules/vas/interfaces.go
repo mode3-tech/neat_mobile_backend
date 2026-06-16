@@ -2,6 +2,7 @@ package vas
 
 import (
 	"context"
+	"neat_mobile_app_backend/models"
 	"neat_mobile_app_backend/providers/baas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 )
@@ -34,4 +35,8 @@ type BAAS interface {
 
 type AuthService interface {
 	VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error
+}
+
+type UserFinder interface {
+	GetUserByUserID(ctx context.Context, mobileUserID string) (*models.User, error)
 }
