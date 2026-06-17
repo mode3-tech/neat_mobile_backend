@@ -246,7 +246,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount)
+	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
 

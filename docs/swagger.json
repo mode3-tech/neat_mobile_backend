@@ -11423,18 +11423,8 @@
       },
       "PayElectricityRequest": {
         "type": "object",
-        "required": [
-          "request_id",
-          "unique_code",
-          "account_number",
-          "account_type",
-          "amount",
-          "name",
-          "address",
-          "phone_number"
-        ],
+        "required": ["unique_code", "account_number", "account_type", "amount"],
         "properties": {
-          "request_id": { "type": "string", "example": "req-004" },
           "unique_code": { "type": "string", "example": "EKEDC_PREPAID" },
           "account_number": {
             "type": "string",
@@ -11450,18 +11440,7 @@
             "type": "integer",
             "example": 5000,
             "description": "Amount in Naira"
-          },
-          "name": {
-            "type": "string",
-            "example": "John Doe",
-            "description": "Account holder name from validation"
-          },
-          "address": {
-            "type": "string",
-            "example": "12 Marina Street, Lagos",
-            "description": "Account address from validation"
-          },
-          "phone_number": { "type": "string", "example": "08012345678" }
+          }
         }
       },
       "CableValidationRequest": {
@@ -11494,17 +11473,13 @@
       "PayCableRequest": {
         "type": "object",
         "required": [
-          "request_id",
           "unique_code",
           "account_number",
           "account_type",
-          "name",
-          "phone_number",
           "no_of_month",
           "amount"
         ],
         "properties": {
-          "request_id": { "type": "string", "example": "req-006" },
           "unique_code": { "type": "string", "example": "DSTV" },
           "account_number": {
             "type": "string",
@@ -11516,12 +11491,6 @@
             "example": "DSTV",
             "description": "Account type from validation response"
           },
-          "name": {
-            "type": "string",
-            "example": "John Doe",
-            "description": "Account holder name from validation"
-          },
-          "phone_number": { "type": "string", "example": "08012345678" },
           "no_of_month": { "type": "integer", "example": 1 },
           "amount": {
             "type": "integer",

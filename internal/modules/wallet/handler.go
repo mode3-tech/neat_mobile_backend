@@ -1,8 +1,6 @@
 package wallet
 
 import (
-	"encoding/json"
-	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
@@ -177,64 +175,64 @@ func (h *Handler) AddBeneficiary(c *gin.Context) {
 	})
 }
 
-func (h *Handler) HandleCreditWebhook(c *gin.Context) {
+// func (h *Handler) HandleCreditWebhook(c *gin.Context) {
 
-	rawBody, err := c.GetRawData()
-	if err != nil {
-		log.Printf("providus credit webhook: error: %v", err)
-		mapped := response.MapError(appErr.ErrBadRequest)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+// 	rawBody, err := c.GetRawData()
+// 	if err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(appErr.ErrBadRequest)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	signature := c.Request.Header.Get("x-xpresswallet-signature")
-	log.Printf("providus credit webhook: signature: %s", signature)
-	if signature == "" {
-		log.Printf("providus credit webhook: error: signature is empty")
-		mapped := response.MapError(appErr.ErrUnauthorized)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+// 	signature := c.Request.Header.Get("x-xpresswallet-signature")
+// 	log.Printf("providus credit webhook: signature: %s", signature)
+// 	if signature == "" {
+// 		log.Printf("providus credit webhook: error: signature is empty")
+// 		mapped := response.MapError(appErr.ErrUnauthorized)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	if !verifySignature(rawBody, signature, h.apiKey) {
-		log.Printf("providus credit webhook: error: invalid signature")
-		mapped := response.MapError(appErr.ErrUnauthorized)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+// 	if !verifySignature(rawBody, signature, h.apiKey) {
+// 		log.Printf("providus credit webhook: error: invalid signature")
+// 		mapped := response.MapError(appErr.ErrUnauthorized)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	var event XpressWalletEvent
-	if err := json.Unmarshal(rawBody, &event); err != nil {
-		log.Printf("providus credit webhook: error: %v", err)
-		mapped := response.MapError(appErr.ErrBadRequest)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+// 	var event XpressWalletEvent
+// 	if err := json.Unmarshal(rawBody, &event); err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(appErr.ErrBadRequest)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	if err := h.service.ProcessCreditWebhook(c.Request.Context(), event); err != nil {
-		log.Printf("providus credit webhook: error: %v", err)
-		mapped := response.MapError(err)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
+// 	if err := h.service.ProcessCreditWebhook(c.Request.Context(), event); err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(err)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": true})
-}
+// 	c.JSON(http.StatusOK, gin.H{"status": true})
+// }
 
 func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
