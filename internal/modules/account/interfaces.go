@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/wallet"
+	"neat_mobile_app_backend/providers/baas"
 	"time"
 )
 
@@ -17,4 +19,12 @@ type UploadService interface {
 
 type DeviceVerifier interface {
 	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
+}
+
+type CustomerAccountFinder interface {
+	GetCustomerDetails(ctx context.Context, customerID string) (*baas.ProvidusCustomerDetailsResponse, error)
+}
+
+type WalletFinder interface {
+	GetUserWalletBalance(ctx context.Context, mobileUserID string) (*wallet.CustomerWallet, error)
 }

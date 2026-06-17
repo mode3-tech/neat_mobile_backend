@@ -656,3 +656,38 @@ func (p *Providus) CreditCustomer(ctx context.Context, amount int64, referenceID
 
 	return &result, nil
 }
+
+func (p *Providus) GetCustomerDetails(ctx context.Context, customerID string) (*ProvidusCustomerDetailsResponse, error) {
+	url := p.BaseURL + fmt.Sprintf("/customer/%s", customerID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
+		return nil, err
+	}
+
+	var result ProvidusCustomerDetailsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("providus: failed to decode response body into a json - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}

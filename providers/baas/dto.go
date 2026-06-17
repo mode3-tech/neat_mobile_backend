@@ -1,5 +1,7 @@
 package baas
 
+import "time"
+
 type optimusTokenRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -57,4 +59,30 @@ type ProvidusWalletCreditResponse struct {
 	Message   string `json:"message"`
 	Reference string `json:"reference"`
 	Amount    int64  `json:"amount"`
+}
+
+type ProvidusCustomerDetailsResponse struct {
+	Status   bool             `json:"status"`
+	Customer ProvidusCustomer `json:"customer"`
+}
+
+type ProvidusCustomer struct {
+	ID               string            `json:"id"`
+	BVN              string            `json:"bvn"`
+	FirstName        string            `json:"firstName"`
+	LastName         string            `json:"lastName"`
+	BVNLastName      string            `json:"bvnLastName"`
+	BVNFirstName     string            `json:"bvnFirstName"`
+	NameMatch        bool              `json:"nameMatch"`
+	Email            string            `json:"email"`
+	DateOfBirth      time.Time         `json:"dateOfBirth"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	WalletID         string            `json:"walletId"`
+	Metadata         map[string]string `json:"metadata"`
+	Tier             string            `json:"tier"`
+	DeletedAt        *time.Time        `json:"deletedAt"`
+	AccountNumber    string            `json:"accountNumber"`
+	BookedBalance    int64             `json:"bookedBalance"`
+	AvailableBalance int64             `json:"availableBalance"`
 }

@@ -393,6 +393,15 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
 	amount := payload.Amount
 
+	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get user - %s\n", err)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+	if user == nil {
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
@@ -463,7 +472,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 
 	result, err := s.XpressPayments.PayElectricityBill(
 		ctx, requestID, uniqueCode, accountNumber,
-		payload.Name, payload.Address, payload.PhoneNumber,
+		user.FullName, *user.Address, user.Phone,
 		vasprovider.AccountType(payload.AccountType), amount,
 	)
 	if err != nil {
@@ -594,7 +603,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 
 	result, err := s.XpressPayments.PayCableBill(
 		ctx, requestID, uniqueCode, accountNumber,
-		payload.AccountType, user.FirstName+" "+user.LastName, normalizedPhone,
+		payload.AccountType, user.FullName, normalizedPhone,
 		payload.NoOfMonth, amount,
 	)
 	if err != nil {

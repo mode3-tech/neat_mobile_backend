@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"neat_mobile_app_backend/models"
 
 	"gorm.io/gorm"
 )
@@ -15,10 +14,19 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{DB: db}
 }
 
-func (r *Repository) GetUserByUserID(ctx context.Context, mobileUserID string) (*models.User, error) {
-	var user models.User
-	if err := r.DB.WithContext(ctx).First(&user, "id = ?", mobileUserID).Error; err != nil {
+func (r *Repository) GetUserByUserID(ctx context.Context, mobileUserID string) (*UserWithAddress, error) {
+	var result UserWithAddress
+	err := r.DB.WithContext(ctx).
+		Table("wallet_users").
+		Select(`wallet_users.id,
+		        wallet_users.first_name || ' ' || wallet_users.last_name as full_name,
+		        wallet_users.phone, wallet_users.address,
+		        wallet_bvn_records.full_home_address as bvn_home_address`).
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
+		Where("wallet_users.id = ?", mobileUserID).
+		First(&result).Error
+	if err != nil {
 		return nil, err
 	}
-	return &user, nil
+	return &result, nil
 }

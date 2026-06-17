@@ -209,3 +209,53 @@ func (r *Repository) SumTransactionsInWindow(ctx context.Context, mobileUserID s
 		Scan(&total).Error
 	return total, err
 }
+
+func (r *Repository) FindTransactionByProviderRef(ctx context.Context, providerRef string) (*transaction.Transaction, error) {
+	var tx transaction.Transaction
+	err := r.db.WithContext(ctx).
+		Where("provider_reference = ?", providerRef).
+		First(&tx).Error
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}
+
+func (r *Repository) ReverseDebitTransaction(ctx context.Context, txID, walletID string) error {
+	return r.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
+		var tx transaction.Transaction
+		if err := db.Set("gorm:query_option", "FOR UPDATE").
+			Where("id = ?", txID).
+			First(&tx).Error; err != nil {
+			return err
+		}
+
+		if tx.Status != transaction.TransactionStatusPending {
+			return nil // already finalized
+		}
+
+		var wallet CustomerWallet
+		if err := db.Set("gorm:query_option", "FOR UPDATE").
+			Where("internal_wallet_id = ?", walletID).
+			First(&wallet).Error; err != nil {
+			return err
+		}
+
+		if err := db.Model(&transaction.Transaction{}).
+			Where("id = ?", txID).
+			Updates(map[string]interface{}{
+				"status":        transaction.TransactionStatusFailed,
+				"balance_after": wallet.AvailableBalance,
+			}).Error; err != nil {
+			return err
+		}
+
+		return db.Model(&CustomerWallet{}).
+			Where("internal_wallet_id = ?", walletID).
+			Updates(map[string]interface{}{
+				"booked_balance":    gorm.Expr("booked_balance + ?", tx.Amount),
+				"available_balance": gorm.Expr("available_balance + ?", tx.Amount),
+				"updated_at":        time.Now(),
+			}).Error
+	})
+}

@@ -25,9 +25,6 @@ type PayElectricityPayload struct {
 	AccountNumber string      `json:"account_number" binding:"required"`
 	AccountType   AccountType `json:"account_type" binding:"required"`
 	Amount        int64       `json:"amount" binding:"required,gt=0"`
-	Name          string      `json:"name" binding:"required"`
-	Address       string      `json:"address" binding:"required"`
-	PhoneNumber   string      `json:"phone_number" binding:"required"`
 	Pin           string      `json:"pin" binding:"required"`
 }
 

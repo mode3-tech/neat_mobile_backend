@@ -124,3 +124,11 @@ func verifySignature(payload []byte, signature, apiKey string) bool {
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
+
+func parseAmountToKobo(amount string) (int64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	if err != nil {
+		return 0, err
+	}
+	return int64(parsed * 100), nil
+}
