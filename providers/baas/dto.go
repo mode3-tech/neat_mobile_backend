@@ -75,7 +75,7 @@ type ProvidusCustomer struct {
 	BVNFirstName     string            `json:"bvnFirstName"`
 	NameMatch        bool              `json:"nameMatch"`
 	Email            string            `json:"email"`
-	DateOfBirth      time.Time         `json:"dateOfBirth"`
+	DateOfBirth      string            `json:"dateOfBirth"`
 	CreatedAt        time.Time         `json:"createdAt"`
 	UpdatedAt        time.Time         `json:"updatedAt"`
 	WalletID         string            `json:"walletId"`
