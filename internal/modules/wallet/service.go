@@ -170,7 +170,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 
-	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
+	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit); err != nil {
 		log.Printf("wallet service: failed to complete debit transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
@@ -413,9 +413,9 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 
 }
 
-func (s *Service) ProcessCreditWebhook(ctx context.Context, event XpressWalletEvent) error {
-	return nil
-}
+// func (s *Service) ProcessCreditWebhook(ctx context.Context, event XpressWalletEvent) error {
+// 	return nil
+// }
 
 func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]Beneficiary, error) {
 	beneficiaries, err := s.repo.GetBeneficiaries(ctx, mobileUserID)

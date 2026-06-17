@@ -17,6 +17,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 func RegisterWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth gin.HandlerFunc) {
 	providus := rg.Group("/providus", webhookAuth)
 	{
-		providus.POST("/credit", handler.HandleCreditWebhook)
+		providus.POST("/credit", handler.HandleBaaSEvent)
 	}
 }
