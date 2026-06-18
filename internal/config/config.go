@@ -119,9 +119,9 @@ func Load() Config {
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
 
-		XpressPublicKey:  getEnv("XPRESS_LIVE_PUBLIC_KEY", ""),
-		XpressPrivateKey: getEnv("XPRESS_LIVE_PRIVATE_KEY", ""),
-		XpressBaseURL:    getEnv("XPRESS_LIVE_BASE_URL", ""),
+		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
+		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
+		XpressBaseURL:    getEnv("XPRESS_BASE_URL", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}

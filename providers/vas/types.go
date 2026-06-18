@@ -106,7 +106,7 @@ type cableValidationDetails struct {
 
 type CableValidationResponse struct {
 	Response
-	Data cableValidationResponseData `json:"data"`
+	Data *cableValidationResponseData `json:"data"`
 }
 
 type cableValidationResponseData struct {

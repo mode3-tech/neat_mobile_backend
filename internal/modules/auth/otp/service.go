@@ -153,15 +153,17 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			}
 			log.Printf("[otp.Issue] SMS sent: purpose=%s", in.Purpose)
 		case ChannelEmail:
-			subject := "Your One Time Password (OTP)"
-			if in.Purpose == PurposePasswordReset {
-				subject = "Your Password Reset OTP"
-			}
-			if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
-				log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
-				return err
-			}
-			log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
+			// subject := "Your One Time Password (OTP)"
+			// if in.Purpose == PurposePasswordReset {
+			// 	subject = "Your Password Reset OTP"
+			// }
+			// if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
+			// 	log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
+			// 	return err
+			// }
+			// log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
+			log.Printf("otp service: email currently out of service")
+			return appErr.ErrEmailOutOfService
 		default:
 			log.Printf("[otp.Issue] unsupported channel: channel=%s", in.Channel)
 			return appErr.ErrInvalidChannel
