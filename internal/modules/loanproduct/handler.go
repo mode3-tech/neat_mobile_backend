@@ -215,10 +215,18 @@ func (h *Handler) GetLoanDetails(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*LoanDetailsResponse]{
+	dto := &LoanDetails{
+		TotalLoanAmount:    resp.Details.TotalLoanAmount,
+		AmountRepaid:       resp.Details.AmountRepaid,
+		OutstandingBalance: resp.Details.OutstandingBalance,
+		DueDate:            resp.Details.DueDate,
+		RepaymentHistory:   resp.Details.RepaymentHistory,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[*LoanDetails]{
 		Status:  "success",
 		Message: "Loan details fetched successfully",
-		Data:    &resp,
+		Data:    &dto,
 	})
 }
 
@@ -293,10 +301,21 @@ func (h *Handler) GetRepaymentSchedule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*LoanRepaymentResponse]{
+	dto := &LoanRepayment{
+		LoanProductType:   resp.Repayment.LoanProductType,
+		LoanAmount:        resp.Repayment.LoanAmount,
+		TotalRepayment:    resp.Repayment.TotalRepayment,
+		PeriodicRepayment: resp.Repayment.PeriodicRepayment,
+		LoanDuration:      resp.Repayment.LoanDuration,
+		AmountPaid:        resp.Repayment.AmountPaid,
+		YetToPay:          resp.Repayment.YetToPay,
+		InterestRate:      resp.Repayment.InterestRate,
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[*LoanRepayment]{
 		Status:  "success",
 		Message: "Loan repayments fetched successfully",
-		Data:    &resp,
+		Data:    &dto,
 	})
 }
 
