@@ -199,7 +199,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 		}
 
 		deviceRow := &device.UserDevice{
-			ID:          deviceID,
+			ID:          uuid.NewString(),
 			UserID:      pendingSession.UserID,
 			DeviceID:    deviceID,
 			PublicKey:   strings.TrimSpace(req.Device.PublicKey),
@@ -212,9 +212,11 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 			LastUsedAt:  now,
 		}
 		if err := deviceRepo.UpsertDevicePublicKey(ctx, deviceRow); err != nil {
+			log.Printf("auth service: failed to upsert device public key - %s\n", err)
 			return err
 		}
 		if err := deviceRepo.ActivateAndTrustDevice(ctx, pendingSession.UserID, deviceID, now, ip); err != nil {
+			log.Printf("auth service: failed to activate device - %s\n", err)
 			return err
 		}
 

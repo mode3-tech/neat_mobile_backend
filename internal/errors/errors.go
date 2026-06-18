@@ -2,6 +2,16 @@ package errors
 
 import "errors"
 
+type XpressWalletProviderError struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+func (e XpressWalletProviderError) Error() string {
+	return e.Message
+}
+
 var (
 	ErrInvalidCredentials              = errors.New("invalid credentials")
 	ErrUserExists                      = errors.New("user already exists")
@@ -112,4 +122,5 @@ var (
 	ErrInvalidProductAmount            = errors.New("Product amount mismatch")
 	ErrInvalidAccountNumber            = errors.New("Invalid electricity account number")
 	ErrInvalidAccountType              = errors.New("Invalid electricity account type")
+	ErrEmailOutOfService               = errors.New("Email service is currently out of service, kindly skip")
 )

@@ -426,15 +426,31 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	validationResult, err := s.validateElectricity(ctx, validateElectricityPayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate electricity account - %s\n", err)
-		return nil, appErr.ErrValidatingElectricity
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    "",
+			Message: err.Error(),
+		}
 	}
 
-	if validationResult.Data.AccountNumber != accountNumber {
-		return nil, appErr.ErrInvalidAccountNumber
-	}
+	if validationResult != nil {
+		if &validationResult.Data == nil {
+			return nil, appErr.ErrValidatingElectricity
+		}
+		if validationResult.Data.AccountNumber != accountNumber {
+			return nil, appErr.ErrInvalidAccountNumber
+		}
 
-	if string(validationResult.Data.AccountType) != string(payload.AccountType) {
-		return nil, appErr.ErrInvalidAccountType
+		if string(validationResult.Data.AccountType) != string(payload.AccountType) {
+			return nil, appErr.ErrInvalidAccountType
+		}
+
+		if validationResult.ResponseCode != "00" || validationResult.ResponseMessage != "01" {
+			log.Printf("vas service: failed to validate electricity account - %s\n", validationResult.ResponseMessage)
+			return nil, &appErr.XpressWalletProviderError{
+				Code:    validationResult.ResponseCode,
+				Message: validationResult.ResponseMessage,
+			}
+		}
 	}
 
 	txID, ref := uuid.NewString(), uuid.NewString()
@@ -556,10 +572,21 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	validateResult, err := s.ValidateCable(ctx, validateCablePayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate cable account - %s\n", err)
-		return nil, appErr.ErrValidatingCable
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    "",
+			Message: err.Error(),
+		}
 	}
 	if validateResult.Data.AccountNumber != accountNumber {
 		return nil, appErr.ErrInvalidAccountNumber
+	}
+
+	if validateResult.ResponseCode != "00" || validateResult.ResponseMessage != "01" {
+		log.Printf("vas service: failed to validate cable account - %s\n", validateResult.ResponseMessage)
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    validateResult.ResponseCode,
+			Message: validateResult.ResponseMessage,
+		}
 	}
 
 	txID, ref := uuid.NewString(), uuid.NewString()

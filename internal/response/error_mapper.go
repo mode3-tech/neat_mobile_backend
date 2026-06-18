@@ -976,7 +976,27 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrEmailOutOfService):
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "EMAIL_OUT_SERVICE",
+				Message: appErr.ErrEmailOutOfService.Error(),
+			},
+		}
+
 	default:
+		var providerErr *appErr.XpressWalletProviderError
+		if errors.As(err, &providerErr) {
+			return ErrorMapping{
+				Status: http.StatusUnprocessableEntity,
+				Error: APIError{
+					Code:    "XPRESS_WALLET_PROVIDER_ERROR",
+					Message: providerErr.Message,
+				},
+			}
+		}
+
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
