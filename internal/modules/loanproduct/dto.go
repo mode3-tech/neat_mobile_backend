@@ -35,7 +35,7 @@ type ManualRepaymentRequest struct {
 }
 
 type LoanRepaymentResponse struct {
-	Repayment LoanRepayment `json:"repayment"`
+	Repayment LoanRepayment
 }
 
 type AllLoansResponse struct {
