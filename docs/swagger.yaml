@@ -6626,9 +6626,7 @@ components:
           example: Loan details fetched successfully
         data:
           type: object
-          properties:
-            details:
-              $ref: "#/components/schemas/LoanDetails"
+          $ref: "#/components/schemas/LoanDetails"
     ActiveLoanItem:
       type: object
       properties:
@@ -6728,9 +6726,7 @@ components:
           example: "Loan repayment fetched successfully"
         data:
           type: object
-          properties:
-            repayment:
-              $ref: "#/components/schemas/LoanRepayment"
+          $ref: "#/components/schemas/LoanRepayment"
     ManualRepaymentRequest:
       type: object
       required:
