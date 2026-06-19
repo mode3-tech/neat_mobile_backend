@@ -58,6 +58,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrInvalidChannel):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_CHANNEL",
+				Message: "invalid channel",
+			},
+		}
+
 	case errors.Is(err, appErr.ErrNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
