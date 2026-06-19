@@ -53,7 +53,6 @@ var (
 	ErrInvalidLoanTerm                 = errors.New("invalid loan term")
 	ErrInvalidSavingsAmount            = errors.New("invalid savings amount")
 	ErrInvalidVerificationID           = errors.New("invalid verification id")
-	ErrInvalidChannel                  = errors.New("invalid channel")
 	ErrTooManyRequests                 = errors.New("too many requests")
 	ErrUnableToGenerateOTP             = errors.New("unable to generate otp")
 	ErrUnableToHashOTP                 = errors.New("unable to hash otp")
@@ -123,4 +122,5 @@ var (
 	ErrInvalidAccountNumber            = errors.New("Invalid electricity account number")
 	ErrInvalidAccountType              = errors.New("Invalid electricity account type")
 	ErrEmailOutOfService               = errors.New("Email service is currently out of service, kindly skip")
+	ErrInvalidChannel                  = errors.New("Invalid phone or email")
 )
