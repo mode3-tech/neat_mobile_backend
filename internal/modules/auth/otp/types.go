@@ -16,6 +16,7 @@ const (
 const (
 	ChannelSMS   Channel = "sms"
 	ChannelEmail Channel = "email"
+	ChannelNone  Channel = ""
 )
 
 const (

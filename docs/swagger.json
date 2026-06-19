@@ -10350,17 +10350,11 @@
       },
       "RequestOTPRequest": {
         "type": "object",
-        "required": ["purpose", "channel", "verification_id"],
+        "required": ["destination", "verification_id"],
         "properties": {
-          "purpose": {
+          "destination": {
             "type": "string",
-            "enum": ["login", "signup", "password_reset", "pin_reset"],
-            "example": "login"
-          },
-          "channel": {
-            "type": "string",
-            "enum": ["sms", "email"],
-            "example": "email"
+            "example": "08012345678"
           },
           "verification_id": {
             "type": "string",
@@ -10370,18 +10364,8 @@
       },
       "VerifyOTPRequest": {
         "type": "object",
-        "required": ["purpose", "channel", "verification_id", "otp"],
+        "required": ["verification_id", "otp"],
         "properties": {
-          "purpose": {
-            "type": "string",
-            "enum": ["login", "signup", "password_reset", "pin_reset"],
-            "example": "login"
-          },
-          "channel": {
-            "type": "string",
-            "enum": ["sms", "email"],
-            "example": "email"
-          },
           "verification_id": {
             "type": "string",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
