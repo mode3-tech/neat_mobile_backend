@@ -2,6 +2,16 @@ package errors
 
 import "errors"
 
+type XpressWalletProviderError struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+func (e XpressWalletProviderError) Error() string {
+	return e.Message
+}
+
 var (
 	ErrInvalidCredentials              = errors.New("invalid credentials")
 	ErrUserExists                      = errors.New("user already exists")
@@ -9,6 +19,7 @@ var (
 	ErrEmailPhoneMismatch              = errors.New("email and phone verification do not match")
 	ErrNotFound                        = errors.New("not found")
 	ErrUnauthorized                    = errors.New("unauthorized")
+	ErrBadRequest                      = errors.New("bad request")
 	ErrBVNNotFound                     = errors.New("bvn not found")
 	ErrNINNotFound                     = errors.New("nin not found")
 	ErrInvalidNIN                      = errors.New("invalid nin")
@@ -37,11 +48,11 @@ var (
 	ErrIncompleteKYC                   = errors.New("incomplete kyc")
 	ErrIneligibleBusinessAge           = errors.New("ineligible business age")
 	ErrIneligibleForLoan               = errors.New("ineligible for loan")
+	ErrUnprocessedAppliedLoanExists    = errors.New("unprocessed applied loan exists")
 	ErrInvalidBusinessValue            = errors.New("invalid business value")
 	ErrInvalidLoanTerm                 = errors.New("invalid loan term")
 	ErrInvalidSavingsAmount            = errors.New("invalid savings amount")
 	ErrInvalidVerificationID           = errors.New("invalid verification id")
-	ErrInvalidChannel                  = errors.New("invalid channel")
 	ErrTooManyRequests                 = errors.New("too many requests")
 	ErrUnableToGenerateOTP             = errors.New("unable to generate otp")
 	ErrUnableToHashOTP                 = errors.New("unable to hash otp")
@@ -93,8 +104,23 @@ var (
 	ErrRequestingForCard               = errors.New("Failed to request for card")
 	ErrInsufficientBalance             = errors.New("Insufficient balance")
 	ErrNewUserTransferRestriction      = errors.New("New users are restricted from making transfers greater than NGN 20,000 for the first 24 hours after registration")
-	ErrValidatingBVNWithFace              = errors.New("Failed to match bvn with face")
-	ErrBVNWithFaceVerificationNotFound    = errors.New("BVN with face verification not found or incomplete")
-	ErrValidatingNINWithFace              = errors.New("Failed to match nin with face")
-	ErrNINWithFaceVerificationNotFound    = errors.New("NIN with face verification not found or incomplete")
+	ErrValidatingBVNWithFace           = errors.New("Failed to match bvn with face")
+	ErrBVNWithFaceVerificationNotFound = errors.New("BVN with face verification not found or incomplete")
+	ErrValidatingNINWithFace           = errors.New("Failed to match nin with face")
+	ErrNINWithFaceVerificationNotFound = errors.New("NIN with face verification not found or incomplete")
+	ErrInvalidISPAmount                = errors.New("Amount for airtime or data must be greater than NGN 100 and less than NGN 10,000")
+	ErrGettingAirtime                  = errors.New("Failed to get airtime")
+	ErrGettingData                     = errors.New("Failed to get data")
+	ErrValidatingElectricity           = errors.New("Failed to validate electricity account")
+	ErrPayingElectricityBill           = errors.New("Failed to pay electricity bill")
+	ErrValidatingCable                 = errors.New("Failed to validate cable account")
+	ErrPayingCableBill                 = errors.New("Failed to pay cable bill")
+	ErrVASAmbiguous                    = errors.New("VAS request outcome unknown — possible timeout")
+	ErrFetchingAllCategories           = errors.New("Failed to fetch all categories")
+	ErrInvalidPhoneNumber              = errors.New("Invalid nigerian phone number")
+	ErrInvalidProductAmount            = errors.New("Product amount mismatch")
+	ErrInvalidAccountNumber            = errors.New("Invalid electricity account number")
+	ErrInvalidAccountType              = errors.New("Invalid electricity account type")
+	ErrEmailOutOfService               = errors.New("Email service is currently out of service, kindly skip")
+	ErrInvalidChannel                  = errors.New("Invalid phone or email")
 )

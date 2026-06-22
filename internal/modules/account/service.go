@@ -23,21 +23,49 @@ import (
 )
 
 type Service struct {
-	Repo           *Repository
-	B2             UploadService
-	Notifier       *notification.Service
-	PDFShiftAPIKey string
-	DeviceVerifier DeviceVerifier
-	TrfLimitAmount string
+	Repo                  *Repository
+	B2                    UploadService
+	Notifier              *notification.Service
+	PDFShiftAPIKey        string
+	DeviceVerifier        DeviceVerifier
+	TrfLimitAmount        string
+	CustomerAccountFinder CustomerAccountFinder
+	WalletFinder          WalletFinder
 }
 
-func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier, trfLimitAmount string) *Service {
-	return &Service{Repo: repo, B2: b2, Notifier: notifier, PDFShiftAPIKey: pdfShiftAPIKey, DeviceVerifier: deviceVerifier, TrfLimitAmount: trfLimitAmount}
+func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier, trfLimitAmount string, customerAccountFinder CustomerAccountFinder, walletFinder WalletFinder) *Service {
+	return &Service{
+		Repo:                  repo,
+		B2:                    b2,
+		Notifier:              notifier,
+		PDFShiftAPIKey:        pdfShiftAPIKey,
+		DeviceVerifier:        deviceVerifier,
+		TrfLimitAmount:        trfLimitAmount,
+		CustomerAccountFinder: customerAccountFinder,
+		WalletFinder:          walletFinder,
+	}
 }
 
 func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*AccountSummary, error) {
 	accountInfo, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
+		return nil, appErr.ErrFetchingAccountSummary //500
+	}
+
+	wallet, err := s.WalletFinder.GetUserWalletBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("account service: error finding user - %s", err)
+		return nil, appErr.ErrFetchingAccountSummary //500
+	}
+
+	if wallet == nil {
+		log.Printf("account service: user not found - %s", mobileUserID)
+		return nil, appErr.ErrFetchingAccountSummary //500
+	}
+
+	customerDetails, err := s.CustomerAccountFinder.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+	if err != nil {
+		log.Printf("account service: error finding customer details - %s", err)
 		return nil, appErr.ErrFetchingAccountSummary //500
 	}
 
@@ -69,7 +97,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 	}
 
 	return &AccountSummary{
-		FullName:               strings.TrimSpace(accountInfo.FirstName + " " + accountInfo.LastName),
+		FullName:               strings.TrimSpace(customerDetails.Customer.FirstName + " " + customerDetails.Customer.LastName),
 		BankName:               accountInfo.BankName,
 		Email:                  accountInfo.Email,
 		BVN:                    accountInfo.BVN,
@@ -77,8 +105,8 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		ProfilePicture:         accountInfo.ProfilePicture,
 		Address:                accountInfo.Address,
 		PhoneNumber:            accountInfo.Phone,
-		AccountNumber:          accountInfo.AccountNumber,
-		AvailableBalance:       accountInfo.AvailableBalance / 100, // convert from kobo to naira
+		AccountNumber:          customerDetails.Customer.AccountNumber,
+		AvailableBalance:       customerDetails.Customer.AvailableBalance, // convert from kobo to naira
 		LoanBalance:            loanBalance,
 		ActiveLoans:            activeLoans,
 		IsNotificationsEnabled: accountInfo.IsNotificationsEnabled,
@@ -597,4 +625,55 @@ func (s *Service) uploadProfilePicture(ctx context.Context, file multipart.File,
 	return url, nil
 }
 
-// func (s *Service)
+func (s *Service) AccountLimits(ctx context.Context, mobileUserID string) (*AccountLimitResponse, error) {
+	user, err := s.Repo.GetUser(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrUnauthorized
+	}
+
+	now := time.Now().UTC()
+	capActive := user.ActivationCapExpiresAt != nil && now.Before(*user.ActivationCapExpiresAt)
+
+	if !capActive {
+		return &AccountLimitResponse{
+			ActivationCap: ActivationCap{Active: false},
+			Outflow:       Outflow{},
+			Inflow:        Inflow{Capped: false},
+		}, nil
+	}
+
+	capAmount := user.ActivationCapAmount
+	capStart := user.CreatedAt
+	capEnd := *user.ActivationCapExpiresAt
+
+	outflowSpent, _ := s.Repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeDebit, capStart, capEnd)
+	inflowSpent, _ := s.Repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeCredit, capStart, capEnd)
+
+	outflowRemaining := capAmount - outflowSpent
+	if outflowRemaining < 0 {
+		outflowRemaining = 0
+	}
+	inflowRemaining := capAmount - inflowSpent
+	if inflowRemaining < 0 {
+		inflowRemaining = 0
+	}
+
+	return &AccountLimitResponse{
+		ActivationCap: ActivationCap{
+			Active:    true,
+			ExpiresAt: capEnd,
+			CapAmount: capAmount,
+			Currency:  "NGN",
+		},
+		Outflow: Outflow{
+			Limit:     capAmount,
+			Spent:     outflowSpent,
+			Remaining: outflowRemaining,
+		},
+		Inflow: Inflow{
+			Capped:    true,
+			Limit:     capAmount,
+			Remaining: inflowRemaining,
+		},
+	}, nil
+}

@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
@@ -13,10 +12,11 @@ import (
 
 type Handler struct {
 	service *Service
+	apiKey  string
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, apiKey string) *Handler {
+	return &Handler{service: service, apiKey: apiKey}
 }
 
 func (h *Handler) FetchBanks(c *gin.Context) {
@@ -59,13 +59,13 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 		return
 	}
 
-	resp := &BankDetailsResponse{
+	resp := &BankDetails{
 		BankCode:      bankDetails.BankCode,
 		AccountName:   bankDetails.AccountName,
 		AccountNumber: bankDetails.AccountNumber,
 	}
 
-	c.JSON(http.StatusOK, response.APIResponse[*BankDetailsResponse]{
+	c.JSON(http.StatusOK, response.APIResponse[*BankDetails]{
 		Status:  "success",
 		Message: "Bank details fetched successfully",
 		Data:    &resp,
@@ -100,6 +100,7 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 			Status: "error",
 			Error:  &mapped.Error,
 		})
+		return
 	}
 
 	dto := &TransferResult{
@@ -174,21 +175,64 @@ func (h *Handler) AddBeneficiary(c *gin.Context) {
 	})
 }
 
-func (h *Handler) HandleCreditWebhook(c *gin.Context) {
-	var payload ProvidusCredit
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		// Always return 200 — a non-200 causes Providus to retry indefinitely
-		log.Printf("providus credit webhook: invalid payload: %v", err)
-		c.JSON(http.StatusOK, gin.H{"status": true})
-		return
-	}
+// func (h *Handler) HandleCreditWebhook(c *gin.Context) {
 
-	if err := h.service.HandleCreditWebhook(c.Request.Context(), &payload); err != nil {
-		log.Printf("providus credit webhook: processing error: %v", err)
-	}
+// 	rawBody, err := c.GetRawData()
+// 	if err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(appErr.ErrBadRequest)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": true})
-}
+// 	signature := c.Request.Header.Get("x-xpresswallet-signature")
+// 	log.Printf("providus credit webhook: signature: %s", signature)
+// 	if signature == "" {
+// 		log.Printf("providus credit webhook: error: signature is empty")
+// 		mapped := response.MapError(appErr.ErrUnauthorized)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
+
+// 	if !verifySignature(rawBody, signature, h.apiKey) {
+// 		log.Printf("providus credit webhook: error: invalid signature")
+// 		mapped := response.MapError(appErr.ErrUnauthorized)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
+
+// 	var event XpressWalletEvent
+// 	if err := json.Unmarshal(rawBody, &event); err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(appErr.ErrBadRequest)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
+
+// 	if err := h.service.ProcessCreditWebhook(c.Request.Context(), event); err != nil {
+// 		log.Printf("providus credit webhook: error: %v", err)
+// 		mapped := response.MapError(err)
+// 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+// 			Status: "error",
+// 			Error:  &mapped.Error,
+// 		})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{"status": true})
+// }
 
 func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	mobileUserID := c.GetString(middleware.UserIDContextKey)
@@ -197,11 +241,6 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 		return
 	}
 
-	// var query FetchBeneficiariesQuery
-	// if err := c.ShouldBindQuery(&query); err != nil {
-	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
-	// 	return
-	// }
 	beneficiaries, err := h.service.GetBeneficiaries(c.Request.Context(), mobileUserID)
 
 	if err != nil {
@@ -212,7 +251,6 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	result := make([]BeneficiaryResponseStruct, len(beneficiaries))
 	for i, b := range beneficiaries {
 		result[i] = BeneficiaryResponseStruct{
-			WalletID:      b.WalletID,
 			BankCode:      b.BankCode,
 			AccountNumber: b.AccountNumber,
 			AccountName:   b.AccountName,
@@ -226,70 +264,4 @@ func (h *Handler) GetBeneficiaries(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-func (h *Handler) InitiateBulkTransfer(c *gin.Context) {
-	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
-	if mobileUserID == "" {
-		mapped := response.MapError(appErr.ErrMissingUserID)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	var req BulkTransferRequest
-
-	if strings.Contains(c.ContentType(), "multipart/form-data") {
-		pin := c.PostForm("transaction_pin")
-		if strings.TrimSpace(pin) == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "transaction_pin is required"})
-			return
-		}
-
-		fileHeader, err := c.FormFile("recipients_excel")
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "recipients_excel file is required"})
-			return
-		}
-
-		file, err := fileHeader.Open()
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to read uploaded file"})
-			return
-		}
-		defer file.Close()
-
-		recipients, err := parseExcel(file)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		req = BulkTransferRequest{
-			RecipientInfo:  recipients,
-			TransactionPin: pin,
-		}
-	} else {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			mapped := response.MapError(appErr.ErrInvalidRequestBody)
-			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-				Status: "error",
-				Error:  &mapped.Error,
-			})
-			return
-		}
-	}
-
-	resp, err := h.service.InitiateBulkTransfer(c.Request.Context(), mobileUserID, &req)
-	if err != nil {
-		mapped := response.MapError(err)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-	}
-
-	c.JSON(http.StatusOK, resp)
 }

@@ -28,19 +28,9 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	purpose, err := parsePurpose(req.Purpose)
+	channel, err := detectChannel(strings.TrimSpace(req.Destination))
 	if err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	channel, err := parseChannel(req.Channel)
-	if err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		mapped := response.MapError(appErr.ErrInvalidChannel)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
 			Error:  &mapped.Error,
@@ -49,11 +39,15 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 	}
 
 	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
-		Purpose:        purpose,
+		Purpose:        PurposeSignup,
 		Channel:        channel,
 		VerificationID: req.VerificationID,
 	}); err != nil {
-		writeOTPError(c, err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
@@ -73,32 +67,10 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		})
 		return
 	}
-
-	purpose, err := parsePurpose(req.Purpose)
-	if err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	channel, err := parseChannel(req.Channel)
-	if err != nil {
-		mapped := response.MapError(appErr.ErrInvalidRequestBody)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
 	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
 		Code:           req.OTP,
 		VerificationID: req.VerificationID,
-		Channel:        channel,
-		Purpose:        purpose,
+		Purpose:        PurposeSignup,
 	})
 
 	if err != nil {

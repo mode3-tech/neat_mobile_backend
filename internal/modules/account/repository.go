@@ -253,6 +253,17 @@ func (r *Repository) GetLastestAccountStatement(ctx context.Context, mobileUserI
 	return &job, nil
 }
 
+func (r *Repository) SumTransactionsInWindow(ctx context.Context, mobileUserID string, txType transaction.TransactionType, from, to time.Time) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Model(&transaction.Transaction{}).
+		Select("COALESCE(SUM(amount), 0)").
+		Where("mobile_user_id = ? AND type = ? AND created_at >= ? AND created_at < ? AND status = ?",
+			mobileUserID, txType, from, to, transaction.TransactionStatusSuccessful).
+		Scan(&total).Error
+	return total, err
+}
+
 func (r *Repository) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
 	var userDevice device.UserDevice
 

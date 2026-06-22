@@ -37,6 +37,8 @@ type User struct {
 	IsNinVerified                bool            `gorm:"is_nin_verified;not null"`
 	IsBiometricsEnabled          bool            `gorm:"is_biometrics_enabled"`
 	IsNotificationsEnabled       bool            `gorm:"is_notifications_enabled"`
+	ActivationCapAmount          int64           `gorm:"column:activation_cap_amount;not null;default:0"`
+	ActivationCapExpiresAt       *time.Time      `gorm:"column:activation_cap_expires_at;type:timestamptz"`
 	CreatedAt                    time.Time       `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt                    *time.Time      `gorm:"column:updated_at;autoUpdateTime"`
 }

@@ -48,3 +48,14 @@ func (r *Repository) FetchTransactionPaged(ctx context.Context, userID, walletID
 								Find(&txs).Error
 	return txs, err
 }
+
+func (r *Repository) AddTransaction(ctx context.Context, transaction *Transaction) error {
+	return r.db.WithContext(ctx).Create(transaction).Error
+}
+
+func (r *Repository) UpdateTransactionStatus(ctx context.Context, txID string, balanceAfter int64, status TransactionStatus) error {
+	return r.db.WithContext(ctx).Model(&Transaction{}).Where("id = ?", txID).Updates(map[string]interface{}{
+		"status":        status,
+		"balance_after": balanceAfter,
+	}).Error
+}

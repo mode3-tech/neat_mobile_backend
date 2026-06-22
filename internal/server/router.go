@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
+	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
@@ -21,8 +22,9 @@ import (
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/reporting"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
-	"neat_mobile_app_backend/internal/pinverifier"
+	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
@@ -32,7 +34,8 @@ import (
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
-	"neat_mobile_app_backend/providers/sms"
+	termii "neat_mobile_app_backend/providers/sms"
+	vasprovider "neat_mobile_app_backend/providers/vas"
 	"net/http"
 	"strings"
 	"sync"
@@ -95,7 +98,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
 
-	smsSender := sms.NewSMSService(smsApiKey, smsSenderID)
+	smsSender := termii.NewSMSService(smsApiKey, smsSenderID)
 	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
@@ -140,7 +143,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	deviceValidator := middleware.DeviceValidator(deviceService)
@@ -201,7 +204,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	walletRepo := wallet.NewRepository(db)
-	walletPinVerifier := pinverifier.New(walletRepo)
+	walletPinVerifier := authchecker.New(walletRepo)
 	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
@@ -209,16 +212,26 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}, deviceService)
 
 	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, pinverifier.New(loanRepo), walletService, deviceService)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
-	walletHandler := wallet.NewHandler(walletService)
+	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 
 	transactionRepo := transaction.NewRepository(db)
 	transactionService := transaction.NewServie(transactionRepo)
 	transactionHandler := transaction.NewHandler(transactionService)
 	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+
+	xpressPayments, xpressErr := vasprovider.NewXpressPayments(cfg.XpressPublicKey, cfg.XpressPrivateKey, cfg.XpressBaseURL)
+	if xpressErr != nil {
+		log.Printf("xpress payments not configured: %v — VAS endpoints will be unavailable", xpressErr)
+	} else {
+		vasRepo := vas.NewRepository(db)
+		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
+		vasHandler := vas.NewHandler(vasService)
+		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
+	}
 
 	webhooksGroup := r.Group("/webhooks")
 	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
@@ -233,7 +246,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	accountRepo := account.NewRepository(db)
-	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount)
+	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
 
@@ -316,7 +329,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}()
 
 	neatsaveRepo := neatsave.NewRepository(db)
-	neatsavePinVerifier := pinverifier.New(neatsaveRepo)
+	neatsavePinVerifier := authchecker.New(neatsaveRepo)
 	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, deviceValidator, neatsaveHandler)

@@ -7,12 +7,6 @@ type BankDetailsQuery struct {
 	BankCode      string `form:"bank_code" binding:"required"`
 }
 
-type BankDetailsResponse struct {
-	BankCode      string `json:"bank_code"`
-	AccountName   string `json:"account_name"`
-	AccountNumber string `json:"account_number"`
-}
-
 type TransferRequest struct {
 	Amount         int64          `json:"amount" binding:"required,gt=0"`
 	SortCode       string         `json:"sort_code" binding:"required"`
@@ -65,7 +59,6 @@ type FetchBeneficiariesResponse struct {
 }
 
 type BeneficiaryResponseStruct struct {
-	WalletID      string `json:"wallet_id"`
 	BankCode      string `json:"bank_code"`
 	AccountNumber string `json:"account_number"`
 	AccountName   string `json:"account_name"`

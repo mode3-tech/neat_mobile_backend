@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/models"
 	"time"
@@ -169,6 +170,22 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema() AND table_name = 'wallet_users'
+			) THEN
+				ALTER TABLE wallet_users
+				ADD COLUMN IF NOT EXISTS activation_cap_amount bigint NOT NULL DEFAULT 0,
+				ADD COLUMN IF NOT EXISTS activation_cap_expires_at timestamptz;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},
@@ -199,6 +216,7 @@ func Migrate(db *gorm.DB) error {
 		&neatsave.SavingsActivity{},
 		&autorepayment.AutoRepaymentAttempt{},
 		&card.Card{},
+		&vas.VASBeneficiary{},
 	); err != nil {
 		return err
 	}

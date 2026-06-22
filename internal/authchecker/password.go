@@ -1,0 +1,39 @@
+package authchecker
+
+import (
+	"errors"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+func CheckPassword(storedHash, plainPassword string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(plainPassword))
+	return err == nil
+}
+
+func ValidatePassword(pw string) error {
+	if len(pw) < 8 {
+		return errors.New("password length should be at least 8 characters long")
+	}
+
+	var hasUpper, hasLower, hasNumber, hasSpecial bool
+
+	for _, r := range pw {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasNumber = true
+		case r == '!' || r == '@' || r == '#' || r == '$' || r == '%' || r == '^' || r == '&' || r == '*' || r == '?':
+			hasSpecial = true
+		}
+
+		if hasUpper && hasLower && hasNumber && hasSpecial {
+			return nil
+		}
+	}
+
+	return errors.New("password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+}

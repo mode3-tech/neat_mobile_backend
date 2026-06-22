@@ -48,6 +48,7 @@ type Config struct {
 	PDFShiftAPIKey             string
 	AppName                    string
 	TransferLimitAmount        string
+	ActivationCapKobo          int64
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -55,6 +56,10 @@ type Config struct {
 	LoginRateLimitBlockMinutes     int
 
 	WalletProvider string
+
+	XpressPublicKey  string
+	XpressPrivateKey string
+	XpressBaseURL    string
 
 	RunMigrations bool
 }
@@ -105,6 +110,7 @@ func Load() Config {
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 		AppName:                    getEnv("APPNAME", "NeatPay"),
 		TransferLimitAmount:        getEnv("TRF_LIMIT_AMOUNT", ""),
+		ActivationCapKobo:          int64(getEnvInt("ACTIVATION_CAP_KOBO", 2_000_000)),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),
@@ -112,6 +118,10 @@ func Load() Config {
 		LoginRateLimitBlockMinutes:     getEnvInt("LOGIN_RATE_LIMIT_BLOCK_MINUTES", 15),
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
+
+		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
+		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
+		XpressBaseURL:    getEnv("XPRESS_BASE_URL", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}

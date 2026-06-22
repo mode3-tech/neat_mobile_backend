@@ -2,8 +2,6 @@ package loanproduct
 
 import (
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func countActiveCoreLoans(loans []CoreCustomerLoanItem) int {
@@ -64,9 +62,4 @@ func normalizeCoreLoanStatus(status string) string {
 	status = strings.ReplaceAll(status, "-", "_")
 	status = strings.ReplaceAll(status, " ", "_")
 	return status
-}
-
-func CheckPassword(storedHash, plainPassword string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(plainPassword))
-	return err == nil
 }

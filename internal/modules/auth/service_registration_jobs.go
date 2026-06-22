@@ -63,7 +63,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
 
-		user := buildUserFromRegistrationSnapshot(job.MobileUserID, job.InternalWalletID, snapshot)
+		user := buildUserFromRegistrationSnapshot(job.MobileUserID, job.InternalWalletID, snapshot, s.activationCapKobo)
 		createdUser, txErr := authRepo.CreateUser(ctx, user)
 		if txErr != nil {
 			return txErr
@@ -288,7 +288,7 @@ func normalizeWalletResponse(resp *WalletResponse, snapshot *registrationJobSnap
 	return nil
 }
 
-func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, snapshot *registrationJobSnapshot) *models.User {
+func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, snapshot *registrationJobSnapshot, activationCapKobo int64) *models.User {
 	var emailPtr *string
 	if trimmedEmail := strings.TrimSpace(snapshot.Email); trimmedEmail != "" {
 		emailCopy := trimmedEmail
@@ -300,6 +300,8 @@ func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, sn
 		middleNameCopy := trimmedMiddleName
 		middleNamePtr = &middleNameCopy
 	}
+
+	capExpiresAt := time.Now().UTC().Add(24 * time.Hour)
 
 	return &models.User{
 		ID:                     mobileUserID,
@@ -320,6 +322,8 @@ func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, sn
 		IsNinVerified:          snapshot.IsNinVerified,
 		IsBiometricsEnabled:    snapshot.IsBiometricsEnabled,
 		IsNotificationsEnabled: true,
+		ActivationCapAmount:    activationCapKobo,
+		ActivationCapExpiresAt: &capExpiresAt,
 	}
 }
 
