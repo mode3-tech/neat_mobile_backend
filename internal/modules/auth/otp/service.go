@@ -66,7 +66,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 				log.Printf("[otp.Issue] no verified email found in verification record: verificationID=%s", in.VerificationID)
 				return nil, appErr.ErrInvalidVerificationID
 			}
-			normalizeDestination, err = NormalizeDestination(*row.VerifiedEmail, in.Channel)
+			normalizeDestination, err = NormalizeDestination(in.Destination, in.Channel)
 		default:
 			log.Printf("[otp.Issue] unsupported channel: channel=%s", in.Channel)
 			return nil, appErr.ErrInvalidChannel

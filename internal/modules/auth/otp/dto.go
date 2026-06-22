@@ -1,8 +1,12 @@
 package otp
 
-type RequestOTPRequest struct {
-	Destination    string `json:"destination" binding:"required"`
+type RequestSMSOTPRequest struct {
 	VerificationID string `json:"verification_id" binding:"required"`
+}
+
+type RequestEmailOTPRequest struct {
+	VerificationID string `json:"verification_id" binding:"required"`
+	Destination    string `json:"destination" binding:"required,email"`
 }
 
 type VerifyOTPRequest struct {
