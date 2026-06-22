@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
-	"neat_mobile_app_backend/internal/validators"
 	"strconv"
 	"strings"
 	"time"
@@ -218,13 +218,22 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	if req.Password != req.ConfirmPassword {
 		return nil, appErr.ErrPasswordMismatch
 	}
-	if err = validators.ValidatePassword(req.Password); err != nil {
+	if err = authchecker.ValidatePassword(req.Password); err != nil {
 		log.Printf("invalid password: %v", err)
 		return nil, errors.New(err.Error())
 	}
 
 	if req.TransactionPin != req.ConfirmTransactionPin {
 		return nil, appErr.ErrTransactionPinMismatch
+	}
+
+	passwordHash, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+	pinHash, err := HashPassword(req.TransactionPin)
+	if err != nil {
+		return nil, err
 	}
 
 	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
@@ -273,6 +282,8 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	return &registrationJobSnapshot{
 		Phone:               normalizedPhone,
 		Email:               trimmedEmail,
+		PasswordHash:        passwordHash,
+		PinHash:             pinHash,
 		RequestID:           requestID,
 		FirstName:           firstName,
 		MiddleName:          strings.TrimSpace(middleName),

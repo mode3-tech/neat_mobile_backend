@@ -10,7 +10,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 		wallet.POST("/transfer", handler.InitiateTransfer)
 		wallet.POST("/beneficiary", handler.AddBeneficiary)
 		wallet.GET("/beneficiaries", handler.GetBeneficiaries)
-		wallet.POST("/transfer/bulk", handler.InitiateBulkTransfer)
 	}
 
 }
@@ -18,6 +17,6 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 func RegisterWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth gin.HandlerFunc) {
 	providus := rg.Group("/providus", webhookAuth)
 	{
-		providus.POST("/credit", handler.HandleCreditWebhook)
+		providus.POST("/credit", handler.HandleBaaSEvent)
 	}
 }

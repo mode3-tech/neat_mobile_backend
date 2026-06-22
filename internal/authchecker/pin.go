@@ -1,11 +1,13 @@
-package pinverifier
+package authchecker
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
+
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -36,8 +38,10 @@ func (v *Verifier) Verify(ctx context.Context, mobileUserID, pin string) error {
 	user, err := v.repo.GetUserForPinVerification(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("pin verifier: failed to retrieve user for pin verification - %s\n", err)
 			return appErr.ErrUnauthorized
 		}
+		log.Printf("pin verifier: failed to retrieve user for pin verification - %s\n", err)
 		return fmt.Errorf("failed to retrieve user for pin verification: %w", err)
 	}
 
@@ -56,5 +60,19 @@ func (v *Verifier) Verify(ctx context.Context, mobileUserID, pin string) error {
 	}
 
 	_ = v.repo.ResetPinAttempts(ctx, mobileUserID)
+	return nil
+}
+
+func ValidatePin(pin string) error {
+	if len(pin) != 4 {
+		return errors.New("transaction pin must be exactly 4 digits long")
+	}
+
+	for _, r := range pin {
+		if r < '0' || r > '9' {
+			return errors.New("transaction pin must contain only digits")
+		}
+	}
+
 	return nil
 }

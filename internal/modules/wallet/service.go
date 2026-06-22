@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/transaction"
-	"neat_mobile_app_backend/internal/pinverifier"
-	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +25,12 @@ type SettlementAccount struct {
 type Service struct {
 	repo              *Repository
 	providusService   ProvidusService
-	pinVerifier       *pinverifier.Verifier
+	pinVerifier       *authchecker.Verifier
 	settlementAccount SettlementAccount
 	deviceVerifier    DeviceVerifier
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *pinverifier.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
 	return &Service{
 		repo:              repo,
 		providusService:   providusService,
@@ -72,14 +71,22 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	user, err := s.repo.GetUserByMobileUserID(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("wallet service: user record not found: %v", err)
 			return nil, appErr.ErrUnauthorized
 		}
-
+		log.Printf("wallet service: failed to get user: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	if user.CreatedAt.Add(24*time.Hour).After(time.Now()) && req.Amount > 20000*100 {
-		return nil, appErr.ErrNewUserTransferRestriction
+	if user.ActivationCapExpiresAt != nil && time.Now().Before(*user.ActivationCapExpiresAt) {
+		spent, err := s.repo.SumTransactionsInWindow(ctx, mobileUserID, transaction.TransactionTypeDebit, user.CreatedAt, *user.ActivationCapExpiresAt)
+		if err != nil {
+			log.Printf("wallet service: failed to sum transactions in window: %v", err)
+			return nil, appErr.ErrFundsTransfer
+		}
+		if err := checkActivationCap(time.Now().UTC(), user, req.Amount, spent); err != nil {
+			return nil, err
+		}
 	}
 
 	accountNumber := strings.TrimSpace(req.AccountNumber)
@@ -97,6 +104,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	}
 	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
 	if err != nil {
+		log.Printf("wallet service: failed to get user wallet id: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -105,11 +113,12 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		narration = *req.Narration
 	}
 
-	wallet, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErr.ErrMissingUserWallet
 		}
+		log.Printf("wallet service: failed to get wallet: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -132,17 +141,20 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	}
 
 	if err := s.repo.AddTransaction(ctx, txRecord); err != nil {
+		log.Printf("wallet service: failed to add transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		log.Printf("wallet service: failed to initiate transfer: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	if resp == nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+		log.Printf("wallet service: provider returned an unsuccessful transfer response")
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -152,17 +164,18 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		if message == "" {
 			message = "provider returned an unsuccessful transfer response"
 		}
+		log.Printf("wallet service: provider returned an unsuccessful transfer response: %s", message)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	totalDebit := req.Amount + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 
-	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
+	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit); err != nil {
+		log.Printf("wallet service: failed to complete debit transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
 	return resp, nil
-
 }
 
 func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error {
@@ -173,12 +186,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		return errors.New("loan repayment settlement account is not configured")
 	}
 
-	walletUser, err := s.repo.GetUserWalletID(ctx, mobileUserID)
-	if err != nil {
-		return appErr.ErrMakingLoanRepayment
-	}
-
-	w, err := s.repo.GetWallet(ctx, mobileUserID, walletUser.WalletID)
+	w, err := s.repo.GetWallet(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appErr.ErrMissingUserWallet
@@ -198,7 +206,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 	txRecord := &transaction.Transaction{
 		ID:                  txID,
 		MobileUserID:        mobileUserID,
-		WalletID:            walletUser.WalletID,
+		WalletID:            w.InternalWalletID,
 		Type:                transaction.TransactionTypeDebit,
 		Category:            transaction.TransactionCategoryLoanRepayment,
 		Source:              transaction.TransactionSourceLoanRepayment,
@@ -236,7 +244,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 
 	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 	return s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference,
-		transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit)
+		transaction.TransactionStatusSuccessful, w.InternalWalletID, totalDebit)
 }
 
 func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
@@ -362,15 +370,7 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 		return nil, fmt.Errorf("failed to verify device: %s", err.Error())
 	}
 
-	user, err := s.repo.GetUserWalletID(ctx, mobileUserID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
-		}
-		return nil, fmt.Errorf("error fetching user: %s", err.Error())
-	}
-
-	wallet, err := s.repo.GetWallet(ctx, mobileUserID, user.WalletID)
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("wallet not found")
@@ -387,7 +387,7 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 		TrackingID:     trackingID,
 		MobileUserID:   mobileUserID,
 		ExpectedAmount: req.ExpectedAmount,
-		WalletID:       user.WalletID,
+		WalletID:       wallet.InternalWalletID,
 		Status:         ExpectedDepositStatusPending,
 		ExpiresAt:      expiresAt,
 		CreatedAt:      now,
@@ -413,58 +413,9 @@ func (s *Service) InitiateDeposit(ctx context.Context, deviceID, mobileUserID st
 
 }
 
-func (s *Service) HandleCreditWebhook(ctx context.Context, payload *ProvidusCredit) error {
-	if strings.TrimSpace(payload.TranType) != "C" {
-		return fmt.Errorf("unexpected tranType: %s", payload.TranType)
-	}
-
-	amountFloat, err := strconv.ParseFloat(strings.TrimSpace(payload.TransactionAmount), 64)
-	if err != nil || amountFloat <= 0 {
-		return fmt.Errorf("invalid transaction amount: %s", payload.TransactionAmount)
-	}
-	amountKobo := int64(math.Round(amountFloat * 100))
-
-	providerRef := strings.TrimSpace(payload.TranID)
-	if providerRef == "" {
-		providerRef = strings.TrimSpace(payload.SessionID)
-	}
-	if providerRef == "" {
-		return errors.New("no usable provider reference in payload")
-	}
-
-	wallet, err := s.repo.GetWalletByAccountNumber(ctx, strings.TrimSpace(payload.AccountNumber))
-	if err != nil {
-		// account not ours — log upstream and return nil so handler responds 200
-		return nil
-	}
-
-	// existing, _ := s.repo.GetTransferByProviderRef(ctx, providerRef)
-	// if existing != nil {
-	// 	return nil // duplicate webhook, already processed
-	// }
-
-	narration := strings.TrimSpace(payload.TranRemarks)
-	transfer := &transaction.Transaction{
-		ID:                  uuid.NewString(),
-		MobileUserID:        wallet.MobileUserID,
-		WalletID:            wallet.WalletID,
-		Reference:           uuid.NewString(),
-		ProviderReference:   providerRef,
-		SessionID:           payload.SessionID,
-		Amount:              amountKobo,
-		Narration:           &narration,
-		CounterpartyAccount: payload.AccountNumber,
-		Description:         payload.TranRemarks,
-		Status:              transaction.TransactionStatusSuccessful,
-		Type:                transaction.TransactionTypeCredit,
-	}
-
-	if err := s.repo.CreditWalletAtomically(ctx, transfer, amountKobo); err != nil {
-		return fmt.Errorf("failed to credit wallet: %w", err)
-	}
-
-	return nil
-}
+// func (s *Service) ProcessCreditWebhook(ctx context.Context, event XpressWalletEvent) error {
+// 	return nil
+// }
 
 func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]Beneficiary, error) {
 	beneficiaries, err := s.repo.GetBeneficiaries(ctx, mobileUserID)
@@ -473,4 +424,13 @@ func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]
 	}
 
 	return beneficiaries, nil
+}
+
+func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string) (*CustomerWallet, error) {
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("wallet service: failed to get user wallet - %s", err)
+		return nil, err
+	}
+	return wallet, nil
 }

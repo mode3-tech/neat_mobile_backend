@@ -96,6 +96,14 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 	}, nil
 }
 
+func (s *Service) CreateTransaction(ctx context.Context, txn *Transaction) error {
+	return s.repo.AddTransaction(ctx, txn)
+}
+
+func (s *Service) UpdateTransactionStatus(ctx context.Context, txID string, balanceAfter int64, status TransactionStatus) error {
+	return s.repo.UpdateTransactionStatus(ctx, txID, balanceAfter, status)
+}
+
 // groupByMonth preserves DESC order since txs is already sorted that way.
 func groupByMonth(txs []Transaction) []TransactionSection {
 	type key struct {

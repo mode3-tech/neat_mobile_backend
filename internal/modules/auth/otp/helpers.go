@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"neat_mobile_app_backend/internal/phone"
 	"regexp"
 	"strings"
 )
@@ -87,4 +88,15 @@ func HashEqualHex(aHex, bHex string) bool {
 	}
 
 	return hmac.Equal(a, b)
+}
+
+func detectChannel(destination string) (Channel, error) {
+	if emailRegex.Match([]byte(destination)) {
+		return ChannelEmail, nil
+	}
+	_, err := phone.NormalizeNigerianNumber(destination)
+	if err != nil {
+		return ChannelNone, err
+	}
+	return ChannelSMS, nil
 }

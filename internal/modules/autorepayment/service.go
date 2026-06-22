@@ -90,7 +90,7 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 		return
 	}
 
-	w, err := s.walletRepository.GetWallet(ctx, row.MobileUserID, walletUser.WalletID)
+	w, err := s.walletRepository.GetWallet(ctx, row.MobileUserID)
 	if err != nil {
 		log.Printf("auto-repayment: failed to fetch wallet for %s: %v", row.MobileUserID, err)
 		_ = s.repository.UpdateAttemptStatus(ctx, attemptID, AutoRepaymentAttemptStatusFailed, err.Error(), "")

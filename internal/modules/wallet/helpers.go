@@ -1,11 +1,17 @@
 package wallet
 
 import (
+	"crypto/hmac"
+	"crypto/sha512"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"io"
+	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/models"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -99,4 +105,30 @@ func parseExcel(reader io.Reader) ([]BulkTransferRecipientInfo, error) {
 	}
 
 	return recipients, nil
+}
+
+func checkActivationCap(now time.Time, user *models.User, amount, alreadySpent int64) error {
+	if user.ActivationCapExpiresAt == nil || !now.Before(*user.ActivationCapExpiresAt) {
+		return nil
+	}
+	if alreadySpent+amount > user.ActivationCapAmount {
+		return appErr.ErrNewUserTransferRestriction
+	}
+	return nil
+
+}
+
+func verifySignature(payload []byte, signature, apiKey string) bool {
+	mac := hmac.New(sha512.New, []byte(apiKey))
+	mac.Write(payload)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+func parseAmountToKobo(amount string) (int64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	if err != nil {
+		return 0, err
+	}
+	return int64(parsed * 100), nil
 }

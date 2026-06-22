@@ -153,15 +153,17 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			}
 			log.Printf("[otp.Issue] SMS sent: purpose=%s", in.Purpose)
 		case ChannelEmail:
-			subject := "Your One Time Password (OTP)"
-			if in.Purpose == PurposePasswordReset {
-				subject = "Your Password Reset OTP"
-			}
-			if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
-				log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
-				return err
-			}
-			log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
+			// subject := "Your One Time Password (OTP)"
+			// if in.Purpose == PurposePasswordReset {
+			// 	subject = "Your Password Reset OTP"
+			// }
+			// if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
+			// 	log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
+			// 	return err
+			// }
+			// log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
+			log.Printf("otp service: email currently out of service")
+			return appErr.ErrEmailOutOfService
 		default:
 			log.Printf("[otp.Issue] unsupported channel: channel=%s", in.Channel)
 			return appErr.ErrInvalidChannel
@@ -222,7 +224,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 }
 
 func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResult, error) {
-	log.Printf("[otp.Verify] start: verificationID=%q otpID=%q purpose=%s channel=%s", in.VerificationID, in.OTPID, in.Purpose, in.Channel)
+	log.Printf("[otp.Verify] start: verificationID=%q otpID=%q purpose=%s", in.VerificationID, in.OTPID, in.Purpose)
 	now := time.Now().UTC()
 
 	var result VerifyOTPResult
@@ -250,7 +252,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 				return appErr.ErrInvalidOTP
 			}
 		} else {
-			// Caller provided a verification_id + channel — derive destination from that record.
+			// Caller provided a verification_id — derive destination from the record.
 			row, err := s.repo.GetVerificationRow(ctx, in.VerificationID)
 			if err != nil {
 				log.Printf("[otp.Verify] failed to fetch verification row: verificationID=%s err=%v", in.VerificationID, err)
@@ -261,28 +263,31 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 				return appErr.ErrInvalidVerificationID
 			}
 
+			var channel Channel
 			var destination string
-			switch in.Channel {
-			case ChannelSMS:
+			switch row.Type {
+			case models.VerificationTypePhone:
+				channel = ChannelSMS
 				if row.VerifiedPhone == nil || *row.VerifiedPhone == "" {
 					log.Printf("[otp.Verify] no verified phone in verification record: verificationID=%s", in.VerificationID)
 					return appErr.ErrInvalidVerificationID
 				}
 				destination = *row.VerifiedPhone
-			case ChannelEmail:
+			case models.VerificationTypeEmail:
+				channel = ChannelEmail
 				if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
 					log.Printf("[otp.Verify] no verified email in verification record: verificationID=%s", in.VerificationID)
 					return appErr.ErrInvalidVerificationID
 				}
 				destination = *row.VerifiedEmail
 			default:
-				log.Printf("[otp.Verify] unsupported channel: channel=%s", in.Channel)
-				return appErr.ErrInvalidChannel
+				log.Printf("[otp.Verify] unsupported verification record type: type=%s", row.Type)
+				return appErr.ErrInvalidVerificationID
 			}
 
-			normalizedDestination, normErr := NormalizeDestination(destination, in.Channel)
+			normalizedDestination, normErr := NormalizeDestination(destination, channel)
 			if normErr != nil {
-				if in.Channel == ChannelSMS {
+				if channel == ChannelSMS {
 					log.Printf("[otp.Verify] failed to normalize phone number: err=%v", normErr)
 					return appErr.ErrInvalidPhone
 				}
@@ -300,7 +305,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 				return err
 			}
 			if active == nil {
-				log.Printf("[otp.Verify] no active OTP found: purpose=%s channel=%s", in.Purpose, in.Channel)
+				log.Printf("[otp.Verify] no active OTP found: purpose=%s channel=%s", in.Purpose, channel)
 				return appErr.ErrInvalidOTP
 			}
 		}
