@@ -9,9 +9,13 @@ type RequestEmailOTPRequest struct {
 	Destination    string `json:"destination" binding:"required,email"`
 }
 
+type RequestOTPResponse struct {
+	OTPID string `json:"otp_id"`
+}
+
 type VerifyOTPRequest struct {
-	VerificationID string `json:"verification_id" binding:"required"`
-	OTP            string `json:"otp" binding:"required,len=6,numeric"`
+	OTPID string `json:"otp_id" binding:"required"`
+	OTP   string `json:"otp" binding:"required,len=6,numeric"`
 }
 
 type VerifyOTPResponse struct {
