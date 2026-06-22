@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -17,7 +18,7 @@ import (
 func run(ctx context.Context) error {
 	cfg := config.Load()
 
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	srv, stopCron, err := server.New(cfg)
@@ -46,7 +47,6 @@ func run(ctx context.Context) error {
 
 	stopCron()
 	return srv.Shutdown(shutdownCtx)
-
 }
 
 func main() {
