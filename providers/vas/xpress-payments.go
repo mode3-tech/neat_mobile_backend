@@ -588,7 +588,9 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+hash)
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
+	req.Header.Set("Channel", "api")
+	req.Header.Set("PaymentHash", hash)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := x.Client.Do(req)
@@ -643,8 +645,15 @@ func (x *XpressPayments) ValidateWAECRegistration(ctx context.Context, requestId
 		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
+	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
+	if err != nil {
+		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+	}
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
+	req.Header.Set("Channel", "api")
+	req.Header.Set("PaymentHash", paymentHash)
 
 	resp, err := x.Client.Do(req)
 	if err != nil {

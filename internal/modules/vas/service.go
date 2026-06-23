@@ -255,6 +255,19 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrGettingAirtime
 	}
 
+	switch result.ResponseCode {
+	case "01":
+		log.Printf("vas service: airtime purchase pending - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		return nil, appErr.ErrGettingAirtime
+	case "00":
+	default:
+		log.Printf("vas service: airtime purchase failed - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
+			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+		return nil, appErr.ErrGettingAirtime
+	}
+
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
@@ -369,6 +382,19 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrGettingData
 	}
 
+	switch result.ResponseCode {
+	case "01":
+		log.Printf("vas service: data purchase pending - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		return nil, appErr.ErrGettingData
+	case "00":
+	default:
+		log.Printf("vas service: data purchase failed - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
+			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+		return nil, appErr.ErrGettingData
+	}
+
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
@@ -404,7 +430,7 @@ func (s *Service) validateElectricity(ctx context.Context, payload ElectricityVa
 	)
 	if err != nil {
 		log.Printf("vas service: failed to validate electricity account - %s\n", err)
-		return nil, appErr.ErrValidatingElectricity
+		return nil, err
 	}
 	return result, nil
 }
@@ -459,10 +485,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	validationResult, err := s.validateElectricity(ctx, validateElectricityPayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate electricity account - %s\n", err)
-		return nil, &appErr.XpressWalletProviderError{
-			Code:    "",
-			Message: err.Error(),
-		}
+		return nil, err
 	}
 
 	if validationResult != nil {
@@ -519,14 +542,32 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
+	address := ""
+	if user.Address != nil {
+		address = *user.Address
+	}
+
 	result, err := s.XpressPayments.PayElectricityBill(
 		ctx, requestID, uniqueCode, accountNumber,
-		user.FullName, *user.Address, user.Phone,
+		user.FullName, address, user.Phone,
 		vasprovider.AccountType(payload.AccountType), amount,
 	)
 	if err != nil {
 		log.Printf("vas service: failed to pay electricity bill - %s\n", err)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		log.Printf("vas service: electricity payment pending - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		return nil, appErr.ErrPayingElectricityBill
+	case "00":
+	default:
+		log.Printf("vas service: electricity payment failed - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
+			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -561,7 +602,7 @@ func (s *Service) ValidateCable(ctx context.Context, payload ValidateCablePayloa
 	)
 	if err != nil {
 		log.Printf("vas service: failed to validate cable account - %s\n", err)
-		return nil, appErr.ErrValidatingCable
+		return nil, err
 	}
 	return result, nil
 }
@@ -616,10 +657,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	validateResult, err := s.ValidateCable(ctx, validateCablePayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate cable account - %s\n", err)
-		return nil, &appErr.XpressWalletProviderError{
-			Code:    "",
-			Message: err.Error(),
-		}
+		return nil, err
 	}
 	if validateResult.Data.AccountNumber != accountNumber {
 		return nil, appErr.ErrInvalidAccountNumber
@@ -680,6 +718,19 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	if err != nil {
 		log.Printf("vas service: failed to pay cable bill - %s\n", err)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		log.Printf("vas service: cable payment pending - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		return nil, appErr.ErrPayingCableBill
+	case "00":
+	default:
+		log.Printf("vas service: cable payment failed - %s\n", result.ResponseMessage)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
+			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrPayingCableBill
 	}
 

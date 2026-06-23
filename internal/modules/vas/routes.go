@@ -13,6 +13,6 @@ func RegisterRoutes(rg *gin.RouterGroup, authGuard, deviceValidator gin.HandlerF
 		vas.POST("/electricity", handler.PayElectricity)
 		vas.POST("/cable", handler.PayCable)
 		vas.GET("/beneficiaries", handler.FetchBeneficiaries)
-		// vas.GET("/status/:requestID", handler.CheckStatus)
+		vas.GET("/status/:requestID", handler.CheckStatus)
 	}
 }
