@@ -163,9 +163,12 @@ func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *Registra
 		Metadata:          map[string]interface{}{"customer_id": job.MobileUserID},
 	}
 
-	walletInfo, err := SeedWalletPayload(walletInfo, s.walletPayloadSeedKey, false)
-	if err != nil {
-		return nil, err
+	if s.walletPayloadSeedKey != "" {
+		seeded, err := SeedWalletPayload(walletInfo, s.walletPayloadSeedKey, false)
+		if err != nil {
+			return nil, err
+		}
+		walletInfo = seeded
 	}
 
 	resp, err := s.walletService.GenerateWallet(ctx, walletInfo)

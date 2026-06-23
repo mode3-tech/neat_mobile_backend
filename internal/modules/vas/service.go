@@ -192,6 +192,17 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrInsufficientBalance
 	}
 
+	// Check provider wallet balance before proceeding
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
 	metadata := map[string]any{
 		"isp":  ExtractBillingCompanyName(uniqueCode),
 		"type": "airtime",
@@ -240,7 +251,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	result, err := s.XpressPayments.GetAirtime(ctx, requestID, uniqueCode, localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase airtime - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
 		return nil, appErr.ErrGettingAirtime
 	}
 
@@ -297,6 +308,17 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrInsufficientBalance
 	}
 
+	// Check provider wallet balance before proceeding
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
 	metadata := map[string]any{
 		"isp":  ExtractBillingCompanyName(uniqueCode),
 		"type": "data",
@@ -343,7 +365,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	result, err := s.XpressPayments.GetData(ctx, requestID, uniqueCode, localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase data - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
 		return nil, appErr.ErrGettingData
 	}
 
@@ -412,6 +434,17 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrInsufficientBalance
 	}
 
+	// Check provider wallet balance before proceeding
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
 	metadata := map[string]any{
 		"provider": ExtractBillingCompanyName(uniqueCode),
 		"type":     "electricity",
@@ -444,7 +477,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 			return nil, appErr.ErrInvalidAccountType
 		}
 
-		if validationResult.ResponseCode != "00" || validationResult.ResponseMessage != "01" {
+		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
 			log.Printf("vas service: failed to validate electricity account - %s\n", validationResult.ResponseMessage)
 			return nil, &appErr.XpressWalletProviderError{
 				Code:    validationResult.ResponseCode,
@@ -493,7 +526,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	)
 	if err != nil {
 		log.Printf("vas service: failed to pay electricity bill - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -558,6 +591,17 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrInsufficientBalance
 	}
 
+	// Check provider wallet balance before proceeding
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
 	metadata := map[string]any{
 		"provider": ExtractBillingCompanyName(uniqueCode),
 		"type":     "cable",
@@ -581,7 +625,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrInvalidAccountNumber
 	}
 
-	if validateResult.ResponseCode != "00" || validateResult.ResponseMessage != "01" {
+	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
 		log.Printf("vas service: failed to validate cable account - %s\n", validateResult.ResponseMessage)
 		return nil, &appErr.XpressWalletProviderError{
 			Code:    validateResult.ResponseCode,
@@ -635,7 +679,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	)
 	if err != nil {
 		log.Printf("vas service: failed to pay cable bill - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
 		return nil, appErr.ErrPayingCableBill
 	}
 
@@ -649,10 +693,40 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 }
 
 // handleFulfilFailure handles the post-debit failure path for all fulfil operations.
-// ErrVASAmbiguous (timeout/5xx) → marks reversal_pending for manual reconciliation.
-// Any other error → credits the customer back and marks reversed.
-func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount int64, txFee int, balanceBefore int64, metadata map[string]any, customerID string, vasErr error) {
+// For ambiguous outcomes (timeout/5xx), it queries CheckStatus to resolve:
+//
+//	"00" → update to successful (no reversal needed)
+//	"01" → reversal_pending (manual reconciliation)
+//	other → fall through to auto-reverse
+//
+// If CheckStatus itself fails, defaults to reversal_pending.
+// For deterministic errors → credits the customer back and marks reversed.
+func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount int64, txFee int, balanceBefore int64, metadata map[string]any, customerID string, vasErr error, requestID string) {
 	if errors.Is(vasErr, appErr.ErrVASAmbiguous) {
+		// Try to resolve ambiguity by checking status with the provider
+		status, checkErr := s.XpressPayments.CheckStatus(ctx, requestID)
+		if checkErr == nil {
+			switch status.ResponseCode {
+			case "00":
+				// Transaction actually succeeded — update to successful
+				balanceAfter := balanceBefore - ((amount + int64(txFee)) * 100)
+				if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); updateErr != nil {
+					log.Printf("vas service: failed to mark transaction as successful after status check - %s\n", updateErr)
+				}
+				return
+			case "01":
+				// Still pending — mark for manual reconciliation
+				debitedBalance := balanceBefore - ((amount + int64(txFee)) * 100)
+				if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); updateErr != nil {
+					log.Printf("vas service: failed to mark transaction as reversal_pending - %s\n", updateErr)
+				}
+				return
+			default:
+				// Failed — fall through to auto-reverse
+			}
+		}
+
+		// Status check failed or returned unknown code — default to reversal_pending
 		debitedBalance := balanceBefore - ((amount + int64(txFee)) * 100)
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); updateErr != nil {
 			log.Printf("vas service: failed to mark transaction as reversal_pending - %s\n", updateErr)
@@ -660,6 +734,7 @@ func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount i
 		return
 	}
 
+	// Deterministic failure — auto-reverse
 	reversalRef := uuid.NewString()
 	if _, creditErr := s.Baas.CreditCustomer(ctx, amount, reversalRef, customerID, metadata); creditErr != nil {
 		log.Printf("vas service: failed to credit customer back after VAS failure - %s\n", creditErr)
@@ -671,4 +746,12 @@ func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount i
 
 func (s *Service) FetchBeneficiaries(ctx context.Context, mobileUserID, biller string) ([]VAS, error) {
 	return s.Repo.FetchVASBeneficiaries(ctx, mobileUserID, biller)
+}
+
+func (s *Service) CheckStatus(ctx context.Context, requestID string) (*vasprovider.CheckStatusResponse, error) {
+	result, err := s.XpressPayments.CheckStatus(ctx, requestID)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -9,7 +9,7 @@ type TermiiSuccessResponse struct {
 }
 
 type TermiiErrorResponse struct {
-	Code    string `json:"code"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Status  string `json:"status"`
 	Link    string `json:"link"`
