@@ -162,7 +162,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
 				Code:    "NIN_BVN_MISMATCH",
-				Message: "could not verify bvn and nin belongs to the same person due to a mismatch in names of date of births",
+				Message: "could not verify bvn and nin belongs to the same person due to a mismatch in names or date of births",
 			},
 		}
 
