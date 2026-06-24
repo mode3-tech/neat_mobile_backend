@@ -35,9 +35,9 @@ type ISPResponse struct {
 }
 
 type ispData struct {
-	Channel     string `json:"channel"`
-	Amount      int64  `json:"amount"`
-	PhoneNumber string `json:"phoneNumber"`
+	Channel     string  `json:"channel"`
+	Amount      float64 `json:"amount"`
+	PhoneNumber string  `json:"phoneNumber"`
 }
 
 type ElectricityValidationPayload struct {
