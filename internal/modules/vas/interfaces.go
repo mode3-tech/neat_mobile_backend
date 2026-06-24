@@ -17,6 +17,8 @@ type VASService interface {
 	PayElectricityBill(ctx context.Context, requestID, uniqueCode, accountNumber, name, address, phoneNumber string, accountType vasprovider.AccountType, amount int64) (*vasprovider.PayElectricityResponse, error)
 	ValidateCable(ctx context.Context, requestID, uniqueCode, accountNumber string, noOfMonth int) (*vasprovider.CableValidationResponse, error)
 	PayCableBill(ctx context.Context, requestID, uniqueCode, accountNumber, accountType, name, phoneNumber string, noOfMonth int, amount int64) (*vasprovider.PayCableResponse, error)
+	CheckStatus(ctx context.Context, requestID string) (*vasprovider.CheckStatusResponse, error)
+	GetWalletBalance(ctx context.Context) (*vasprovider.WalletBalanceResponse, error)
 }
 
 type WalletService interface {

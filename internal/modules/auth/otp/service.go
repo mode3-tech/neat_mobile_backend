@@ -253,7 +253,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 			}
 		} else {
 			// Caller provided a verification_id — derive destination from the record.
-			row, err := s.repo.GetVerificationRow(ctx, in.VerificationID)
+			row, err := r.GetVerificationRow(ctx, in.VerificationID)
 			if err != nil {
 				log.Printf("[otp.Verify] failed to fetch verification row: verificationID=%s err=%v", in.VerificationID, err)
 				return err
@@ -265,23 +265,16 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 
 			var channel Channel
 			var destination string
-			switch row.Type {
-			case models.VerificationTypePhone:
+
+			switch {
+			case row.VerifiedPhone != nil && *row.VerifiedPhone != "":
 				channel = ChannelSMS
-				if row.VerifiedPhone == nil || *row.VerifiedPhone == "" {
-					log.Printf("[otp.Verify] no verified phone in verification record: verificationID=%s", in.VerificationID)
-					return appErr.ErrInvalidVerificationID
-				}
 				destination = *row.VerifiedPhone
-			case models.VerificationTypeEmail:
+			case row.VerifiedEmail != nil && *row.VerifiedEmail != "":
 				channel = ChannelEmail
-				if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
-					log.Printf("[otp.Verify] no verified email in verification record: verificationID=%s", in.VerificationID)
-					return appErr.ErrInvalidVerificationID
-				}
 				destination = *row.VerifiedEmail
 			default:
-				log.Printf("[otp.Verify] unsupported verification record type: type=%s", row.Type)
+				log.Printf("[otp.Verify] no verified destination in verification record: verificationID=%s type=%s", in.VerificationID, row.Type)
 				return appErr.ErrInvalidVerificationID
 			}
 
