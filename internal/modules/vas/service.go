@@ -200,8 +200,15 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
-		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+	if providerBal.ResponseCode != "00" {
+		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    providerBal.ResponseCode,
+			Message: providerBal.ResponseMessage,
+		}
+	}
+	if providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -334,8 +341,15 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
-		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+	if providerBal.ResponseCode != "00" {
+		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    providerBal.ResponseCode,
+			Message: providerBal.ResponseMessage,
+		}
+	}
+	if providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -478,8 +492,15 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
-		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+	if providerBal.ResponseCode != "00" {
+		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    providerBal.ResponseCode,
+			Message: providerBal.ResponseMessage,
+		}
+	}
+	if providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -655,8 +676,15 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" || providerBal.Data < float64(amount) {
-		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d\n", providerBal.Data, amount)
+	if providerBal.ResponseCode != "00" {
+		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		return nil, &appErr.XpressWalletProviderError{
+			Code:    providerBal.ResponseCode,
+			Message: providerBal.ResponseMessage,
+		}
+	}
+	if providerBal.Data < float64(amount) {
+		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
