@@ -644,8 +644,9 @@ func (p *Providus) CreditCustomer(ctx context.Context, amount int64, referenceID
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
-		return nil, err
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus: request failed with status code: %s body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("providus: request failed with status code: %s", resp.StatusCode)
 	}
 
 	var result ProvidusWalletCreditResponse
@@ -659,6 +660,7 @@ func (p *Providus) CreditCustomer(ctx context.Context, amount int64, referenceID
 
 func (p *Providus) GetCustomerDetails(ctx context.Context, customerID string) (*ProvidusCustomerDetailsResponse, error) {
 	url := p.BaseURL + fmt.Sprintf("/customer/%s", customerID)
+	log.Printf("providus: GetCustomerDetails url: %s\n", url)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -679,11 +681,49 @@ func (p *Providus) GetCustomerDetails(ctx context.Context, customerID string) (*
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
-		return nil, err
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus: GetCustomerDetails failed status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("providus: GetCustomerDetails returned status %d", resp.StatusCode)
 	}
 
 	var result ProvidusCustomerDetailsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("providus: failed to decode response body into a json - %s\n", err)
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (p *Providus) GetCustomerWallet(ctx context.Context, customerID string) (*ProvidusCustomerWalletResponse, error) {
+	url := p.BaseURL + fmt.Sprintf("/wallet/customer?customerId=%s", customerID)
+	log.Printf("providus: GetCustomerWallet url: %s\n", url)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus: GetCustomerWallet failed status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("providus: GetCustomerWallet returned status %d", resp.StatusCode)
+	}
+
+	var result ProvidusCustomerWalletResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Printf("providus: failed to decode response body into a json - %s\n", err)
 		return nil, err
