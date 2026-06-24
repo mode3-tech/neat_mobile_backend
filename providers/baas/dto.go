@@ -86,3 +86,33 @@ type ProvidusCustomer struct {
 	BookedBalance    int64             `json:"bookedBalance"`
 	AvailableBalance int64             `json:"availableBalance"`
 }
+
+type ProvidusCustomerWalletResponse struct {
+	Status bool           `json:"status"`
+	Wallet ProvidusWallet `json:"wallet"`
+}
+
+type ProvidusWallet struct {
+	Id                    string `json:"id"`
+	Type                  string `json:"type"`
+	Tier                  string `json:"tier"`
+	Status                string `json:"status"`
+	Email                 string `json:"email"`
+	CustomerId            string `json:"customerId"`
+	LastName              string `json:"lastName"`
+	FirstName             string `json:"firstName"`
+	BankName              string `json:"bankName"`
+	BankCode              string `json:"bankCode"`
+	CreatedAt             string `json:"createdAt"`
+	UpdatedAt             string `json:"updatedAt"`
+	AccountName           string `json:"accountName"`
+	PhoneNumber           string `json:"phoneNumber"`
+	PostNoCredit          bool   `json:"postNoCredit"`
+	AccountNumber         string `json:"accountNumber"`
+	BookedBalance         int64  `json:"bookedBalance"`
+	AvailableBalance      int64  `json:"availableBalance"`
+	AccountReference      string `json:"accountReference"`
+	MinBalance            int64  `json:"minBalance"`
+	MaxBalance            int64  `json:"maxBalance"`
+	DailyTransactionLimit int64  `json:"dailyTransactionLimit"`
+}
