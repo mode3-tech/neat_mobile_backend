@@ -200,7 +200,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" {
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
 		return nil, &appErr.XpressWalletProviderError{
 			Code:    providerBal.ResponseCode,
@@ -341,7 +341,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" {
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
 		return nil, &appErr.XpressWalletProviderError{
 			Code:    providerBal.ResponseCode,
@@ -492,7 +492,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" {
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
 		return nil, &appErr.XpressWalletProviderError{
 			Code:    providerBal.ResponseCode,
@@ -676,7 +676,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
-	if providerBal.ResponseCode != "00" {
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
 		return nil, &appErr.XpressWalletProviderError{
 			Code:    providerBal.ResponseCode,
