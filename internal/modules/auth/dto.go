@@ -15,7 +15,6 @@ type registrationJobSnapshot struct {
 	ProductID           string
 	Gender              string
 	MaritalStatus       string
-	MothersMaidenName   string              `json:"mother_maiden_name"`
 	BVN                 string              `json:"bvn"`
 	NIN                 string              `json:"nin"`
 	DOB                 time.Time           `json:"dob"`
@@ -33,7 +32,6 @@ type registrationJobSnapshot struct {
 type registrationIdempotencyPayload struct {
 	PhoneNumber               string              `json:"phone_number"`
 	Email                     string              `json:"email"`
-	MotherMaidenName          string              `json:"mother_maiden_name"`
 	BVNVerificationID         string              `json:"bvn_verification_id"`
 	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id"`
 	NINVerificationID         string              `json:"nin_verification_id"`
@@ -56,7 +54,6 @@ type DeviceRegisteration struct {
 
 type RegisterationRequest struct {
 	Email                     string              `json:"email"`
-	MothersMaidenName         string              `json:"mothers_maiden_name"`
 	Password                  string              `json:"password" binding:"required"`
 	ConfirmPassword           string              `json:"confirm_password" binding:"required"`
 	TransactionPin            string              `json:"transaction_pin" binding:"required"`

@@ -52,7 +52,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 
 	if err != nil {
 		log.Printf("ValidateNIN: BVN/NIN detail mismatch: %v", err)
-		return nil, errors.New(err.Error())
+		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
 	verificationID := uuid.NewString()
@@ -265,7 +265,7 @@ func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *mode
 		*cached.VerifiedName,
 		SerializeDOB(strings.TrimSpace(*cached.VerifiedDOB)),
 	); err != nil {
-		return nil, errors.New(err.Error())
+		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
 	verificationID := uuid.NewString()

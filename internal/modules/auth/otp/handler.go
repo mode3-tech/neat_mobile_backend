@@ -2,6 +2,7 @@ package otp
 
 import (
 	"log"
+
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
 	"strings"
@@ -17,8 +18,8 @@ func NewOTPHandler(manager OTPManager) *OTPHandler {
 	return &OTPHandler{manager: manager}
 }
 
-func (o *OTPHandler) RequestOTP(c *gin.Context) {
-	var req RequestOTPRequest
+func (o *OTPHandler) RequestSMSOTP(c *gin.Context) {
+	var req RequestSMSOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -28,21 +29,12 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	channel, err := detectChannel(strings.TrimSpace(req.Destination))
-	if err != nil {
-		mapped := response.MapError(appErr.ErrInvalidChannel)
-		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
-			Status: "error",
-			Error:  &mapped.Error,
-		})
-		return
-	}
-
-	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
+	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
 		Purpose:        PurposeSignup,
-		Channel:        channel,
+		Channel:        ChannelSMS,
 		VerificationID: req.VerificationID,
-	}); err != nil {
+	})
+	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
@@ -51,9 +43,51 @@ func (o *OTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, response.APIResponse[any]{
+	resp := RequestOTPResponse{
+		OTPID: result.OTPID,
+	}
+
+	c.JSON(200, response.APIResponse[RequestOTPResponse]{
 		Status:  "success",
 		Message: "OTP sent successfully",
+		Data:    &resp,
+	})
+}
+
+func (o *OTPHandler) RequestEmailOTP(c *gin.Context) {
+	var req RequestEmailOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		mapped := response.MapError(appErr.ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
+		Purpose:        PurposeSignup,
+		Channel:        ChannelEmail,
+		VerificationID: req.VerificationID,
+		Destination:    strings.TrimSpace(req.Destination),
+	})
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	resp := RequestOTPResponse{
+		OTPID: result.OTPID,
+	}
+
+	c.JSON(200, response.APIResponse[RequestOTPResponse]{
+		Status:  "success",
+		Message: "OTP sent successfully",
+		Data:    &resp,
 	})
 }
 
@@ -68,13 +102,17 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		return
 	}
 	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
-		Code:           req.OTP,
-		VerificationID: req.VerificationID,
-		Purpose:        PurposeSignup,
+		Code:    req.OTP,
+		OTPID:   req.OTPID,
+		Purpose: PurposeSignup,
 	})
 
 	if err != nil {
-		writeOTPError(c, err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
