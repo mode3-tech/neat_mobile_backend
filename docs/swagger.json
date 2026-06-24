@@ -2948,17 +2948,17 @@
         }
       }
     },
-    "/auth/otp/request": {
+    "/auth/otp/sms/request": {
       "post": {
         "tags": ["OTP"],
-        "summary": "Request OTP",
-        "description": "Sends an OTP for login, signup, or password reset via SMS or email.",
+        "summary": "Request SMS OTP",
+        "description": "Sends an OTP via SMS for a verified phone number.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestOTPRequest"
+                "$ref": "#/components/schemas/RequestSMSOTPRequest"
               }
             }
           }
@@ -2969,22 +2969,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "success"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "OTP sent successfully"
-                    }
-                  }
+                  "$ref": "#/components/schemas/OTPRequestSuccessResponse"
                 },
                 "examples": {
                   "otp_sent": {
                     "value": {
                       "status": "success",
-                      "message": "OTP sent successfully"
+                      "message": "OTP sent successfully",
+                      "data": {
+                        "otp_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+                      }
                     }
                   }
                 }
@@ -2992,7 +2986,7 @@
             }
           },
           "400": {
-            "description": "Invalid request body, purpose, channel, email, or phone number",
+            "description": "Invalid request body or verification_id",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/API400Error" },
@@ -3060,6 +3054,142 @@
                       "error": {
                         "code": "SMS_SERVICE_NOT_CONFIGURED",
                         "message": "SMS service not configured"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" },
+                "examples": {
+                  "server_error": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "An unexpected error occurred, please try again later"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/otp/email/request": {
+      "post": {
+        "tags": ["OTP"],
+        "summary": "Request Email OTP",
+        "description": "Sends an OTP via email for a verified email address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEmailOTPRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OTPRequestSuccessResponse"
+                },
+                "examples": {
+                  "otp_sent": {
+                    "value": {
+                      "status": "success",
+                      "message": "OTP sent successfully",
+                      "data": {
+                        "otp_id": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298",
+                        "expires_at": "2026-06-22T12:00:00Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body, verification_id, or destination",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" },
+                "examples": {
+                  "invalid_request": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "INVALID_REQUEST_BODY",
+                        "message": "Invalid request body"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API429Error" },
+                "examples": {
+                  "too_many_requests": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "TOO_MANY_REQUESTS",
+                        "message": "Too many requests, please try again later"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Email delivery failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API502Error" },
+                "examples": {
+                  "email_delivery_failed": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "EMAIL_DELIVERY_FAILED",
+                        "message": "Email delivery failed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Email service not configured",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API503Error" },
+                "examples": {
+                  "email_not_configured": {
+                    "value": {
+                      "status": "error",
+                      "error": {
+                        "code": "EMAIL_SERVICE_NOT_CONFIGURED",
+                        "message": "Email service not configured"
                       }
                     }
                   }
@@ -10348,25 +10478,36 @@
           }
         }
       },
-      "RequestOTPRequest": {
+      "RequestSMSOTPRequest": {
         "type": "object",
-        "required": ["destination", "verification_id"],
+        "required": ["verification_id"],
         "properties": {
-          "destination": {
-            "type": "string",
-            "example": "08012345678"
-          },
           "verification_id": {
             "type": "string",
-            "example": "ver_1234567890abcdef"
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          }
+        }
+      },
+      "RequestEmailOTPRequest": {
+        "type": "object",
+        "required": ["verification_id", "destination"],
+        "properties": {
+          "verification_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
+          },
+          "destination": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
           }
         }
       },
       "VerifyOTPRequest": {
         "type": "object",
-        "required": ["verification_id", "otp"],
+        "required": ["otp_id", "otp"],
         "properties": {
-          "verification_id": {
+          "otp_id": {
             "type": "string",
             "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           },
@@ -10375,6 +10516,16 @@
             "minLength": 6,
             "maxLength": 6,
             "example": "123456"
+          }
+        }
+      },
+      "RequestOTPResponse": {
+        "type": "object",
+        "required": ["otp_id"],
+        "properties": {
+          "otp_id": {
+            "type": "string",
+            "example": "b8fa4c0f-a086-4f9d-96db-3ac7457f6298"
           }
         }
       },
@@ -11281,10 +11432,11 @@
       },
       "OTPRequestSuccessResponse": {
         "type": "object",
-        "required": ["status", "message"],
+        "required": ["status", "message", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
-          "message": { "type": "string", "example": "OTP sent successfully" }
+          "message": { "type": "string", "example": "OTP sent successfully" },
+          "data": { "$ref": "#/components/schemas/RequestOTPResponse" }
         }
       },
       "OTPVerifySuccessResponse": {

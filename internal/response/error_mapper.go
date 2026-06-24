@@ -162,7 +162,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusUnprocessableEntity,
 			Error: APIError{
 				Code:    "NIN_BVN_MISMATCH",
-				Message: "could not verify bvn and nin belongs to the same person due to a mismatch in names of date of births",
+				Message: "could not verify bvn and nin belongs to the same person due to a mismatch in names or date of births",
 			},
 		}
 
@@ -994,6 +994,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrProviderServiceUnavailable):
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "SERVICE_UNAVAILABLE",
+				Message: appErr.ErrProviderServiceUnavailable.Error(),
+			},
+		}
+
 	default:
 		var providerErr *appErr.XpressWalletProviderError
 		if errors.As(err, &providerErr) {
@@ -1002,6 +1011,21 @@ func MapError(err error) ErrorMapping {
 				Error: APIError{
 					Code:    "XPRESS_WALLET_PROVIDER_ERROR",
 					Message: providerErr.Message,
+				},
+			}
+		}
+
+		var termiiErr *appErr.TermiiError
+		if errors.As(err, &termiiErr) {
+			status := termiiErr.Code
+			if status == 0 {
+				status = http.StatusBadGateway // network error, timeout, marshal failure
+			}
+			return ErrorMapping{
+				Status: status,
+				Error: APIError{
+					Code:    "SMS_PROVIDER_ERROR",
+					Message: termiiErr.Message, // forward the actual Termii message
 				},
 			}
 		}

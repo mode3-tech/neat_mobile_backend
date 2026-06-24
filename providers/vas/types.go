@@ -230,3 +230,13 @@ type WAECRegistrationValidationResponse struct {
 type WAECRegistrationValidationData struct {
 	TotalAmount int64 `json:"totalAmount"`
 }
+
+type CheckStatusResponse struct {
+	Response
+	Data interface{} `json:"data,omitempty"`
+}
+
+type WalletBalanceResponse struct {
+	Response
+	Data float64 `json:"data"`
+}

@@ -235,6 +235,36 @@ func (h *Handler) PayCable(c *gin.Context) {
 	})
 }
 
+func (h *Handler) CheckStatus(c *gin.Context) {
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		log.Println("vas handler: missing user id in context for CheckStatus")
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	requestID := strings.TrimSpace(c.Param("requestID"))
+	if requestID == "" {
+		mapped := response.MapError(appErr.ErrMissingRequiredPathParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	result, err := h.service.CheckStatus(c.Request.Context(), requestID)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.CheckStatusResponse]{
+		Status:  "success",
+		Message: "Transaction status retrieved successfully",
+		Data:    &result,
+	})
+}
+
 func (h *Handler) FetchBeneficiaries(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
