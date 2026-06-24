@@ -183,14 +183,17 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
+		log.Printf("vas service: failed to get wallet balance - %s\n", err)
 		return nil, appErr.ErrGettingAirtime
 	}
 
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
 	if err != nil {
+		log.Printf("vas service: failed to check wallet balance - %s\n", err)
 		return nil, appErr.ErrGettingAirtime
 	}
 	if !hasSufficientBalance {
+		log.Println("vas service: insufficient balance")
 		return nil, appErr.ErrInsufficientBalance
 	}
 
@@ -332,6 +335,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrGettingData
 	}
 	if !hasSufficientBalance {
+		log.Println("vas service: insufficient balance")
 		return nil, appErr.ErrInsufficientBalance
 	}
 
