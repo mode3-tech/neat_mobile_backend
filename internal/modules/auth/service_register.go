@@ -309,7 +309,6 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		WalletEmail:       walletRegistrationEmail(trimmedEmail, mobileUserID),
 		WalletAddress:     address,
 		HouseNo:           houseNo,
-		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
 		Gender:            gender,
 		MaritalStatus:     maritalStatus,
 		ProductID:         s.productID,

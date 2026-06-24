@@ -147,20 +147,19 @@ func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *Registra
 	}
 
 	walletInfo := &WalletPayload{
-		RequestID:         snapshot.RequestID,
-		BVN:               snapshot.BVN,
-		FirstName:         snapshot.FirstName,
-		MothersMaidenName: snapshot.MothersMaidenName,
-		HouseNo:           snapshot.HouseNo,
-		ProductId:         snapshot.ProductID,
-		Gender:            snapshot.Gender,
-		MaritalStatus:     snapshot.MaritalStatus,
-		LastName:          snapshot.LastName,
-		DateOfBirth:       snapshot.DOB.Format("2006-01-02"),
-		PhoneNumber:       snapshot.Phone,
-		Email:             snapshot.WalletEmail,
-		Address:           snapshot.WalletAddress,
-		Metadata:          map[string]interface{}{"customer_id": job.MobileUserID},
+		RequestID:     snapshot.RequestID,
+		BVN:           snapshot.BVN,
+		FirstName:     snapshot.FirstName,
+		HouseNo:       snapshot.HouseNo,
+		ProductId:     snapshot.ProductID,
+		Gender:        snapshot.Gender,
+		MaritalStatus: snapshot.MaritalStatus,
+		LastName:      snapshot.LastName,
+		DateOfBirth:   snapshot.DOB.Format("2006-01-02"),
+		PhoneNumber:   snapshot.Phone,
+		Email:         snapshot.WalletEmail,
+		Address:       snapshot.WalletAddress,
+		Metadata:      map[string]interface{}{"customer_id": job.MobileUserID},
 	}
 
 	if s.walletPayloadSeedKey != "" {
