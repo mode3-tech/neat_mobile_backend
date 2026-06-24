@@ -33,6 +33,7 @@ type TransactionService interface {
 type BAAS interface {
 	DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) (*baas.ProvidusWalletDebitResponse, error)
 	CreditCustomer(ctx context.Context, amount int64, referenceID, customerID string, metadata interface{}) (*baas.ProvidusWalletCreditResponse, error)
+	GetCustomerDetails(ctx context.Context, customerID string) (*baas.ProvidusCustomerDetailsResponse, error)
 }
 
 type AuthService interface {
