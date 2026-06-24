@@ -2,6 +2,7 @@ package otp
 
 import (
 	"log"
+
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
 	"strings"
@@ -28,11 +29,12 @@ func (o *OTPHandler) RequestSMSOTP(c *gin.Context) {
 		return
 	}
 
-	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
+	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
 		Purpose:        PurposeSignup,
 		Channel:        ChannelSMS,
 		VerificationID: req.VerificationID,
-	}); err != nil {
+	})
+	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
@@ -41,9 +43,14 @@ func (o *OTPHandler) RequestSMSOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, response.APIResponse[any]{
+	resp := RequestOTPResponse{
+		OTPID: result.OTPID,
+	}
+
+	c.JSON(200, response.APIResponse[RequestOTPResponse]{
 		Status:  "success",
 		Message: "OTP sent successfully",
+		Data:    &resp,
 	})
 }
 
@@ -58,12 +65,13 @@ func (o *OTPHandler) RequestEmailOTP(c *gin.Context) {
 		return
 	}
 
-	if _, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
+	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
 		Purpose:        PurposeSignup,
 		Channel:        ChannelEmail,
 		VerificationID: req.VerificationID,
 		Destination:    strings.TrimSpace(req.Destination),
-	}); err != nil {
+	})
+	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
@@ -72,9 +80,14 @@ func (o *OTPHandler) RequestEmailOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, response.APIResponse[any]{
+	resp := RequestOTPResponse{
+		OTPID: result.OTPID,
+	}
+
+	c.JSON(200, response.APIResponse[RequestOTPResponse]{
 		Status:  "success",
 		Message: "OTP sent successfully",
+		Data:    &resp,
 	})
 }
 
@@ -89,13 +102,17 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		return
 	}
 	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
-		Code:           req.OTP,
-		VerificationID: req.VerificationID,
-		Purpose:        PurposeSignup,
+		Code:    req.OTP,
+		OTPID:   req.OTPID,
+		Purpose: PurposeSignup,
 	})
 
 	if err != nil {
-		writeOTPError(c, err)
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
 		return
 	}
 
