@@ -741,7 +741,7 @@ func (x *XpressPayments) CheckStatus(ctx context.Context, requestID string) (*Ch
 func (x *XpressPayments) GetWalletBalance(ctx context.Context) (*WalletBalanceResponse, error) {
 	url := x.BaseURL + "/api/v1/wallets/balance"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
