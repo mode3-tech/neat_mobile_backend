@@ -114,4 +114,5 @@ var (
 	ErrEmailOutOfService               = errors.New("Email service is currently out of service, kindly skip")
 	ErrInvalidChannel                  = errors.New("Invalid phone or email")
 	ErrProviderServiceUnavailable      = errors.New("Service is currently unavailable, please try again later")
+	ErrInvalidPassword                 = errors.New("password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
 )

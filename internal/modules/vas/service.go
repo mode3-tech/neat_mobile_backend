@@ -188,6 +188,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
+	log.Printf("vas service: wallet customer id: %s\n", wallet.WalletCustomerID)
 	if err != nil {
 		log.Printf("vas service: failed to check wallet balance - %s\n", err)
 		return nil, appErr.ErrGettingAirtime
@@ -261,6 +262,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 
 	result, err := s.XpressPayments.GetAirtime(ctx, requestID, uniqueCode, localizedPhone, amount)
+	log.Printf("vas service: local phone: %s, amount: %d\n", localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase airtime - %s\n", err)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
@@ -857,11 +859,11 @@ func (s *Service) CheckStatus(ctx context.Context, requestID string) (*vasprovid
 }
 
 func (s *Service) hasSufficientBalance(ctx context.Context, customerID string, amount int64) (bool, error) {
-	customerDetails, err := s.Baas.GetCustomerDetails(ctx, customerID)
+	customerWallet, err := s.Baas.GetCustomerWallet(ctx, customerID)
 	if err != nil {
 		return false, err
 	}
-	if customerDetails.Customer.AvailableBalance < amount {
+	if customerWallet.Wallet.AvailableBalance < amount {
 		log.Println("vas service: insufficient balance")
 		return false, appErr.ErrInsufficientBalance
 	}
