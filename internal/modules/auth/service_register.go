@@ -220,7 +220,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}
 	if err = authchecker.ValidatePassword(req.Password); err != nil {
 		log.Printf("invalid password: %v", err)
-		return nil, errors.New(err.Error())
+		return nil, appErr.ErrInvalidPassword
 	}
 
 	if req.TransactionPin != req.ConfirmTransactionPin {
@@ -238,7 +238,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	dob, err := timeutil.ParseDOB(*ninRecord.VerifiedDOB)
 	if err != nil {
-		return nil, errors.New(err.Error())
+		return nil, err
 	}
 
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
@@ -305,13 +305,13 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
 			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
 		},
-		IP:                strings.TrimSpace(ip),
-		WalletEmail:       walletRegistrationEmail(trimmedEmail, mobileUserID),
-		WalletAddress:     address,
-		HouseNo:           houseNo,
-		Gender:            gender,
-		MaritalStatus:     maritalStatus,
-		ProductID:         s.productID,
+		IP:            strings.TrimSpace(ip),
+		WalletEmail:   walletRegistrationEmail(trimmedEmail, mobileUserID),
+		WalletAddress: address,
+		HouseNo:       houseNo,
+		Gender:        gender,
+		MaritalStatus: maritalStatus,
+		ProductID:     s.productID,
 	}, nil
 }
 

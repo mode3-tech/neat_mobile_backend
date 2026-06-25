@@ -50,6 +50,7 @@ func (h *Handler) HandleBaaSEvent(c *gin.Context) {
 			log.Printf("baas webhook: failed to process customer bank transfer: %v", err)
 		}
 	case "account_funded":
+		log.Printf("baas webhook: account funded: %s", rawBody)
 		var ev AccountFundedWebhook
 		if err := json.Unmarshal(rawBody, &ev); err != nil {
 			mapped := response.MapError(appErr.ErrInvalidRequestBody)
