@@ -259,3 +259,16 @@ func (r *Repository) ReverseDebitTransaction(ctx context.Context, txID, walletID
 			}).Error
 	})
 }
+
+func (r *Repository) FindUserByWalletCustomerID(ctx context.Context, walletCustomerID string) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).
+		Table("wallet_users").
+		Joins("JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
+		Where("wallet_customer_wallets.wallet_customer_id = ?", walletCustomerID).
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

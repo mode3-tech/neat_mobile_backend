@@ -36,3 +36,7 @@ type ProvidusService interface {
 type DeviceVerifier interface {
 	VerifyUserDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error)
 }
+
+type SmsSender interface {
+	Send(ctx context.Context, destination, message string) error
+}

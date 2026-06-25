@@ -28,15 +28,17 @@ type Service struct {
 	pinVerifier       *authchecker.Verifier
 	settlementAccount SettlementAccount
 	deviceVerifier    DeviceVerifier
+	SmsSender         SmsSender
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender) *Service {
 	return &Service{
 		repo:              repo,
 		providusService:   providusService,
 		pinVerifier:       pinVerifier,
 		settlementAccount: settlementAccount,
 		deviceVerifier:    deviceVerifier,
+		SmsSender:         smsSender,
 	}
 }
 
