@@ -3,6 +3,7 @@ package wallet
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"time"
@@ -28,18 +29,24 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 
 	if data.Status == "success" {
 		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
-		return s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful)
-	}
 
-	user, err := s.repo.FindUserByWalletCustomerID(ctx, data.CustomerID)
-	if err != nil {
-		return err
-	}
+		if err := s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful); err != nil {
+			return err
+		}
 
-	
-
-	if err := s.SmsSender.Send(ctx, user.Phone, "Your transaction has been successfully processed."); err != nil {
-		return err
+		go func() {
+			user, err := s.repo.FindUserByWalletCustomerID(context.Background(), data.CustomerID)
+			if err != nil {
+				log.Printf("baas: failed to find user for debit sms: customer_id=%s err=%v", data.CustomerID, err)
+				return
+			}
+			amountNaira := data.Amount // assuming it's in naira from the webhook
+			msg := fmt.Sprintf("%s: ₦%.2f has been debited from your account. Ref: %s", s.appName, amountNaira, data.TransactionReference)
+			if err := s.SmsSender.Send(context.Background(), user.Phone, msg); err != nil {
+				log.Printf("baas: failed to send debit sms: phone=%s err=%v", user.Phone, err)
+			}
+		}()
+		return nil
 	}
 
 	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
@@ -86,5 +93,17 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 		Description:       "Deposit via bank transfer",
 		CreatedAt:         now,
 	}
-	return s.repo.CreditWalletAtomically(ctx, creditTx, amountKobo)
+	if err := s.repo.CreditWalletAtomically(ctx, creditTx, amountKobo); err != nil {
+		log.Printf("baas: failed to credit wallet: %v", err)
+		return nil
+	}
+
+	go func() {
+		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. Ref: %s", s.appName, amountKobo/100, creditTx.Reference)
+		if err := s.SmsSender.Send(context.Background(), wallet.MobileUserID, msg); err != nil {
+			log.Printf("baas: failed to send credit sms: phone=%s err=%v", wallet.MobileUserID, err)
+		}
+	}()
+
+	return nil
 }
