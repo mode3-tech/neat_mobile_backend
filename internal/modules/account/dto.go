@@ -16,7 +16,7 @@ type AccountSummary struct {
 	BVN                    string       `json:"bvn"`
 	BankName               string       `json:"bank_name"`
 	AccountNumber          string       `json:"account_number"`
-	AvailableBalance       int64        `json:"available_balance"`
+	AvailableBalance       float64      `json:"available_balance"`
 	LoanBalance            float64      `json:"loan_balance"`
 	ActiveLoans            []ActiveLoan `json:"active_loans"`
 	IsNotificationsEnabled bool         `json:"is_notifications_enabled"`
