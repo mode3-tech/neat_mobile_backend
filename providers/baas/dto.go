@@ -83,8 +83,8 @@ type ProvidusCustomer struct {
 	Tier             string            `json:"tier"`
 	DeletedAt        *time.Time        `json:"deletedAt"`
 	AccountNumber    string            `json:"accountNumber"`
-	BookedBalance    int64             `json:"bookedBalance"`
-	AvailableBalance int64             `json:"availableBalance"`
+	BookedBalance    float64           `json:"bookedBalance"`
+	AvailableBalance float64           `json:"availableBalance"`
 }
 
 type ProvidusCustomerWalletResponse struct {
