@@ -233,7 +233,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 	}
 
-	webhooksGroup := r.Group("/wallet")
+	webhooksGroup := apiV1.Group("/wallet")
 	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
 		log.Print("Providus webhook secret is not configured; credit webhook will reject all requests")
 	}
