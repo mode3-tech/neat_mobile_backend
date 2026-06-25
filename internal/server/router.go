@@ -234,10 +234,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	webhooksGroup := apiV1.Group("/wallet")
-	if strings.TrimSpace(cfg.ProvidusWebhookSecret) == "" {
+	if strings.TrimSpace(cfg.ProvidusSecretKey) == "" {
 		log.Print("Providus webhook secret is not configured; credit webhook will reject all requests")
 	}
-	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusWebhookSecret))
+	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusSecretKey))
 
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
