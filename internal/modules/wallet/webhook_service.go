@@ -31,6 +31,17 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 		return s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful)
 	}
 
+	user, err := s.repo.FindUserByWalletCustomerID(ctx, data.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	
+
+	if err := s.SmsSender.Send(ctx, user.Phone, "Your transaction has been successfully processed."); err != nil {
+		return err
+	}
+
 	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
 	return s.repo.ReverseDebitTransaction(ctx, tx.ID, tx.WalletID)
 }
