@@ -13,7 +13,7 @@ import (
 func (h *Handler) HandleBaaSEvent(c *gin.Context) {
 	rawBody, err := c.GetRawData()
 	if err != nil {
-		log.Printf("baas webhook: failed to ready body: %v")
+		log.Printf("baas webhook: failed to ready body: %v", err)
 		mapped := response.MapError(appErr.ErrInvalidRequestBody)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
