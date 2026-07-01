@@ -25,9 +25,9 @@ func ProvidusWebhookAuth(secret string) gin.HandlerFunc {
 			return
 		}
 
-		incoming := strings.TrimSpace(c.GetHeader("X-Xpress-Signature"))
+		incoming := strings.TrimSpace(c.GetHeader("x-xpresswallet-signature"))
 		if incoming == "" {
-			log.Print("providus webhook: missing X-Xpress-Signature header")
+			log.Print("providus webhook: missing x-xpresswallet-signature header")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}

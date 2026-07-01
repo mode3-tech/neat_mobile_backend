@@ -484,8 +484,10 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if len(respBody) == 0 {
+			log.Printf("providus transfer failed with status: %d", resp.StatusCode)
 			return nil, fmt.Errorf("providus transfer failed with status: %d", resp.StatusCode)
 		}
+		log.Printf("providus transfer failed: %s", extractErrorMessage(respBody))
 		return nil, fmt.Errorf("providus transfer failed: %s", extractErrorMessage(respBody))
 	}
 

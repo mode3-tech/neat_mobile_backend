@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/models"
+	mailprovider "neat_mobile_app_backend/providers/email"
 	"strings"
 	"time"
 
@@ -66,7 +67,11 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 				log.Printf("[otp.Issue] no verified email found in verification record: verificationID=%s", in.VerificationID)
 				return nil, appErr.ErrInvalidVerificationID
 			}
-			normalizeDestination, err = NormalizeDestination(in.Destination, in.Channel)
+			destination := in.Destination
+			if destination == "" {
+				destination = *row.VerifiedEmail
+			}
+			normalizeDestination, err = NormalizeDestination(destination, in.Channel)
 		default:
 			log.Printf("[otp.Issue] unsupported channel: channel=%s", in.Channel)
 			return nil, appErr.ErrInvalidChannel
@@ -153,17 +158,24 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			}
 			log.Printf("[otp.Issue] SMS sent: purpose=%s", in.Purpose)
 		case ChannelEmail:
-			// subject := "Your One Time Password (OTP)"
-			// if in.Purpose == PurposePasswordReset {
-			// 	subject = "Your Password Reset OTP"
-			// }
-			// if err := s.email.Send(ctx, normalizeDestination, subject, code); err != nil {
-			// 	log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
-			// 	return err
-			// }
-			// log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
-			log.Printf("otp service: email currently out of service")
-			return appErr.ErrEmailOutOfService
+			subject := "Your One Time Password (OTP)"
+			if in.Purpose == PurposePasswordReset {
+				subject = "Your Password Reset OTP"
+			}
+			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
+				Subject: subject,
+				OTP:     code,
+				Year:    now.Year(),
+			})
+			if err != nil {
+				log.Printf("[otp.Issue] failed to render email template: purpose=%s err=%v", in.Purpose, err)
+				return err
+			}
+			if err := s.email.Send(ctx, []string{normalizeDestination}, subject, htmlBody); err != nil {
+				log.Printf("[otp.Issue] failed to send email: purpose=%s err=%v", in.Purpose, err)
+				return err
+			}
+			log.Printf("[otp.Issue] email sent: purpose=%s", in.Purpose)
 		default:
 			log.Printf("[otp.Issue] unsupported channel: channel=%s", in.Channel)
 			return appErr.ErrInvalidChannel
@@ -419,7 +431,17 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 			}
 			log.Printf("[otp.SendOTP] SMS sent: purpose=%s", purpose)
 		case ChannelEmail:
-			if err := s.email.Send(ctx, normalizedDestination, "Your One Time Password (OTP)", generatedOTP); err != nil {
+			subject := "Your One Time Password (OTP)"
+			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
+				Subject: subject,
+				OTP:     generatedOTP,
+				Year:    now.Year(),
+			})
+			if err != nil {
+				log.Printf("[otp.SendOTP] failed to render email template: purpose=%s err=%v", purpose, err)
+				return err
+			}
+			if err := s.email.Send(ctx, []string{normalizedDestination}, subject, htmlBody); err != nil {
 				log.Printf("[otp.SendOTP] failed to send email: purpose=%s err=%v", purpose, err)
 				return err
 			}
