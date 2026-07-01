@@ -59,7 +59,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		case ChannelSMS:
 			if row.VerifiedPhone == nil || *row.VerifiedPhone == "" {
 				log.Printf("[otp.Issue] no verified phone number found in verification record: verificationID=%s", in.VerificationID)
-				return nil, appErr.ErrInvalidVerificationID
+				return nil, appErr.ErrMissingPhone
 			}
 			normalizeDestination, err = NormalizeDestination(*row.VerifiedPhone, in.Channel)
 		case ChannelEmail:
@@ -67,7 +67,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			if destination == "" {
 				if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
 					log.Printf("[otp.Issue] no verified email found in verification record: verificationID=%s", in.VerificationID)
-					return nil, appErr.ErrInvalidVerificationID
+					return nil, appErr.ErrMissingEmail
 				}
 				destination = *row.VerifiedEmail
 			}
