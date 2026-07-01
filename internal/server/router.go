@@ -29,7 +29,7 @@ import (
 	"neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	cardprovider "neat_mobile_app_backend/providers/card"
-	"neat_mobile_app_backend/providers/email"
+	mailprovider "neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	"neat_mobile_app_backend/providers/nin"
 	"neat_mobile_app_backend/providers/push"
@@ -99,7 +99,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsSenderID := cfg.TermiiSenderID
 
 	smsSender := termii.NewSMSService(smsApiKey, smsSenderID)
-	emailSender := email.NewService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
+	mailSender := mailprovider.NewZepto(cfg.ZeptoMailAPIKey, cfg.ZeptoMailURL, cfg.ZeptoMailSender)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
@@ -137,7 +137,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	otpRepo := otp.NewRepository(db)
-	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, emailSender, cfg.Pepper, cfg.AppName)
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, mailSender, cfg.Pepper, cfg.AppName)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 

@@ -171,12 +171,12 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 	amount := payload.Amount
 
-	if amount < 100 {
+	if amount < 100.00 {
 		log.Println("vas service: amount is less than NGN 100")
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
-	if amount > 10000 {
+	if amount > 10000.00 {
 		log.Println("vas service: amount is greater than NGN 10,000")
 		return nil, appErr.ErrInvalidISPAmount
 	}
@@ -187,7 +187,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrGettingAirtime
 	}
 
-	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
+	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	log.Printf("vas service: wallet customer id: %s\n", wallet.WalletCustomerID)
 	if err != nil {
 		log.Printf("vas service: failed to check wallet balance - %s\n", err)
@@ -331,7 +331,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrGettingData
 	}
 
-	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
+	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
 		return nil, appErr.ErrGettingData
@@ -483,7 +483,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
-	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
+	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
 		return nil, appErr.ErrPayingElectricityBill
@@ -667,7 +667,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrPayingCableBill
 	}
 
-	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, amount)
+	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
 		return nil, appErr.ErrPayingCableBill
@@ -858,7 +858,7 @@ func (s *Service) CheckStatus(ctx context.Context, requestID string) (*vasprovid
 	return result, nil
 }
 
-func (s *Service) hasSufficientBalance(ctx context.Context, customerID string, amount int64) (bool, error) {
+func (s *Service) hasSufficientBalance(ctx context.Context, customerID string, amount float64) (bool, error) {
 	customerWallet, err := s.Baas.GetCustomerWallet(ctx, customerID)
 	if err != nil {
 		return false, err

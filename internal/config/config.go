@@ -17,6 +17,13 @@ type Config struct {
 	SMTPPort                   string
 	SMTPUser                   string
 	SMTPPass                   string
+	ZeptoMailServerName        string
+	ZeptoMailPortNumber        string
+	ZeptoMailUsername          string
+	ZeptoMailPassword          string
+	ZeptoMailSender            string
+	ZeptoMailAPIKey            string
+	ZeptoMailURL               string
 	TendarAPIKey               string
 	PremblyAPIKey              string
 	CBAInternalURL             string
@@ -65,11 +72,9 @@ type Config struct {
 }
 
 func Load() Config {
-	notificationPort := getEnv("NOTIFICATION_PORT", "8081")
-
 	return Config{
 		Port:                       getEnv("PORT", "8080"),
-		NotificationPort:           notificationPort,
+		NotificationPort:           getEnv("NOTIFICATION_PORT", "8081"),
 		DBUrl:                      getEnv("DB_URL", ""),
 		JWTSecret:                  getEnv("JWT_SECRET", ""),
 		Pepper:                     getEnv("PEPPER", ""),
@@ -79,6 +84,13 @@ func Load() Config {
 		SMTPPort:                   getEnv("SMTP_PORT", ""),
 		SMTPUser:                   getEnv("SMTP_USER", ""),
 		SMTPPass:                   getEnv("SMTP_PASS", ""),
+		ZeptoMailServerName:        getEnv("ZEPTOMAIL_SERVER_NAME", ""),
+		ZeptoMailPortNumber:        getEnv("ZEPTOMAIL_PORT_NUMBER", ""),
+		ZeptoMailUsername:          getEnv("ZEPTOMAIL_USERNAME", ""),
+		ZeptoMailPassword:          getEnv("ZEPTOMAIL_PASSWORD", ""),
+		ZeptoMailSender:            getEnv("ZEPTOMAIL_SENDER", ""),
+		ZeptoMailAPIKey:            getEnv("ZEPTOMAIL_API_KEY", ""),
+		ZeptoMailURL:               getEnv("ZEPTOMAIL_URL", ""),
 		TendarAPIKey:               getEnv("TENDAR_APIKEY", ""),
 		PremblyAPIKey:              getEnv("PREMBLY_APIKEY", ""),
 		CBAInternalURL:             getEnv("CBA_INTERNAL_URL", ""),

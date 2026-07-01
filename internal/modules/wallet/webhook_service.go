@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	"neat_mobile_app_backend/internal/phone"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,10 @@ import (
 
 func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *CustomerBankTransferData) error {
 	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.TransactionReference)
+	if tx != nil && err == nil {
+		log.Printf("baas: tx %s already %s - skipping", tx.ID, tx.Status)
+		return nil
+	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("baas: no pending tx for provider_ref=%s", data.TransactionReference)
@@ -42,8 +47,13 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 			}
 			amountNaira := data.Amount // assuming it's in naira from the webhook
 			msg := fmt.Sprintf("%s: ₦%.2f has been debited from your account. Ref: %s", s.appName, amountNaira, data.TransactionReference)
-			if err := s.SmsSender.Send(context.Background(), user.Phone, msg); err != nil {
-				log.Printf("baas: failed to send debit sms: phone=%s err=%v", user.Phone, err)
+			normalized, err := phone.NormalizeNigerianNumber(user.Phone)
+			if err != nil {
+				log.Printf("baas: failed to normalize phone number: %v", err)
+				return
+			}
+			if err := s.SmsSender.Send(context.Background(), normalized, msg); err != nil {
+				log.Printf("baas: failed to send debit sms: phone=%s err=%v", normalized, err)
 			}
 		}()
 		return nil
@@ -66,7 +76,11 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	existing, err := s.repo.FindTransactionByProviderRef(ctx, data.Reference)
-	if err == nil && existing != nil {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("baas: failed to check for existing deposit ref=%s: %v", data.Reference, err)
+		return err
+	}
+	if existing != nil {
 		log.Printf("baas: deposit ref=%s already processed as tx=%s", data.Reference, existing.ID)
 		return nil
 	}
@@ -100,8 +114,13 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 
 	go func() {
 		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. Ref: %s", s.appName, amountKobo/100, creditTx.Reference)
-		if err := s.SmsSender.Send(context.Background(), wallet.MobileUserID, msg); err != nil {
-			log.Printf("baas: failed to send credit sms: phone=%s err=%v", wallet.MobileUserID, err)
+		normalized, err := phone.NormalizeNigerianNumber(wallet.PhoneNumber)
+		if err != nil {
+			log.Printf("baas: failed to normalize phone number: %v", err)
+			return
+		}
+		if err := s.SmsSender.Send(context.Background(), normalized, msg); err != nil {
+			log.Printf("baas: failed to send credit sms: phone=%s err=%v", normalized, err)
 		}
 	}()
 

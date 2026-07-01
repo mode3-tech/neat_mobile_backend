@@ -6,7 +6,7 @@ type RequestSMSOTPRequest struct {
 
 type RequestEmailOTPRequest struct {
 	VerificationID string `json:"verification_id" binding:"required"`
-	Destination    string `json:"destination" binding:"required,email"`
+	Destination    string `json:"destination" binding:"omitempty,email"`
 }
 
 type RequestOTPResponse struct {
