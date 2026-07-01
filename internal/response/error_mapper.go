@@ -58,6 +58,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrMissingPhone):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_PHONE",
+				Message: appErr.ErrMissingPhone.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrUserExists):
 		return ErrorMapping{
 			Status: http.StatusConflict,
@@ -333,7 +342,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_VERIFICATION_ID",
-				Message: "invalid verification id",
+				Message: "We couldn't verify one of your details. Please restart the verification and try again.",
 			},
 		}
 

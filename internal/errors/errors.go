@@ -18,6 +18,7 @@ var (
 	ErrPhoneMismatch                   = errors.New("phones do not match")
 	ErrEmailNotFound                   = errors.New("email not found")
 	ErrMissingEmail                    = errors.New("your verified bvn is missing your email. kindly update your bvn profile and try again")
+	ErrMissingPhone                    = errors.New("your verified bvn is missing your phone number. kindly update your bvn profile and try again")
 	ErrNINAndBVNMismatch               = errors.New("nin and bvn do not match")
 	ErrPasswordMismatch                = errors.New("passwords do not match")
 	ErrTransactionPinMismatch          = errors.New("transaction pins do not match")
