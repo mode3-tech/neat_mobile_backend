@@ -35,6 +35,10 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		return nil, err
 	}
 
+	if phoneRow.VerifiedPhone == nil || strings.TrimSpace(*phoneRow.VerifiedPhone) == "" {
+		return nil, appErr.ErrPhoneNotFound
+	}
+
 	normalizedPhone, err := phone.NormalizeNigerianNumber(strings.TrimSpace(*phoneRow.VerifiedPhone))
 	if err != nil {
 		return nil, err

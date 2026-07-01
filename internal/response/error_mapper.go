@@ -49,6 +49,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrMissingEmail):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_EMAIL",
+				Message: appErr.ErrMissingEmail.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrUserExists):
 		return ErrorMapping{
 			Status: http.StatusConflict,

@@ -63,12 +63,12 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			}
 			normalizeDestination, err = NormalizeDestination(*row.VerifiedPhone, in.Channel)
 		case ChannelEmail:
-			if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
-				log.Printf("[otp.Issue] no verified email found in verification record: verificationID=%s", in.VerificationID)
-				return nil, appErr.ErrInvalidVerificationID
-			}
 			destination := in.Destination
 			if destination == "" {
+				if row.VerifiedEmail == nil || *row.VerifiedEmail == "" {
+					log.Printf("[otp.Issue] no verified email found in verification record: verificationID=%s", in.VerificationID)
+					return nil, appErr.ErrInvalidVerificationID
+				}
 				destination = *row.VerifiedEmail
 			}
 			normalizeDestination, err = NormalizeDestination(destination, in.Channel)
@@ -84,7 +84,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		normalizeDestination, err = NormalizeDestination(in.Destination, in.Channel)
 		if err != nil {
 			log.Printf("[otp.Issue] failed to normalize destination: channel=%s err=%v", in.Channel, err)
-			return nil, err
+			return nil, appErr.ErrMissingEmail
 		}
 	} else {
 		log.Printf("[otp.Issue] neither verificationID nor destination provided")
