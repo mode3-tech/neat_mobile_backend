@@ -28,7 +28,7 @@ func (r *Repository) FetchUserWithUserID(ctx context.Context, userID string) (*m
 func (r *Repository) FetchRecentTransactions(ctx context.Context, userID, walletID string) ([]Transaction, error) {
 	var transactions []Transaction
 	err := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ?", userID, walletID).
+		Where("mobile_user_id = ? AND wallet_id = ? AND status != ?", userID, walletID, TransactionStatusPending).
 		Order("created_at DESC").
 		Limit(2).
 		Find(&transactions).Error
