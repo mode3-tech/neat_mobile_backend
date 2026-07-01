@@ -46,7 +46,7 @@ type ProvidusWalletDebitResponse struct {
 }
 
 type ProvidusWalletDebitResponseData struct {
-	Amount           int64       `json:"amount"`
+	Amount           float64     `json:"amount"`
 	Reference        string      `json:"reference"`
 	CustomerID       string      `json:"customerId"`
 	Metadata         interface{} `json:"metadata"`
@@ -55,10 +55,10 @@ type ProvidusWalletDebitResponseData struct {
 }
 
 type ProvidusWalletCreditResponse struct {
-	Status    bool   `json:"status"`
-	Message   string `json:"message"`
-	Reference string `json:"reference"`
-	Amount    int64  `json:"amount"`
+	Status    bool    `json:"status"`
+	Message   string  `json:"message"`
+	Reference string  `json:"reference"`
+	Amount    float64 `json:"amount"`
 }
 
 type ProvidusCustomerDetailsResponse struct {
@@ -93,26 +93,26 @@ type ProvidusCustomerWalletResponse struct {
 }
 
 type ProvidusWallet struct {
-	Id                    string `json:"id"`
-	Type                  string `json:"type"`
-	Tier                  string `json:"tier"`
-	Status                string `json:"status"`
-	Email                 string `json:"email"`
-	CustomerId            string `json:"customerId"`
-	LastName              string `json:"lastName"`
-	FirstName             string `json:"firstName"`
-	BankName              string `json:"bankName"`
-	BankCode              string `json:"bankCode"`
-	CreatedAt             string `json:"createdAt"`
-	UpdatedAt             string `json:"updatedAt"`
-	AccountName           string `json:"accountName"`
-	PhoneNumber           string `json:"phoneNumber"`
-	PostNoCredit          bool   `json:"postNoCredit"`
-	AccountNumber         string `json:"accountNumber"`
-	BookedBalance         int64  `json:"bookedBalance"`
-	AvailableBalance      int64  `json:"availableBalance"`
-	AccountReference      string `json:"accountReference"`
-	MinBalance            int64  `json:"minBalance"`
-	MaxBalance            int64  `json:"maxBalance"`
-	DailyTransactionLimit int64  `json:"dailyTransactionLimit"`
+	Id                    string  `json:"id"`
+	Type                  string  `json:"type"`
+	Tier                  string  `json:"tier"`
+	Status                string  `json:"status"`
+	Email                 string  `json:"email"`
+	CustomerId            string  `json:"customerId"`
+	LastName              string  `json:"lastName"`
+	FirstName             string  `json:"firstName"`
+	BankName              string  `json:"bankName"`
+	BankCode              string  `json:"bankCode"`
+	CreatedAt             string  `json:"createdAt"`
+	UpdatedAt             string  `json:"updatedAt"`
+	AccountName           string  `json:"accountName"`
+	PhoneNumber           string  `json:"phoneNumber"`
+	PostNoCredit          bool    `json:"postNoCredit"`
+	AccountNumber         string  `json:"accountNumber"`
+	BookedBalance         float64 `json:"bookedBalance"`
+	AvailableBalance      float64 `json:"availableBalance"`
+	AccountReference      string  `json:"accountReference"`
+	MinBalance            float64 `json:"minBalance"`
+	MaxBalance            float64 `json:"maxBalance"`
+	DailyTransactionLimit float64 `json:"dailyTransactionLimit"`
 }

@@ -65,11 +65,18 @@ func (o *OTPHandler) RequestEmailOTP(c *gin.Context) {
 		return
 	}
 
+	var destination string
+
+	if req.Destination == "" {
+		destination = ""
+	} else {
+		destination = strings.TrimSpace(req.Destination)
+	}
 	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
 		Purpose:        PurposeSignup,
 		Channel:        ChannelEmail,
 		VerificationID: req.VerificationID,
-		Destination:    strings.TrimSpace(req.Destination),
+		Destination:    destination,
 	})
 	if err != nil {
 		mapped := response.MapError(err)
