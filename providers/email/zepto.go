@@ -69,7 +69,7 @@ func (z *Zepto) Send(ctx context.Context, to []string, subject, body string) err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		respBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
 			log.Printf("unexpected status code: %d (failed to read response body: %v)", resp.StatusCode, readErr)
