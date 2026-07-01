@@ -510,8 +510,10 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
+	extractedBillingCompany := ExtractBillingCompanyName(uniqueCode)
+
 	metadata := map[string]any{
-		"provider": ExtractBillingCompanyName(uniqueCode),
+		"provider": extractedBillingCompany,
 		"type":     "electricity",
 	}
 
@@ -557,6 +559,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryElectricity,
 		Amount:              amount * 100,
+		Description:         fmt.Sprintf("Electricity purchase from %s", extractedBillingCompany),
 		BalanceBefore:       wallet.AvailableBalance,
 		BalanceAfter:        0,
 		Reference:           ref,
@@ -694,8 +697,10 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
+	extractedBillingCompany := ExtractBillingCompanyName(uniqueCode)
+
 	metadata := map[string]any{
-		"provider": ExtractBillingCompanyName(uniqueCode),
+		"provider": extractedBillingCompany,
 		"type":     "cable",
 	}
 
@@ -731,6 +736,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryTV,
 		Amount:              amount * 100,
+		Description:         fmt.Sprintf("Debit Alert: ₦%.2f transfer to %s. Ref: %s", float64(amount)/100, extractedBillingCompany, ref),
 		BalanceBefore:       wallet.AvailableBalance,
 		BalanceAfter:        0,
 		Reference:           ref,

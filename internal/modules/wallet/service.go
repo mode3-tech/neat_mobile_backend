@@ -9,7 +9,6 @@ import (
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/transaction"
-	"neat_mobile_app_backend/internal/phone"
 	"strings"
 	"time"
 
@@ -180,19 +179,11 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	normalizedPhone, err := phone.NormalizeNigerianNumber(user.Phone)
-	if err != nil {
-		log.Printf("wallet service: failed to normalize phone number: %v", err)
-		return nil, err
-	}
-
-	go func() {
-		amountNaira := float64(req.Amount) / 100
-		msg := fmt.Sprintf("Debit Alert: ₦%.2f transfer to %s. Ref: %s", amountNaira, accountName, txRecord.Reference)
-		if err := s.SmsSender.Send(context.Background(), normalizedPhone, msg); err != nil {
-			log.Printf("wallet service: failed to send debit sms: phone=%s err=%v", normalizedPhone, err)
-		}
-	}()
+	// normalizedPhone, err := phone.NormalizeNigerianNumber(user.Phone)
+	// if err != nil {
+	// 	log.Printf("wallet service: failed to normalize phone number: %v", err)
+	// 	return nil, err
+	// }
 
 	return resp, nil
 }
