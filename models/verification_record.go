@@ -7,6 +7,7 @@ const (
 	VerificationTypeNIN   = "nin"
 	VerificationTypePhone = "phone"
 	VerificationTypeEmail = "email"
+	VerificationTypeOTP   = "otp"
 )
 
 const (
