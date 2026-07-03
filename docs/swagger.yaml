@@ -87,7 +87,7 @@ paths:
                       claim_token: reg_claim_x7F1z0gVh4Wk2NfQ
                       claim_expires_at: "2026-05-02T18:30:00Z"
         "400":
-          description: Invalid request body, invalid phone number, or failed registration validation
+          description: Invalid request body, or a verification id resolved to the wrong record type
           content:
             application/json:
               schema:
@@ -99,6 +99,31 @@ paths:
                     error:
                       code: INVALID_REQUEST_BODY
                       message: Invalid request body
+                invalid_verification_type:
+                  value:
+                    status: error
+                    error:
+                      code: INVALID_VERIFICATION_TYPE
+                      message: cannot verify your account. kindly restart the verification process
+        "404":
+          description: A required verified contact record was not found (or expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API404Error"
+              examples:
+                phone_or_email_not_found:
+                  value:
+                    status: error
+                    error:
+                      code: PHONE_OR_EMAIL_NOT_FOUND
+                      message: kindly verify your phone or email
+                email_not_found:
+                  value:
+                    status: error
+                    error:
+                      code: EMAIL_NOT_FOUND
+                      message: email verification not found
         "409":
           description: Registration already in progress or account already exists
           content:
@@ -113,24 +138,18 @@ paths:
                       code: USER_EXISTS
                       message: user already exists
         "422":
-          description: Validation failed due to mismatched verification data
+          description: BVN and NIN identity data do not match
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/API422Error"
               examples:
-                email_phone_mismatch:
+                nin_bvn_mismatch:
                   value:
                     status: error
                     error:
-                      code: EMAIL_PHONE_MISMATCH
-                      message: verified email and phone do not belong to the same person
-                phone_mismatch:
-                  value:
-                    status: error
-                    error:
-                      code: PHONE_MISMATCH
-                      message: verified phone and phone number do not match
+                      code: NIN_BVN_MISMATCH
+                      message: could not verify bvn and nin belongs to the same person due to a mismatch in names or date of births
         "500":
           description: Registration failed
           content:
@@ -5915,15 +5934,10 @@ components:
         - bvn_w_face_verification_id
         - nin_verification_id
         - nin_w_face_verification_id
-        - phone_verification_id
+        - otp_verification_id
         - is_biometrics_enabled
         - device
       properties:
-        email:
-          type: string
-          format: email
-          description: Optional email address. When supplied, pair it with `email_verification_id`.
-          example: user@example.com
         password:
           type: string
           minLength: 8
@@ -5956,12 +5970,26 @@ components:
           type: string
           description: Face check ID returned by `/auth/validate/nin-with-face`.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
-        phone_verification_id:
+        otp_verification_id:
           type: string
+          description: >-
+            Required. Verification ID for the primary signup contact OTP (phone **or** email),
+            returned by `/auth/otp/verify` with `purpose = signup`. Must resolve to a `type = otp` record.
+          example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        submitted_phone_verification_id:
+          type: string
+          description: >-
+            Optional, but **required when `otp_verification_id` was an email OTP**. Verification ID for an
+            alternate phone the user submitted and verified via `/auth/otp/verify` with
+            `purpose = submitted_contact` over SMS. Must resolve to a `type = phone` record. This phone
+            becomes the account's login/reachable number.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         email_verification_id:
           type: string
-          description: Verification ID returned by `/auth/otp/verify` for the optional email step.
+          description: >-
+            Optional. Verification ID for an email a phone-first user also verified (via
+            `/auth/otp/verify` with `purpose = submitted_contact` over email). Must resolve to a
+            `type = email` record.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         is_biometrics_enabled:
           type: boolean
@@ -7243,25 +7271,53 @@ components:
           $ref: "#/components/schemas/NINWithFaceValidationResponse"
     RequestSMSOTPRequest:
       type: object
-      required:
-        - verification_id
+      description: >-
+        Supply `verification_id` to send an OTP to a phone already on a verification record, **or**
+        `destination` to send an OTP to a user-typed phone number. `purpose` must match the value used at verify time.
       properties:
         verification_id:
           type: string
+          description: Verification ID of a record whose phone should receive the OTP. Omit when using `destination`.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
+        destination:
+          type: string
+          description: A user-typed phone number to send the OTP to (used for the submitted alternate phone). Omit when using `verification_id`.
+          example: "08012345678"
+        purpose:
+          type: string
+          enum:
+            - signup
+            - submitted_contact
+          default: signup
+          description: >-
+            `signup` (default) for the primary contact OTP, or `submitted_contact` for an alternate
+            phone/email. Issue and verify must use the same `purpose`.
+          example: signup
     RequestEmailOTPRequest:
       type: object
-      required:
-        - verification_id
-        - destination
+      description: >-
+        Supply `verification_id` to send an OTP to an email already on a verification record, **or**
+        `destination` to send an OTP to a user-typed email. `purpose` must match the value used at verify time.
       properties:
         verification_id:
           type: string
+          description: Verification ID of a record whose email should receive the OTP. Omit when using `destination`.
           example: b8fa4c0f-a086-4f9d-96db-3ac7457f6298
         destination:
           type: string
           format: email
+          description: A user-typed email to send the OTP to. Omit when using `verification_id`.
           example: user@example.com
+        purpose:
+          type: string
+          enum:
+            - signup
+            - submitted_contact
+          default: signup
+          description: >-
+            `signup` (default) for the primary contact OTP, or `submitted_contact` for an alternate
+            phone/email. Issue and verify must use the same `purpose`.
+          example: signup
     VerifyOTPRequest:
       type: object
       required:
@@ -7276,6 +7332,14 @@ components:
           minLength: 6
           maxLength: 6
           example: "123456"
+        purpose:
+          type: string
+          enum:
+            - signup
+            - submitted_contact
+          default: signup
+          description: Must match the `purpose` used when the OTP was issued.
+          example: signup
     RequestOTPResponse:
       type: object
       required:
