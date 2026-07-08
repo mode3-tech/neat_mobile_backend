@@ -10896,10 +10896,44 @@
             "example": "successful"
           },
           "amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Amount in the smallest currency unit (kobo).",
-            "example": 500000
+            "type": "number",
+            "format": "double",
+            "description": "Amount in naira. Whole naira plus trailing kobo as decimals (e.g. 5000.50).",
+            "example": 5000.50
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Interbank (NIP) session id, when available.",
+            "example": "100004260708115725164782993866"
+          },
+          "narration": {
+            "type": "string",
+            "nullable": true,
+            "description": "Transfer note, when available.",
+            "example": "Transfer from PATRICK MOROJUOLUWA ABIMBOLA"
+          },
+          "counterparty": {
+            "nullable": true,
+            "description": "The other party — sender for a credit, recipient for a debit. Omitted when none.",
+            "allOf": [{ "$ref": "#/components/schemas/Counterparty" }]
+          }
+        }
+      },
+      "Counterparty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "PATRICK MOROJUOLUWA ABIMBOLA"
+          },
+          "account_number": {
+            "type": "string",
+            "example": "9059375974"
+          },
+          "bank": {
+            "type": "string",
+            "description": "Bank code/sort code. May be empty for inbound deposits.",
+            "example": "000014"
           }
         }
       },
