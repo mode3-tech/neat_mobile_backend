@@ -38,15 +38,7 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 	result := make([]TransactionResponse, len(transactions))
 
 	for i, t := range transactions {
-		result[i] = TransactionResponse{
-			ID:          t.ID,
-			Type:        t.Type,
-			Description: t.Description,
-			Date:        t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			Reference:   t.Reference,
-			Status:      t.Status,
-			Amount:      t.Amount / 100,
-		}
+		result[i] = toTransactionResponse(t)
 	}
 
 	return result, nil
@@ -104,6 +96,31 @@ func (s *Service) UpdateTransactionStatus(ctx context.Context, txID string, bala
 	return s.repo.UpdateTransactionStatus(ctx, txID, balanceAfter, status)
 }
 
+// toTransactionResponse maps a stored transaction to its API shape, including
+// counterparty (sender for a credit, recipient for a debit), session id, and
+// narration when present.
+func toTransactionResponse(t Transaction) TransactionResponse {
+	resp := TransactionResponse{
+		ID:          t.ID,
+		Type:        t.Type,
+		Description: t.Description,
+		Reference:   t.Reference,
+		Date:        t.CreatedAt.Format(time.RFC3339),
+		Status:      t.Status,
+		Amount:      float64(t.Amount) / 100, // kobo -> naira, keeping trailing kobo as decimals
+		SessionID:   t.SessionID,
+		Narration:   t.Narration,
+	}
+	if t.CounterpartyName != "" || t.CounterpartyAccount != "" || t.CounterpartyBank != "" {
+		resp.Counterparty = &Counterparty{
+			Name:          t.CounterpartyName,
+			AccountNumber: t.CounterpartyAccount,
+			Bank:          t.CounterpartyBank,
+		}
+	}
+	return resp
+}
+
 // groupByMonth preserves DESC order since txs is already sorted that way.
 func groupByMonth(txs []Transaction) []TransactionSection {
 	type key struct {
@@ -119,15 +136,7 @@ func groupByMonth(txs []Transaction) []TransactionSection {
 		if _, exists := groups[k]; !exists {
 			order = append(order, k)
 		}
-		groups[k] = append(groups[k], TransactionResponse{
-			ID:          t.ID,
-			Type:        t.Type,
-			Description: t.Description,
-			Reference:   t.Reference,
-			Date:        t.CreatedAt.Format(time.RFC3339),
-			Status:      t.Status,
-			Amount:      t.Amount / 100,
-		})
+		groups[k] = append(groups[k], toTransactionResponse(t))
 	}
 
 	sections := make([]TransactionSection, len(order))

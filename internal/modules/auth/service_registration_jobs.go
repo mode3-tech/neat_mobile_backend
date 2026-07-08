@@ -156,7 +156,7 @@ func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *Registra
 		MaritalStatus: snapshot.MaritalStatus,
 		LastName:      snapshot.LastName,
 		DateOfBirth:   snapshot.DOB.Format("2006-01-02"),
-		PhoneNumber:   snapshot.Phone,
+		PhoneNumber:   walletPhoneFromSnapshot(snapshot),
 		Email:         snapshot.WalletEmail,
 		Address:       snapshot.WalletAddress,
 		Metadata:      map[string]interface{}{"customer_id": job.MobileUserID},
@@ -252,6 +252,19 @@ func decodeRegistrationSnapshot(snapshotJSON string) (*registrationJobSnapshot, 
 	return &snapshot, nil
 }
 
+// walletPhoneFromSnapshot returns the BVN-linked phone to send to the wallet
+// provider, falling back to the reachable/login phone for snapshots serialized
+// before WalletPhone existed (in-flight registration jobs).
+func walletPhoneFromSnapshot(snapshot *registrationJobSnapshot) string {
+	if snapshot == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(snapshot.WalletPhone); v != "" {
+		return v
+	}
+	return snapshot.Phone
+}
+
 func normalizeWalletResponse(resp *WalletResponse, snapshot *registrationJobSnapshot) error {
 	if resp == nil || resp.Customer == nil || resp.Wallet == nil {
 		return errors.New("wallet provider returned incomplete response")
@@ -272,7 +285,7 @@ func normalizeWalletResponse(resp *WalletResponse, snapshot *registrationJobSnap
 		resp.Customer.Email = snapshot.WalletEmail
 	}
 	if strings.TrimSpace(resp.Customer.PhoneNumber) == "" {
-		resp.Customer.PhoneNumber = snapshot.Phone
+		resp.Customer.PhoneNumber = walletPhoneFromSnapshot(snapshot)
 	}
 	if strings.TrimSpace(resp.Customer.BVN) == "" {
 		resp.Customer.BVN = snapshot.BVN

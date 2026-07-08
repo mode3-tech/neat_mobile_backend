@@ -18,6 +18,7 @@ type bvnInfo struct {
 	name           string
 	dob            string
 	phone          string
+	email          string
 	verificationID string
 }
 

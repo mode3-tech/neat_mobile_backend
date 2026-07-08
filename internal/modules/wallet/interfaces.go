@@ -40,3 +40,7 @@ type DeviceVerifier interface {
 type SmsSender interface {
 	Send(ctx context.Context, destination, message string) error
 }
+
+type NotificationSender interface {
+	SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error
+}

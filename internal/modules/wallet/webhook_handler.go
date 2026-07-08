@@ -37,6 +37,7 @@ func (h *Handler) HandleBaaSEvent(c *gin.Context) {
 
 	switch envelope.Event {
 	case "customer_bank_transfer":
+		log.Printf("baas webhook: customer bank transfer: %s", rawBody)
 		var ev CustomerBankTransferWebhook
 		if err := json.Unmarshal(rawBody, &ev); err != nil {
 			mapped := response.MapError(appErr.ErrInvalidRequestBody)

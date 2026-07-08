@@ -7,6 +7,8 @@ import (
 	"log"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/models"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,14 +16,15 @@ import (
 )
 
 func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *CustomerBankTransferData) error {
-	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.TransactionReference)
+	log.Println("baas: processing customer bank transfer")
+	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.Reference)
 	if tx != nil && err == nil {
 		log.Printf("baas: tx %s already %s - skipping", tx.ID, tx.Status)
 		return nil
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("baas: no pending tx for provider_ref=%s", data.TransactionReference)
+			log.Printf("baas: no pending tx for provider_ref=%s", data.Reference)
 			return nil
 		}
 		return err
@@ -33,7 +36,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 	}
 
 	if data.Status == "success" {
-		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
+		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.Reference)
 
 		if err := s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful); err != nil {
 			return err
@@ -46,7 +49,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 				return
 			}
 			amountNaira := data.Amount // assuming it's in naira from the webhook
-			msg := fmt.Sprintf("%s: ₦%.2f has been debited from your account. Ref: %s", s.appName, amountNaira, data.TransactionReference)
+			msg := fmt.Sprintf("%s: ₦%.2f has been debited from your account. Ref: %s", s.appName, amountNaira, data.Reference)
 			normalized, err := phone.NormalizeNigerianNumber(user.Phone)
 			if err != nil {
 				log.Printf("baas: failed to normalize phone number: %v", err)
@@ -59,19 +62,33 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 		return nil
 	}
 
-	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
+	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.Reference)
 	return s.repo.ReverseDebitTransaction(ctx, tx.ID, tx.WalletID)
 }
 
+// fundedBeneficiaryAccountNumber returns the account number of the wallet to
+// credit. Real transfer-in payloads put the recipient (our customer) in
+// beneficiaryAccountNumber, while accountNumber is the payer. We fall back to
+// accountNumber for the provider's documented single-account sample shape.
+func fundedBeneficiaryAccountNumber(data *AccountFundedData) string {
+	if acctNo := strings.TrimSpace(data.BeneficiaryAccountNumber); acctNo != "" {
+		return acctNo
+	}
+	return strings.TrimSpace(data.AccountNumber)
+}
+
 func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedData) error {
+	log.Println("baas: processing account funded")
 	if data.Status != "success" {
 		log.Printf("baas: account funded failed status=%s - skipping", data.Status)
 		return nil
 	}
 
-	wallet, err := s.repo.GetWalletByAccountNumber(ctx, data.AccountNumber)
+	acctNo := fundedBeneficiaryAccountNumber(data)
+
+	wallet, err := s.repo.GetWalletByAccountNumber(ctx, acctNo)
 	if err != nil {
-		log.Printf("baas: no wallet found for account_number=%s: %v", data.AccountNumber, err)
+		log.Printf("baas: no wallet found for account_number=%s: %v", acctNo, err)
 		return nil
 	}
 
@@ -92,20 +109,28 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	now := time.Now().UTC()
+	// The counterparty on an inbound deposit is the sender (originator).
+	var narration *string
+	if n := strings.TrimSpace(data.Narration); n != "" {
+		narration = &n
+	}
 	creditTx := &transaction.Transaction{
-		ID:                uuid.NewString(),
-		MobileUserID:      wallet.MobileUserID,
-		WalletID:          wallet.WalletID,
-		Type:              transaction.TransactionTypeCredit,
-		Category:          transaction.TransactionCategoryTransferFrom,
-		Source:            transaction.TransactionSourceCredit,
-		Amount:            amountKobo,
-		Reference:         uuid.NewString(),
-		ProviderReference: data.Reference,
-		SessionID:         data.SessionID,
-		Status:            transaction.TransactionStatusSuccessful,
-		Description:       "Deposit via bank transfer",
-		CreatedAt:         now,
+		ID:                  uuid.NewString(),
+		MobileUserID:        wallet.MobileUserID,
+		WalletID:            wallet.WalletID,
+		Type:                transaction.TransactionTypeCredit,
+		Category:            transaction.TransactionCategoryTransferFrom,
+		Source:              transaction.TransactionSourceCredit,
+		Amount:              amountKobo,
+		Reference:           uuid.NewString(),
+		ProviderReference:   data.Reference,
+		SessionID:           data.SessionID,
+		Narration:           narration,
+		CounterpartyName:    strings.TrimSpace(data.OriginatorAccountName),
+		CounterpartyAccount: strings.TrimSpace(data.OriginatorAccountNumber),
+		Status:              transaction.TransactionStatusSuccessful,
+		Description:         "Deposit via bank transfer",
+		CreatedAt:           now,
 	}
 	if err := s.repo.CreditWalletAtomically(ctx, creditTx, amountKobo); err != nil {
 		log.Printf("baas: failed to credit wallet: %v", err)
@@ -113,7 +138,7 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	go func() {
-		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. Ref: %s", s.appName, amountKobo/100, creditTx.Reference)
+		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. Ref: %s", s.appName, float64(amountKobo)/100, creditTx.Reference)
 		normalized, err := phone.NormalizeNigerianNumber(wallet.PhoneNumber)
 		if err != nil {
 			log.Printf("baas: failed to normalize phone number: %v", err)
@@ -123,6 +148,22 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 			log.Printf("baas: failed to send credit sms: phone=%s err=%v", normalized, err)
 		}
 	}()
+
+	if s.Notifier != nil {
+		go func() {
+			amountNaira := float64(amountKobo) / 100
+			title := "Money received"
+			body := fmt.Sprintf("₦%.2f has been credited to your account.", amountNaira)
+			data := map[string]any{
+				"reference": creditTx.Reference,
+				"amount":    amountNaira,
+				"type":      "credit",
+			}
+			if err := s.Notifier.SendToUser(context.Background(), wallet.MobileUserID, title, models.NotificationTypeTransaction, body, data); err != nil {
+				log.Printf("baas: failed to send credit notification: user=%s err=%v", wallet.MobileUserID, err)
+			}
+		}()
+	}
 
 	return nil
 }

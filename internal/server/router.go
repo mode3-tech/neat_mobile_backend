@@ -203,13 +203,19 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	})
 
+	// Notification service is built before the wallet service so wallet events
+	// (e.g. inbound deposits) can push notifications to the customer.
+	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
+	notificationRepo := notification.NewRepository(db)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
+
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := authchecker.New(walletRepo)
 	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	}, deviceService, smsSender, cfg.AppName)
+	}, deviceService, smsSender, notificationService, cfg.AppName)
 
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
@@ -239,9 +245,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusSecretKey))
 
-	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
-	notificationRepo := notification.NewRepository(db)
-	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 

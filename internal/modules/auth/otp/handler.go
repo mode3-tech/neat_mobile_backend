@@ -30,9 +30,10 @@ func (o *OTPHandler) RequestSMSOTP(c *gin.Context) {
 	}
 
 	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
-		Purpose:        PurposeSignup,
+		Purpose:        signupOTPPurpose(req.Purpose),
 		Channel:        ChannelSMS,
 		VerificationID: req.VerificationID,
+		Destination:    strings.TrimSpace(req.Destination),
 	})
 	if err != nil {
 		mapped := response.MapError(err)
@@ -73,7 +74,7 @@ func (o *OTPHandler) RequestEmailOTP(c *gin.Context) {
 		destination = strings.TrimSpace(req.Destination)
 	}
 	result, err := o.manager.Issue(c.Request.Context(), IssueOTPInput{
-		Purpose:        PurposeSignup,
+		Purpose:        signupOTPPurpose(req.Purpose),
 		Channel:        ChannelEmail,
 		VerificationID: req.VerificationID,
 		Destination:    destination,
@@ -111,7 +112,7 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 	result, err := o.manager.Verify(c.Request.Context(), VerifyOTPInput{
 		Code:    req.OTP,
 		OTPID:   req.OTPID,
-		Purpose: PurposeSignup,
+		Purpose: signupOTPPurpose(req.Purpose),
 	})
 
 	if err != nil {
@@ -132,6 +133,17 @@ func (o *OTPHandler) VerifyOTP(c *gin.Context) {
 		Message: "OTP verified successfully",
 		Data:    &resp,
 	})
+}
+
+// signupOTPPurpose maps the optional request purpose to the internal Purpose
+// for the signup OTP endpoints. It only distinguishes the primary signup
+// contact (default) from a submitted alternate contact; the binding tag
+// `oneof=signup submitted_contact` guarantees no other value reaches here.
+func signupOTPPurpose(v string) Purpose {
+	if strings.EqualFold(strings.TrimSpace(v), string(PurposeSubmittedContact)) {
+		return PurposeSubmittedContact
+	}
+	return PurposeSignup
 }
 
 func parsePurpose(v string) (Purpose, error) {

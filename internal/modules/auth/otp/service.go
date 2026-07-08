@@ -84,7 +84,10 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		normalizeDestination, err = NormalizeDestination(in.Destination, in.Channel)
 		if err != nil {
 			log.Printf("[otp.Issue] failed to normalize destination: channel=%s err=%v", in.Channel, err)
-			return nil, appErr.ErrMissingEmail
+			if in.Channel == ChannelSMS {
+				return nil, appErr.ErrInvalidPhone
+			}
+			return nil, appErr.ErrInvalidEmail
 		}
 	} else {
 		log.Printf("[otp.Issue] neither verificationID nor destination provided")
@@ -344,7 +347,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 			log.Printf("[otp.Verify] failed to consume OTP: otpID=%s err=%v", active.ID, err)
 			return err
 		}
-		record, err := newVerifiedVerificationRecord(active.Channel, active.Destination, now)
+		record, err := newVerifiedVerificationRecord(in.Purpose, active.Channel, active.Destination, now)
 		if err != nil {
 			log.Printf("[otp.Verify] failed to build verification record: otpID=%s err=%v", active.ID, err)
 			return err
@@ -511,14 +514,14 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 		}
 		if active == nil {
 			log.Printf("[otp.VerifyOTP] no active OTP found: purpose=%s channel=%s", purpose, channel)
-			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "no active otp found"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, purpose, channel, normalizedDestination, "no active otp found"); err != nil {
 				return err
 			}
 			return appErr.ErrInvalidOTP
 		}
 		if active.AttemptCount >= active.MaxAttempts {
 			log.Printf("[otp.VerifyOTP] max attempts reached: otpID=%s attemptCount=%d maxAttempts=%d", active.ID, active.AttemptCount, active.MaxAttempts)
-			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "too many failed attempts"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, purpose, channel, normalizedDestination, "too many failed attempts"); err != nil {
 				return err
 			}
 			return appErr.ErrInvalidOTP
@@ -535,7 +538,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 				log.Printf("[otp.VerifyOTP] failed to increment attempt count: otpID=%s err=%v", active.ID, err)
 				return err
 			}
-			if err = s.addFailedVerification(ctx, verificationRepo, channel, normalizedDestination, "incorrect otp"); err != nil {
+			if err = s.addFailedVerification(ctx, verificationRepo, purpose, channel, normalizedDestination, "incorrect otp"); err != nil {
 				return err
 			}
 			log.Printf("[otp.VerifyOTP] incorrect OTP code: otpID=%s attemptCount=%d", active.ID, active.AttemptCount+1)
@@ -547,7 +550,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 			log.Printf("[otp.VerifyOTP] failed to consume OTP: otpID=%s err=%v", active.ID, err)
 			return err
 		}
-		record, err := newVerifiedVerificationRecord(channel, normalizedDestination, now)
+		record, err := newVerifiedVerificationRecord(purpose, channel, normalizedDestination, now)
 		if err != nil {
 			log.Printf("[otp.VerifyOTP] failed to build verification record: otpID=%s err=%v", active.ID, err)
 			return err
@@ -579,8 +582,8 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 	return &resp, nil
 }
 
-func (s *Service) addFailedVerification(ctx context.Context, repo *verification.VerificationRepo, channel Channel, destination string, reason string) error {
-	record, err := newFailedVerificationRecord(channel, destination, reason)
+func (s *Service) addFailedVerification(ctx context.Context, repo *verification.VerificationRepo, purpose Purpose, channel Channel, destination string, reason string) error {
+	record, err := newFailedVerificationRecord(purpose, channel, destination, reason)
 	if err != nil {
 		return err
 	}
@@ -588,8 +591,8 @@ func (s *Service) addFailedVerification(ctx context.Context, repo *verification.
 	return repo.AddVerification(ctx, record)
 }
 
-func newFailedVerificationRecord(channel Channel, destination string, reason string) (*models.VerificationRecord, error) {
-	record, err := newVerificationRecord(channel, destination)
+func newFailedVerificationRecord(purpose Purpose, channel Channel, destination string, reason string) (*models.VerificationRecord, error) {
+	record, err := newVerificationRecord(purpose, channel, destination)
 	if err != nil {
 		return nil, err
 	}
@@ -600,8 +603,8 @@ func newFailedVerificationRecord(channel Channel, destination string, reason str
 	return record, nil
 }
 
-func newVerifiedVerificationRecord(channel Channel, destination string, verifiedAt time.Time) (*models.VerificationRecord, error) {
-	record, err := newVerificationRecord(channel, destination)
+func newVerifiedVerificationRecord(purpose Purpose, channel Channel, destination string, verifiedAt time.Time) (*models.VerificationRecord, error) {
+	record, err := newVerificationRecord(purpose, channel, destination)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +624,7 @@ func newVerifiedVerificationRecord(channel Channel, destination string, verified
 	return record, nil
 }
 
-func newVerificationRecord(channel Channel, destination string) (*models.VerificationRecord, error) {
+func newVerificationRecord(purpose Purpose, channel Channel, destination string) (*models.VerificationRecord, error) {
 	destination = strings.TrimSpace(destination)
 	subjectHashBytes := sha256.Sum256([]byte(destination))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
@@ -639,6 +642,15 @@ func newVerificationRecord(channel Channel, destination string) (*models.Verific
 		record.Provider = string(ProviderTermii)
 	default:
 		return nil, appErr.ErrInvalidChannel
+	}
+
+	// The primary signup contact OTP (phone or email) is stamped with the
+	// umbrella "otp" type so the registration flow can tell it apart from a
+	// submitted alternate phone/email (which keep their channel type). The
+	// VerifiedPhone/VerifiedEmail fields are still populated by channel above,
+	// so an "otp" record still carries the actual contact.
+	if purpose == PurposeSignup {
+		record.Type = models.VerificationTypeOTP
 	}
 
 	return record, nil

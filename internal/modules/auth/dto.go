@@ -4,6 +4,7 @@ import "time"
 
 type registrationJobSnapshot struct {
 	Phone               string `json:"phone"`
+	WalletPhone         string `json:"wallet_phone,omitempty"`
 	Email               string `json:"email,omitempty"`
 	PasswordHash        string `json:"password_hash"`
 	PinHash             string `json:"pin_hash"`
@@ -30,16 +31,17 @@ type registrationJobSnapshot struct {
 }
 
 type registrationIdempotencyPayload struct {
-	PhoneNumber               string              `json:"phone_number"`
-	Email                     string              `json:"email"`
-	BVNVerificationID         string              `json:"bvn_verification_id"`
-	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id"`
-	NINVerificationID         string              `json:"nin_verification_id"`
-	NINWithFaceVerificationID string              `json:"nin_w_face_verification_id"`
-	PhoneVerificationID       string              `json:"phone_verification_id"`
-	EmailVerificationID       string              `json:"email_verification_id"`
-	IsBiometricsEnabled       bool                `json:"is_biometrics_enabled"`
-	Device                    DeviceRegisteration `json:"device"`
+	PhoneNumber                  string              `json:"phone_number"`
+	Email                        string              `json:"email"`
+	BVNVerificationID            string              `json:"bvn_verification_id"`
+	BVNWithFaceVerificationID    string              `json:"bvn_w_face_verification_id"`
+	NINVerificationID            string              `json:"nin_verification_id"`
+	NINWithFaceVerificationID    string              `json:"nin_w_face_verification_id"`
+	OTPVerificationID            string              `json:"otp_verification_id"`
+	SubmittedPhoneVerificationID string              `json:"submitted_phone_verification_id"`
+	EmailVerificationID          string              `json:"email_verification_id"`
+	IsBiometricsEnabled          bool                `json:"is_biometrics_enabled"`
+	Device                       DeviceRegisteration `json:"device"`
 }
 
 type DeviceRegisteration struct {
@@ -53,19 +55,19 @@ type DeviceRegisteration struct {
 }
 
 type RegisterationRequest struct {
-	Email                     string              `json:"email"`
-	Password                  string              `json:"password" binding:"required"`
-	ConfirmPassword           string              `json:"confirm_password" binding:"required"`
-	TransactionPin            string              `json:"transaction_pin" binding:"required"`
-	ConfirmTransactionPin     string              `json:"confirm_transaction_pin" binding:"required"`
-	BVNVerificationID         string              `json:"bvn_verification_id" binding:"required"`
-	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id" binding:"required"`
-	NINVerificationID         string              `json:"nin_verification_id" binding:"required"`
-	NINWithFaceVerificationID string              `json:"nin_w_face_verification_id" binding:"required"`
-	PhoneVerificationID       string              `json:"phone_verification_id" binding:"required"`
-	EmailVerificationID       string              `json:"email_verification_id"`
-	IsBiometricsEnabled       *bool               `json:"is_biometrics_enabled" binding:"required"`
-	Device                    DeviceRegisteration `json:"device" binding:"required"`
+	Password                     string              `json:"password" binding:"required"`
+	ConfirmPassword              string              `json:"confirm_password" binding:"required"`
+	TransactionPin               string              `json:"transaction_pin" binding:"required"`
+	ConfirmTransactionPin        string              `json:"confirm_transaction_pin" binding:"required"`
+	BVNVerificationID            string              `json:"bvn_verification_id" binding:"required"`
+	BVNWithFaceVerificationID    string              `json:"bvn_w_face_verification_id" binding:"required"`
+	NINVerificationID            string              `json:"nin_verification_id" binding:"required"`
+	NINWithFaceVerificationID    string              `json:"nin_w_face_verification_id" binding:"required"`
+	OTPVerificationID            string              `json:"otp_verification_id" binding:"required"`
+	SubmittedPhoneVerificationID string              `json:"submitted_phone_verification_id" binding:"omitempty"`
+	EmailVerificationID          string              `json:"email_verification_id" binding:"omitempty"`
+	IsBiometricsEnabled          *bool               `json:"is_biometrics_enabled" binding:"required"`
+	Device                       DeviceRegisteration `json:"device" binding:"required"`
 }
 
 type RegistrationResponse struct {

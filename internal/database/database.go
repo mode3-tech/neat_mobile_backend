@@ -491,6 +491,15 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := db.Exec(`DO $$
+		BEGIN
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_user_nin ON wallet_users(nin);
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_user_bvn ON wallet_users(bvn);
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
 	// FK: wallet_pending_device_sessions → wallet_users
 	// user_id was declared as uuid but wallet_users.id is text; cast column type first.
 	if err := db.Exec(`
