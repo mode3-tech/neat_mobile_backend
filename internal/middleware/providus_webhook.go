@@ -46,7 +46,7 @@ func ProvidusWebhookAuth(secret string) gin.HandlerFunc {
 		expected := hex.EncodeToString(mac.Sum(nil))
 
 		if !hmac.Equal([]byte(expected), []byte(incoming)) {
-			log.Print("providus webhook: invalid signature")
+			log.Printf("providus webhook: invalid signature expected=%s incoming=%s bodyLen=%d", expected, incoming, len(body))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}

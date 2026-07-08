@@ -29,13 +29,24 @@ type AccountFundedWebhook struct {
 }
 
 type AccountFundedData struct {
-	UserID               string `json:"userId"`
-	Amount               string `json:"amount"`
-	Reference            string `json:"reference"`
-	SessionID            string `json:"sessionID"`
-	ChannelCode          string `json:"channelCode"`
-	Status               string `json:"status"`
-	AccountName          string `json:"accountName"`
-	AccountNumber        string `json:"accountNumber"`
-	BankVerificationCode string `json:"BankVerificationCode"`
+	Type                             string `json:"type"`
+	UserID                           string `json:"userId"`
+	PaidAt                           string `json:"paidAt"`
+	Amount                           string `json:"amount"`
+	WalletID                         string `json:"walletId"`
+	Narration                        string `json:"narration"`
+	Reference                        string `json:"reference"`
+	SessionID                        string `json:"sessionID"`
+	ChannelCode                      string `json:"channelCode"`
+	Status                           string `json:"status"`
+	BeneficiaryAccountName           string `json:"beneficiaryAccountName"`
+	BeneficiaryAccountNumber         string `json:"beneficiaryAccountNumber"`
+	BeneficiaryBankVerificationNumber string `json:"beneficiaryBankVerificationNumber"`
+	DestinationInstitutionCode       string `json:"destinationInstitutionCode"`
+	OriginatorAccountName            string `json:"originatorAccountName"`
+	OriginatorAccountNumber          string `json:"originatorAccountNumber"`
+	OriginatorBankVerificationNumber string `json:"originatorBankVerificationNumber"`
+	AccountName                      string `json:"accountName"`
+	AccountNumber                    string `json:"accountNumber"`
+	BankVerificationCode             string `json:"BankVerificationCode"`
 }

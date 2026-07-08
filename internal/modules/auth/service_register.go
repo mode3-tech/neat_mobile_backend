@@ -12,6 +12,7 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
+	"neat_mobile_app_backend/models"
 	"strconv"
 	"strings"
 	"time"
@@ -27,24 +28,62 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		return nil, errors.New("transaction manager not configured")
 	}
 
-	phoneRow, err := s.repo.GetValidationRow(ctx, req.PhoneVerificationID)
+	otpRow, err := s.repo.GetValidationRow(ctx, req.OTPVerificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, appErr.ErrPhoneNotFound
+			return nil, appErr.ErrPhoneOrEmailNotFound
 		}
 		return nil, err
 	}
 
-	if phoneRow.VerifiedPhone == nil || strings.TrimSpace(*phoneRow.VerifiedPhone) == "" {
-		return nil, appErr.ErrPhoneNotFound
+	if otpRow.Type != models.VerificationTypeOTP {
+		return nil, appErr.ErrInvalidVerificationType
 	}
 
-	normalizedPhone, err := phone.NormalizeNigerianNumber(strings.TrimSpace(*phoneRow.VerifiedPhone))
-	if err != nil {
-		return nil, err
+	phoneVerified := otpRow.VerifiedPhone != nil && strings.TrimSpace(*otpRow.VerifiedPhone) != ""
+	emailVerified := otpRow.VerifiedEmail != nil && strings.TrimSpace(*otpRow.VerifiedEmail) != ""
+	if !phoneVerified && !emailVerified {
+		return nil, appErr.ErrPhoneOrEmailNotFound
 	}
 
-	idempotencyKey, err := registrationIdempotencyKey(req, normalizedPhone)
+	normalizedPhone := ""
+	if phoneVerified {
+		normalizedPhone, err = phone.NormalizeNigerianNumber(strings.TrimSpace(*otpRow.VerifiedPhone))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	normalizedEmail := ""
+	if otpRow.VerifiedEmail != nil {
+		normalizedEmail = strings.TrimSpace(*otpRow.VerifiedEmail)
+	}
+
+	// When the OTP was email-based there is no verified phone yet, so the client
+	// must supply an alternate phone that was itself OTP-verified (type "phone").
+	if !phoneVerified {
+		if req.SubmittedPhoneVerificationID == "" {
+			return nil, appErr.ErrPhoneOrEmailNotFound
+		}
+		submittedPhoneRow, subErr := s.repo.GetValidationRow(ctx, req.SubmittedPhoneVerificationID)
+		if subErr != nil {
+			if errors.Is(subErr, gorm.ErrRecordNotFound) {
+				return nil, appErr.ErrPhoneOrEmailNotFound
+			}
+			return nil, subErr
+		}
+		if submittedPhoneRow.Type != models.VerificationTypePhone ||
+			submittedPhoneRow.VerifiedPhone == nil ||
+			strings.TrimSpace(*submittedPhoneRow.VerifiedPhone) == "" {
+			return nil, appErr.ErrInvalidVerificationType
+		}
+		normalizedPhone, err = phone.NormalizeNigerianNumber(strings.TrimSpace(*submittedPhoneRow.VerifiedPhone))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	idempotencyKey, err := registrationIdempotencyKey(req, normalizedPhone, normalizedEmail)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +138,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		internalWalletID := uuid.NewString()
 		requestID := uuid.NewString()
 
-		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, mobileUserID, ip, requestID)
+		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, normalizedEmail, mobileUserID, ip, requestID)
 		if buildErr != nil {
 			return buildErr
 		}
@@ -148,27 +187,51 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	return resp, nil
 }
 
-func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repository, req RegisterationRequest, normalizedPhone, mobileUserID, ip, requestID string) (*registrationJobSnapshot, error) {
-	phoneRecord, err := repo.GetValidationRow(ctx, req.PhoneVerificationID)
+func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repository, req RegisterationRequest, normalizedPhone, normalizedEmail, mobileUserID, ip, requestID string) (*registrationJobSnapshot, error) {
+	otpRecord, err := repo.GetValidationRow(ctx, req.OTPVerificationID)
 	if err != nil {
-		return nil, appErr.ErrPhoneNotFound
-	}
-
-	if phoneRecord.VerifiedPhone == nil || *phoneRecord.VerifiedPhone != normalizedPhone {
-		return nil, appErr.ErrPhoneMismatch
-	}
-
-	existingUser, err := repo.GetUserByPhone(ctx, normalizedPhone)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Println("phone or email verification not found")
+			return nil, appErr.ErrPhoneOrEmailNotFound
+		}
+		log.Println("failed to get phone or email verification", err)
 		return nil, err
 	}
-	if existingUser != nil {
-		return nil, appErr.ErrUserExists
+	if otpRecord.Type != models.VerificationTypeOTP {
+		return nil, appErr.ErrInvalidVerificationType
 	}
 
-	trimmedEmail := strings.TrimSpace(req.Email)
-	if trimmedEmail != "" {
-		existingByEmail, emailErr := repo.GetUserByEmail(ctx, trimmedEmail)
+	phoneVerified := otpRecord.VerifiedPhone != nil && strings.TrimSpace(*otpRecord.VerifiedPhone) != ""
+
+	// Resolve the account email from a verified record only: the OTP email when
+	// the OTP channel was email, otherwise the optional email_verification_id
+	// (a phone-OTP user who also verified an email). No unverified email is ever
+	// stored, so uniqueness below is safe.
+	accountEmail := strings.TrimSpace(normalizedEmail)
+	var emailRecordUsedID string
+	if accountEmail == "" && strings.TrimSpace(req.EmailVerificationID) != "" {
+		emailRecord, emailErr := repo.GetValidationRow(ctx, req.EmailVerificationID)
+		if emailErr != nil || emailRecord.Type != models.VerificationTypeEmail ||
+			emailRecord.VerifiedEmail == nil || strings.TrimSpace(*emailRecord.VerifiedEmail) == "" {
+			return nil, appErr.ErrEmailNotFound
+		}
+		accountEmail = strings.TrimSpace(*emailRecord.VerifiedEmail)
+		emailRecordUsedID = emailRecord.ID
+	}
+	isEmailVerified := accountEmail != ""
+
+	if normalizedPhone != "" {
+		existingUser, err := repo.GetUserByPhone(ctx, normalizedPhone)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		if existingUser != nil {
+			return nil, appErr.ErrUserExists
+		}
+	}
+
+	if accountEmail != "" {
+		existingByEmail, emailErr := repo.GetUserByEmail(ctx, accountEmail)
 		if emailErr != nil && !errors.Is(emailErr, gorm.ErrRecordNotFound) {
 			return nil, emailErr
 		}
@@ -178,7 +241,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}
 
 	bvnRecord, err := repo.GetValidationRow(ctx, req.BVNVerificationID)
-	if err != nil || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil || bvnRecord.VerifiedID == nil {
+	if err != nil || bvnRecord.Type != models.VerificationTypeBVN || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil || bvnRecord.VerifiedID == nil {
 		return nil, appErr.ErrBVNNotFound
 	}
 
@@ -188,29 +251,13 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}
 
 	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
-	if err != nil || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil || ninRecord.VerifiedID == nil {
+	if err != nil || ninRecord.Type != models.VerificationTypeNIN || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil || ninRecord.VerifiedID == nil {
 		return nil, appErr.ErrNINNotFound
 	}
 
 	ninFaceCheck, err := repo.GetFaceCheckRecord(ctx, req.NINWithFaceVerificationID)
 	if err != nil || !ninFaceCheck.Matched || ninFaceCheck.VerificationRecordID != ninRecord.ID {
 		return nil, appErr.ErrNINWithFaceVerificationNotFound
-	}
-
-	var isEmailVerified bool
-	var emailRecordUsedID string
-	if trimmedEmail != "" {
-		emailRecord, emailErr := repo.GetValidationRow(ctx, req.EmailVerificationID)
-		if emailErr != nil || emailRecord.VerifiedName == nil || emailRecord.VerifiedDOB == nil {
-			return nil, appErr.ErrEmailNotFound
-		}
-
-		if emailRecord.VerifiedName != phoneRecord.VerifiedName || emailRecord.VerifiedDOB != phoneRecord.VerifiedDOB {
-			return nil, appErr.ErrEmailPhoneMismatch
-		}
-
-		isEmailVerified = true
-		emailRecordUsedID = emailRecord.ID
 	}
 
 	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
@@ -247,7 +294,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	firstName, middleName, lastName := SplitFullName(*bvnRecord.VerifiedName)
 
-	if err := repo.MarkValidationRecordUsed(ctx, phoneRecord.ID); err != nil {
+	if err := repo.MarkValidationRecordUsed(ctx, otpRecord.ID); err != nil {
 		log.Printf("failed to mark phone verification record as used")
 		return nil, errors.New("failed to mark phone verification record as used")
 	}
@@ -263,6 +310,13 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		if err := repo.MarkValidationRecordUsed(ctx, emailRecordUsedID); err != nil {
 			log.Printf("failed to mark email verification record as used")
 			return nil, errors.New("failed to mark email verification record as used")
+		}
+	}
+	// The submitted alternate phone is only consumed when the OTP was email-based.
+	if !phoneVerified && strings.TrimSpace(req.SubmittedPhoneVerificationID) != "" {
+		if err := repo.MarkValidationRecordUsed(ctx, req.SubmittedPhoneVerificationID); err != nil {
+			log.Printf("failed to mark submitted phone verification record as used")
+			return nil, errors.New("failed to mark submitted phone verification record as used")
 		}
 	}
 
@@ -283,9 +337,22 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		maritalStatus = *bvnRecord.VerifiedMaritalStatus
 	}
 
+	// The wallet provider (Providus/Optimus) runs BVN-based verification on the
+	// wallet payload, so it must receive the BVN-linked phone — not the account's
+	// reachable/login phone, which for email-first users is a submitted alternate
+	// number that won't match the BVN registry. Fall back to the reachable phone
+	// only defensively (BVN validation already guarantees VerifiedPhone is set).
+	walletPhone := normalizedPhone
+	if bvnRecord.VerifiedPhone != nil {
+		if v := strings.TrimSpace(*bvnRecord.VerifiedPhone); v != "" {
+			walletPhone = v
+		}
+	}
+
 	return &registrationJobSnapshot{
 		Phone:               normalizedPhone,
-		Email:               trimmedEmail,
+		WalletPhone:         walletPhone,
+		Email:               accountEmail,
 		PasswordHash:        passwordHash,
 		PinHash:             pinHash,
 		RequestID:           requestID,
@@ -310,7 +377,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
 		},
 		IP:            strings.TrimSpace(ip),
-		WalletEmail:   walletRegistrationEmail(trimmedEmail, mobileUserID),
+		WalletEmail:   walletRegistrationEmail(accountEmail, mobileUserID),
 		WalletAddress: address,
 		HouseNo:       houseNo,
 		Gender:        gender,
@@ -319,16 +386,17 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}, nil
 }
 
-func registrationIdempotencyKey(req RegisterationRequest, normalizedPhone string) (string, error) {
+func registrationIdempotencyKey(req RegisterationRequest, normalizedPhone, normalizedEmail string) (string, error) {
 	payload := registrationIdempotencyPayload{
-		PhoneNumber:               normalizedPhone,
-		Email:                     strings.ToLower(strings.TrimSpace(req.Email)),
-		BVNVerificationID:         strings.TrimSpace(req.BVNVerificationID),
-		BVNWithFaceVerificationID: strings.TrimSpace(req.BVNWithFaceVerificationID),
-		NINVerificationID:         strings.TrimSpace(req.NINVerificationID),
-		NINWithFaceVerificationID: strings.TrimSpace(req.NINWithFaceVerificationID),
-		PhoneVerificationID:       strings.TrimSpace(req.PhoneVerificationID),
-		EmailVerificationID:       strings.TrimSpace(req.EmailVerificationID),
+		PhoneNumber:                  normalizedPhone,
+		Email:                        strings.ToLower(strings.TrimSpace(normalizedEmail)),
+		BVNVerificationID:            strings.TrimSpace(req.BVNVerificationID),
+		BVNWithFaceVerificationID:    strings.TrimSpace(req.BVNWithFaceVerificationID),
+		NINVerificationID:            strings.TrimSpace(req.NINVerificationID),
+		NINWithFaceVerificationID:    strings.TrimSpace(req.NINWithFaceVerificationID),
+		OTPVerificationID:            strings.TrimSpace(req.OTPVerificationID),
+		SubmittedPhoneVerificationID: strings.TrimSpace(req.SubmittedPhoneVerificationID),
+		EmailVerificationID:          strings.TrimSpace(req.EmailVerificationID),
 	}
 
 	body, err := json.Marshal(payload)

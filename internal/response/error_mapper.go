@@ -58,6 +58,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrMissingBVNPhoneNumber):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_BVN_PHONE_NUMBER",
+				Message: appErr.ErrMissingBVNPhoneNumber.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrMissingBVNPhoneNumberAndEmail):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "MISSING_BVN_PHONE_NUMBER_AND_EMAIL",
+				Message: appErr.ErrMissingBVNPhoneNumberAndEmail.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrMissingPhone):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
@@ -148,12 +166,12 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case errors.Is(err, appErr.ErrPhoneNotFound):
+	case errors.Is(err, appErr.ErrPhoneOrEmailNotFound):
 		return ErrorMapping{
 			Status: http.StatusNotFound,
 			Error: APIError{
-				Code:    "PHONE_NOT_FOUND",
-				Message: "phone verification not found",
+				Code:    "PHONE_OR_EMAIL_NOT_FOUND",
+				Message: "kindly verify your phone or email",
 			},
 		}
 
@@ -595,6 +613,15 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "INVALID_SESSION",
 				Message: "invalid or expired session",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrInvalidVerificationType):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_VERIFICATION_TYPE",
+				Message: "cannot verify your account. kindly restart the verification process",
 			},
 		}
 
@@ -1057,6 +1084,35 @@ func MapError(err error) ErrorMapping {
 			}
 		}
 
+		var zeptoErr *appErr.ZeptoError
+		if errors.As(err, &zeptoErr) {
+			// Infrastructure/config-side failures (expired credits, unverified
+			// sender domain, rate limits, invalid token, transport errors) are not
+			// user-actionable and would leak our setup — surface a generic message.
+			if isZeptoInfraCode(zeptoErr.Code) || isZeptoInfraCode(zeptoErr.SubCode) {
+				return ErrorMapping{
+					Status: http.StatusServiceUnavailable,
+					Error: APIError{
+						Code:    "EMAIL_OUT_SERVICE",
+						Message: appErr.ErrEmailOutOfService.Error(),
+					},
+				}
+			}
+			// Validation-side failures (bad payload, invalid recipient) — forward
+			// the actual ZeptoMail message to aid debugging.
+			status := zeptoErr.Status
+			if status < 400 {
+				status = http.StatusBadGateway // unknown / unexpected
+			}
+			return ErrorMapping{
+				Status: status,
+				Error: APIError{
+					Code:    "EMAIL_PROVIDER_ERROR",
+					Message: zeptoErr.Message,
+				},
+			}
+		}
+
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -1065,4 +1121,38 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 	}
+}
+
+// zeptoInfraCodes are ZeptoMail error codes (and our synthetic transport codes)
+// that represent infrastructure/config-side failures rather than a bad request
+// payload — none are actionable by the end user, so they are surfaced as a
+// generic "email out of service" message instead of forwarding provider detail.
+var zeptoInfraCodes = map[string]struct{}{
+	// Transport-level (synthesized in providers/email/zepto.go)
+	"TIMEOUT":       {},
+	"NETWORK_ERROR": {},
+	"CLIENT_ERROR":  {},
+	// ZeptoMail category codes
+	"TM_3501": {}, // credits expired
+	"TM_5001": {}, // credit exhausted
+	"TM_3601": {}, // daily limit / trial limit / account blocked / IP not whitelisted
+	"TM_4001": {}, // unverified sender domain / account not yet approved / invalid from
+	// ZeptoMail sub-codes
+	"SERR_157": {}, // sendmail token invalid
+	"SERR_156": {}, // sending IP not whitelisted
+	"LE_101":   {}, // credits expired
+	"LE_102":   {}, // credit exhausted
+	"SMI_115":  {}, // per-day limit exhausted
+	"SM_133":   {}, // trial sending limit exceeded
+	"SM_111":   {}, // sender address domain not verified
+	"SM_128":   {}, // account not yet reviewed/approved
+	"AE_101":   {}, // account blocked
+}
+
+func isZeptoInfraCode(code string) bool {
+	if code == "" {
+		return false
+	}
+	_, ok := zeptoInfraCodes[code]
+	return ok
 }
