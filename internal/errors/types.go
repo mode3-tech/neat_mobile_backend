@@ -20,3 +20,16 @@ type TermiiError struct {
 func (e TermiiError) Error() string {
 	return e.Message
 }
+
+type ZeptoError struct {
+	Status    int    // HTTP status from ZeptoMail (or synthetic for network/timeout)
+	Code      string // top-level error.code, e.g. "TM_3201"
+	SubCode   string // details[0].code, e.g. "GE_102"
+	Message   string // human-readable reason
+	Target    string // details[0].target — the offending field
+	RequestID string // request_id
+}
+
+func (e ZeptoError) Error() string {
+	return e.Message
+}

@@ -141,8 +141,8 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, oldJTI string, newT
 func (r *Repository) GetValidationRow(ctx context.Context, verificationID string) (*models.VerificationRecord, error) {
 	var record models.VerificationRecord
 	err := r.db.WithContext(ctx).Table("wallet_verification_records").
-		Select("id, verified_name, verified_dob, verified_phone, verified_id, verified_gender, verified_marital_status, verified_full_home_address").
-		Where("id = ? AND status = ?", verificationID, models.VerificationStatusVerified).
+		Select("id, type, verified_name, verified_dob, verified_phone, verified_email, verified_id, verified_gender, verified_marital_status, verified_full_home_address, expires_at").
+		Where("id = ? AND status = ? AND expires_at > ?", verificationID, models.VerificationStatusVerified, time.Now().UTC()).
 		First(&record).Error
 
 	if err != nil {
@@ -357,4 +357,15 @@ func (r *Repository) ResetPinAttempts(ctx context.Context, userID string) error 
 			"failed_transaction_pin_attempts": 0,
 			"transaction_pin_locked_until":    nil,
 		}).Error
+}
+
+func (r *Repository) GetUserByBVN(ctx context.Context, bvn string) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).
+		Where("bvn = ?", bvn).
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

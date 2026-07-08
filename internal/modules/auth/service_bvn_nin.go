@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/email"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	phoneUtil "neat_mobile_app_backend/internal/phone"
@@ -31,10 +32,6 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 			return nil, appErr.ErrBVNNotFound
 		}
 		return nil, err
-	}
-
-	if info, err := s.reuseVerifiedNIN(ctx, nin, row); err == nil && info != nil {
-		return info, nil
 	}
 
 	resp, err := s.nin.ValidateNIN(ctx, nin)
@@ -114,10 +111,6 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 }
 
 func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if info, err := s.reuseVerifiedBVN(ctx, bvn); err == nil && info != nil {
-		return info, nil
-	}
-
 	if s.providerSource == nil {
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
@@ -134,182 +127,6 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 	default:
 		return s.ValidateBVNWithTendar(ctx, bvn)
 	}
-}
-
-func (s *Service) reuseVerifiedBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
-	if s.verification == nil {
-		return nil, errors.New("verification repo not configured")
-	}
-	hashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
-	hash := hex.EncodeToString(hashBytes[:])
-
-	cached, err := s.verification.GetVerifiedRecordBySubjectHash(ctx, hash, models.VerificationTypeBVN)
-	if err != nil || cached == nil {
-		return nil, errors.New("no cached bvn record")
-	}
-	if cached.VerifiedName == nil || cached.VerifiedDOB == nil || cached.VerifiedPhone == nil {
-		return nil, errors.New("cached bvn record is incomplete")
-	}
-
-	verificationID := uuid.NewString()
-	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
-	maskedBVN := MaskSub(bvn)
-
-	record := &models.VerificationRecord{
-		ID:                      verificationID,
-		Type:                    models.VerificationTypeBVN,
-		Provider:                cached.Provider,
-		Status:                  models.VerificationStatusVerified,
-		SubjectHash:             hash,
-		SubjectMasked:           &maskedBVN,
-		VerifiedAt:              &now,
-		ExpiresAt:               &expiresAt,
-		VerifiedID:              cached.VerifiedID,
-		VerifiedName:            cached.VerifiedName,
-		VerifiedDOB:             cached.VerifiedDOB,
-		VerifiedPhone:           cached.VerifiedPhone,
-		VerifiedEmail:           cached.VerifiedEmail,
-		VerifiedGender:          cached.VerifiedGender,
-		VerifiedNationality:     cached.VerifiedNationality,
-		VerifiedStateOfOrigin:   cached.VerifiedStateOfOrigin,
-		VerifiedPlaceOfBirth:    cached.VerifiedPlaceOfBirth,
-		VerifiedOccupation:      cached.VerifiedOccupation,
-		VerifiedMaritalStatus:   cached.VerifiedMaritalStatus,
-		VerifiedEducation:       cached.VerifiedEducation,
-		VerifiedReligion:        cached.VerifiedReligion,
-		PassportOnBVN:           cached.PassportOnBVN,
-		Passport:                cached.Passport,
-		VerifiedFullHomeAddress: cached.VerifiedFullHomeAddress,
-		TypeOfHouse:             cached.TypeOfHouse,
-		City:                    cached.City,
-		Landmark:                cached.Landmark,
-		LivingSince:             cached.LivingSince,
-		AlternativeMobilePhone:  cached.AlternativeMobilePhone,
-		BankName:                cached.BankName,
-		AccountNumber:           cached.AccountNumber,
-		CreatedAt:               now,
-		UpdatedAt:               now,
-	}
-
-	firstName, middleName, lastName := SplitFullName(*cached.VerifiedName)
-	bvnRecord := &models.BVNRecord{
-		ID:                     uuid.NewString(),
-		UserID:                 "",
-		FirstName:              firstName,
-		MiddleName:             middleName,
-		LastName:               lastName,
-		Gender:                 derefString(cached.VerifiedGender),
-		Nationality:            derefString(cached.VerifiedNationality),
-		StateOfOrigin:          derefString(cached.VerifiedStateOfOrigin),
-		PlaceOfBirth:           derefString(cached.VerifiedPlaceOfBirth),
-		Occupation:             derefString(cached.VerifiedOccupation),
-		MaritalStatus:          derefString(cached.VerifiedMaritalStatus),
-		Education:              derefString(cached.VerifiedEducation),
-		Religion:               derefString(cached.VerifiedReligion),
-		EmailAddress:           derefString(cached.VerifiedEmail),
-		PassportOnBVN:          derefString(cached.PassportOnBVN),
-		Passport:               cached.Passport,
-		FullHomeAddress:        derefString(cached.VerifiedFullHomeAddress),
-		TypeOfHouse:            cached.TypeOfHouse,
-		City:                   cached.City,
-		Landmark:               cached.Landmark,
-		LivingSince:            cached.LivingSince,
-		MobilePhone:            *cached.VerifiedPhone,
-		AlternativeMobilePhone: cached.AlternativeMobilePhone,
-		BankName:               cached.BankName,
-		AccountNumber:          cached.AccountNumber,
-		DateOfBirth:            parseBVNRecordDOB(*cached.VerifiedDOB),
-		BVN:                    *cached.VerifiedID,
-	}
-
-	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
-		log.Printf("reuseVerifiedBVN: saveVerifiedBVN failed: %v", err)
-		return nil, err
-	}
-
-	log.Printf("bvn cache hit: reused existing verified record masked=%s", maskedBVN)
-
-	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
-	if err != nil {
-		log.Printf("reuseVerifiedBVN: MaskPhone failed: %v", err)
-		return nil, err
-	}
-
-	return &bvnInfo{
-		name:           *cached.VerifiedName,
-		dob:            *cached.VerifiedDOB,
-		phone:          maskedPhone,
-		verificationID: verificationID,
-	}, nil
-}
-
-func (s *Service) reuseVerifiedNIN(ctx context.Context, nin string, bvnRow *models.VerificationRecord) (*ninInfo, error) {
-	if s.verification == nil {
-		return nil, errors.New("verification repo not configured")
-	}
-	hashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
-	hash := hex.EncodeToString(hashBytes[:])
-
-	cached, err := s.verification.GetVerifiedRecordBySubjectHash(ctx, hash, models.VerificationTypeNIN)
-	if err != nil || cached == nil {
-		return nil, errors.New("no cached nin record")
-	}
-	if cached.VerifiedName == nil || cached.VerifiedDOB == nil || cached.VerifiedPhone == nil {
-		return nil, errors.New("cached nin record is incomplete")
-	}
-
-	if _, err := compareBVNAndNinDetails(
-		*bvnRow.VerifiedName,
-		SerializeDOB(strings.TrimSpace(*bvnRow.VerifiedDOB)),
-		*cached.VerifiedName,
-		SerializeDOB(strings.TrimSpace(*cached.VerifiedDOB)),
-	); err != nil {
-		return nil, appErr.ErrNINAndBVNMismatch
-	}
-
-	verificationID := uuid.NewString()
-	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
-	maskedNIN := MaskSub(nin)
-
-	record := &models.VerificationRecord{
-		ID:            verificationID,
-		Type:          models.VerificationTypeNIN,
-		Provider:      cached.Provider,
-		Status:        models.VerificationStatusVerified,
-		SubjectHash:   hash,
-		SubjectMasked: &maskedNIN,
-		VerifiedAt:    &now,
-		ExpiresAt:     &expiresAt,
-		VerifiedID:    cached.VerifiedID,
-		VerifiedName:  cached.VerifiedName,
-		VerifiedDOB:   cached.VerifiedDOB,
-		VerifiedPhone: cached.VerifiedPhone,
-		VerifiedEmail: cached.VerifiedEmail,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}
-
-	if err := s.verification.AddVerification(ctx, record); err != nil {
-		log.Printf("reuseVerifiedNIN: AddVerification failed: %v", err)
-		return nil, err
-	}
-
-	log.Printf("nin cache hit: reused existing verified record masked=%s", maskedNIN)
-
-	maskedPhone, err := phoneUtil.MaskPhone(*cached.VerifiedPhone)
-	if err != nil {
-		log.Printf("reuseVerifiedNIN: MaskPhone failed: %v", err)
-		return nil, err
-	}
-
-	return &ninInfo{
-		name:           *cached.VerifiedName,
-		dob:            *cached.VerifiedDOB,
-		phone:          maskedPhone,
-		verificationID: verificationID,
-	}, nil
 }
 
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
@@ -373,14 +190,18 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	if fullName != "" {
 		record.VerifiedName = &fullName
 	}
-	if phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber); phone != "" {
-		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
-		if err != nil {
-			log.Printf("ValidateBVNWithTendar: phone normalization failed phone=%q err=%v", phone, err)
-			return nil, appErr.ErrInvalidBVN
-		}
-		record.VerifiedPhone = &normalizedPhoneNumber
+
+	phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber)
+	if phone == "" {
+		return nil, appErr.ErrMissingBVNPhoneNumber
 	}
+
+	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
+	if err != nil {
+		log.Printf("ValidateBVNWithTendar: phone normalization failed phone=%q err=%v", phone, err)
+		return nil, err
+	}
+	record.VerifiedPhone = &normalizedPhoneNumber
 	if email := strings.TrimSpace(bvnDetails.Data.Details.Email); email != "" {
 		record.VerifiedEmail = &email
 	}
@@ -461,10 +282,16 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 		return nil, err
 	}
 
+	maskedEmail := email.MaskEmail(bvnDetails.Data.Details.Email)
+	if maskedEmail == "" {
+		return nil, appErr.ErrMissingEmail
+	}
+
 	return &bvnInfo{
 		name:           fullName,
 		dob:            bvnDetails.Data.Details.DateOfBirth,
 		phone:          maskedPhone,
+		email:          maskedEmail,
 		verificationID: verificationID,
 	}, nil
 }
