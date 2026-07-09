@@ -20,7 +20,7 @@ import (
 type Service struct {
 	repository          *Repository
 	walletRepository    *wallet.Repository
-	providusService     wallet.ProvidusService
+	providusService     ProvidusService
 	repayer             loanproduct.ManualRepayer
 	notificationService *notification.Service
 	settlementAccount   wallet.SettlementAccount
@@ -29,7 +29,7 @@ type Service struct {
 func NewService(
 	repository *Repository,
 	walletRepository *wallet.Repository,
-	providusService wallet.ProvidusService,
+	providusService ProvidusService,
 	repayer loanproduct.ManualRepayer,
 	notificationService *notification.Service,
 	settlementAccount wallet.SettlementAccount,

@@ -146,11 +146,11 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		var smsMsg string
 		switch in.Purpose {
 		case PurposePasswordReset:
-			smsMsg = fmt.Sprintf("%s: Your password reset code is %s. Expires in %d minutes. If you didn`t request a password reset, contact support immediately.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your password reset code. Valid for %d min. Didn't request it? Ignore this SMS. %s will never ask for your code.", s.appName, code, int(ttl.Minutes()), s.appName)
 		case PurposeLogin:
-			smsMsg = fmt.Sprintf("%s: Login verification code: %s. Expires in %d min. If this wasn`t you, secure your account immediately.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your login code. Valid for %d min. Never share it - %s will never ask for it. Not you? Secure your account now.", s.appName, code, int(ttl.Minutes()), s.appName)
 		default:
-			smsMsg = fmt.Sprintf("%s: Your verification code is %s. It expires in %d minutes. Do not share this code.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your verification code. Valid for %d min. Never share this code - %s will never ask you for it.", s.appName, code, int(ttl.Minutes()), s.appName)
 		}
 
 		switch in.Channel {

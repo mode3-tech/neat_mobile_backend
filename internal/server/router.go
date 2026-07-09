@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
+	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
@@ -211,7 +212,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := authchecker.New(walletRepo)
-	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
+	walletService := wallet.NewService(walletRepo, providusadapter.New(providusWalletService), walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,

@@ -246,7 +246,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		return nil, appErr.ErrApplyingForLoan
 	}
 
-	message := fmt.Sprintf("%s:Your loan application has been received. Reference: %s", s.appName, eoi.ApplicationRef)
+	message := fmt.Sprintf("%s: We've received your loan application. Ref: %s. We'll notify you as soon as it's reviewed.", s.appName, eoi.ApplicationRef)
 	if err := s.smsSender.Send(ctx, normalizedPhone, message); err != nil {
 		log.Printf("loan service: failed to send sms - %s\n", err)
 	}

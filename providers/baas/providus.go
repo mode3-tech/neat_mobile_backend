@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"neat_mobile_app_backend/internal/modules/auth"
-	"neat_mobile_app_backend/internal/modules/wallet"
 	"net/http"
 	"net/url"
 	"strings"
@@ -366,7 +365,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 	return mapped, true, nil
 }
 
-func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
+func (p *Providus) FetchBanks(ctx context.Context) ([]Bank, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 
 		return nil, errors.New("providus service not configured")
@@ -398,7 +397,7 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 		return nil, fmt.Errorf("providus banks fetch failed: %s", extractErrorMessage(respBody))
 	}
 
-	var result wallet.BankResponse
+	var result BankResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus banks response: %w", err)
 	}
@@ -406,7 +405,7 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 	return result.Banks, nil
 }
 
-func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*wallet.BankDetails, error) {
+func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -436,7 +435,7 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	}
 	defer resp.Body.Close()
 
-	var result wallet.BankDetailsResponse
+	var result BankDetailsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bank details response: %w", err)
 	}
@@ -444,7 +443,7 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	return &result.Account, nil
 }
 
-func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
+func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *TransferRequest) (*TransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -491,7 +490,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 		return nil, fmt.Errorf("providus transfer failed: %s", extractErrorMessage(respBody))
 	}
 
-	var result wallet.TransferResponse
+	var result TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus transfer response: %w", err)
 	}
@@ -499,7 +498,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	return &result, nil
 }
 
-func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []wallet.BulkTransferRecipientInfo) (*wallet.ProvidusBatchTransferResponse, error) {
+func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []BulkTransferRecipientInfo) (*ProvidusBatchTransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -555,7 +554,7 @@ func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []wallet.BulkT
 		return nil, fmt.Errorf("providus bulk transfer failed: %s", extractErrorMessage(respBody))
 	}
 
-	var result wallet.ProvidusBatchTransferResponse
+	var result ProvidusBatchTransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bulk transfer response: %w", err)
 	}

@@ -259,65 +259,65 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		transaction.TransactionStatusSuccessful, w.InternalWalletID, totalDebit)
 }
 
-func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	if mobileUserID == "" {
-		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
-	}
+// func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
+// 	mobileUserID = strings.TrimSpace(mobileUserID)
+// 	if mobileUserID == "" {
+// 		return nil, fmt.Errorf("%w: mobile user ID is required", ErrInvalidTransferRequest)
+// 	}
 
-	if req == nil || len(req.RecipientInfo) == 0 {
-		return nil, fmt.Errorf("%w: at least one recipient is required", ErrInvalidTransferRequest)
-	}
+// 	if req == nil || len(req.RecipientInfo) == 0 {
+// 		return nil, fmt.Errorf("%w: at least one recipient is required", ErrInvalidTransferRequest)
+// 	}
 
-	if s.providusService == nil {
-		return nil, errors.New("transfer service is not configured")
-	}
+// 	if s.providusService == nil {
+// 		return nil, errors.New("transfer service is not configured")
+// 	}
 
-	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
-		return nil, err
-	}
+// 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
+// 		return nil, err
+// 	}
 
-	resp, err := s.providusService.InitiateBulkTransfer(ctx, req.RecipientInfo)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
-	}
+// 	resp, err := s.providusService.InitiateBulkTransfer(ctx, req.RecipientInfo)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
+// 	}
 
-	if resp == nil {
-		return nil, errors.New("transfer service returned no response body")
-	}
+// 	if resp == nil {
+// 		return nil, errors.New("transfer service returned no response body")
+// 	}
 
-	toResults := func(src []ProvidusBatchTransferResult) []BulkTransferResult {
-		out := make([]BulkTransferResult, len(src))
-		for i, r := range src {
-			out[i] = BulkTransferResult{
-				Amount:        r.Amount,
-				VAT:           r.VAT,
-				SortCode:      r.SortCode,
-				Reference:     r.Reference,
-				Narration:     r.Narration,
-				AccountName:   r.AccountName,
-				Fee:           r.Fee,
-				AccountNumber: r.AccountNumber,
-				Total:         r.Total,
-			}
-		}
-		return out
-	}
+// 	toResults := func(src []ProvidusBatchTransferResult) []BulkTransferResult {
+// 		out := make([]BulkTransferResult, len(src))
+// 		for i, r := range src {
+// 			out[i] = BulkTransferResult{
+// 				Amount:        r.Amount,
+// 				VAT:           r.VAT,
+// 				SortCode:      r.SortCode,
+// 				Reference:     r.Reference,
+// 				Narration:     r.Narration,
+// 				AccountName:   r.AccountName,
+// 				Fee:           r.Fee,
+// 				AccountNumber: r.AccountNumber,
+// 				Total:         r.Total,
+// 			}
+// 		}
+// 		return out
+// 	}
 
-	return &BulkTransferResponse{
-		Status:  "success",
-		Message: resp.Message,
-		Data: struct {
-			All      []BulkTransferResult `json:"all"`
-			Rejected []BulkTransferResult `json:"rejected"`
-			Accepted []BulkTransferResult `json:"accepted"`
-		}{
-			All:      toResults(resp.Data.All),
-			Rejected: toResults(resp.Data.Rejected),
-			Accepted: toResults(resp.Data.Accepted),
-		},
-	}, nil
-}
+// 	return &BulkTransferResponse{
+// 		Status:  "success",
+// 		Message: resp.Message,
+// 		Data: struct {
+// 			All      []BulkTransferResult `json:"all"`
+// 			Rejected []BulkTransferResult `json:"rejected"`
+// 			Accepted []BulkTransferResult `json:"accepted"`
+// 		}{
+// 			All:      toResults(resp.Data.All),
+// 			Rejected: toResults(resp.Data.Rejected),
+// 			Accepted: toResults(resp.Data.Accepted),
+// 		},
+// 	}, nil
+// }
 
 func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID string, req *AddBeneficiaryRequest) (*Beneficiary, error) {
 	mobileUserID = strings.TrimSpace(mobileUserID)

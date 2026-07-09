@@ -29,8 +29,8 @@ type BankDetails struct {
 type ProvidusService interface {
 	FetchBanks(ctx context.Context) ([]Bank, error)
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
-	InitiateTransfer(ctx context.Context, customerID string, req *TransferRequest) (*TransferResponse, error)
-	InitiateBulkTransfer(ctx context.Context, req []BulkTransferRecipientInfo) (*ProvidusBatchTransferResponse, error)
+	GetCustomerDetails(ctx context.Context, customerID string) (*ProvidusCustomerDetailsResponse, error)
+	InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *TransferRequest) (*TransferResponse, error)
 }
 
 type DeviceVerifier interface {

@@ -48,8 +48,34 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 				log.Printf("baas: failed to find user for debit sms: customer_id=%s err=%v", data.CustomerID, err)
 				return
 			}
-			amountNaira := data.Amount // assuming it's in naira from the webhook
-			msg := fmt.Sprintf("%s: ₦%.2f has been debited from your account. Ref: %s", s.appName, amountNaira, data.Reference)
+
+			wallet, err := s.repo.GetWallet(context.Background(), user.ID)
+			if err != nil {
+				log.Printf("baas: failed to get wallet for debit sms: user_id=%s err=%v", user.ID, err)
+				return
+			}
+
+			customerDetails, err := s.providusService.GetCustomerDetails(context.Background(), wallet.WalletCustomerID)
+			if err != nil {
+				log.Printf("baas: skipping debit sms, failed to get customer details: customer_id=%s err=%v", wallet.WalletCustomerID, err)
+				return
+			}
+			if customerDetails == nil {
+				log.Printf("baas: skipping debit sms, nil customer details: customer_id=%s", wallet.WalletCustomerID)
+				return
+			}
+
+			acc := maskAccount(customerDetails.Customer.AccountNumber)
+			balanceNaira := customerDetails.Customer.AvailableBalance
+
+			desc := strings.TrimSpace(data.Description)
+			if desc == "" {
+				desc = "Transfer"
+			}
+
+			msg := fmt.Sprintf("DEBIT ALERT\nAcc: %s\nAmt: NGN%.2f\nBal: NGN%.2f\nDate: %s\nDes: %s",
+				acc, data.Amount, balanceNaira, time.Now().Format("02-Jan-2006 15:04"), desc)
+
 			normalized, err := phone.NormalizeNigerianNumber(user.Phone)
 			if err != nil {
 				log.Printf("baas: failed to normalize phone number: %v", err)
@@ -166,4 +192,11 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	return nil
+}
+
+func maskAccount(a string) string {
+	if n := len(a); n >= 6 {
+		return a[:3] + "***" + a[n-3:]
+	}
+	return a
 }
