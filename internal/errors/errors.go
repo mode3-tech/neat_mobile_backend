@@ -24,7 +24,7 @@ var (
 	ErrTransactionPinMismatch          = errors.New("transaction pins do not match")
 	ErrMissingDeviceID                 = errors.New("missing device id")
 	ErrMissingUserID                   = errors.New("missing user id")
-	ErrDeviceNotAllowed                = errors.New("device not allowed")
+	ErrDeviceNotAllowed                = errors.New("Device not allowed")
 	ErrInvalidSession                  = errors.New("invalid session")
 	ErrAccessTokenIssue                = errors.New("Error issuing access token")
 	ErrRefreshTokenIssue               = errors.New("Error issuing refresh token")

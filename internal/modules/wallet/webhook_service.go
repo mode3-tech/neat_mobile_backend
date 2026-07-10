@@ -17,14 +17,14 @@ import (
 
 func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *CustomerBankTransferData) error {
 	log.Println("baas: processing customer bank transfer")
-	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.Reference)
+	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.TransactionReference)
 	if tx != nil && err == nil {
 		log.Printf("baas: tx %s already %s - skipping", tx.ID, tx.Status)
 		return nil
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("baas: no pending tx for provider_ref=%s", data.Reference)
+			log.Printf("baas: no pending tx for provider_ref=%s", data.TransactionReference)
 			return nil
 		}
 		return err
@@ -36,7 +36,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 	}
 
 	if data.Status == "success" {
-		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.Reference)
+		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
 
 		if err := s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful); err != nil {
 			return err
@@ -88,7 +88,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 		return nil
 	}
 
-	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.Reference)
+	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
 	return s.repo.ReverseDebitTransaction(ctx, tx.ID, tx.WalletID)
 }
 
