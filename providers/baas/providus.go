@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
+
 	"net/http"
 	"net/url"
 	"strings"
@@ -445,11 +447,11 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 
 func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *TransferRequest) (*TransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
-		return nil, errors.New("providus service not configured")
+		log.Printf("providus service not configured")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	url := p.BaseURL + "/transfer/bank/customer"
-
 	payload := map[string]any{
 		"amount":        float64(transferInfo.Amount) / 100,
 		"sortCode":      transferInfo.SortCode,
@@ -462,12 +464,14 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		log.Printf("failed to marshal transfer request: %v", err)
+		return nil, appErr.XpressWalletProviderError{Status: false, Message: "Failed to marshal transfer request"}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		log.Printf("failed to create transfer request: %v", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -476,23 +480,34 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("providus transfer request failed: %w", err)
+		log.Printf("providus transfer request failed: %v", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		if len(respBody) == 0 {
-			log.Printf("providus transfer failed with status: %d", resp.StatusCode)
-			return nil, fmt.Errorf("providus transfer failed with status: %d", resp.StatusCode)
+		bodyStr := strings.TrimSpace(string(respBody))
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		status := false
+
+		if err := json.Unmarshal([]byte(bodyStr), &providusErrResp); err == nil && !providusErrResp.Status {
+			msg = providusErrResp.Message
+			status = providusErrResp.Status
 		}
-		log.Printf("providus transfer failed: %s", extractErrorMessage(respBody))
-		return nil, fmt.Errorf("providus transfer failed: %s", extractErrorMessage(respBody))
+
+		log.Printf("providus transfer failed: %s", msg)
+		return nil, appErr.XpressWalletProviderError{
+			Status:  status,
+			Message: msg,
+		}
 	}
 
 	var result TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode providus transfer response: %w", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	return &result, nil

@@ -1,12 +1,12 @@
 package errors
 
-type XpressWalletProviderError struct {
+type XpressPayProviderError struct {
 	Status  int
 	Code    string
 	Message string
 }
 
-func (e XpressWalletProviderError) Error() string {
+func (e XpressPayProviderError) Error() string {
 	return e.Message
 }
 
@@ -31,5 +31,14 @@ type ZeptoError struct {
 }
 
 func (e ZeptoError) Error() string {
+	return e.Message
+}
+
+type XpressWalletProviderError struct {
+	Status  bool
+	Message string
+}
+
+func (e XpressWalletProviderError) Error() string {
 	return e.Message
 }

@@ -206,7 +206,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
 		}
@@ -278,7 +278,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	default:
 		log.Printf("vas service: airtime purchase failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrGettingAirtime
 	}
 
@@ -349,7 +349,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
 		}
@@ -418,7 +418,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	default:
 		log.Printf("vas service: data purchase failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrGettingData
 	}
 
@@ -500,7 +500,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
 		}
@@ -543,7 +543,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 
 		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
 			log.Printf("vas service: failed to validate electricity account - %s\n", validationResult.ResponseMessage)
-			return nil, &appErr.XpressWalletProviderError{
+			return nil, &appErr.XpressPayProviderError{
 				Code:    validationResult.ResponseCode,
 				Message: validationResult.ResponseMessage,
 			}
@@ -609,7 +609,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	default:
 		log.Printf("vas service: electricity payment failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -687,7 +687,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
 		}
@@ -721,7 +721,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 
 	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
 		log.Printf("vas service: failed to validate cable account - %s\n", validateResult.ResponseMessage)
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Code:    validateResult.ResponseCode,
 			Message: validateResult.ResponseMessage,
 		}
@@ -787,7 +787,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	default:
 		log.Printf("vas service: cable payment failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressWalletProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
 		return nil, appErr.ErrPayingCableBill
 	}
 

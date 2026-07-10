@@ -1076,13 +1076,13 @@ func MapError(err error) ErrorMapping {
 		}
 
 	default:
-		var providerErr *appErr.XpressWalletProviderError
-		if errors.As(err, &providerErr) {
+		var xpressWalletErr *appErr.XpressWalletProviderError
+		if errors.As(err, &xpressWalletErr) {
 			return ErrorMapping{
 				Status: http.StatusUnprocessableEntity,
 				Error: APIError{
 					Code:    "XPRESS_WALLET_PROVIDER_ERROR",
-					Message: providerErr.Message,
+					Message: xpressWalletErr.Message,
 				},
 			}
 		}

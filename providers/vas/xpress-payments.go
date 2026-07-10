@@ -27,10 +27,10 @@ type XpressPayments struct {
 
 func NewXpressPayments(publicKey, privateKey, baseURL string) (*XpressPayments, error) {
 	if strings.TrimSpace(publicKey) == "" || strings.TrimSpace(privateKey) == "" {
-		return nil, &appErr.XpressWalletProviderError{Code: "", Message: "xpress payments: public and private keys are required"}
+		return nil, &appErr.XpressPayProviderError{Code: "", Message: "xpress payments: public and private keys are required"}
 	}
 	if strings.TrimSpace(baseURL) == "" {
-		return nil, &appErr.XpressWalletProviderError{Code: "", Message: "xpress payments: base URL is required"}
+		return nil, &appErr.XpressPayProviderError{Code: "", Message: "xpress payments: base URL is required"}
 	}
 	return &XpressPayments{
 		PublicKey:  publicKey,
@@ -58,12 +58,12 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: "failed to marshal payload"}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: "failed to marshal payload"}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: "failed to create request"}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: "failed to create request"}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
@@ -73,25 +73,25 @@ func (x *XpressPayments) FetchAllCategories(ctx context.Context) (*CategoriesRes
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: "failed to read response body"}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: "failed to read response body"}
 	}
 
 	var result CategoriesResponse
 	if err := json.Unmarshal(respBodyBytes, &result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: "failed to decode response"}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: "failed to decode response"}
 	}
 
 	return &result, nil
@@ -102,7 +102,7 @@ func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryI
 
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to parse billers url: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to parse billers url: %v", err)}
 	}
 
 	q := u.Query()
@@ -116,12 +116,12 @@ func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryI
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -130,20 +130,20 @@ func (x *XpressPayments) FetchBillersByCategoryID(ctx context.Context, categoryI
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result BillersByCategoryIDResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -153,7 +153,7 @@ func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Contex
 	reqURL := x.BaseURL + "/api/v1/products"
 	u, err := url.Parse(reqURL)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to parse products url: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to parse products url: %v", err)}
 	}
 
 	q := u.Query()
@@ -168,12 +168,12 @@ func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Contex
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -182,20 +182,20 @@ func (x *XpressPayments) FetchProductsByCategoryIDAndBillerID(ctx context.Contex
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result ProductResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -214,17 +214,17 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+x.PublicKey)
@@ -237,7 +237,7 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, appErr.ErrVASAmbiguous
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
@@ -247,12 +247,12 @@ func (x *XpressPayments) GetAirtime(ctx context.Context, requestID, uniqueCode, 
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result ISPResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -271,17 +271,17 @@ func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, pho
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -294,7 +294,7 @@ func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, pho
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, appErr.ErrVASAmbiguous
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
@@ -304,12 +304,12 @@ func (x *XpressPayments) GetData(ctx context.Context, requestId, uniqueCode, pho
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result ISPResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -331,17 +331,17 @@ func (x *XpressPayments) ValidateElectricity(ctx context.Context, requestId, uni
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -352,25 +352,25 @@ func (x *XpressPayments) ValidateElectricity(ctx context.Context, requestId, uni
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result ElectricityValidationResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -396,17 +396,17 @@ func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniq
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -419,7 +419,7 @@ func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniq
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, appErr.ErrVASAmbiguous
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
@@ -429,12 +429,12 @@ func (x *XpressPayments) PayElectricityBill(ctx context.Context, requestId, uniq
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result PayElectricityResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -453,17 +453,17 @@ func (x *XpressPayments) ValidateCable(ctx context.Context, requestId, uniqueCod
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -474,25 +474,25 @@ func (x *XpressPayments) ValidateCable(ctx context.Context, requestId, uniqueCod
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result CableValidationResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -515,17 +515,17 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -538,7 +538,7 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, appErr.ErrVASAmbiguous
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
@@ -548,12 +548,12 @@ func (x *XpressPayments) PayCableBill(ctx context.Context, requestId, uniqueCode
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	var result PayCableResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -574,17 +574,17 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	hash, err := generatePaymentHash(jsonPayload, x.PrivateKey)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -598,7 +598,7 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, appErr.ErrVASAmbiguous
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
@@ -608,17 +608,17 @@ func (x *XpressPayments) GetWAECResultCheckerPin(ctx context.Context, requestId,
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to read response body: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to read response body: %v", err)}
 	}
 
 	var result WAECResultCheckerPinResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -637,17 +637,17 @@ func (x *XpressPayments) ValidateWAECRegistration(ctx context.Context, requestId
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to marshal payload: %v", err)}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	paymentHash, err := generatePaymentHash(body, strings.TrimSpace(x.PrivateKey))
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to generate payment hash: %v", err)}
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -658,30 +658,30 @@ func (x *XpressPayments) ValidateWAECRegistration(ctx context.Context, requestId
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "REQUEST_FAILED", Message: msg}
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to read response body: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to read response body: %v", err)}
 	}
 
 	var result WAECRegistrationValidationResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -692,7 +692,7 @@ func (x *XpressPayments) CheckStatus(ctx context.Context, requestID string) (*Ch
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -701,15 +701,15 @@ func (x *XpressPayments) CheckStatus(ctx context.Context, requestID string) (*Ch
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
 	}
 
 	// Non-OK responses carry a JSON body with the business error
@@ -717,13 +717,13 @@ func (x *XpressPayments) CheckStatus(ctx context.Context, requestID string) (*Ch
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		var errResp Response
 		if json.Unmarshal(body, &errResp) == nil && errResp.ResponseMessage != "" {
-			return nil, &appErr.XpressWalletProviderError{
+			return nil, &appErr.XpressPayProviderError{
 				Status:  resp.StatusCode,
 				Code:    errResp.ResponseCode,
 				Message: errResp.ResponseMessage,
 			}
 		}
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Status:  resp.StatusCode,
 			Code:    "REQUEST_FAILED",
 			Message: strings.TrimSpace(string(body)),
@@ -732,7 +732,7 @@ func (x *XpressPayments) CheckStatus(ctx context.Context, requestID string) (*Ch
 
 	var result CheckStatusResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
@@ -743,7 +743,7 @@ func (x *XpressPayments) GetWalletBalance(ctx context.Context) (*WalletBalanceRe
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 500, Code: "", Message: fmt.Sprintf("failed to create request: %v", err)}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(x.PublicKey))
@@ -752,28 +752,28 @@ func (x *XpressPayments) GetWalletBalance(ctx context.Context) (*WalletBalanceRe
 	resp, err := x.Client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, &appErr.XpressWalletProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
+			return nil, &appErr.XpressPayProviderError{Status: 408, Code: "TIMEOUT", Message: "request timed out"}
 		}
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "NETWORK_ERROR", Message: fmt.Sprintf("request failed: %v", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		msg := readResponseBody(resp)
-		return nil, &appErr.XpressWalletProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
+		return nil, &appErr.XpressPayProviderError{Status: resp.StatusCode, Code: "SERVER_ERROR", Message: msg}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		var errResp Response
 		if json.Unmarshal(body, &errResp) == nil && errResp.ResponseMessage != "" {
-			return nil, &appErr.XpressWalletProviderError{
+			return nil, &appErr.XpressPayProviderError{
 				Status:  resp.StatusCode,
 				Code:    errResp.ResponseCode,
 				Message: errResp.ResponseMessage,
 			}
 		}
-		return nil, &appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressPayProviderError{
 			Status:  resp.StatusCode,
 			Code:    "REQUEST_FAILED",
 			Message: strings.TrimSpace(string(body)),
@@ -782,7 +782,7 @@ func (x *XpressPayments) GetWalletBalance(ctx context.Context) (*WalletBalanceRe
 
 	var result WalletBalanceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, &appErr.XpressWalletProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
+		return nil, &appErr.XpressPayProviderError{Status: 502, Code: "", Message: fmt.Sprintf("failed to decode response: %v", err)}
 	}
 
 	return &result, nil
