@@ -8,7 +8,7 @@ type BankDetailsQuery struct {
 }
 
 type TransferRequest struct {
-	Amount         int64          `json:"amount" binding:"required,gt=0"`
+	Amount         float64        `json:"amount" binding:"required,gt=0"`
 	SortCode       string         `json:"sort_code" binding:"required"`
 	Narration      *string        `json:"narration" binding:"omitempty,max=255"`
 	AccountNumber  string         `json:"account_number" binding:"required"`

@@ -164,7 +164,12 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	go func() {
-		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. Ref: %s", s.appName, float64(amountKobo)/100, creditTx.Reference)
+		customerDetails, err := s.providusService.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+		if err != nil {
+			log.Printf("baas: failed to get customer details: %v", err)
+			return
+		}
+		msg := fmt.Sprintf("%s: ₦%.2f has been credited to your account. New balance: ₦%.2f. Ref: %s", s.appName, float64(amountKobo)/100, float64(customerDetails.Customer.AvailableBalance), creditTx.Reference)
 		normalized, err := phone.NormalizeNigerianNumber(wallet.PhoneNumber)
 		if err != nil {
 			log.Printf("baas: failed to normalize phone number: %v", err)

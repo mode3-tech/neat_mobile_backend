@@ -131,7 +131,7 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 	}
 
 	resp, err := s.providusService.InitiateTransfer(ctx, w.WalletCustomerID, &wallet.TransferRequest{
-		Amount:        row.Amount,
+		Amount:        float64(row.Amount),
 		SortCode:      s.settlementAccount.BankCode,
 		AccountNumber: s.settlementAccount.AccountNumber,
 		AccountName:   &accountName,
@@ -161,7 +161,7 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 	}
 
 	err = s.repayer.MakeManualRepayment(ctx, loanproduct.RepaymentRequest{
-		Amount:      row.Amount,
+		Amount:      float64(row.Amount),
 		RepaymentID: strconv.FormatInt(row.LoanID, 10),
 	})
 	if err != nil {
