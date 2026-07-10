@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 	"strings"
@@ -115,12 +116,14 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 
 	accessToken, err := s.jwtSigner.IssueAccessToken(sub, sid)
 	if err != nil {
-		return nil, err
+		log.Println("access token issue failed:", err)
+		return nil, appErr.ErrAccessTokenIssue
 	}
 
 	newRefreshToken, newJTI, newExpiresAt, err := s.jwtSigner.IssueRefreshToken(sub, sid)
 	if err != nil || newRefreshToken == "" || newJTI == "" {
-		return nil, errors.New("failed to issue refresh token")
+		log.Println("refresh token issue failed:", err)
+		return nil, appErr.ErrRefreshTokenIssue
 	}
 
 	hashedRefreshToken := sha256.Sum256([]byte(newRefreshToken))
@@ -138,6 +141,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 	}
 
 	if err := s.repo.RotateRefreshToken(ctx, oldJTI, newRefreshTokenRow); err != nil {
+		log.Println("refresh token rotation failed:", err)
 		return nil, err
 	}
 

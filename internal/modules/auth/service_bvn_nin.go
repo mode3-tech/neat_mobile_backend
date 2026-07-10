@@ -283,9 +283,6 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 
 	maskedEmail := email.MaskEmail(bvnDetails.Data.Details.Email)
-	if maskedEmail == "" {
-		return nil, appErr.ErrMissingEmail
-	}
 
 	return &bvnInfo{
 		name:           fullName,

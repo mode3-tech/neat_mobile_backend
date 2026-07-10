@@ -616,6 +616,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrAccessTokenIssue):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACCESS_TOKEN_ISSUE",
+				Message: "Error issuing access token",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrRefreshTokenIssue):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "REFRESH_TOKEN_ISSUE",
+				Message: "Error issuing refresh token",
+			},
+		}
+
 	case errors.Is(err, appErr.ErrInvalidVerificationType):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
