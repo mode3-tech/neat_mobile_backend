@@ -177,7 +177,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
 		log.Printf("wallet service: failed to initiate transfer: %v", err)
-		return nil, appErr.ErrFundsTransfer
+		return nil, err
 	}
 
 	if resp == nil {

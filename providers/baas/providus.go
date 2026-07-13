@@ -465,7 +465,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 	body, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("failed to marshal transfer request: %v", err)
-		return nil, appErr.XpressWalletProviderError{Status: false, Message: "Failed to marshal transfer request"}
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
@@ -487,7 +487,10 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus transfer failed: %s", strings.TrimSpace(string(respBody)))
 		bodyStr := strings.TrimSpace(string(respBody))
+
+		log.Printf("providus transfer failed: %s", bodyStr)
 
 		var providusErrResp XpressWalletErrorResponse
 		msg := bodyStr
@@ -499,7 +502,7 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 		}
 
 		log.Printf("providus transfer failed: %s", msg)
-		return nil, appErr.XpressWalletProviderError{
+		return nil, &appErr.XpressWalletProviderError{
 			Status:  status,
 			Message: msg,
 		}

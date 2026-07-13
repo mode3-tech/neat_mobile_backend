@@ -19,6 +19,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// DemoConfig configures a single whitelisted account (e.g. the Google Play
+// review account) whose OTP is a fixed, known code and whose delivery is
+// skipped. Disabled unless Enabled is true and Destination/Code are set.
+type DemoConfig struct {
+	Enabled     bool
+	Destination string // normalized demo phone/email (must match NormalizeDestination output)
+	Code        string // fixed OTP code accepted for this destination
+}
+
 type Service struct {
 	repo         *Repository
 	verification *verification.VerificationRepo
@@ -27,14 +36,15 @@ type Service struct {
 	email        notify.EmailSender
 	pepper       string
 	appName      string
+	demo         DemoConfig
 }
 
-func NewOTPService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string) *Service {
-	return &Service{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper, appName: appName}
+func NewOTPService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string, demo DemoConfig) *Service {
+	return &Service{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper, appName: appName, demo: demo}
 }
 
-func NewOTPManager(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string) OTPManager {
-	return NewOTPService(repo, verification, tx, sms, email, pepper, appName)
+func NewOTPManager(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string, demo DemoConfig) OTPManager {
+	return NewOTPService(repo, verification, tx, sms, email, pepper, appName, demo)
 }
 
 func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult, error) {
@@ -117,6 +127,16 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		return nil, appErr.ErrUnableToGenerateOTP
 	}
 
+	// Demo/review account: use the fixed code and skip real delivery. Scoped to
+	// the one configured destination; the hash below still binds it normally so
+	// verification runs unchanged. Never log the code.
+	skipSend := false
+	if s.demo.Enabled && s.demo.Code != "" && s.demo.Destination != "" && normalizeDestination == s.demo.Destination {
+		code = s.demo.Code
+		skipSend = true
+		log.Printf("[otp.Issue] demo account: using fixed code, skipping delivery: purpose=%s", in.Purpose)
+	}
+
 	hashedOTP, err := HashOTP(s.pepper, in.Purpose, normalizeDestination, code)
 	if err != nil {
 		log.Printf("[otp.Issue] failed to hash OTP: err=%v", err)
@@ -155,12 +175,18 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 
 		switch in.Channel {
 		case ChannelSMS:
+			if skipSend {
+				break
+			}
 			if err := s.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
 				log.Printf("[otp.Issue] failed to send SMS: purpose=%s err=%v", in.Purpose, err)
 				return err
 			}
 			log.Printf("[otp.Issue] SMS sent: purpose=%s", in.Purpose)
 		case ChannelEmail:
+			if skipSend {
+				break
+			}
 			subject := "Your One Time Password (OTP)"
 			if in.Purpose == PurposePasswordReset {
 				subject = "Your Password Reset OTP"

@@ -39,6 +39,7 @@ type User struct {
 	IsNotificationsEnabled       bool            `gorm:"is_notifications_enabled"`
 	ActivationCapAmount          int64           `gorm:"column:activation_cap_amount;not null;default:0"`
 	ActivationCapExpiresAt       *time.Time      `gorm:"column:activation_cap_expires_at;type:timestamptz"`
+	ClosedAt                     *time.Time      `gorm:"column:closed_at;type:timestamptz"`
 	CreatedAt                    time.Time       `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt                    *time.Time      `gorm:"column:updated_at;autoUpdateTime"`
 }

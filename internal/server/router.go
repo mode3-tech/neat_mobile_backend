@@ -25,6 +25,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
+	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
@@ -138,7 +139,19 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	otpRepo := otp.NewRepository(db)
-	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, mailSender, cfg.Pepper, cfg.AppName)
+
+	demoOTP := otp.DemoConfig{}
+	if cfg.DemoLoginEnabled {
+		normalizedDemoPhone, err := phoneutil.NormalizeNigerianNumber(cfg.DemoLoginPhone)
+		if err != nil || strings.TrimSpace(cfg.DemoLoginOTP) == "" {
+			log.Printf("demo login: disabled (invalid DEMO_LOGIN_PHONE or empty DEMO_LOGIN_OTP): err=%v", err)
+		} else {
+			demoOTP = otp.DemoConfig{Enabled: true, Destination: normalizedDemoPhone, Code: cfg.DemoLoginOTP}
+			log.Printf("demo login: ENABLED for a single whitelisted account")
+		}
+	}
+
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, mailSender, cfg.Pepper, cfg.AppName, demoOTP)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 

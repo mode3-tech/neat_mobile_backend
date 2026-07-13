@@ -68,6 +68,12 @@ type Config struct {
 	XpressPrivateKey string
 	XpressBaseURL    string
 
+	// Demo/review login account (e.g. Google Play review). Disabled unless
+	// DemoLoginEnabled is true. DemoLoginPhone gets a fixed OTP and no SMS.
+	DemoLoginEnabled bool
+	DemoLoginPhone   string
+	DemoLoginOTP     string
+
 	RunMigrations bool
 }
 
@@ -134,6 +140,10 @@ func Load() Config {
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
 		XpressBaseURL:    getEnv("XPRESS_BASE_URL", ""),
+
+		DemoLoginEnabled: getEnv("DEMO_LOGIN_ENABLED", "false") == "true",
+		DemoLoginPhone:   getEnv("DEMO_LOGIN_PHONE", ""),
+		DemoLoginOTP:     getEnv("DEMO_LOGIN_OTP", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}
