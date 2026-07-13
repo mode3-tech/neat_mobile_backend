@@ -19,6 +19,8 @@ tags:
     description: Push-token registration and in-app notification history endpoints
   - name: Account
     description: Account summary and profile endpoints
+  - name: Account Closure
+    description: Account closure request endpoints
   - name: Wallet
     description: Bank lookup and account resolution endpoints
   - name: Transaction
@@ -3418,6 +3420,75 @@ paths:
                     example: error
                   error:
                     $ref: "#/components/schemas/API500Error"
+  /account/close:
+    post:
+      tags:
+        - Account Closure
+      summary: Request account closure
+      description: |
+        Requests closure of the authenticated user's account. Runs wallet-balance and active-loan checks first;
+        if either blocks closure, returns a `blocked` closure with `blocker_code`/`blocker_details` populated
+        instead of an error. Otherwise closes the wallet with the provider, revokes all sessions, deactivates
+        all devices, and stops auto-repayments. Returns 409 if a closure request is already in progress for
+        this user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema:
+            type: string
+          description: Stable device installation identifier from the mobile app.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountClosureRequest"
+      responses:
+        "200":
+          description: Account closure request processed — the returned closure may be `closed` or `blocked`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountClosureResponse"
+        "400":
+          description: Invalid request body (missing or too-long reason_note)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API400Error"
+        "401":
+          description: Unauthorized or missing device ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API401Error"
+        "409":
+          description: An account closure request is already in progress for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API409Error"
+        "422":
+          description: User wallet not found, or the wallet provider rejected the closure request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API422Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API500Error"
+        "503":
+          description: Wallet provider service is currently unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API500Error"
   /wallet/banks:
     get:
       tags:
@@ -5614,6 +5685,124 @@ components:
           format: int64
           description: Remaining inflow allowance in kobo.
           example: 2000000
+    AccountClosureRequest:
+      type: object
+      required:
+        - reason_note
+      properties:
+        reason_note:
+          type: string
+          maxLength: 500
+          example: I no longer need this account
+    AccountClosureStatus:
+      type: string
+      enum:
+        - checking
+        - processing
+        - blocked
+        - closed
+        - pending
+        - approved
+        - completed
+        - cancelled
+        - rejected
+        - failed
+      description: |
+        The account closure endpoint itself only ever transitions a request through `checking` → `blocked` or
+        `checking` → `processing` → `closed`. The remaining enum values are reserved for admin-driven closure
+        workflows.
+      example: closed
+    AccountClosure:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cls-3fa85f64-5717-4562-b3fc-2c963f66afa6
+        user_id:
+          type: string
+          example: usr-3fa85f64-5717-4562-b3fc-2c963f66afa6
+        closure_reference:
+          type: string
+          example: CLS-202607-000123
+        status:
+          $ref: "#/components/schemas/AccountClosureStatus"
+        requested_at:
+          type: string
+          format: date-time
+        requested_by_type:
+          type: string
+          enum:
+            - user
+            - system
+            - admin
+          example: user
+        requested_by_id:
+          type: string
+        reason_code:
+          type: string
+          nullable: true
+        reason_note:
+          type: string
+          example: I no longer need this account
+        blocker_code:
+          type: string
+          nullable: true
+          example: positive_wallet_balance
+          description: "Set when status is `blocked`. Known values: `positive_wallet_balance`, `active_loans`."
+        blocker_details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            available_balance: 15000
+            currency: NGN
+        approved_by_id:
+          type: string
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        provider_status:
+          type: string
+          nullable: true
+          example: success
+        internal_provider_reference:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AccountClosureResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Account closure request processed
+        data:
+          $ref: "#/components/schemas/AccountClosure"
     UpdateProfileRequest:
       type: object
       properties:

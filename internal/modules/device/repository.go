@@ -180,11 +180,28 @@ func (r *Repository) ActivateAndTrustDevice(ctx context.Context, userID, deviceI
 	return nil
 }
 
+func (r *Repository) DeactivateAllDevices(ctx context.Context, userID string) error {
+	result := r.db.WithContext(ctx).
+		Model(&UserDevice{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]any{
+			"is_active":  false,
+			"is_trusted": false,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (r *Repository) DeactivateDevice(ctx context.Context, userID, deviceID string) error {
 	result := r.db.WithContext(ctx).
 		Model(&UserDevice{}).
 		Where("user_id = ? AND device_id = ?", userID, deviceID).
-		Update("is_active", false)
+		Updates(map[string]any{
+			"is_active":  false,
+			"is_trusted": false,
+		})
 	if result.Error != nil {
 		return result.Error
 	}

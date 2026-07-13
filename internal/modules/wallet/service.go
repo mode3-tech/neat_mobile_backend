@@ -469,6 +469,9 @@ func (s *Service) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]
 func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string) (*CustomerWallet, error) {
 	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrMissingUserWallet
+		}
 		log.Printf("wallet service: failed to get user wallet - %s", err)
 		return nil, err
 	}

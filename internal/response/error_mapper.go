@@ -18,7 +18,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusUnauthorized,
 			Error: APIError{
 				Code:    "AUTH_INVALID_CREDENTIALS",
-				Message: "invalid credentials",
+				Message: "Incorrect credentials. Try again or signup if you don't have an account.",
 			},
 		}
 
@@ -46,6 +46,33 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "BAD_REQUEST",
 				Message: "bad request",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountHasBalance):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "ACCOUNT_HAS_BALANCE",
+				Message: appErr.ErrAccountHasBalance.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountHasActiveLoans):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "ACCOUNT_HAS_ACTIVE_LOANS",
+				Message: appErr.ErrAccountHasActiveLoans.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountClosureAlreadyInProgress):
+		return ErrorMapping{
+			Status: http.StatusConflict,
+			Error: APIError{
+				Code:    "ACCOUNT_CLOSURE_IN_PROGRESS",
+				Message: appErr.ErrAccountClosureAlreadyInProgress.Error(),
 			},
 		}
 

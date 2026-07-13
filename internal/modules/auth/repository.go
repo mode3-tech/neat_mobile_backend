@@ -27,7 +27,7 @@ func NewRespository(db *gorm.DB) *Repository {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var u models.User
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password_hash,created_at").Where("email = ?", email).First(&u).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password_hash,closed_at,created_at").Where("email = ?", email).First(&u).Error; err != nil {
 		return nil, err
 	}
 
@@ -36,7 +36,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.
 
 func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.User, error) {
 	var u models.User
-	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password_hash,created_at").Where("phone = ?", phone).First(&u).Error
+	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password_hash,closed_at,created_at").Where("phone = ?", phone).First(&u).Error
 	if err != nil {
 		return nil, err
 	}
@@ -368,4 +368,11 @@ func (r *Repository) GetUserByBVN(ctx context.Context, bvn string) (*models.User
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *Repository) RevokeAllSessions(ctx context.Context, mobileUserID string, revokedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Table("wallet_auth_sessions").
+		Where("user_id = ?", mobileUserID).
+		Update("revoked_at", revokedAt).Error
 }

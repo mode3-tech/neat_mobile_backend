@@ -122,4 +122,7 @@ var (
 	ErrInvalidVerificationType         = errors.New("Invalid verification type")
 	ErrMissingBVNPhoneNumber           = errors.New("Your BVN was registered without a phone number")
 	ErrMissingBVNPhoneNumberAndEmail   = errors.New("Your BVN was registered without a phone number and email")
+	ErrAccountHasBalance               = errors.New("Account can only be closed after balance is cleared")
+	ErrAccountHasActiveLoans           = errors.New("Account can only be closed after all active loans are repaid")
+	ErrAccountClosureAlreadyInProgress = errors.New("An account closure request is already in progress")
 )

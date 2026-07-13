@@ -9,6 +9,7 @@ const (
 	AutoRepaymentAttemptStatusSuccess AutoRepaymentAttemptStatus = "success"
 	AutoRepaymentAttemptStatusFailed  AutoRepaymentAttemptStatus = "failed"
 	AutoRepaymentAttemptStatusSkipped AutoRepaymentAttemptStatus = "skipped"
+	AutoRepaymentAttemptStatusStopped AutoRepaymentAttemptStatus = "stopped"
 )
 
 type DueRepaymentRow struct {

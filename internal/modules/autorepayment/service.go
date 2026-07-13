@@ -182,3 +182,9 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 		fmt.Sprintf("Your loan auto-repayment of ₦%d was successful.", row.Amount),
 		nil)
 }
+
+// For when customer pay out their loans manually
+
+func (s *Service) StopAllAutoRepayments(ctx context.Context, mobileUserID string) error {
+	return s.repository.StopAllAutoRepayments(ctx, mobileUserID)
+}

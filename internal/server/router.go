@@ -13,6 +13,7 @@ import (
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/modules/account"
+	"neat_mobile_app_backend/internal/modules/accountclosure"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
@@ -237,6 +238,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
+
+	accountClosureRepo := accountclosure.NewRepository(db)
+	userService := user.NewService(user.NewRepository(db))
+	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService)
+	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
+	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
 
 	transactionRepo := transaction.NewRepository(db)
 	transactionService := transaction.NewServie(transactionRepo)

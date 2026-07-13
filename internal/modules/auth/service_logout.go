@@ -153,3 +153,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 func (s *Service) IsSessionActive(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error) {
 	return s.repo.CheckSession(ctx, sid, mobileUserID, deviceID)
 }
+
+func (s *Service) RevokeAllSessions(ctx context.Context, mobileUserID string, revokedAt time.Time) error {
+	return s.repo.RevokeAllSessions(ctx, mobileUserID, revokedAt)
+}

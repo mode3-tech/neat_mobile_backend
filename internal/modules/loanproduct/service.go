@@ -483,6 +483,14 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, 
 	return nil
 }
 
+func (s *Service) HasActiveLoans(ctx context.Context, coreCustomerID string) (bool, error) {
+	loans, err := s.repo.ListActiveLoansByCustomerID(ctx, coreCustomerID)
+	if err != nil {
+		return false, err
+	}
+	return len(loans) > 0, nil
+}
+
 func newTooManyTransactionPinAttemptsError(lockedUntil, now time.Time) error {
 	return fmt.Errorf("%w, try again in %s", ErrTooManyTransactionPinAttempts, remainingLockDuration(now, lockedUntil))
 }

@@ -701,8 +701,16 @@ func (p *Providus) GetCustomerDetails(ctx context.Context, customerID string) (*
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		log.Printf("providus: GetCustomerDetails failed status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-		return nil, fmt.Errorf("providus: GetCustomerDetails returned status %d", resp.StatusCode)
+		bodyStr := strings.TrimSpace(string(body))
+		log.Printf("providus: GetCustomerDetails failed status=%d body=%s", resp.StatusCode, bodyStr)
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		if err := json.Unmarshal(body, &providusErrResp); err == nil && providusErrResp.Message != "" {
+			msg = providusErrResp.Message
+		}
+
+		return nil, &appErr.XpressWalletProviderError{Message: msg}
 	}
 
 	var result ProvidusCustomerDetailsResponse
@@ -749,4 +757,58 @@ func (p *Providus) GetCustomerWallet(ctx context.Context, customerID string) (*P
 	}
 
 	return &result, nil
+}
+
+func (p *Providus) CloseWallet(ctx context.Context, customerID string) error {
+	url := p.BaseURL + "/wallet/close"
+
+	payload := map[string]string{"customerId": customerID}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("providus: failed to marshal payload - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus close wallet failed: %s", strings.TrimSpace(string(respBody)))
+		bodyStr := strings.TrimSpace(string(respBody))
+
+		log.Printf("providus close wallet failed: %s", bodyStr)
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		status := false
+
+		if err := json.Unmarshal([]byte(bodyStr), &providusErrResp); err == nil && !providusErrResp.Status {
+			msg = providusErrResp.Message
+			status = providusErrResp.Status
+		}
+
+		log.Printf("providus close wallet failed: %s", msg)
+		return &appErr.XpressWalletProviderError{
+			Status:  status,
+			Message: msg,
+		}
+	}
+
+	return nil
 }

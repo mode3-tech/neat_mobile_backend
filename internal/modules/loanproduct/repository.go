@@ -432,3 +432,12 @@ func (r *Repository) GetLoanRepaymentSummary(ctx context.Context, loanID string)
 	}
 	return &summary, nil
 }
+
+func (r *Repository) GetActiveLoans(ctx context.Context, mobileUserID string) ([]*Loan, error) {
+	var loans []*Loan
+	err := r.db.WithContext(ctx).Raw(activeLoansQuery, mobileUserID).Scan(&loans).Error
+	if err != nil {
+		return nil, err
+	}
+	return loans, nil
+}

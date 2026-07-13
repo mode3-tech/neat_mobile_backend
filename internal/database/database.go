@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"neat_mobile_app_backend/internal/modules/account"
+	"neat_mobile_app_backend/internal/modules/accountclosure"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/autorepayment"
@@ -211,12 +212,16 @@ func Migrate(db *gorm.DB) error {
 		&wallet.Beneficiary{},
 		&wallet.ExpectedDeposit{},
 		&account.AccountReportJob{},
+		&accountclosure.AccountClosure{},
 		&neatsave.SavingsGoal{},
 		&neatsave.AutoSaveRule{},
 		&neatsave.SavingsActivity{},
 		&autorepayment.AutoRepaymentAttempt{},
 		&card.Card{},
 		&vas.VASBeneficiary{},
+		&accountclosure.AccountClosureEvent{},
+		&accountclosure.AccountClosure{},
+		&models.ClosureReferenceCounter{},
 	); err != nil {
 		return err
 	}
