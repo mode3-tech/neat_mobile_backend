@@ -38,7 +38,7 @@ func (r *Repository) FetchRecentTransactions(ctx context.Context, userID string)
 func (r *Repository) FetchTransactionPaged(ctx context.Context, userID string, cursor time.Time, limit int) ([]Transaction, error) {
 	var txs []Transaction
 	q := r.db.WithContext(ctx).
-		Where("mobile_user_id = ?", userID)
+		Where("mobile_user_id = ? AND status != ?", userID, TransactionStatusPending)
 
 	if !cursor.IsZero() {
 		q = q.Where("created_at < ?", cursor)

@@ -23,27 +23,27 @@ type SettlementAccount struct {
 }
 
 type Service struct {
-	repo              *Repository
-	providusService   ProvidusService
-	pinVerifier       *authchecker.Verifier
-	settlementAccount SettlementAccount
-	deviceVerifier    DeviceVerifier
-	SmsSender         SmsSender
-	Notifier          NotificationSender
-	appName           string
+	repo               *Repository
+	providusService    ProvidusService
+	pinVerifier        *authchecker.Verifier
+	settlementAccount  SettlementAccount
+	deviceVerifier     DeviceVerifier
+	SmsSender          SmsSender
+	Notifier           NotificationSender
+	appName            string
 	outgoingSMSService OutgoingSMSService
 }
 
 func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService) *Service {
 	return &Service{
-		repo:              repo,
-		providusService:   providusService,
-		pinVerifier:       pinVerifier,
-		settlementAccount: settlementAccount,
-		deviceVerifier:    deviceVerifier,
-		SmsSender:         smsSender,
-		Notifier:          notifier,
-		appName:           appName,
+		repo:               repo,
+		providusService:    providusService,
+		pinVerifier:        pinVerifier,
+		settlementAccount:  settlementAccount,
+		deviceVerifier:     deviceVerifier,
+		SmsSender:          smsSender,
+		Notifier:           notifier,
+		appName:            appName,
 		outgoingSMSService: outgoingSMSService,
 	}
 }
@@ -153,6 +153,11 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		narration = *req.Narration
 	}
 
+	bankName, err := s.resolveBankDetails(ctx, req.SortCode)
+	if err != nil {
+		return nil, appErr.ErrFundsTransfer
+	}
+
 	txRecord := &transaction.Transaction{
 		ID:                  txID,
 		MobileUserID:        mobileUserID,
@@ -165,7 +170,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		Narration:           &narration,
 		CounterpartyAccount: accountNumber,
 		CounterpartyName:    accountName,
-		CounterpartyBank:    req.SortCode,
+		CounterpartyBank:    bankName,
 		Source:              "transfer",
 		Status:              transaction.TransactionStatusPending,
 	}
@@ -478,4 +483,21 @@ func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string)
 		return nil, err
 	}
 	return wallet, nil
+}
+
+func (s *Service) resolveBankDetails(ctx context.Context, sortCode string) (string, error) {
+	banks, err := s.providusService.FetchBanks(ctx)
+	if err != nil {
+		log.Printf("wallet service: failed to fetch banks - %s", err)
+		return "", err
+	}
+
+	for _, bank := range banks {
+		if bank.Code == sortCode {
+			return bank.Name, nil
+		}
+	}
+
+	log.Printf("wallet service: bank not found - sortCode: %s", sortCode)
+	return "", err
 }
