@@ -3,6 +3,8 @@ package wallet
 import (
 	"context"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/sms"
+	"time"
 )
 
 type BankResponse struct {
@@ -43,4 +45,10 @@ type SmsSender interface {
 
 type NotificationSender interface {
 	SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error
+}
+
+type OutgoingSMSService interface {
+	CreateOutgoingSMS(ctx context.Context, id, phone, message, recipient string) (*sms.OutgoingSMS, error)
+	UpdateOutgoingSMS(ctx context.Context, id string, status sms.OutgoingSMSStatus, sentAt *time.Time, reasonForFailure string) error
+	GetPendingOutgoingSMS(ctx context.Context, retryBackoff time.Duration) ([]sms.OutgoingSMS, error)
 }

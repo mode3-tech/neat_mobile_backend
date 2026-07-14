@@ -31,9 +31,10 @@ type Service struct {
 	SmsSender         SmsSender
 	Notifier          NotificationSender
 	appName           string
+	outgoingSMSService OutgoingSMSService
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string) *Service {
+func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService) *Service {
 	return &Service{
 		repo:              repo,
 		providusService:   providusService,
@@ -43,6 +44,7 @@ func NewService(repo *Repository, providusService ProvidusService, pinVerifier *
 		SmsSender:         smsSender,
 		Notifier:          notifier,
 		appName:           appName,
+		outgoingSMSService: outgoingSMSService,
 	}
 }
 

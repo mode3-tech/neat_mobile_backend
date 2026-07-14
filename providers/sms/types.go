@@ -1,4 +1,4 @@
-package termii
+package sms
 
 type TermiiSuccessResponse struct {
 	Code         string `json:"code"`

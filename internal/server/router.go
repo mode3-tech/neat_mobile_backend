@@ -27,6 +27,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	phoneutil "neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/internal/sms"
 	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
 	"neat_mobile_app_backend/providers/bvn/prembly"
@@ -101,7 +102,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
 
-	smsSender := termii.NewSMSService(smsApiKey, smsSenderID)
+	smsSender := termii.NewTermii(smsApiKey, smsSenderID)
 	mailSender := mailprovider.NewZepto(cfg.ZeptoMailAPIKey, cfg.ZeptoMailURL, cfg.ZeptoMailSender)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
@@ -224,13 +225,16 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationRepo := notification.NewRepository(db)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 
+	smsRepo := sms.NewRepository(db)
+	smsService := sms.NewService(smsRepo)
+
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := authchecker.New(walletRepo)
 	walletService := wallet.NewService(walletRepo, providusadapter.New(providusWalletService), walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	}, deviceService, smsSender, notificationService, cfg.AppName)
+	}, deviceService, smsSender, notificationService, cfg.AppName, smsService)
 
 	loanRepo := loanproduct.NewRepository(db)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
