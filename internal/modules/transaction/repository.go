@@ -25,20 +25,20 @@ func (r *Repository) FetchUserWithUserID(ctx context.Context, userID string) (*m
 	return &user, err
 }
 
-func (r *Repository) FetchRecentTransactions(ctx context.Context, userID, walletID string) ([]Transaction, error) {
+func (r *Repository) FetchRecentTransactions(ctx context.Context, userID string) ([]Transaction, error) {
 	var transactions []Transaction
 	err := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ? AND status != ?", userID, walletID, TransactionStatusPending).
+		Where("mobile_user_id = ? AND status != ?", userID, TransactionStatusPending).
 		Order("created_at DESC").
 		Limit(2).
 		Find(&transactions).Error
 	return transactions, err
 }
 
-func (r *Repository) FetchTransactionPaged(ctx context.Context, userID, walletID string, cursor time.Time, limit int) ([]Transaction, error) {
+func (r *Repository) FetchTransactionPaged(ctx context.Context, userID string, cursor time.Time, limit int) ([]Transaction, error) {
 	var txs []Transaction
 	q := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ?", userID, walletID)
+		Where("mobile_user_id = ?", userID)
 
 	if !cursor.IsZero() {
 		q = q.Where("created_at < ?", cursor)

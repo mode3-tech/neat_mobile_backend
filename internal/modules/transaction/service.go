@@ -18,15 +18,7 @@ func NewServie(repo *Repository) *Service {
 }
 
 func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID string) ([]TransactionResponse, error) {
-	user, err := s.repo.FetchUserWithUserID(ctx, mobileUserID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, appErr.ErrUnauthorized
-		}
-		return nil, appErr.ErrFetchingTransactions
-	}
-
-	transactions, err := s.repo.FetchRecentTransactions(ctx, mobileUserID, user.WalletID)
+	transactions, err := s.repo.FetchRecentTransactions(ctx, mobileUserID)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -49,24 +41,15 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 		limit = 20
 	}
 
-	user, err := s.repo.FetchUserWithUserID(ctx, userID)
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, appErr.ErrUnauthorized
-		}
-		return nil, appErr.ErrFetchingTransactions
-	}
-
 	var cursorTime time.Time
 	if cursor != "" {
-		cursorTime, err = time.Parse(time.RFC3339, cursor)
+		_, err := time.Parse(time.RFC3339, cursor)
 		if err != nil {
 			return nil, appErr.ErrInvalidCursor
 		}
 	}
 
-	txs, err := s.repo.FetchTransactionPaged(ctx, userID, user.WalletID, cursorTime, limit)
+	txs, err := s.repo.FetchTransactionPaged(ctx, userID, cursorTime, limit)
 	if err != nil {
 		return nil, appErr.ErrFetchingTransactions
 	}
