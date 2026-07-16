@@ -120,11 +120,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, dat
 		Updates(updates).Error
 }
 
-func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID string, walletID string, from, to time.Time) ([]transaction.Transaction, error) {
+func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID string, from, to time.Time) ([]transaction.Transaction, error) {
 	var transactions []transaction.Transaction
 
 	err := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).
+		Where("mobile_user_id = ? AND created_at >= ? AND created_at <= ? AND status != ?", mobileUserID, from, to, transaction.TransactionStatusPending).
 		Order("created_at DESC").
 		Find(&transactions).Error
 	return transactions, err

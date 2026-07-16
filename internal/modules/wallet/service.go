@@ -205,6 +205,8 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 
 	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
 
+	log.Printf("wallet service: transfer response: %v", resp)
+
 	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit); err != nil {
 		log.Printf("wallet service: failed to complete debit transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer

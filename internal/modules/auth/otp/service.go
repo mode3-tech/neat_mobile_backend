@@ -192,9 +192,10 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 				subject = "Your Password Reset OTP"
 			}
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject: subject,
-				OTP:     code,
-				Year:    now.Year(),
+				Subject:          subject,
+				OTP:              code,
+				Year:             now.Year(),
+				ExpiresInMinutes: int(ttl.Minutes()),
 			})
 			if err != nil {
 				log.Printf("[otp.Issue] failed to render email template: purpose=%s err=%v", in.Purpose, err)
@@ -462,9 +463,10 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 		case ChannelEmail:
 			subject := "Your One Time Password (OTP)"
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject: subject,
-				OTP:     generatedOTP,
-				Year:    now.Year(),
+				Subject:          subject,
+				OTP:              generatedOTP,
+				Year:             now.Year(),
+				ExpiresInMinutes: int(ttl.Minutes()),
 			})
 			if err != nil {
 				log.Printf("[otp.SendOTP] failed to render email template: purpose=%s err=%v", purpose, err)

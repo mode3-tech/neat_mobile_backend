@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
@@ -222,6 +223,8 @@ func Migrate(db *gorm.DB) error {
 		&accountclosure.AccountClosureEvent{},
 		&accountclosure.AccountClosure{},
 		&models.ClosureReferenceCounter{},
+		&referrals.ReferralCode{},
+		&referrals.ReferralRedemption{},
 	); err != nil {
 		return err
 	}

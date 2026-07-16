@@ -40,11 +40,6 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 
 func (r *Repository) IsNotificationsEnabled(ctx context.Context, mobileUserID string) (bool, error) {
-	mobileUserID = strings.TrimSpace(mobileUserID)
-	if mobileUserID == "" {
-		return false, errors.New("user id is required")
-	}
-
 	var user models.User
 	if err := r.db.WithContext(ctx).Model(&models.User{}).Select("is_notifications_enabled").Where("id = ?", mobileUserID).First(&user).Error; err != nil {
 		return false, err
