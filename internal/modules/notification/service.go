@@ -219,12 +219,13 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 	}
 
 	notification := &models.Notification{
-		ID:     uuid.NewString(),
-		UserID: userID,
-		Title:  title,
-		Body:   body,
-		Type:   req.Type,
-		Data:   req.Data,
+		ID:            uuid.NewString(),
+		UserID:        userID,
+		Title:         title,
+		Body:          body,
+		TransactionID: strings.TrimSpace(req.TransactionID),
+		Type:          req.Type,
+		Data:          req.Data,
 	}
 
 	if err := s.repo.CreateNotification(ctx, *notification); err != nil {
@@ -251,12 +252,13 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 		messages := make([]ExpoPushMessage, 0, len(tokens))
 		for _, token := range tokens {
 			messages = append(messages, ExpoPushMessage{
-				To:        token.ExpoPushToken,
-				Title:     title,
-				Body:      body,
-				Data:      req.Data,
-				Sound:     sound,
-				ChannelID: channelID,
+				To:            token.ExpoPushToken,
+				Title:         title,
+				Body:          body,
+				Data:          req.Data,
+				TransactionID: strings.TrimSpace(req.TransactionID),
+				Sound:         sound,
+				ChannelID:     channelID,
 			})
 		}
 
