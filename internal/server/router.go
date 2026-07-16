@@ -22,6 +22,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/notification"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/modules/reporting"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
@@ -367,6 +368,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider)
 	cardHandler := card.NewHandler(cardService)
 	card.RegisterRoutes(apiV1, authGuard, cardHandler)
+
+	referralsRepo := referrals.NewRepository(db)
+	referralsService := referrals.NewService(referralsRepo)
+	referralsHandler := referrals.NewHandler(referralsService)
+	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
 
 	return r, stopCron, nil
 }

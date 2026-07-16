@@ -14,7 +14,7 @@ func (ReferralCode) TableName() string {
 type ReferralRedemption struct {
 	ID             string `gorm:"column:id;primaryKey"`
 	ReferrerUserID string `gorm:"column:referrer_user_id;type:text;not null"`
-	MobileUserID   string `gorm:"column:mobile_user_id;type:text;not null;unique"`
+	ReferredUserID string `gorm:"column:referred_user_id;type:text;not null;unique"`
 	CreatedAt      string `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
 }
 

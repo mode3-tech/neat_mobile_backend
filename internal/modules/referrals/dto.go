@@ -1,5 +1,5 @@
 package referrals
 
-type GenerateReferralCodeResponse struct {
+type RedeemReferralCodeRequest struct {
 	ReferralCode string `json:"referral_code"`
 }
