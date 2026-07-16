@@ -201,6 +201,7 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 		job.MobileUserID,
 		"Your statement is ready",
 		"transaction",
+		"",
 		fmt.Sprintf("Your account statement for the period %s to %s is ready for download.",
 			job.DateFrom.Format("2006-01-02"),
 			job.DateTo.Format("2006-01-02")),

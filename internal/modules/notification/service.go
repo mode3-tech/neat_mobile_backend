@@ -165,13 +165,14 @@ func isDeviceNotRegisteredReceipt(r ExpoPushReceipt) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(val)), "DeviceNotRegistered")
 }
 
-func (s *Service) SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error {
+func (s *Service) SendToUser(ctx context.Context, userID, title, typ, transactionID, body string, data map[string]any) error {
 	return s.SendToUserWithOptions(ctx, SendNotificationRequest{
-		UserID: userID,
-		Title:  title,
-		Type:   typ,
-		Body:   body,
-		Data:   data,
+		UserID:        userID,
+		Title:         title,
+		Type:          typ,
+		TransactionID: transactionID,
+		Body:          body,
+		Data:          data,
 	})
 }
 

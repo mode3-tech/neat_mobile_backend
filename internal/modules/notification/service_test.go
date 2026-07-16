@@ -139,7 +139,7 @@ func TestSendToUserDeletesDeviceNotRegisteredTokens(t *testing.T) {
 	}
 	service := NewService(store, sender, "default", nil)
 
-	err := service.SendToUser(context.Background(), "user-1", "Loan Approved!", models.NotificationTypeLoan, "Your loan has been approved.", map[string]any{
+	err := service.SendToUser(context.Background(), "user-1", "Loan Approved!", models.NotificationTypeLoan, "", "Your loan has been approved.", map[string]any{
 		"screen": "/(loan)/details",
 	})
 	if err != nil {
@@ -166,7 +166,7 @@ func TestSendToUserReturnsSenderError(t *testing.T) {
 		},
 	}, &stubSender{err: expectedErr}, "default", nil)
 
-	err := service.SendToUser(context.Background(), "user-1", "Title", models.NotificationTypeTransaction, "Body", nil)
+	err := service.SendToUser(context.Background(), "user-1", "Title", models.NotificationTypeTransaction, "", "Body", nil)
 	if !errors.Is(err, expectedErr) {
 		t.Fatalf("expected %v, got %v", expectedErr, err)
 	}

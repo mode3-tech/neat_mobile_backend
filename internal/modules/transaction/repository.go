@@ -25,6 +25,12 @@ func (r *Repository) FetchUserWithUserID(ctx context.Context, userID string) (*m
 	return &user, err
 }
 
+func (r *Repository) FetchTransactionByID(ctx context.Context, txID string) (*Transaction, error) {
+	var tx Transaction
+	err := r.db.WithContext(ctx).Where("id = ?", txID).First(&tx).Error
+	return &tx, err
+}
+
 func (r *Repository) FetchRecentTransactions(ctx context.Context, userID string) ([]Transaction, error) {
 	var transactions []Transaction
 	err := r.db.WithContext(ctx).

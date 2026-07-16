@@ -44,7 +44,7 @@ type SmsSender interface {
 }
 
 type NotificationSender interface {
-	SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error
+	SendToUser(ctx context.Context, userID, title, typ, transactionID, body string, data map[string]any) error
 }
 
 type OutgoingSMSService interface {

@@ -17,6 +17,15 @@ func NewServie(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+func (s *Service) FetchTransactionByID(ctx context.Context, txID string) (*TransactionResponse, error) {
+	tx, err := s.repo.FetchTransactionByID(ctx, txID)
+	if err != nil {
+		return nil, appErr.ErrFetchingTransactions
+	}
+	resp := toTransactionResponse(*tx)
+	return &resp, nil
+}
+
 func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID string) ([]TransactionResponse, error) {
 	transactions, err := s.repo.FetchRecentTransactions(ctx, mobileUserID)
 

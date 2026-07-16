@@ -140,8 +140,9 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	if n := strings.TrimSpace(data.Narration); n != "" {
 		narration = &n
 	}
+	txID := uuid.NewString()
 	creditTx := &transaction.Transaction{
-		ID:                  uuid.NewString(),
+		ID:                  txID,
 		MobileUserID:        wallet.MobileUserID,
 		WalletID:            wallet.WalletID,
 		Type:                transaction.TransactionTypeCredit,
@@ -190,7 +191,7 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 				"amount":    amountNaira,
 				"type":      "credit",
 			}
-			if err := s.Notifier.SendToUser(context.Background(), wallet.MobileUserID, title, models.NotificationTypeTransaction, body, data); err != nil {
+			if err := s.Notifier.SendToUser(context.Background(), wallet.MobileUserID, title, models.NotificationTypeTransaction, txID, body, data); err != nil {
 				log.Printf("baas: failed to send credit notification: user=%s err=%v", wallet.MobileUserID, err)
 			}
 		}()
