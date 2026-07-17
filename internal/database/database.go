@@ -229,6 +229,12 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Drop stale mobile_user_id column — an earlier draft of ReferralRedemption
+	// used this name before settling on referrer_user_id/referred_user_id.
+	if err := db.Exec(`ALTER TABLE wallet_referral_redemptions DROP COLUMN IF EXISTS mobile_user_id`).Error; err != nil {
+		return err
+	}
+
 	if err := db.Exec(`
 		DO $$
 		BEGIN

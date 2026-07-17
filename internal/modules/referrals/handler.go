@@ -19,7 +19,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) RedeemReferralCode(c *gin.Context) {
-	mobileUserID := strings.TrimSpace(middleware.UserIDContextKey)
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
 		mapped := response.MapError(appErr.ErrUnauthorized)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
