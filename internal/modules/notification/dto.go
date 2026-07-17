@@ -23,13 +23,12 @@ type SendNotificationRequest struct {
 }
 
 type ExpoPushMessage struct {
-	To            string         `json:"to"`
-	Title         string         `json:"title,omitempty"`
-	Body          string         `json:"body,omitempty"`
-	Data          map[string]any `json:"data,omitempty"`
-	Sound         string         `json:"sound,omitempty"`
-	TransactionID string         `json:"transaction_id,omitempty"`
-	ChannelID     string         `json:"channelId,omitempty"`
+	To        string         `json:"to"`
+	Title     string         `json:"title,omitempty"`
+	Body      string         `json:"body,omitempty"`
+	Data      map[string]any `json:"data,omitempty"`
+	Sound     string         `json:"sound,omitempty"`
+	ChannelID string         `json:"channelId,omitempty"`
 }
 
 type ExpoPushTicket struct {

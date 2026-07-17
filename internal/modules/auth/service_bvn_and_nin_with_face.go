@@ -33,6 +33,7 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 
 	resp, err := s.prembly.ValidateBVNWithFace(ctx, bvn, image)
 	if err != nil {
+
 		return nil, appErr.ErrValidatingBVNWithFace
 	}
 
@@ -94,6 +95,7 @@ func (s *Service) ValidateNINWithFace(ctx context.Context, payload NINWithFaceVa
 
 	resp, err := s.nin.ValidateNINWithFace(ctx, image, nin, *record.VerifiedDOB)
 	if err != nil {
+		// log.Printf("ValidateNINWithFaceError with verif)
 		return nil, appErr.ErrValidatingNINWithFace
 	}
 

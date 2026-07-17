@@ -249,16 +249,29 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 			return nil
 		}
 
+		pushData := req.Data
+		if txID := strings.TrimSpace(req.TransactionID); txID != "" {
+			if pushData == nil {
+				pushData = map[string]any{}
+			} else {
+				merged := make(map[string]any, len(pushData)+1)
+				for k, v := range pushData {
+					merged[k] = v
+				}
+				pushData = merged
+			}
+			pushData["transaction_id"] = txID
+		}
+
 		messages := make([]ExpoPushMessage, 0, len(tokens))
 		for _, token := range tokens {
 			messages = append(messages, ExpoPushMessage{
-				To:            token.ExpoPushToken,
-				Title:         title,
-				Body:          body,
-				Data:          req.Data,
-				TransactionID: strings.TrimSpace(req.TransactionID),
-				Sound:         sound,
-				ChannelID:     channelID,
+				To:        token.ExpoPushToken,
+				Title:     title,
+				Body:      body,
+				Data:      pushData,
+				Sound:     sound,
+				ChannelID: channelID,
 			})
 		}
 
