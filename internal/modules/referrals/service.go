@@ -35,3 +35,7 @@ func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code str
 
 	return nil
 }
+
+func (s *Service) FetchRedeemReferrals(ctx context.Context, page, pageSize int) ([]RedeemedReferral, error) {
+	return s.repo.FetchRedeemReferrals(ctx, page, pageSize)
+}
