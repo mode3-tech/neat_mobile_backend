@@ -125,4 +125,5 @@ var (
 	ErrAccountHasBalance               = errors.New("Account can only be closed after balance is cleared")
 	ErrAccountHasActiveLoans           = errors.New("Account can only be closed after all active loans are repaid")
 	ErrAccountClosureAlreadyInProgress = errors.New("An account closure request is already in progress")
+	ErrInvalidReferralCode             = errors.New("Invalid referral code")
 )

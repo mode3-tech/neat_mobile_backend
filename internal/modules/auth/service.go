@@ -8,6 +8,7 @@ import (
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/notify"
 	"time"
 
@@ -67,6 +68,7 @@ type Service struct {
 	productID            string
 	optimusKYC           OptimusKYCValidation
 	activationCapKobo    int64
+	referralsRepo        *referrals.Repository
 }
 
 func NewService(
@@ -122,6 +124,10 @@ func (s *Service) ConfigureOTPManager(manager authotp.OTPManager) {
 
 func (s *Service) ConfigureOptimusKYC(kyc OptimusKYCValidation) {
 	s.optimusKYC = kyc
+}
+
+func (s *Service) ConfigureReferralsRepo(repo *referrals.Repository) {
+	s.referralsRepo = repo
 }
 
 func (s *Service) VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error {

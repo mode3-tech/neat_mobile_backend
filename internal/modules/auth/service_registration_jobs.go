@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/models"
 	"strings"
@@ -113,6 +114,17 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 		walletResp.Wallet.BankCode,
 		walletResp.Wallet.BankName,
 	)
+
+	if snapshot.ReferrerUserID != "" && s.referralsRepo != nil {
+		if redeemErr := s.referralsRepo.RedeemReferral(ctx, &referrals.ReferralRedemption{
+			ID:             uuid.NewString(),
+			ReferrerUserID: snapshot.ReferrerUserID,
+			ReferredUserID: job.MobileUserID,
+		}); redeemErr != nil {
+			log.Printf("referral redemption failed job_id=%s referrer=%s referred=%s: %v",
+				job.ID, snapshot.ReferrerUserID, job.MobileUserID, redeemErr)
+		}
+	}
 }
 
 func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *RegistrationJob, snapshot *registrationJobSnapshot) (*WalletResponse, error) {

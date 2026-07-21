@@ -370,6 +370,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	card.RegisterRoutes(apiV1, authGuard, cardHandler)
 
 	referralsRepo := referrals.NewRepository(db)
+	authService.ConfigureReferralsRepo(referralsRepo)
 	referralsService := referrals.NewService(referralsRepo)
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)

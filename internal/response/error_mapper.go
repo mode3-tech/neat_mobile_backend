@@ -49,6 +49,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrInvalidReferralCode):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_REFERRAL_CODE",
+				Message: "invalid referral code",
+			},
+		}
+
 	case errors.Is(err, appErr.ErrAccountHasBalance):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,

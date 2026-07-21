@@ -278,6 +278,15 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrTransactionPinMismatch
 	}
 
+	referrerUserID := ""
+	if code := strings.TrimSpace(req.ReferralCode); code != "" {
+		referral, err := s.referralsRepo.FindReferralByCode(ctx, code)
+		if err != nil {
+			return nil, appErr.ErrInvalidReferralCode
+		}
+		referrerUserID = referral.MobileUserID
+	}
+
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -376,13 +385,14 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
 			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
 		},
-		IP:            strings.TrimSpace(ip),
-		WalletEmail:   walletRegistrationEmail(accountEmail, mobileUserID),
-		WalletAddress: address,
-		HouseNo:       houseNo,
-		Gender:        gender,
-		MaritalStatus: maritalStatus,
-		ProductID:     s.productID,
+		IP:             strings.TrimSpace(ip),
+		WalletEmail:    walletRegistrationEmail(accountEmail, mobileUserID),
+		WalletAddress:  address,
+		HouseNo:        houseNo,
+		Gender:         gender,
+		MaritalStatus:  maritalStatus,
+		ProductID:      s.productID,
+		ReferrerUserID: referrerUserID,
 	}, nil
 }
 
