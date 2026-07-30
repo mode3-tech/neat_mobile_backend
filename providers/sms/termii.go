@@ -39,7 +39,7 @@ func (t *Termii) Send(ctx context.Context, destination, message string) error {
 		"to":      destination,
 		"sms":     message,
 		"type":    "plain",
-		"channel": "generic",
+		"channel": "dnd",
 	}
 
 	body, err := json.Marshal(payload)
