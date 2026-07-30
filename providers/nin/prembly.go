@@ -4,130 +4,178 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
 	"strings"
 	"time"
 )
+
+const premblyErrorBodyLimit = 2048
 
 type NIN struct {
 	apiKey     string
 	httpClient *http.Client
 }
 
+// premblyErrorResponse supports documented and top-level Prembly errors.
+type premblyErrorResponse struct {
+	ResponseCode string `json:"response_code"`
+	Message      string `json:"message"`
+	Detail       string `json:"detail"`
+	RequestID    string `json:"request_id"`
+	Error        struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 func NewNIN(apiKey string) *NIN {
-	return &NIN{apiKey: apiKey, httpClient: &http.Client{
-		Timeout: 10 * time.Second,
-	}}
+	return &NIN{apiKey: apiKey, httpClient: &http.Client{Timeout: 10 * time.Second}}
 }
 
 func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidationSuccessResponse, error) {
-	url := "https://api.prembly.com/verification/vnin"
-
-	payload := map[string]string{
+	resp, duration, err := n.postJSON(ctx, "https://api.prembly.com/verification/vnin", "prembly_nin", map[string]string{
 		"number_nin": nin,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, premblyHTTPError("prembly_nin", resp, duration)
+	}
+
+	var result PremblyNINValidationSuccessResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("prembly_nin response decode failed duration=%s err=%v", duration, err)
+		return nil, invalidPremblyResponseError()
+	}
+	return &result, nil
+}
+
+func (n *NIN) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
+	resp, duration, err := n.postJSON(ctx, "https://api.prembly.com/verification/nin_w_face", "prembly_nin_with_face", map[string]string{
+		"number_nin":    numberNin,
+		"image":         image,
+		"date_of_birth": dateOfBirth,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, premblyHTTPError("prembly_nin_with_face", resp, duration)
+	}
+
+	var result PremblyNINWithFaceValidationSuccessResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("prembly_nin_with_face response decode failed duration=%s err=%v", duration, err)
+		return nil, invalidPremblyResponseError()
+	}
+	return &result, nil
+}
+
+func (n *NIN) postJSON(ctx context.Context, endpoint, operation string, payload map[string]string) (*http.Response, time.Duration, error) {
+	if strings.TrimSpace(n.apiKey) == "" {
+		log.Printf("%s request skipped: Prembly API key is not configured", operation)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "NIN validation service is not configured",
+		}
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		log.Printf("%s payload marshal failed: %v", operation, err)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "NIN validation request could not be created",
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		log.Printf("%s request creation failed: %v", operation, err)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "NIN validation request could not be created",
+		}
 	}
 
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("x-api-key", strings.TrimSpace(n.apiKey))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-key", strings.TrimSpace(n.apiKey))
 
 	start := time.Now()
 	resp, err := n.httpClient.Do(req)
 	duration := time.Since(start)
 	if err != nil {
-		log.Printf("prembly_nin request failed duration=%s err=%v", duration, err)
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			log.Printf("prembly nin validation failed and response body could not be read: %v", readErr)
-		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
-			log.Printf("prembly nin validation failed body=%s", body)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			log.Printf("%s request timed out duration=%s err=%v", operation, duration, err)
+			return nil, duration, &appErr.PremblyError{
+				Status:    http.StatusRequestTimeout,
+				Code:      "TIMEOUT",
+				Message:   "NIN validation service timed out",
+				Retryable: true,
+			}
 		}
-		log.Printf("prembly_nin non-2xx status=%d duration=%s", resp.StatusCode, duration)
-		return nil, fmt.Errorf("prembly nin validation failed with status %d", resp.StatusCode)
+		log.Printf("%s request failed duration=%s err=%v", operation, duration, err)
+		return nil, duration, &appErr.PremblyError{
+			Status:    http.StatusBadGateway,
+			Code:      "NETWORK_ERROR",
+			Message:   "NIN validation service is unavailable",
+			Retryable: true,
+		}
 	}
-
-	var result PremblyNINValidationSuccessResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("prembly nin validation response body could not be decoded: %v", err)
-		return nil, err
-	}
-
-	return &result, nil
+	return resp, duration, nil
 }
 
-func (n *NIN) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
-	if n.apiKey == "" {
-		log.Printf("api key for validating nin with face is missing")
-		return nil, fmt.Errorf("api key for validating nin with face is missing")
+func invalidPremblyResponseError() error {
+	return &appErr.PremblyError{
+		Status:    http.StatusBadGateway,
+		Code:      "INVALID_RESPONSE",
+		Message:   "NIN validation service returned an invalid response",
+		Retryable: true,
+	}
+}
+
+func premblyHTTPError(operation string, resp *http.Response, duration time.Duration) error {
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, premblyErrorBodyLimit))
+	if readErr != nil {
+		log.Printf("%s error response read failed status=%d duration=%s err=%v", operation, resp.StatusCode, duration, readErr)
+	} else {
+		log.Printf("%s unexpected status=%d duration=%s response=%s", operation, resp.StatusCode, duration, strings.TrimSpace(string(body)))
 	}
 
-	url := "https://api.prembly.com/verification/nin_w_face"
-
-	payload := map[string]string{
-		"number_nin":    numberNin,
-		"image":         image,
-		"date_of_birth": dateOfBirth,
+	providerErr := &appErr.PremblyError{
+		Status:    resp.StatusCode,
+		Code:      "HTTP_ERROR",
+		Message:   "NIN validation service returned an unexpected error",
+		Retryable: resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError,
 	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("error marshaling the nin with face validation payload: %s", err)
-		return nil, fmt.Errorf("error marshaling the nin with face validation payload: %s", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("request failed: %v", err)
-		return nil, fmt.Errorf("request failed: %v", err)
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("x-api-key", strings.TrimSpace(n.apiKey))
-
-	resp, err := n.httpClient.Do(req)
-	if err != nil {
-		log.Printf("request failed: %v", err)
-		return nil, fmt.Errorf("request failed: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			log.Printf("prembly nin validation failed and response body could not be read: %v", readErr)
-		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
-			log.Printf("prembly nin validation failed body=%s", body)
+	var response premblyErrorResponse
+	if len(body) > 0 && json.Unmarshal(body, &response) == nil {
+		providerErr.RequestID = response.RequestID
+		if response.Error.Code != "" {
+			providerErr.Code = response.Error.Code
+		} else if response.ResponseCode != "" {
+			providerErr.Code = response.ResponseCode
 		}
-		log.Printf("prembly_nin non-2xx status=%d", resp.StatusCode)
-		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+		if response.Error.Message != "" {
+			providerErr.Message = response.Error.Message
+		} else if response.Message != "" {
+			providerErr.Message = response.Message
+		} else if response.Detail != "" {
+			providerErr.Message = response.Detail
+		}
 	}
-
-	var result PremblyNINWithFaceValidationSuccessResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("failed to decode response body: %v", err)
-		return nil, fmt.Errorf("failed to decode response body: %v", err)
-	}
-
-	return &result, nil
+	return providerErr
 }

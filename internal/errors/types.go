@@ -42,3 +42,15 @@ type XpressWalletProviderError struct {
 func (e XpressWalletProviderError) Error() string {
 	return e.Message
 }
+
+type PremblyError struct {
+	Status    int    // HTTP status from Prembly (or synthetic for client/network failures)
+	Code      string // Prembly response code or a local classification such as TIMEOUT
+	Message   string // Safe, human-readable error message
+	RequestID string // Prembly request identifier, when supplied
+	Retryable bool   // Whether a later request may succeed without changing input
+}
+
+func (e PremblyError) Error() string {
+	return e.Message
+}
