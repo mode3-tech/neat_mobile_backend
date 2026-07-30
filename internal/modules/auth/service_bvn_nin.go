@@ -21,9 +21,30 @@ import (
 	"gorm.io/gorm"
 )
 
+// ValidateNIN resolves the configured identity provider and performs the NIN lookup.
+// The same system_preferences row drives BVN and NIN, so flipping it moves both.
 func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
-	if nin == "" || len(nin) < 11 || len(nin) > 11 {
-		return nil, errors.New("invalid nin")
+	provider, client := s.ninProviderFor(ctx)
+	if client == nil {
+		log.Printf("ValidateNIN: %s nin provider is not configured", provider)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	return s.validateNINWith(ctx, provider, client, bvnVerificationID, nin)
+}
+
+// ninProviderFor resolves the configured provider and the client that serves it.
+// Anything other than an explicit prembly preference lands on Tendar.
+func (s *Service) ninProviderFor(ctx context.Context) (Provider, NINValidation) {
+	if s.resolveProvider(ctx) == ProviderPrembly {
+		return ProviderPrembly, s.ninPrembly
+	}
+	return ProviderTendar, s.ninTendar
+}
+
+func (s *Service) validateNINWith(ctx context.Context, provider Provider, client NINValidation, bvnVerificationID, nin string) (*ninInfo, error) {
+	if len(nin) != 11 {
+		return nil, appErr.ErrInvalidNIN
 	}
 
 	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
@@ -34,10 +55,10 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		return nil, err
 	}
 
-	resp, err := s.nin.ValidateNIN(ctx, nin)
+	resp, err := client.ValidateNIN(ctx, nin)
 	if err != nil {
-		log.Printf("ValidateNIN: provider call failed: %v", err)
-		return nil, err
+		log.Printf("ValidateNIN: %s provider call failed: %v", provider, err)
+		return nil, translateProviderError(err, appErr.ErrNINNotFound)
 	}
 
 	firstName := TitleCase(resp.Data.FirstName)
@@ -68,7 +89,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		ID:            verificationID,
 		Type:          models.VerificationTypeNIN,
 		Status:        models.VerificationStatusVerified,
-		Provider:      string(ProviderPrembly),
+		Provider:      string(provider),
 		SubjectHash:   subjectHash,
 		SubjectMasked: &maskedNIN,
 		ExpiresAt:     &expiresAt,
@@ -110,18 +131,24 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	}, nil
 }
 
-func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+// resolveProvider reads the single system_preferences row that governs both BVN and
+// NIN validation. Any failure — no source wired, missing row, DB error — falls back
+// to Tendar.
+func (s *Service) resolveProvider(ctx context.Context) Provider {
 	if s.providerSource == nil {
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		return ProviderTendar
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
-		log.Printf("failed to resolve bvn provider from source; forcing tendar: %v", err)
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		log.Printf("failed to resolve validation provider from source; forcing tendar: %v", err)
+		return ProviderTendar
 	}
+	return provider
+}
 
-	switch provider {
+func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+	switch s.resolveProvider(ctx) {
 	case ProviderPrembly:
 		return s.ValidateBVNWithPrembly(ctx, bvn)
 	default:
@@ -132,7 +159,7 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
 		log.Printf("tendar validator is not configured")
-		return nil, errors.New("tendar validator is not configured")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
@@ -148,7 +175,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithTendar: provider call failed: %v", err)
-		return nil, err
+		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("invalid bvn number")
@@ -296,7 +323,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
 		log.Printf("ValidateBVNWithPrembly: prembly provider not configured")
-		return nil, errors.New("couldn't resolve prembly provider")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
@@ -310,7 +337,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithPrembly: provider call failed: %v", err)
-		return nil, err
+		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("ValidateBVNWithPrembly: provider returned nil response")

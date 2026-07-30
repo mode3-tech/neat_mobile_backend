@@ -4,18 +4,33 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/providers/bvn"
 	"net/http"
 	"strings"
 	"time"
 )
 
+const premblyErrorBodyLimit = 2048
+
 type Prembly struct {
 	apiKey     string
 	httpClient *http.Client
+}
+
+// premblyErrorResponse supports documented and top-level Prembly errors.
+type premblyErrorResponse struct {
+	ResponseCode string `json:"response_code"`
+	Message      string `json:"message"`
+	Detail       string `json:"detail"`
+	RequestID    string `json:"request_id"`
+	Error        struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 func NewPrembly(apiKey string) *Prembly {
@@ -25,108 +40,146 @@ func NewPrembly(apiKey string) *Prembly {
 }
 
 func (p *Prembly) ValidateBVNWithPrembly(ctx context.Context, BVN string) (*bvn.PremblyBVNValidationSuccessResponse, error) {
-	url := "https://api.prembly.com/verification/bvn"
-
-	payload := map[string]string{
+	resp, duration, err := p.postJSON(ctx, "https://api.prembly.com/verification/bvn", "prembly_bvn", map[string]string{
 		"number": BVN,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, premblyHTTPError("prembly_bvn", resp, duration)
+	}
+
+	var result bvn.PremblyBVNValidationSuccessResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("prembly_bvn response decode failed duration=%s err=%v", duration, err)
+		return nil, invalidPremblyResponseError()
+	}
+	return &result, nil
+}
+
+func (p *Prembly) ValidateBVNWithFace(ctx context.Context, number, image string) (*bvn.PremblyBVNWithFaceResponse, error) {
+	resp, duration, err := p.postJSON(ctx, "https://api.prembly.com/verification/bvn_w_face", "prembly_bvn_with_face", map[string]string{
+		"number": number,
+		"image":  image,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, premblyHTTPError("prembly_bvn_with_face", resp, duration)
+	}
+
+	var result bvn.PremblyBVNWithFaceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("prembly_bvn_with_face response decode failed duration=%s err=%v", duration, err)
+		return nil, invalidPremblyResponseError()
+	}
+	return &result, nil
+}
+
+func (p *Prembly) postJSON(ctx context.Context, endpoint, operation string, payload map[string]string) (*http.Response, time.Duration, error) {
+	if strings.TrimSpace(p.apiKey) == "" {
+		log.Printf("%s request skipped: Prembly API key is not configured", operation)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "BVN validation service is not configured",
+		}
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		log.Printf("%s payload marshal failed: %v", operation, err)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "BVN validation request could not be created",
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		log.Printf("%s request creation failed: %v", operation, err)
+		return nil, 0, &appErr.PremblyError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "BVN validation request could not be created",
+		}
 	}
 
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("x-api-key", strings.TrimSpace(p.apiKey))
 
 	start := time.Now()
 	resp, err := p.httpClient.Do(req)
 	duration := time.Since(start)
 	if err != nil {
-		log.Printf("prembly_bvn request failed duration=%s err=%v", duration, err)
-		return nil, err
-	}
-
-	log.Printf("prembly_bvn request completed status=%d duration=%s", resp.StatusCode, duration)
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			log.Printf("prembly bvn validation failed and response body could not be read: %v", readErr)
-		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
-			log.Printf("prembly bvn validation failed body=%s", body)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			log.Printf("%s request timed out duration=%s err=%v", operation, duration, err)
+			return nil, duration, &appErr.PremblyError{
+				Status:    http.StatusRequestTimeout,
+				Code:      "TIMEOUT",
+				Message:   "BVN validation service timed out",
+				Retryable: true,
+			}
 		}
-		log.Printf("prembly_bvn non-2xx status=%d duration=%s", resp.StatusCode, duration)
-		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+		log.Printf("%s request failed duration=%s err=%v", operation, duration, err)
+		return nil, duration, &appErr.PremblyError{
+			Status:    http.StatusBadGateway,
+			Code:      "NETWORK_ERROR",
+			Message:   "BVN validation service is unavailable",
+			Retryable: true,
+		}
 	}
 
-	var result bvn.PremblyBVNValidationSuccessResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	log.Printf("%s request completed status=%d duration=%s", operation, resp.StatusCode, duration)
+	return resp, duration, nil
 }
 
-func (p *Prembly) ValidateBVNWithFace(ctx context.Context, number, image string) (*bvn.PremblyBVNWithFaceResponse, error) {
-	if p.apiKey == "" {
-		log.Printf("can't validate bvn with face because api key is missing")
-		return nil, fmt.Errorf("api key for bvn validation with face is missing")
+func invalidPremblyResponseError() error {
+	return &appErr.PremblyError{
+		Status:    http.StatusBadGateway,
+		Code:      "INVALID_RESPONSE",
+		Message:   "BVN validation service returned an invalid response",
+		Retryable: true,
 	}
-	url := "https://api.prembly.com/verification/bvn_w_face"
+}
 
-	payload := map[string]string{
-		"number": number,
-		"image":  image,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("error occured while marshaling payload: %v", err)
-		return nil, fmt.Errorf("error occured while marshaling payload: %v", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("an error occured: %v", err)
-		return nil, fmt.Errorf("an error occured: %v", err)
+func premblyHTTPError(operation string, resp *http.Response, duration time.Duration) error {
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, premblyErrorBodyLimit))
+	if readErr != nil {
+		log.Printf("%s error response read failed status=%d duration=%s err=%v", operation, resp.StatusCode, duration, readErr)
+	} else {
+		log.Printf("%s unexpected status=%d duration=%s response=%s", operation, resp.StatusCode, duration, strings.TrimSpace(string(body)))
 	}
 
-	req.Header.Set("accept", "application/json")
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		log.Printf("request failed: %v", err)
-		return nil, fmt.Errorf("request failed: %v", err)
+	providerErr := &appErr.PremblyError{
+		Status:    resp.StatusCode,
+		Code:      "HTTP_ERROR",
+		Message:   "BVN validation service returned an unexpected error",
+		Retryable: resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError,
 	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			log.Printf("prembly bvn validation failed and response body could not be read: %v", readErr)
-		} else if body := strings.TrimSpace(string(bodyBytes)); body != "" {
-			log.Printf("prembly bvn validation failed body=%s", body)
+	var response premblyErrorResponse
+	if len(body) > 0 && json.Unmarshal(body, &response) == nil {
+		providerErr.RequestID = response.RequestID
+		if response.Error.Code != "" {
+			providerErr.Code = response.Error.Code
+		} else if response.ResponseCode != "" {
+			providerErr.Code = response.ResponseCode
 		}
-		log.Printf("prembly_bvn non-2xx status=%d", resp.StatusCode)
-		return nil, fmt.Errorf("prembly bvn validation failed with status %d", resp.StatusCode)
+		if response.Error.Message != "" {
+			providerErr.Message = response.Error.Message
+		} else if response.Message != "" {
+			providerErr.Message = response.Message
+		} else if response.Detail != "" {
+			providerErr.Message = response.Detail
+		}
 	}
-
-	var result bvn.PremblyBVNWithFaceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("failed to decode response body: %v", err)
-		return nil, fmt.Errorf("failed to decode response body: %v", err)
-	}
-
-	return &result, nil
+	return providerErr
 }

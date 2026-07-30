@@ -33,8 +33,10 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 
 	resp, err := s.prembly.ValidateBVNWithFace(ctx, bvn, image)
 	if err != nil {
-
-		return nil, appErr.ErrValidatingBVNWithFace
+		// Only a genuine face comparison result should be reported as a mismatch;
+		// a timeout or an unconfigured key must not tell the user their face is wrong.
+		log.Printf("ValidateBVNWithFace: provider call failed: %v", err)
+		return nil, translateProviderError(err, appErr.ErrValidatingBVNWithFace)
 	}
 
 	faceRecord := &models.FaceCheckRecord{
@@ -93,10 +95,17 @@ func (s *Service) ValidateNINWithFace(ctx context.Context, payload NINWithFaceVa
 		return nil, appErr.ErrInvalidVerificationID
 	}
 
-	resp, err := s.nin.ValidateNINWithFace(ctx, image, nin, *record.VerifiedDOB)
+	if s.ninFace == nil {
+		log.Printf("ValidateNINWithFace: nin face provider is not configured")
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	resp, err := s.ninFace.ValidateNINWithFace(ctx, image, nin, *record.VerifiedDOB)
 	if err != nil {
-		// log.Printf("ValidateNINWithFaceError with verif)
-		return nil, appErr.ErrValidatingNINWithFace
+		// Only a genuine face comparison result should be reported as a mismatch;
+		// a timeout or an unconfigured key must not tell the user their face is wrong.
+		log.Printf("ValidateNINWithFace: provider call failed: %v", err)
+		return nil, translateProviderError(err, appErr.ErrValidatingNINWithFace)
 	}
 
 	faceRecord := &models.FaceCheckRecord{

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	nin "neat_mobile_app_backend/providers/nin"
 	"net/http"
 	"strings"
 	"time"
@@ -36,9 +37,9 @@ func NewPrembly(apiKey string) *Prembly {
 	return &Prembly{apiKey: apiKey, httpClient: &http.Client{Timeout: 10 * time.Second}}
 }
 
-func (p *Prembly) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidationSuccessResponse, error) {
+func (p *Prembly) ValidateNIN(ctx context.Context, number string) (*nin.ValidationResponse, error) {
 	resp, duration, err := p.postJSON(ctx, "https://api.prembly.com/verification/vnin", "prembly_nin", map[string]string{
-		"number_nin": nin,
+		"number_nin": number,
 	})
 	if err != nil {
 		return nil, err
@@ -54,7 +55,19 @@ func (p *Prembly) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValid
 		log.Printf("prembly_nin response decode failed duration=%s err=%v", duration, err)
 		return nil, invalidPremblyResponseError()
 	}
-	return &result, nil
+	// Prembly non-deterministically serves the identity payload from either data or
+	// nin_data (the BVN endpoint has the same quirk). Prefer data and fall back to
+	// nin_data field by field.
+	d := result.Data
+	fb := result.NINData
+	return &nin.ValidationResponse{Data: nin.ValidationData{
+		FirstName:   firstNonEmpty(d.FirstName, fb.FirstName),
+		MiddleName:  firstNonEmpty(d.MiddleName, fb.MiddleName),
+		Surname:     firstNonEmpty(d.Surname, fb.Surname),
+		BirthDate:   firstNonEmpty(d.BirthDate, fb.BirthDate),
+		TelephoneNo: firstNonEmpty(d.TelephoneNo, fb.TelephoneNo),
+		Email:       firstNonEmpty(d.Email, fb.Email),
+	}}, nil
 }
 
 func (p *Prembly) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
@@ -136,6 +149,15 @@ func (p *Prembly) postJSON(ctx context.Context, endpoint, operation string, payl
 		}
 	}
 	return resp, duration, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func invalidPremblyResponseError() error {

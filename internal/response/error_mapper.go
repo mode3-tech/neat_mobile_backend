@@ -4,6 +4,7 @@ import (
 	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
+	"strings"
 )
 
 type ErrorMapping struct {
@@ -1167,6 +1168,19 @@ func MapError(err error) ErrorMapping {
 			}
 		}
 
+		// Safety net for identity-provider failures the service layer did not
+		// translate into a domain error (see auth.translateProviderError). Without
+		// these arms an upstream 401/429/timeout would surface as a bare 500.
+		var premblyErr *appErr.PremblyError
+		if errors.As(err, &premblyErr) {
+			return mapIdentityProviderError(premblyErr.Status, premblyErr.Code, premblyErr.Message, premblyErr.Retryable)
+		}
+
+		var tendarErr *appErr.TendarError
+		if errors.As(err, &tendarErr) {
+			return mapIdentityProviderError(tendarErr.Status, tendarErr.Code, tendarErr.Message, tendarErr.Retryable)
+		}
+
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -1174,6 +1188,43 @@ func MapError(err error) ErrorMapping {
 				Message: "An unexpected error occurred, please try again later",
 			},
 		}
+	}
+}
+
+// identityProviderInfraCodes are locally-synthesized classifications describing a
+// failure of the integration rather than of the identity being checked. They are
+// not user-actionable and would leak our setup, so they get a generic 503.
+var identityProviderInfraCodes = map[string]struct{}{
+	"CLIENT_ERROR":     {},
+	"TIMEOUT":          {},
+	"NETWORK_ERROR":    {},
+	"INVALID_RESPONSE": {},
+}
+
+// mapIdentityProviderError renders a Prembly/Tendar failure without forwarding the
+// upstream HTTP status or request ID to the client — those are logged at the call
+// site instead.
+func mapIdentityProviderError(status int, code, message string, retryable bool) ErrorMapping {
+	_, infra := identityProviderInfraCodes[code]
+	if infra || retryable || status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "SERVICE_UNAVAILABLE",
+				Message: appErr.ErrProviderServiceUnavailable.Error(),
+			},
+		}
+	}
+
+	if strings.TrimSpace(message) == "" {
+		message = "Identity verification could not be completed, please try again"
+	}
+	return ErrorMapping{
+		Status: http.StatusUnprocessableEntity,
+		Error: APIError{
+			Code:    "IDENTITY_PROVIDER_ERROR",
+			Message: message,
+		},
 	}
 }
 

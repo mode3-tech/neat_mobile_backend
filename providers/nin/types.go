@@ -141,3 +141,17 @@ type PremblyNINFaceData struct {
 	Message      string  `json:"message"`
 	Confidence   float64 `json:"confidence"`
 }
+
+// ValidationResponse is the provider-neutral NIN identity data used by the auth service.
+type ValidationResponse struct {
+	Data ValidationData
+}
+
+type ValidationData struct {
+	FirstName   string
+	MiddleName  string
+	Surname     string
+	BirthDate   string
+	TelephoneNo string
+	Email       string
+}

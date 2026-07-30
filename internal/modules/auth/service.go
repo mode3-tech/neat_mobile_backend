@@ -57,8 +57,10 @@ type Service struct {
 	jwtSigner            JWTSigner
 	tender               TendarValidation
 	prembly              PremblyValidation
-	nin                  NINValidation
-	providerSource       BVNProviderSource
+	ninPrembly           NINValidation
+	ninTendar            NINValidation
+	ninFace              NINFaceValidation
+	providerSource       ValidationProviderSource
 	otpManager           authotp.OTPManager
 	walletService        WalletService
 	walletPayloadSeedKey string
@@ -83,8 +85,10 @@ func NewService(
 	jwtSigner JWTSigner,
 	tender TendarValidation,
 	prembly PremblyValidation,
-	nin NINValidation,
-	providerSource BVNProviderSource,
+	ninPrembly NINValidation,
+	ninTendar NINValidation,
+	ninFace NINFaceValidation,
+	providerSource ValidationProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
 	walletPayloadSeedKey string,
@@ -105,7 +109,9 @@ func NewService(
 		jwtSigner:            jwtSigner,
 		tender:               tender,
 		prembly:              prembly,
-		nin:                  nin,
+		ninPrembly:           ninPrembly,
+		ninTendar:            ninTendar,
+		ninFace:              ninFace,
 		providerSource:       providerSource,
 		otpManager:           otpManager,
 		walletService:        walletService,

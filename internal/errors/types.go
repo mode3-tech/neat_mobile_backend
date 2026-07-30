@@ -54,3 +54,14 @@ type PremblyError struct {
 func (e PremblyError) Error() string {
 	return e.Message
 }
+
+type TendarError struct {
+	Status    int
+	Code      string
+	Message   string
+	Retryable bool
+}
+
+func (e TendarError) Error() string {
+	return e.Message
+}

@@ -37,6 +37,7 @@ import (
 	mailprovider "neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
 	ninPrembly "neat_mobile_app_backend/providers/nin/prembly"
+	ninTendar "neat_mobile_app_backend/providers/nin/tendar"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	termii "neat_mobile_app_backend/providers/sms"
@@ -121,7 +122,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	authRepo := auth.NewRespository(db)
 	verificationRepo := verification.NewVerification(db)
-	ninProvider := ninPrembly.NewPrembly(cfg.PremblyAPIKey)
+	ninPremblyProvider := ninPrembly.NewPrembly(cfg.PremblyAPIKey)
+	ninTendarProvider := ninTendar.NewTendar(cfg.TendarAPIKey)
 	loginRateLimiter := middleware.NewLoginRateLimiter(middleware.LoginRateLimiterConfig{
 		IPMaxAttempts:    cfg.LoginRateLimitIPMaxAttempts,
 		EmailMaxAttempts: cfg.LoginRateLimitEmailMaxAttempts,
@@ -160,7 +162,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	deviceValidator := middleware.DeviceValidator(deviceService)
