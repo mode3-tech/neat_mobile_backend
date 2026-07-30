@@ -3,7 +3,7 @@ package phone
 import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"regexp"
-	"strings"
+"strings"
 )
 
 var nonDigit = regexp.MustCompile(`\D`)
@@ -22,9 +22,7 @@ func NormalizeNigerianNumber(input string) (string, error) {
 	case len(cleaned) == 10:
 		return "234" + cleaned, nil
 	}
-
 	return "", appErr.ErrInvalidPhoneNumber
-
 }
 
 func ToLocalFormat(input string) (string, error) {

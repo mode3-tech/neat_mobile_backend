@@ -78,15 +78,6 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
-	// Swap back address/email values corrupted by the UpdateProfile column swap bug.
-	if err := db.Exec(`
-		UPDATE wallet_users
-		SET email = address, address = email
-		WHERE email NOT LIKE '%@%' AND email != '' AND address IS NOT NULL AND address != '';
-	`).Error; err != nil {
-		return err
-	}
-
 	// Copy notifications_enabled → is_notifications_enabled, then drop the old column.
 	if err := db.Exec(`
 		DO $$
@@ -226,6 +217,15 @@ func Migrate(db *gorm.DB) error {
 		&referrals.ReferralCode{},
 		&referrals.ReferralRedemption{},
 	); err != nil {
+		return err
+	}
+
+	// Swap back address/email values corrupted by the UpdateProfile column swap bug.
+	if err := db.Exec(`
+		UPDATE wallet_users
+		SET email = address, address = email
+		WHERE email NOT LIKE '%@%' AND email != '' AND address IS NOT NULL AND address != '';
+	`).Error; err != nil {
 		return err
 	}
 
