@@ -31,12 +31,12 @@ import (
 	"neat_mobile_app_backend/internal/sms"
 	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
-	"neat_mobile_app_backend/providers/bvn/prembly"
+	bvnPrembly "neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	cardprovider "neat_mobile_app_backend/providers/card"
 	mailprovider "neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
-	"neat_mobile_app_backend/providers/nin"
+	ninPrembly "neat_mobile_app_backend/providers/nin/prembly"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
 	termii "neat_mobile_app_backend/providers/sms"
@@ -108,7 +108,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
-	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
+	premblyProvider := bvnPrembly.NewPrembly(cfg.PremblyAPIKey)
 
 	var cbaClient *cba.ProviderClient
 	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
@@ -121,7 +121,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	authRepo := auth.NewRespository(db)
 	verificationRepo := verification.NewVerification(db)
-	ninProvider := nin.NewNIN(cfg.PremblyAPIKey)
+	ninProvider := ninPrembly.NewPrembly(cfg.PremblyAPIKey)
 	loginRateLimiter := middleware.NewLoginRateLimiter(middleware.LoginRateLimiterConfig{
 		IPMaxAttempts:    cfg.LoginRateLimitIPMaxAttempts,
 		EmailMaxAttempts: cfg.LoginRateLimitEmailMaxAttempts,

@@ -1,4 +1,4 @@
-package nin
+package prembly
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 
 const premblyErrorBodyLimit = 2048
 
-type NIN struct {
+type Prembly struct {
 	apiKey     string
 	httpClient *http.Client
 }
@@ -32,12 +32,12 @@ type premblyErrorResponse struct {
 	} `json:"error"`
 }
 
-func NewNIN(apiKey string) *NIN {
-	return &NIN{apiKey: apiKey, httpClient: &http.Client{Timeout: 10 * time.Second}}
+func NewPrembly(apiKey string) *Prembly {
+	return &Prembly{apiKey: apiKey, httpClient: &http.Client{Timeout: 10 * time.Second}}
 }
 
-func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidationSuccessResponse, error) {
-	resp, duration, err := n.postJSON(ctx, "https://api.prembly.com/verification/vnin", "prembly_nin", map[string]string{
+func (p *Prembly) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidationSuccessResponse, error) {
+	resp, duration, err := p.postJSON(ctx, "https://api.prembly.com/verification/vnin", "prembly_nin", map[string]string{
 		"number_nin": nin,
 	})
 	if err != nil {
@@ -57,8 +57,8 @@ func (n *NIN) ValidateNIN(ctx context.Context, nin string) (*PremblyNINValidatio
 	return &result, nil
 }
 
-func (n *NIN) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
-	resp, duration, err := n.postJSON(ctx, "https://api.prembly.com/verification/nin_w_face", "prembly_nin_with_face", map[string]string{
+func (p *Prembly) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*PremblyNINWithFaceValidationSuccessResponse, error) {
+	resp, duration, err := p.postJSON(ctx, "https://api.prembly.com/verification/nin_w_face", "prembly_nin_with_face", map[string]string{
 		"number_nin":    numberNin,
 		"image":         image,
 		"date_of_birth": dateOfBirth,
@@ -80,8 +80,8 @@ func (n *NIN) ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfB
 	return &result, nil
 }
 
-func (n *NIN) postJSON(ctx context.Context, endpoint, operation string, payload map[string]string) (*http.Response, time.Duration, error) {
-	if strings.TrimSpace(n.apiKey) == "" {
+func (p *Prembly) postJSON(ctx context.Context, endpoint, operation string, payload map[string]string) (*http.Response, time.Duration, error) {
+	if strings.TrimSpace(p.apiKey) == "" {
 		log.Printf("%s request skipped: Prembly API key is not configured", operation)
 		return nil, 0, &appErr.PremblyError{
 			Status:  http.StatusInternalServerError,
@@ -112,10 +112,10 @@ func (n *NIN) postJSON(ctx context.Context, endpoint, operation string, payload 
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-api-key", strings.TrimSpace(n.apiKey))
+	req.Header.Set("x-api-key", strings.TrimSpace(p.apiKey))
 
 	start := time.Now()
-	resp, err := n.httpClient.Do(req)
+	resp, err := p.httpClient.Do(req)
 	duration := time.Since(start)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
