@@ -384,10 +384,20 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// wallet_transfers is a legacy table and is not created by AutoMigrate.
 	if err := db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_transfers_transaction_reference
-		ON wallet_transfers (transaction_reference)
-		WHERE transaction_reference IS NOT NULL AND transaction_reference != ''
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = 'wallet_transfers'
+			) THEN
+				CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_transfers_transaction_reference
+				ON wallet_transfers (transaction_reference)
+				WHERE transaction_reference IS NOT NULL AND transaction_reference != '';
+			END IF;
+		END $$;
 	`).Error; err != nil {
 		return err
 	}
