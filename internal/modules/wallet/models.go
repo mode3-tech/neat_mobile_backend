@@ -13,7 +13,7 @@ type CustomerWallet struct {
 	WalletCustomerID string        `gorm:"column:wallet_customer_id;type:text;not null"`
 	Metadata         types.JSONMap `gorm:"column:metadata;type:jsonb;not null"`
 	BVN              string        `gorm:"column:bvn;type:text;not null"`
-	CoreCustomerID   string        `gorm:"column:core_customer_id;type:int64"`
+	CoreCustomerID   *string       `gorm:"column:core_customer_id;type:text"`
 	Currency         string        `gorm:"column:currency;type:text;not null"`
 	DateOfBirth      string        `gorm:"column:date_of_birth;type:text;not null"`
 	FirstName        string        `gorm:"column:first_name;type:text;not null"`
