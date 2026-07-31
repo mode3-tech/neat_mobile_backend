@@ -1112,6 +1112,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrAppOSNotFound):
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "APP_OS_NOT_FOUND",
+				Message: appErr.ErrAppOSNotFound.Error(),
+			},
+		}
+
 	default:
 		var xpressWalletErr *appErr.XpressWalletProviderError
 		if errors.As(err, &xpressWalletErr) {

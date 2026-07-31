@@ -14,6 +14,7 @@ import (
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/modules/account"
 	"neat_mobile_app_backend/internal/modules/accountclosure"
+	appversion "neat_mobile_app_backend/internal/modules/app_version"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
@@ -377,6 +378,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
 
+	appVersionRepo := appversion.NewRepository(db)
+	appVersionService := appversion.NewService(appVersionRepo)
+	appVersionHandler := appversion.NewHandler(appVersionService)
+	appversion.RegisterRoutes(r, appVersionHandler)
 	return r, stopCron, nil
 }
 

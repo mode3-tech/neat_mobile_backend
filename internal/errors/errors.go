@@ -126,4 +126,5 @@ var (
 	ErrAccountHasActiveLoans           = errors.New("Account can only be closed after all active loans are repaid")
 	ErrAccountClosureAlreadyInProgress = errors.New("An account closure request is already in progress")
 	ErrInvalidReferralCode             = errors.New("Invalid referral code")
+	ErrAppOSNotFound                   = errors.New("The requested app OS is not found")
 )

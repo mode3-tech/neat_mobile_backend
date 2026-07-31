@@ -27,5 +27,27 @@ func (h *Handler) GetAppVersion(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, appVersion)
+
+	var dto AppVersionInfoResponse
+	switch appVersion.AppOS {
+	case "android":
+		dto.Android = &android{
+			MinBuild:    appVersion.MinBuild,
+			LatestBuild: appVersion.LatestBuild,
+			StoreURL:    appVersion.StoreURL,
+		}
+	case "ios":
+		dto.Ios = &ios{
+			MinBuild:    appVersion.MinBuild,
+			LatestBuild: appVersion.LatestBuild,
+			StoreURL:    appVersion.StoreURL,
+		}
+
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[AppVersionInfoResponse]{
+		Status:  "success",
+		Message: "App version info successfully fetched",
+		Data:    &dto,
+	})
 }
