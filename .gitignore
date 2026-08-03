@@ -2,3 +2,6 @@
 /.gocache
 .env
 /cmd/seed-dev-user
+*.md
+*.exe
+*.txt

@@ -37,7 +37,7 @@ func (s *Service) ForgotTransactionPin(ctx context.Context, mobileUserID string)
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -181,7 +181,7 @@ func (s *Service) ResendForgotTransactionPinOTP(ctx context.Context, mobileUserI
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	}); err != nil {
@@ -215,7 +215,7 @@ func (s *Service) RequestTransactionPinChange(ctx context.Context, mobileUserID 
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -365,7 +365,7 @@ func (s *Service) ResendTransactionPinChangeOTP(ctx context.Context, mobileUserI
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})

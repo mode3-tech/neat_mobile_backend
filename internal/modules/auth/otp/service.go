@@ -106,7 +106,10 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 
 	ttl := in.TTL
 	if ttl <= 0 {
-		ttl = 10 * time.Minute
+		ttl = DefaultOTPSMSTTL
+		if in.Channel == ChannelEmail {
+			ttl = DefaultOTPEmailTTL
+		}
 	}
 
 	maxAttempts := in.MaxAttempts
@@ -166,11 +169,11 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		var smsMsg string
 		switch in.Purpose {
 		case PurposePasswordReset:
-			smsMsg = fmt.Sprintf("%s: %s is your password reset code. Valid for %d min. Didn't request it? Ignore this SMS. %s will never ask for your code.", s.appName, code, int(ttl.Minutes()), s.appName)
+			smsMsg = fmt.Sprintf("%s: %s is your password reset code. Valid for %s. Didn't request it? Ignore this SMS. %s will never ask for your code.", s.appName, code, formatTTL(ttl), s.appName)
 		case PurposeLogin:
-			smsMsg = fmt.Sprintf("%s: %s is your login code. Valid for %d min. Never share it - %s will never ask for it. Not you? Secure your account now.", s.appName, code, int(ttl.Minutes()), s.appName)
+			smsMsg = fmt.Sprintf("%s: %s is your login code. Valid for %s. Never share it - %s will never ask for it. Not you? Secure your account now.", s.appName, code, formatTTL(ttl), s.appName)
 		default:
-			smsMsg = fmt.Sprintf("%s: %s is your verification code. Valid for %d min. Never share this code - %s will never ask you for it.", s.appName, code, int(ttl.Minutes()), s.appName)
+			smsMsg = fmt.Sprintf("%s: %s is your verification code. Valid for %s. Never share this code - %s will never ask you for it.", s.appName, code, formatTTL(ttl), s.appName)
 		}
 
 		switch in.Channel {
@@ -192,10 +195,10 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 				subject = "Your Password Reset OTP"
 			}
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject:          subject,
-				OTP:              code,
-				Year:             now.Year(),
-				ExpiresInMinutes: int(ttl.Minutes()),
+				Subject:   subject,
+				OTP:       code,
+				Year:      now.Year(),
+				ExpiresIn: formatTTL(ttl),
 			})
 			if err != nil {
 				log.Printf("[otp.Issue] failed to render email template: purpose=%s err=%v", in.Purpose, err)
@@ -455,7 +458,7 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 
 		switch channel {
 		case ChannelSMS:
-			if err := s.sms.Send(ctx, normalizedDestination, fmt.Sprintf("Your verification code is %s. It expires in 5 minutes. Do not share this code with anyone.", generatedOTP)); err != nil {
+			if err := s.sms.Send(ctx, normalizedDestination, fmt.Sprintf("Your verification code is %s. It expires in %s. Do not share this code with anyone.", generatedOTP, formatTTL(ttl))); err != nil {
 				log.Printf("[otp.SendOTP] failed to send SMS: purpose=%s err=%v", purpose, err)
 				return err
 			}
@@ -463,10 +466,10 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 		case ChannelEmail:
 			subject := "Your One Time Password (OTP)"
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject:          subject,
-				OTP:              generatedOTP,
-				Year:             now.Year(),
-				ExpiresInMinutes: int(ttl.Minutes()),
+				Subject:   subject,
+				OTP:       generatedOTP,
+				Year:      now.Year(),
+				ExpiresIn: formatTTL(ttl),
 			})
 			if err != nil {
 				log.Printf("[otp.SendOTP] failed to render email template: purpose=%s err=%v", purpose, err)

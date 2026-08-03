@@ -42,7 +42,7 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID string
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -197,7 +197,7 @@ func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID stri
 		Purpose:     authotp.PurposePasswordChange,
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -254,7 +254,7 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      user.ID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})

@@ -10,10 +10,10 @@ import (
 var templatesFS embed.FS
 
 type OTPEmailData struct {
-	Subject          string
-	OTP              string
-	Year             int
-	ExpiresInMinutes int
+	Subject   string
+	OTP       string
+	Year      int
+	ExpiresIn string
 }
 
 func RenderOTPEmail(data OTPEmailData) (string, error) {

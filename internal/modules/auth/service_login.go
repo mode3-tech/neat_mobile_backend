@@ -274,7 +274,7 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 		Channel:     loginOTPChannel,
 		Destination: normalizedPhone,
 		UserID:      userID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -466,7 +466,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 			Channel:     loginOTPChannel,
 			Destination: phone,
 			UserID:      session.UserID,
-			TTL:         10 * time.Minute,
+			TTL:         authotp.DefaultOTPSMSTTL,
 			MaxAttempts: 5,
 			MaxResends:  3,
 		})
