@@ -129,7 +129,7 @@ func (t *Tendar) ValidateNIN(ctx context.Context, number string) (*nin.Validatio
 	return nil, lastErr
 }
 
-func (t *Tendar) ValidateNINWithFace(ctx context.Context, )
+// func (t *Tendar) ValidateNINWithFace(ctx context.Context, )
 
 func tendarHTTPError(response *http.Response, duration time.Duration) *appErr.TendarError {
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, tendarErrorBodyLimit))
