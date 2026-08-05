@@ -26,12 +26,11 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}
 
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
-
-	if user.ClosedAt != nil {
+	if err != nil {
 		return nil, appErr.ErrInvalidCredentials
 	}
 
-	if err != nil {
+	if user.ClosedAt != nil {
 		return nil, appErr.ErrInvalidCredentials
 	}
 
