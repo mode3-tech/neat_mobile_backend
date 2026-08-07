@@ -30,7 +30,7 @@ func NewProvidus(apiKey, baseURL string) *Providus {
 	return &Providus{
 		APIKey:  apiKey,
 		BaseURL: baseURL,
-		Client:  &http.Client{Timeout: 15 * time.Second},
+		Client:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
