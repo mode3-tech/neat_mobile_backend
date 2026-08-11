@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
@@ -236,16 +237,14 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 }
 
 func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
 	if s.otpManager == nil {
+		log.Printf("forgot password: %v", errors.New("otp manager not configured"))
 		return nil, errors.New("otp manager not configured")
 	}
 
 	user, phone, err := s.resolvePasswordResetTarget(ctx, req.Phone)
 	if err != nil {
+		log.Printf("forgot password: %v", err)
 		return nil, err
 	}
 
@@ -259,6 +258,7 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 		MaxResends:  3,
 	})
 	if err != nil {
+		log.Printf("forgot password: %v", err)
 		return nil, err
 	}
 
@@ -294,9 +294,11 @@ func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, 
 		Code:    strings.TrimSpace(req.OTPCode),
 	})
 	if err != nil {
+		log.Printf("verify forgot password: %v", err)
 		return nil, err
 	}
 	if result == nil {
+		log.Printf("verify forgot password: %v", appErr.ErrInvalidOTP)
 		return nil, appErr.ErrInvalidOTP
 	}
 
