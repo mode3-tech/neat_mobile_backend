@@ -140,6 +140,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("loan product not found: %v", req.LoanProductType)
 			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, appErr.ErrApplyingForLoan
@@ -154,6 +155,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("loan rule not found: %v", loanProduct.ID)
 			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, appErr.ErrApplyingForLoan

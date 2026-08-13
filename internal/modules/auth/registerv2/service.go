@@ -1,0 +1,534 @@
+package registerv2
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"log"
+	"neat_mobile_app_backend/internal/authchecker"
+	"neat_mobile_app_backend/internal/database/tx"
+	"neat_mobile_app_backend/internal/modules/auth"
+	"neat_mobile_app_backend/internal/modules/auth/otp"
+	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/referrals"
+	"neat_mobile_app_backend/internal/modules/wallet"
+	phoneutil "neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/models"
+	"net/mail"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+const verificationExpiry = 15 * time.Minute
+
+// ProviderPreferenceRepository is the narrow lookup Service needs to decide
+// which BaaS provider to use for a new registration. Satisfied by *Repository,
+// kept as an interface so it can be swapped/mocked independently of the rest
+// of the registration data access.
+type ProviderPreferenceRepository interface {
+	GetProviderPreference(ctx context.Context) (*ProviderPreference, error)
+}
+
+// OptimusValidator is implemented by the Optimus BaaS client. The Optimus API
+// returns the same response envelope for successful and failed HTTP requests,
+// so implementations must decode it before returning an error.
+type OptimusValidator interface {
+	ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (*OptimusResponse, error)
+	ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (*OptimusResponse, error)
+}
+
+// SessionIssuer is satisfied by *auth.Service - reused so registerv2 issues
+// sessions the exact same way the old login/registration flow does.
+type SessionIssuer interface {
+	IssueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*auth.VerifiedDeviceResponse, error)
+}
+
+type Service struct {
+	repo               *Repository
+	providerPreference ProviderPreferenceRepository
+	optimus            OptimusValidator
+	walletGenerator    auth.WalletService
+	sessionIssuer      SessionIssuer
+	otpManager         otp.OTPManager
+	tx                 *tx.Transactor
+	activationCapKobo  int64
+	optimusProductID   string
+}
+
+func NewService(
+	repo *Repository,
+	providerPreference ProviderPreferenceRepository,
+	optimus OptimusValidator,
+	walletGenerator auth.WalletService,
+	sessionIssuer SessionIssuer,
+	otpManager otp.OTPManager,
+	transactor *tx.Transactor,
+	activationCapKobo int64,
+	optimusProductID string,
+) *Service {
+	return &Service{
+		repo:               repo,
+		providerPreference: providerPreference,
+		optimus:            optimus,
+		walletGenerator:    walletGenerator,
+		sessionIssuer:      sessionIssuer,
+		otpManager:         otpManager,
+		tx:                 transactor,
+		activationCapKobo:  activationCapKobo,
+		optimusProductID:   optimusProductID,
+	}
+}
+
+// CurrentProvider returns which BaaS provider should be used for the next
+// registration.
+func (s *Service) CurrentProvider(ctx context.Context) (string, error) {
+	pref, err := s.providerPreference.GetProviderPreference(ctx)
+	if err != nil {
+		return "", err
+	}
+	return pref.Provider, nil
+}
+
+// Register validates the four verification records (phone/email by ID,
+// BVN/NIN by re-hashing the raw value), provisions a wallet via the current
+// provider, creates the user, and issues a session. Kept synchronous -
+// Optimus's GenerateWallet is a single blocking call, unlike the old flow's
+// async job/poll/claim pattern.
+func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip string) (*RegisterResponse, error) {
+	if err := authchecker.ValidatePassword(req.Password); err != nil {
+		return nil, err
+	}
+	if req.Password != req.ConfirmPassword {
+		return nil, fmt.Errorf("password and confirm password do not match")
+	}
+	if err := authchecker.ValidatePin(req.TransactionPin); err != nil {
+		return nil, err
+	}
+	if req.TransactionPin != req.ConfirmTransactionPin {
+		return nil, fmt.Errorf("transaction pin and confirm transaction pin do not match")
+	}
+
+	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(req.PhoneNumber))
+	if err != nil {
+		return nil, err
+	}
+	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
+
+	phoneRecord, err := s.repo.GetVerificationByID(ctx, strings.TrimSpace(req.PhoneVerificationID))
+	if err != nil {
+		return nil, err
+	}
+	if phoneRecord == nil || phoneRecord.Status != models.VerificationStatusVerified ||
+		phoneRecord.Type != models.VerificationTypePhone ||
+		phoneRecord.VerifiedPhone == nil || strings.TrimSpace(*phoneRecord.VerifiedPhone) != normalizedPhone {
+		return nil, fmt.Errorf("phone number is not verified")
+	}
+
+	emailRecord, err := s.repo.GetVerificationByID(ctx, strings.TrimSpace(req.EmailVerificationID))
+	if err != nil {
+		return nil, err
+	}
+	if emailRecord == nil || emailRecord.Status != models.VerificationStatusVerified ||
+		emailRecord.Type != models.VerificationTypeEmail ||
+		emailRecord.VerifiedEmail == nil || strings.ToLower(strings.TrimSpace(*emailRecord.VerifiedEmail)) != normalizedEmail {
+		return nil, fmt.Errorf("email is not verified")
+	}
+
+	bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
+	bvnRecord, err := s.repo.GetVerifiedByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
+	if err != nil {
+		return nil, err
+	}
+	if bvnRecord == nil {
+		return nil, fmt.Errorf("bvn is not verified")
+	}
+
+	ninHash := sha256.Sum256([]byte(strings.TrimSpace(req.NIN)))
+	ninRecord, err := s.repo.GetVerifiedByTypeAndHash(ctx, models.VerificationTypeNIN, hex.EncodeToString(ninHash[:]))
+	if err != nil {
+		return nil, err
+	}
+	if ninRecord == nil {
+		return nil, fmt.Errorf("nin is not verified")
+	}
+
+	provider, err := s.CurrentProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(strings.TrimSpace(provider), "optimus") {
+		return nil, fmt.Errorf("registration provider %q is not supported by this flow", provider)
+	}
+	if s.walletGenerator == nil {
+		return nil, fmt.Errorf("wallet generation service is not configured")
+	}
+
+	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
+	if err != nil {
+		return nil, fmt.Errorf("invalid date of birth: %w", err)
+	}
+
+	mobileUserID := uuid.NewString()
+	internalWalletID := uuid.NewString()
+
+	walletResp, err := s.walletGenerator.GenerateWallet(ctx, &auth.WalletPayload{
+		RequestID:         mobileUserID,
+		BVN:               strings.TrimSpace(req.BVN),
+		FirstName:         req.FirstName,
+		LastName:          req.LastName,
+		MothersMaidenName: req.MothersMaidenName,
+		DateOfBirth:       req.Dob,
+		PhoneNumber:       normalizedPhone,
+		Email:             normalizedEmail,
+		Address:           req.Address,
+		HouseNo:           req.HouseNo,
+		ProductId:         s.optimusProductID,
+		Gender:            req.Gender,
+		MaritalStatus:     req.MaritalStatus,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if walletResp == nil || walletResp.Customer == nil || walletResp.Wallet == nil {
+		return nil, fmt.Errorf("wallet provider returned an incomplete response")
+	}
+
+	passwordHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+	pinHash, err := auth.HashPassword(req.TransactionPin)
+	if err != nil {
+		return nil, err
+	}
+
+	address := strings.TrimSpace(req.Address)
+	if walletResp.Customer.Address != nil && strings.TrimSpace(*walletResp.Customer.Address) != "" {
+		address = strings.TrimSpace(*walletResp.Customer.Address)
+	}
+
+	capExpiresAt := time.Now().UTC().Add(24 * time.Hour)
+	addressCopy := address
+	emailCopy := normalizedEmail
+	user := &models.User{
+		ID:                     mobileUserID,
+		WalletID:               internalWalletID,
+		Phone:                  normalizedPhone,
+		Address:                &addressCopy,
+		Email:                  &emailCopy,
+		FirstName:              req.FirstName,
+		LastName:               req.LastName,
+		PasswordHash:           passwordHash,
+		PinHash:                pinHash,
+		DOB:                    dob,
+		BVN:                    strings.TrimSpace(req.BVN),
+		NIN:                    strings.TrimSpace(req.NIN),
+		IsEmailVerified:        true,
+		IsPhoneVerified:        true,
+		IsBvnVerified:          true,
+		IsNinVerified:          true,
+		IsBiometricsEnabled:    req.IsBiomtricsEnabled,
+		IsNotificationsEnabled: true,
+		ActivationCapAmount:    s.activationCapKobo,
+		ActivationCapExpiresAt: &capExpiresAt,
+	}
+
+	walletRecord := &wallet.CustomerWallet{
+		ID:               uuid.NewString(),
+		InternalWalletID: internalWalletID,
+		MobileUserID:     mobileUserID,
+		PhoneNumber:      walletResp.Customer.PhoneNumber,
+		WalletCustomerID: walletResp.Customer.ID,
+		Metadata:         walletResp.Customer.Metadata,
+		BVN:              walletResp.Customer.BVN,
+		Currency:         walletResp.Customer.Currency,
+		DateOfBirth:      walletResp.Customer.DateOfBirth,
+		FirstName:        walletResp.Customer.FirstName,
+		LastName:         walletResp.Customer.LastName,
+		Email:            walletResp.Customer.Email,
+		Address:          address,
+		MerchantID:       walletResp.Customer.MerchantId,
+		Tier:             walletResp.Customer.Tier,
+		WalletID:         walletResp.Wallet.WalletId,
+		Mode:             walletResp.Customer.Mode,
+		BankName:         walletResp.Wallet.BankName,
+		BankCode:         walletResp.Wallet.BankCode,
+		AccountNumber:    walletResp.Wallet.AccountNumber,
+		AccountName:      walletResp.Wallet.AccountName,
+		AccountRef:       walletResp.Wallet.AccountReference,
+		BookedBalance:    walletResp.Wallet.BookedBalance,
+		AvailableBalance: walletResp.Wallet.AvailableBalance,
+		Status:           walletResp.Wallet.Status,
+		WalletType:       walletResp.Wallet.WalletType,
+		Updated:          walletResp.Wallet.Updated,
+		CreatedAt:        time.Now().UTC(),
+	}
+
+	now := time.Now().UTC()
+	usedVerificationIDs := []string{phoneRecord.ID, emailRecord.ID, bvnRecord.ID, ninRecord.ID}
+
+	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+		authRepo := auth.NewRespository(txDB)
+		walletRepo := wallet.NewRepository(txDB)
+		deviceRepo := device.NewRepository(txDB)
+		verificationRepo := &Repository{db: txDB}
+
+		if _, txErr := authRepo.CreateUser(ctx, user); txErr != nil {
+			return txErr
+		}
+		if txErr := authRepo.LinkBVNRecordToUser(ctx, user.BVN, user.ID); txErr != nil {
+			return txErr
+		}
+		if txErr := walletRepo.CreateWallet(ctx, walletRecord); txErr != nil {
+			return txErr
+		}
+
+		deviceService := device.NewService(*deviceRepo)
+		if txErr := deviceService.BindDevice(ctx, mobileUserID, &device.DeviceBindingRequest{
+			DeviceID:    req.Device.DeviceID,
+			PublicKey:   req.Device.PublicKey,
+			DeviceName:  req.Device.DeviceName,
+			DeviceModel: req.Device.DeviceModel,
+			OS:          req.Device.OS,
+			OSVersion:   req.Device.OSVersion,
+			AppVersion:  req.Device.AppVersion,
+			IP:          ip,
+		}); txErr != nil {
+			return txErr
+		}
+
+		for _, id := range usedVerificationIDs {
+			if id == "" {
+				continue
+			}
+			if txErr := verificationRepo.MarkVerificationUsed(ctx, id, now); txErr != nil {
+				return txErr
+			}
+		}
+
+		if strings.TrimSpace(req.ReferralCode) != "" {
+			referralsRepo := referrals.NewRepository(txDB)
+			if txErr := referrals.NewService(referralsRepo).RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
+				log.Printf("registerv2: referral redemption failed user=%s code=%s: %v", mobileUserID, req.ReferralCode, txErr)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if s.sessionIssuer == nil {
+		return nil, fmt.Errorf("session issuer is not configured")
+	}
+	session, err := s.sessionIssuer.IssueSessionTokens(ctx, mobileUserID, req.Device.DeviceID, ip)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RegisterResponse{
+		AccessToken:  session.AccessToken,
+		RefreshToken: session.RefreshToken,
+	}, nil
+}
+
+// RequestPhoneOTP sends an OTP to the given phone number, delegating to the
+// same otp.OTPManager the old login/registration flow uses (reusing its OTP
+// generation, hashing, expiry, rate-limiting, and SMS dispatch rather than
+// reimplementing it). Uses PurposeSubmittedContact rather than PurposeSignup
+// so the resulting VerificationRecord keeps Type "phone" instead of being
+// stamped with the umbrella "otp" type - Register checks for Type == phone.
+func (s *Service) RequestPhoneOTP(ctx context.Context, phone string) (string, error) {
+	if s.otpManager == nil {
+		return "", fmt.Errorf("otp service is not configured")
+	}
+
+	normalized, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(phone))
+	if err != nil {
+		return "", err
+	}
+
+	result, err := s.otpManager.Issue(ctx, otp.IssueOTPInput{
+		Purpose:     otp.PurposeSubmittedContact,
+		Channel:     otp.ChannelSMS,
+		Destination: normalized,
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.OTPID, nil
+}
+
+// VerifyPhoneOTP confirms the code sent by RequestPhoneOTP and returns the
+// resulting verification ID for use in the final /register call.
+func (s *Service) VerifyPhoneOTP(ctx context.Context, otpID, code string) (string, error) {
+	if s.otpManager == nil {
+		return "", fmt.Errorf("otp service is not configured")
+	}
+
+	result, err := s.otpManager.Verify(ctx, otp.VerifyOTPInput{
+		Purpose: otp.PurposeSubmittedContact,
+		OTPID:   strings.TrimSpace(otpID),
+		Code:    strings.TrimSpace(code),
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.VerificationID, nil
+}
+
+// StartEmailVerification creates a pending record for an email address.
+// It does not mark the address verified; that must happen after an OTP flow.
+func (s *Service) StartEmailVerification(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email {
+		return "", fmt.Errorf("invalid email address")
+	}
+
+	return s.createPendingContactVerification(ctx, models.VerificationTypeEmail, email, maskEmail(email))
+}
+
+func (s *Service) createPendingContactVerification(ctx context.Context, verificationType, subject, masked string) (string, error) {
+	now := time.Now().UTC()
+	expiresAt := now.Add(verificationExpiry)
+	hash := sha256.Sum256([]byte(subject))
+
+	record := &models.VerificationRecord{
+		ID:            uuid.NewString(),
+		Type:          verificationType,
+		Provider:      "optimus",
+		Status:        models.VerificationStatusPending,
+		SubjectHash:   hex.EncodeToString(hash[:]),
+		SubjectMasked: &masked,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		ExpiresAt:     &expiresAt,
+	}
+	if verificationType == models.VerificationTypePhone {
+		record.VerifiedPhone = &subject
+	} else {
+		record.VerifiedEmail = &subject
+	}
+
+	if err := s.repo.AddVerification(ctx, record); err != nil {
+		return "", err
+	}
+	return record.ID, nil
+}
+
+func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (string, error) {
+	if s.optimus == nil {
+		return "", fmt.Errorf("optimus validation service is not configured")
+	}
+
+	// RequestId is our correlation ID for this call, not client input -
+	// always generated server-side, overwriting anything the caller sent.
+	request.RequestId = uuid.NewString()
+
+	response, err := s.optimus.ValidateBVN(ctx, request)
+	if err != nil {
+		return "", err
+	}
+	if response == nil || !isOptimusSuccess(response.ResponseCode) {
+		return "", optimusResponseError(response)
+	}
+
+	return s.createVerifiedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, request.RequestId)
+}
+
+func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, error) {
+	if s.optimus == nil {
+		return "", fmt.Errorf("optimus validation service is not configured")
+	}
+
+	// RequestId is our correlation ID for this call, not client input -
+	// always generated server-side, overwriting anything the caller sent.
+	request.RequestId = uuid.NewString()
+
+	response, err := s.optimus.ValidateNIN(ctx, request)
+	if err != nil {
+		return "", err
+	}
+	if response == nil || !isOptimusSuccess(response.ResponseCode) {
+		return "", optimusResponseError(response)
+	}
+
+	return s.createVerifiedIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, request.RequestId)
+}
+
+func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verificationType, identityNumber, requestID string) (string, error) {
+	now := time.Now().UTC()
+	expiresAt := now.Add(verificationExpiry)
+	hash := sha256.Sum256([]byte(identityNumber))
+	masked := maskIdentityNumber(identityNumber)
+
+	record := &models.VerificationRecord{
+		ID:                     uuid.NewString(),
+		Type:                   verificationType,
+		Provider:               "optimus",
+		Status:                 models.VerificationStatusVerified,
+		SubjectHash:            hex.EncodeToString(hash[:]),
+		SubjectMasked:          &masked,
+		ProviderVerificationID: stringPointer(strings.TrimSpace(requestID)),
+		VerifiedID:             &identityNumber,
+		VerifiedAt:             &now,
+		ExpiresAt:              &expiresAt,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	if err := s.repo.AddVerification(ctx, record); err != nil {
+		return "", err
+	}
+	return record.ID, nil
+}
+
+func isOptimusSuccess(code string) bool {
+	code = strings.TrimSpace(code)
+	if code == "" || strings.EqualFold(code, "00") || strings.EqualFold(code, "0") || strings.EqualFold(code, "success") {
+		return true
+	}
+	status, err := strconv.Atoi(code)
+	return err == nil && status >= 200 && status < 300
+}
+
+func optimusResponseError(response *OptimusResponse) error {
+	if response == nil {
+		return fmt.Errorf("we could not verify your details right now. Please try again")
+	}
+	if message := strings.TrimSpace(response.ResponseMessage); message != "" {
+		return fmt.Errorf("%s", message)
+	}
+	if response.Error != nil {
+		return fmt.Errorf("%v", response.Error)
+	}
+	return fmt.Errorf("we could not verify your details. Please check them and try again")
+}
+
+func maskIdentityNumber(value string) string {
+	if len(value) <= 4 {
+		return value
+	}
+	return strings.Repeat("*", len(value)-4) + value[len(value)-4:]
+}
+
+func maskEmail(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at <= 1 {
+		return "***"
+	}
+	return email[:1] + strings.Repeat("*", at-1) + email[at:]
+}
+
+func stringPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
