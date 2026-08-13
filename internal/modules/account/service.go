@@ -149,6 +149,16 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID stri
 
 	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.%s", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"), req.Format)
 
+	existing, err := s.Repo.FindActiveStatementJob(ctx, mobileUserID, req.DateFrom, req.DateTo, req.Format)
+	if err != nil {
+		log.Printf("failed to check for an existing account statement job: %v", err)
+		return "", appErr.ErrGeneratingAccountStatement
+	}
+	if existing != nil {
+		log.Printf("account statement job already in flight, reusing it: job_id=%s user=%s", existing.ID, mobileUserID)
+		return existing.ID, nil
+	}
+
 	job, err := s.Repo.CreateAccountReportJob(ctx, &AccountReportJob{
 		ID:           uuid.NewString(),
 		MobileUserID: mobileUserID,
