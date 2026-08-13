@@ -17,6 +17,7 @@ import (
 	appversion "neat_mobile_app_backend/internal/modules/app_version"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
+	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/card"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -76,6 +77,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")
+	apiV2 := api.Group("/v2")
+
 	internalV1 := r.Group("/internal/v1")
 
 	r.HEAD("/health", func(c *gin.Context) {
@@ -168,6 +171,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	deviceValidator := middleware.DeviceValidator(deviceService)
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, deviceValidator, loginRateLimiter.Middleware())
+
+	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
+	optimusRegistrationRepo := registerv2.NewRepository(db)
+	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID)
+	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)
 

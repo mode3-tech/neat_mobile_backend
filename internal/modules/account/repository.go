@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"errors"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/models"
@@ -136,6 +137,26 @@ func (r *Repository) CreateAccountReportJob(ctx context.Context, job *AccountRep
 		return nil, err
 	}
 	return job, nil
+}
+
+// FindActiveStatementJob looks for an existing pending/processing job for the
+// same user, date range, and format - used to make RequestAccountStatement
+// idempotent against duplicate requests (e.g. a client retry or double-tap)
+// instead of creating a new job (and firing a new notification) each time.
+func (r *Repository) FindActiveStatementJob(ctx context.Context, mobileUserID string, dateFrom, dateTo time.Time, format ReportFormat) (*AccountReportJob, error) {
+	var job AccountReportJob
+	err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND date_from = ? AND date_to = ? AND format = ? AND status IN ?",
+			mobileUserID, dateFrom, dateTo, format, []ReportStatus{ReportStatusPending, ReportStatusProcessing}).
+		Order("created_at DESC").
+		First(&job).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &job, nil
 }
 
 func (r *Repository) GetAccountReportJob(ctx context.Context, jobID string) (*AccountReportJob, error) {

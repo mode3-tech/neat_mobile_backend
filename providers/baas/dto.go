@@ -224,3 +224,114 @@ type ProvidusWallet struct {
 	MaxBalance            float64 `json:"maxBalance"`
 	DailyTransactionLimit float64 `json:"dailyTransactionLimit"`
 }
+
+// OptimusAccountUpgradeRequest is the payload for Optimus's account-tier
+// upgrade/KYC-completion endpoint. Fields that appeared null in the sample
+// payload are pointers so an omitted value can be distinguished from an
+// explicit empty string; date fields are kept as strings (matching
+// OptimusPayload/OptimusBVNValidationRequest elsewhere in this file) since
+// Optimus sends them as "yyyy-MM-ddTHH:mm:ss" with no timezone, which isn't
+// directly compatible with time.Time's default JSON unmarshaling.
+type OptimusAccountUpgradeRequest struct {
+	AccountNumber        string                               `json:"AccountNumber"`
+	RequestId            string                               `json:"RequestId"`
+	Channel              int                                  `json:"Channel"`
+	RequestType          int                                  `json:"RequestType"`
+	PersonalDetails      OptimusAccountUpgradePersonalDetails `json:"PersonalDetails"`
+	NokDetails           OptimusAccountUpgradeNokDetails      `json:"NokDetails"`
+	AddressDetails       []OptimusAccountUpgradeAddressDetail `json:"AddressDetails"`
+	Documents            []OptimusAccountUpgradeDocument      `json:"Documents"`
+	IdentificationDetail OptimusAccountUpgradeIdentification  `json:"IdentificationDetail"`
+	SocialMediaDetails   OptimusAccountUpgradeSocialMedia     `json:"SocialMediaDetails"`
+	CitizenshipDetails   OptimusAccountUpgradeCitizenship     `json:"CitizenshipDetails"`
+	EmploymentDetail     OptimusAccountUpgradeEmployment      `json:"EmploymentDetail"`
+	MetaData             OptimusAccountUpgradeMetaData        `json:"MetaData"`
+}
+
+type OptimusAccountUpgradePersonalDetails struct {
+	FirstName        *string `json:"FirstName"`
+	MiddleName       *string `json:"MiddleName"`
+	LastName         *string `json:"LastName"`
+	MotherMaidenName string  `json:"MotherMaidenName"`
+	DateOfBirth      *string `json:"DateOfBirth"`
+	Title            string  `json:"Title"`
+	MaritalStatus    int     `json:"MaritalStatus"`
+	EmailAddress     *string `json:"EmailAddress"`
+	PhoneNumber      *string `json:"PhoneNumber"`
+}
+
+type OptimusAccountUpgradeNokDetails struct {
+	FullName     string `json:"FullName"`
+	Relationship string `json:"Relationship"`
+	PhoneNumber  string `json:"PhoneNumber"`
+	Email        string `json:"Email"`
+	Gender       string `json:"Gender"`
+	Dob          string `json:"Dob"`
+}
+
+// OptimusAccountUpgradeAddressDetail is repeated per AddressType (e.g. 0 =
+// residential, 1 = office, 2 = other) - fields are pointers since the sample
+// payload shows some address entries fully populated and others (e.g. the
+// "other" address) with most fields null.
+type OptimusAccountUpgradeAddressDetail struct {
+	AddressType     int     `json:"AddressType"`
+	HouseNumber     *string `json:"HouseNumber"`
+	AddressLine1    string  `json:"AddressLine1"`
+	AddressLine2    *string `json:"AddressLine2"`
+	LocalGovernment *string `json:"LocalGovernment"`
+	City            *string `json:"City"`
+	State           *string `json:"State"`
+	Country         string  `json:"Country"`
+	ZipCode         *string `json:"ZipCode"`
+}
+
+type OptimusAccountUpgradeDocument struct {
+	DocumentName  string `json:"DocumentName"`
+	DocumentType  int    `json:"DocumentType"`
+	FileExtension string `json:"FileExtension"`
+	Base64Doc     string `json:"base64Doc"`
+}
+
+type OptimusAccountUpgradeIdentification struct {
+	Nin        string  `json:"Nin"`
+	IdNo       string  `json:"IdNo"`
+	IdType     int     `json:"IdType"`
+	IssueDate  *string `json:"IssueDate"`
+	ExpiryDate *string `json:"ExpiryDate"`
+}
+
+type OptimusAccountUpgradeSocialMedia struct {
+	LinkedIn  string  `json:"LinkedIn"`
+	Facebook  string  `json:"Facebook"`
+	Instagram string  `json:"Instagram"`
+	Tiktok    string  `json:"Tiktok"`
+	Twitter   string  `json:"Twitter"`
+	Thread    *string `json:"Thread"`
+}
+
+type OptimusAccountUpgradeCitizenship struct {
+	ForeignTaxId        string `json:"ForeignTaxId"`
+	CountryTaxResidence string `json:"CountryTaxResidence"`
+	NoReasonForTinClass string `json:"NoReasonForTinClass"`
+	NoReasonCause       string `json:"NoReasonCause"`
+	FatcaAccepted       bool   `json:"FatcaAccepted"`
+	PhoneNumber         string `json:"PhoneNumber"`
+}
+
+type OptimusAccountUpgradeEmployment struct {
+	EmploymentStatus  int    `json:"EmploymentStatus"`
+	YearsOfEmployment string `json:"YearsOfEmployment"`
+	AnnualIncome      string `json:"AnnualIncome"`
+	EmployersName     string `json:"EmployersName"`
+	NatureOfBusiness  int    `json:"NatureOfBusiness"`
+	Occupation        string `json:"Occupation"`
+	SourceOfWealth    string `json:"SourceOfWealth"`
+	EmployersAddress  string `json:"EmployersAddress"`
+	EmploymentDate    string `json:"EmploymentDate"`
+}
+
+type OptimusAccountUpgradeMetaData struct {
+	NotificationPreference *string `json:"NotificationPreference"`
+	PurposeOfAccount       string  `json:"PurposeOfAccount"`
+	OtherReasons           *string `json:"OtherReasons"`
+}

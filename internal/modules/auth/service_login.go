@@ -492,6 +492,13 @@ func (s *Service) issueSessionTokens(ctx context.Context, userID, deviceID, ip s
 	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
 }
 
+// IssueSessionTokens is the exported entry point for other registration flows
+// (e.g. registerv2) that need to issue a session the same way the primary
+// login/registration flow does.
+func (s *Service) IssueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*VerifiedDeviceResponse, error) {
+	return s.issueSessionTokensWithRepo(ctx, s.repo, userID, deviceID, ip)
+}
+
 func (s *Service) issueSessionTokensWithRepo(ctx context.Context, repo *Repository, userID, deviceID, ip string) (*VerifiedDeviceResponse, error) {
 	if repo == nil {
 		return nil, errors.New("auth repository not configured")
