@@ -45,7 +45,7 @@ type AccountSummaryRow struct {
 	InternalWalletID       string    `gorm:"internal_wallet_id"`
 	IsNotificationsEnabled bool      `gorm:"is_notifications_enabled"`
 	CoreCustomerID         *string   `gorm:"core_customer_id"`
-	ReferralCode           string    `gorm:"code"`
+	ReferralCode           string    `gorm:"column:code"`
 }
 
 type DashboardLoanItem struct {
