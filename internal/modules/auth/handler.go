@@ -549,19 +549,19 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
+	// deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	// if deviceID == "" {
+	// 	c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+	// 		Status: "error",
+	// 		Error: &response.APIError{
+	// 			Code:    string(ErrCodeInvalidDeviceID),
+	// 			Message: "Unauthorized",
+	// 		},
+	// 	})
+	// 	return
+	// }
 
-	resp, err := h.service.ForgotPassword(c.Request.Context(), req, deviceID)
+	resp, err := h.service.ForgotPassword(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -604,7 +604,7 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req, deviceID)
+	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
