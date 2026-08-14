@@ -49,6 +49,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}
 
 	if s.deviceRepo == nil {
+		log.Println("device repository not configured")
 		return nil, errors.New("device repository not configured")
 	}
 
