@@ -236,7 +236,7 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 	return user, normalizedPhone, nil
 }
 
-func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
+func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
 	if s.otpManager == nil {
 		log.Printf("forgot password: %v", errors.New("otp manager not configured"))
 		return nil, errors.New("otp manager not configured")
@@ -267,8 +267,8 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 	}, nil
 }
 
-func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	return s.issueForgotPasswordOTP(ctx, req, deviceID)
+func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
+	return s.issueForgotPasswordOTP(ctx, req)
 }
 
 func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, req VerifyForgotPasswordOTPRequest) (*VerifyForgotPasswordOTPResponse, error) {
@@ -379,8 +379,8 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	})
 }
 
-func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	resp, err := s.issueForgotPasswordOTP(ctx, req, deviceID)
+func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
+	resp, err := s.issueForgotPasswordOTP(ctx, req)
 	if err != nil {
 		return nil, err
 	}
