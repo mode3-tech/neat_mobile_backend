@@ -158,6 +158,67 @@ func TestSendToUserDeletesDeviceNotRegisteredTokens(t *testing.T) {
 	}
 }
 
+func TestDedupTokensByAppEnvKeepsMostRecentPerAppEnvAndAllLegacyRows(t *testing.T) {
+	tokens := []models.PushToken{
+		{UserID: "user-1", DeviceID: "device-prod-new", ExpoPushToken: "ExpoPushToken[prod-new]", AppEnv: "production"},
+		{UserID: "user-1", DeviceID: "device-prod-old", ExpoPushToken: "ExpoPushToken[prod-old]", AppEnv: "production"},
+		{UserID: "user-1", DeviceID: "device-staging", ExpoPushToken: "ExpoPushToken[staging]", AppEnv: "staging"},
+		{UserID: "user-1", DeviceID: "device-legacy", ExpoPushToken: "ExpoPushToken[legacy]", AppEnv: ""},
+	}
+
+	deduped := dedupTokensByAppEnv(tokens)
+
+	if len(deduped) != 3 {
+		t.Fatalf("expected 3 tokens after dedup, got %d", len(deduped))
+	}
+
+	got := make(map[string]bool, len(deduped))
+	for _, token := range deduped {
+		got[token.ExpoPushToken] = true
+	}
+
+	for _, want := range []string{"ExpoPushToken[prod-new]", "ExpoPushToken[staging]", "ExpoPushToken[legacy]"} {
+		if !got[want] {
+			t.Fatalf("expected %q to survive dedup, got %+v", want, deduped)
+		}
+	}
+	if got["ExpoPushToken[prod-old]"] {
+		t.Fatalf("expected older production token to be dropped, got %+v", deduped)
+	}
+}
+
+func TestSendToUserDedupesTokensByAppEnv(t *testing.T) {
+	store := &stubStore{
+		listTokens: []models.PushToken{
+			// simulates repository ordering: updated_at DESC
+			{UserID: "user-1", DeviceID: "device-prod-new", ExpoPushToken: "ExpoPushToken[prod-new]", Platform: "android", AppEnv: "production"},
+			{UserID: "user-1", DeviceID: "device-prod-old", ExpoPushToken: "ExpoPushToken[prod-old]", Platform: "android", AppEnv: "production"},
+			{UserID: "user-1", DeviceID: "device-staging", ExpoPushToken: "ExpoPushToken[staging]", Platform: "android", AppEnv: "staging"},
+		},
+	}
+	sender := &stubSender{
+		tickets: []ExpoPushTicket{
+			{Status: "ok", ID: "ticket-1"},
+			{Status: "ok", ID: "ticket-2"},
+		},
+	}
+	service := NewService(store, sender, "default", nil)
+
+	err := service.SendToUser(context.Background(), "user-1", "Title", models.NotificationTypeTransaction, "", "Body", nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(store.createdTickets) != 2 {
+		t.Fatalf("expected 2 tickets created (deduped from 3 tokens), got %d", len(store.createdTickets))
+	}
+	for _, ticket := range store.createdTickets {
+		if ticket.ExpoPushToken == "ExpoPushToken[prod-old]" {
+			t.Fatalf("expected older production token to be skipped, but it was sent to")
+		}
+	}
+}
+
 func TestSendToUserReturnsSenderError(t *testing.T) {
 	expectedErr := errors.New("expo down")
 	service := NewService(&stubStore{

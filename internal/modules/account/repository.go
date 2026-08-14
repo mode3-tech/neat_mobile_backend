@@ -50,6 +50,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_users.dob,
 			wallet_users.phone,
 			wallet_users.core_customer_id,
+			wallet_users.referral_code,
 			wallet_bvn_records.bvn,
 			wallet_bvn_records.full_home_address AS address,
 			wallet_customer_wallets.account_number,

@@ -20,6 +20,7 @@ type AccountSummary struct {
 	LoanBalance            float64      `json:"loan_balance"`
 	ActiveLoans            []ActiveLoan `json:"active_loans"`
 	IsNotificationsEnabled bool         `json:"is_notifications_enabled"`
+	ReferralCode           string       `json:"referral_code"`
 }
 
 type ActiveLoan struct {

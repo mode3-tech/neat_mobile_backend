@@ -72,6 +72,7 @@ func (s *Service) RegisterToken(ctx context.Context, mobileUserID string, req Re
 		DeviceID:      deviceID,
 		ExpoPushToken: expoPushToken,
 		Platform:      platform,
+		AppEnv:        strings.TrimSpace(req.AppEnv),
 	}
 
 	return s.repo.UpsertToken(ctx, row)
@@ -249,6 +250,8 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 			return nil
 		}
 
+		tokens = dedupTokensByAppEnv(tokens)
+
 		pushData := req.Data
 		if txID := strings.TrimSpace(req.TransactionID); txID != "" {
 			if pushData == nil {
@@ -311,6 +314,32 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 	}
 
 	return nil
+}
+
+// dedupTokensByAppEnv keeps at most one token per (app_env) value, preferring
+// the most recently updated one, since multiple builds of the same app on a
+// single physical device each register their own device_id/token but report
+// the same app_env. Tokens with no app_env (legacy rows, or clients that
+// don't send it yet) are left untouched. Callers must pass tokens already
+// ordered by updated_at DESC.
+func dedupTokensByAppEnv(tokens []models.PushToken) []models.PushToken {
+	seenAppEnv := make(map[string]bool, len(tokens))
+	deduped := make([]models.PushToken, 0, len(tokens))
+
+	for _, token := range tokens {
+		appEnv := strings.TrimSpace(token.AppEnv)
+		if appEnv == "" {
+			deduped = append(deduped, token)
+			continue
+		}
+		if seenAppEnv[appEnv] {
+			continue
+		}
+		seenAppEnv[appEnv] = true
+		deduped = append(deduped, token)
+	}
+
+	return deduped
 }
 
 func looksLikeExpoPushToken(token string) bool {
