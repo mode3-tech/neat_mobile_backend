@@ -50,7 +50,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_users.dob,
 			wallet_users.phone,
 			wallet_users.core_customer_id,
-			wallet_users.referral_code,
+			wallet_referral_codes.referral_code,
 			wallet_bvn_records.bvn,
 			wallet_bvn_records.full_home_address AS address,
 			wallet_customer_wallets.account_number,
@@ -59,6 +59,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_customer_wallets.bank_name`).
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
+		Joins("LEFT JOIN wallet_referral_codes ON wallet_referral_codes.mobile_user_id = wallet_users.id").
 		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
 	return &row, err
 }
