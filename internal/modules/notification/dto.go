@@ -9,6 +9,7 @@ type RegisterTokenRequest struct {
 	ExpoPushToken string `json:"expo_push_token" binding:"required"`
 	DeviceID      string `json:"device_id" binding:"required"`
 	Platform      string `json:"platform" binding:"required,oneof=ios android"`
+	AppEnv        string `json:"app_env,omitempty"`
 }
 
 type SendNotificationRequest struct {

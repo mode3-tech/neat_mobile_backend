@@ -104,6 +104,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		BVN:                    accountInfo.BVN,
 		DOB:                    accountInfo.DOB,
 		ProfilePicture:         accountInfo.ProfilePicture,
+		ReferralCode:           accountInfo.ReferralCode,
 		Address:                accountInfo.Address,
 		PhoneNumber:            accountInfo.Phone,
 		AccountNumber:          customerDetails.Customer.AccountNumber,

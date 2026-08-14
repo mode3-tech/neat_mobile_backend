@@ -26,28 +26,6 @@ import (
 
 const verificationExpiry = 15 * time.Minute
 
-// ProviderPreferenceRepository is the narrow lookup Service needs to decide
-// which BaaS provider to use for a new registration. Satisfied by *Repository,
-// kept as an interface so it can be swapped/mocked independently of the rest
-// of the registration data access.
-type ProviderPreferenceRepository interface {
-	GetProviderPreference(ctx context.Context) (*ProviderPreference, error)
-}
-
-// OptimusValidator is implemented by the Optimus BaaS client. The Optimus API
-// returns the same response envelope for successful and failed HTTP requests,
-// so implementations must decode it before returning an error.
-type OptimusValidator interface {
-	ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (*OptimusResponse, error)
-	ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (*OptimusResponse, error)
-}
-
-// SessionIssuer is satisfied by *auth.Service - reused so registerv2 issues
-// sessions the exact same way the old login/registration flow does.
-type SessionIssuer interface {
-	IssueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*auth.VerifiedDeviceResponse, error)
-}
-
 type Service struct {
 	repo               *Repository
 	providerPreference ProviderPreferenceRepository
@@ -161,7 +139,15 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if err != nil {
 		return nil, err
 	}
-	if !strings.EqualFold(strings.TrimSpace(provider), "optimus") {
+
+	switch strings.TrimSpace(provider) {
+	case "optimus":
+		if s.optimus == nil {
+			log.Println("optimus service is not configured")
+			return nil, fmt.Errorf("optimus service is not configured")
+		}
+
+	default:
 		return nil, fmt.Errorf("registration provider %q is not supported by this flow", provider)
 	}
 	if s.walletGenerator == nil {
@@ -179,17 +165,17 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	walletResp, err := s.walletGenerator.GenerateWallet(ctx, &auth.WalletPayload{
 		RequestID:         mobileUserID,
 		BVN:               strings.TrimSpace(req.BVN),
-		FirstName:         req.FirstName,
-		LastName:          req.LastName,
-		MothersMaidenName: req.MothersMaidenName,
-		DateOfBirth:       req.Dob,
+		FirstName:         strings.TrimSpace(req.FirstName),
+		LastName:          strings.TrimSpace(req.LastName),
+		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
+		DateOfBirth:       strings.TrimSpace(req.Dob),
 		PhoneNumber:       normalizedPhone,
 		Email:             normalizedEmail,
-		Address:           req.Address,
-		HouseNo:           req.HouseNo,
+		Address:           strings.TrimSpace(req.Address),
+		HouseNo:           strings.TrimSpace(req.HouseNo),
 		ProductId:         s.optimusProductID,
-		Gender:            req.Gender,
-		MaritalStatus:     req.MaritalStatus,
+		Gender:            strings.TrimSpace(req.Gender),
+		MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
 	})
 	if err != nil {
 		return nil, err

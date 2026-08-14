@@ -68,6 +68,7 @@ func (r *Repository) UpsertToken(ctx context.Context, row *models.PushToken) err
 			DoUpdates: clause.Assignments(map[string]any{
 				"expo_push_token": row.ExpoPushToken,
 				"platform":        row.Platform,
+				"app_env":         row.AppEnv,
 				"updated_at":      time.Now().UTC(),
 			}),
 		}).Create(row).Error
