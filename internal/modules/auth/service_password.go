@@ -225,12 +225,12 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", appErr.ErrUnauthorized
+			return nil, "", appErr.ErrUserNotFound
 		}
 		return nil, "", err
 	}
 	if user == nil {
-		return nil, "", appErr.ErrUnauthorized
+		return nil, "", appErr.ErrUserNotFound
 	}
 
 	return user, normalizedPhone, nil

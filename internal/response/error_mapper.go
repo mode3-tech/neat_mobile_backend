@@ -1121,6 +1121,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrUserNotFound):
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: appErr.ErrUserNotFound.Error(),
+			},
+		}
+
 	default:
 		var xpressWalletErr *appErr.XpressWalletProviderError
 		if errors.As(err, &xpressWalletErr) {

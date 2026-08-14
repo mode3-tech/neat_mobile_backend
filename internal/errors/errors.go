@@ -127,4 +127,5 @@ var (
 	ErrAccountClosureAlreadyInProgress = errors.New("An account closure request is already in progress")
 	ErrInvalidReferralCode             = errors.New("Invalid referral code")
 	ErrAppOSNotFound                   = errors.New("The requested app OS is not found")
+	ErrUserNotFound                    = errors.New("Kindly register to continue as you do not have an account")
 )
