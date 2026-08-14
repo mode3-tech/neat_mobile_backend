@@ -6,3 +6,5 @@
 *.exe
 *.txt
 *.asc
+/tmp/*
+/tmp/*
