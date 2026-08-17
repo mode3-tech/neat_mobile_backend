@@ -52,10 +52,11 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 
 	var cursorTime time.Time
 	if cursor != "" {
-		_, err := time.Parse(time.RFC3339, cursor)
+		parsed, err := time.Parse(time.RFC3339, cursor)
 		if err != nil {
 			return nil, appErr.ErrInvalidCursor
 		}
+		cursorTime = parsed
 	}
 
 	txs, err := s.repo.FetchTransactionPaged(ctx, userID, cursorTime, limit)
