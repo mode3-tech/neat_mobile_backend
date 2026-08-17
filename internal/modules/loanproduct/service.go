@@ -148,7 +148,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	summary, parsedBV, parsedAmount, businessAgeYears, err := s.buildLoanSummary(req, loanProduct, now)
 	if err != nil {
-		return nil, appErr.ErrApplyingForLoan
+		return nil, err
 	}
 
 	loanRule, err := s.repo.GetRuleByProductID(ctx, loanProduct.ID)
@@ -273,7 +273,7 @@ func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now ti
 
 	startDate, err := timeutil.ParseDOB(req.BusinessStartDate)
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return nil, 0, 0, 0, appErr.ErrInvalidDOB
 	}
 
 	businessAgeYears := timeutil.AgeFromDOB(startDate, now)

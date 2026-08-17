@@ -101,6 +101,8 @@ func toTransactionResponse(t Transaction) TransactionResponse {
 		Date:        t.CreatedAt.Format(time.RFC3339),
 		Status:      t.Status,
 		Amount:      float64(t.Amount) / 100, // kobo -> naira, keeping trailing kobo as decimals
+		Charges:     float64(t.Charges) / 100,
+		VAT:         float64(t.VAT) / 100,
 		SessionID:   t.SessionID,
 		Narration:   t.Narration,
 	}

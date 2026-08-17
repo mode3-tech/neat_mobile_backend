@@ -119,7 +119,7 @@ func (r *Repository) UpdateTransactionProviderRef(ctx context.Context, txID, pro
 		}).Error
 }
 
-func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, providerRef string, status transaction.TransactionStatus, walletID string, totalDebit int64) error {
+func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, providerRef string, status transaction.TransactionStatus, walletID string, totalDebit, charges, vat int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		var wallet CustomerWallet
@@ -136,6 +136,8 @@ func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, provide
 				"status":             status,
 				"balance_before":     wallet.AvailableBalance,
 				"balance_after":      wallet.AvailableBalance - totalDebit,
+				"charges":            charges,
+				"vat":                vat,
 			}).Error; err != nil {
 			return err
 		}
