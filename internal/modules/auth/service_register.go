@@ -260,9 +260,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrNINWithFaceVerificationNotFound
 	}
 
-	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
-	ninName := strings.ToLower(strings.Join(strings.Fields(*ninRecord.VerifiedName), " "))
-	if bvnName != ninName || SerializeDOB(*bvnRecord.VerifiedDOB) != SerializeDOB(*ninRecord.VerifiedDOB) {
+	if !namesMatch(*bvnRecord.VerifiedName, *ninRecord.VerifiedName) || !dobsMatch(*bvnRecord.VerifiedDOB, *ninRecord.VerifiedDOB) {
 		return nil, appErr.ErrNINAndBVNMismatch
 	}
 

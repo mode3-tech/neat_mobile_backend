@@ -409,9 +409,9 @@ func (s *Service) createPendingContactVerification(ctx context.Context, verifica
 	return record.ID, nil
 }
 
-func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (string, error) {
+func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (string, string, error) {
 	if s.optimus == nil {
-		return "", fmt.Errorf("optimus validation service is not configured")
+		return "", "", fmt.Errorf("optimus validation service is not configured")
 	}
 
 	// RequestId is our correlation ID for this call, not client input -
@@ -420,18 +420,26 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 
 	response, err := s.optimus.ValidateBVN(ctx, request)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if response == nil || !isOptimusSuccess(response.ResponseCode) {
-		return "", optimusResponseError(response)
+		return "", "", optimusResponseError(response)
 	}
 
-	return s.createVerifiedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, request.RequestId)
+	// response.Data carries Optimus's own reference id for this check, which the
+	// client needs later for /otp/verify and /otp/resend - store it as the
+	// record's provider verification id rather than our own request.RequestId.
+	providerReferenceID := strings.TrimSpace(response.Data)
+	verificationID, err := s.createVerifiedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, providerReferenceID)
+	if err != nil {
+		return "", "", err
+	}
+	return verificationID, providerReferenceID, nil
 }
 
-func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, error) {
+func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
 	if s.optimus == nil {
-		return "", fmt.Errorf("optimus validation service is not configured")
+		return "", "", fmt.Errorf("optimus validation service is not configured")
 	}
 
 	// RequestId is our correlation ID for this call, not client input -
@@ -440,16 +448,39 @@ func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationR
 
 	response, err := s.optimus.ValidateNIN(ctx, request)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if response == nil || !isOptimusSuccess(response.ResponseCode) {
-		return "", optimusResponseError(response)
+		return "", "", optimusResponseError(response)
 	}
 
-	return s.createVerifiedIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, request.RequestId)
+	providerReferenceID := strings.TrimSpace(response.Data)
+	verificationID, err := s.createVerifiedIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, providerReferenceID)
+	if err != nil {
+		return "", "", err
+	}
+	return verificationID, providerReferenceID, nil
 }
 
-func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verificationType, identityNumber, requestID string) (string, error) {
+// VerifyOTP confirms the OTP Optimus sent for referenceID. Generic - works for
+// any Optimus OTP challenge (BVN/NIN validation today), since the reference id
+// alone is what Optimus uses to identify which challenge this is.
+func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referenceID string) error {
+	if s.optimus == nil {
+		return fmt.Errorf("optimus validation service is not configured")
+	}
+	return s.optimus.VerifyOTPWithOptimus(ctx, phone, otpToken, email, referenceID)
+}
+
+// ResendOTP asks Optimus to resend the OTP tied to referenceID.
+func (s *Service) ResendOTP(ctx context.Context, referenceID string) error {
+	if s.optimus == nil {
+		return fmt.Errorf("optimus validation service is not configured")
+	}
+	return s.optimus.ResendOTPWithOptimus(ctx, referenceID)
+}
+
+func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verificationType, identityNumber, providerReferenceID string) (string, error) {
 	now := time.Now().UTC()
 	expiresAt := now.Add(verificationExpiry)
 	hash := sha256.Sum256([]byte(identityNumber))
@@ -462,7 +493,7 @@ func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verifi
 		Status:                 models.VerificationStatusVerified,
 		SubjectHash:            hex.EncodeToString(hash[:]),
 		SubjectMasked:          &masked,
-		ProviderVerificationID: stringPointer(strings.TrimSpace(requestID)),
+		ProviderVerificationID: stringPointer(strings.TrimSpace(providerReferenceID)),
 		VerifiedID:             &identityNumber,
 		VerifiedAt:             &now,
 		ExpiresAt:              &expiresAt,

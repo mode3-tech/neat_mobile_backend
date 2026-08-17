@@ -121,7 +121,7 @@ type optimusTokenResponse struct {
 }
 
 type optimusVerifyOTPRequest struct {
-	PhoneNumber string `json:"phoneNumber"`
+	PhoneNumber string `json:"phoneNo"`
 	OTPToken    string `json:"otpToken"`
 	Email       string `json:"email"`
 	ReferenceID string `json:"referenceId"`

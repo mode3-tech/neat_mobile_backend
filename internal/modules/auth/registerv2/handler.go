@@ -47,7 +47,7 @@ func (h *Handler) VerifyPhoneOTP(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "Phone number verified.")
+	h.writeVerificationSuccess(c, verificationID, "", "Phone number verified.")
 }
 
 func (h *Handler) StartEmailVerification(c *gin.Context) {
@@ -62,7 +62,7 @@ func (h *Handler) StartEmailVerification(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "Email verification started. Confirm the email OTP to complete verification.")
+	h.writeVerificationSuccess(c, verificationID, "", "Email verification started. Confirm the email OTP to complete verification.")
 }
 
 func (h *Handler) ValidateBVN(c *gin.Context) {
@@ -72,12 +72,12 @@ func (h *Handler) ValidateBVN(c *gin.Context) {
 		return
 	}
 
-	verificationID, err := h.service.ValidateBVN(c.Request.Context(), request)
+	verificationID, providerReferenceID, err := h.service.ValidateBVN(c.Request.Context(), request)
 	if err != nil {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "BVN validated successfully.")
+	h.writeVerificationSuccess(c, verificationID, providerReferenceID, "BVN validated successfully.")
 }
 
 func (h *Handler) ValidateNIN(c *gin.Context) {
@@ -87,12 +87,50 @@ func (h *Handler) ValidateNIN(c *gin.Context) {
 		return
 	}
 
-	verificationID, err := h.service.ValidateNIN(c.Request.Context(), request)
+	verificationID, providerReferenceID, err := h.service.ValidateNIN(c.Request.Context(), request)
 	if err != nil {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "NIN validated successfully.")
+	h.writeVerificationSuccess(c, verificationID, providerReferenceID, "NIN validated successfully.")
+}
+
+// VerifyOTP confirms the OTP Optimus sent for a reference id (e.g. from
+// ValidateBVN/ValidateNIN's provider_reference_id). Generic across whatever
+// triggered the OTP challenge.
+func (h *Handler) VerifyOTP(c *gin.Context) {
+	var request VerifyOTPRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+
+	if err := h.service.VerifyOTP(c.Request.Context(), request.PhoneNo, request.OTPToken, request.Email, request.ReferenceID); err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "OTP verified successfully.",
+	})
+}
+
+// ResendOTP asks Optimus to resend the OTP tied to a reference id.
+func (h *Handler) ResendOTP(c *gin.Context) {
+	var request ResendOTPRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+
+	if err := h.service.ResendOTP(c.Request.Context(), request.ReferenceID); err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "OTP resent successfully.",
+	})
 }
 
 func (h *Handler) Register(c *gin.Context) {
@@ -115,8 +153,8 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
-func (h *Handler) writeVerificationSuccess(c *gin.Context, verificationID, message string) {
-	data := OptimusVerificationResponse{VerificationID: verificationID}
+func (h *Handler) writeVerificationSuccess(c *gin.Context, verificationID, providerReferenceID, message string) {
+	data := OptimusVerificationResponse{VerificationID: verificationID, ProviderReferenceID: providerReferenceID}
 	c.JSON(http.StatusOK, response.APIResponse[OptimusVerificationResponse]{
 		Status:  "success",
 		Message: message,

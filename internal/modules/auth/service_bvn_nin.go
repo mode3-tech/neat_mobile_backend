@@ -66,7 +66,7 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
 
-	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
+	_, err = compareBVNAndNinDetails(*row.VerifiedName, strings.TrimSpace(*row.VerifiedDOB), fullName, strings.TrimSpace(resp.Data.BirthDate))
 
 	if err != nil {
 		log.Printf("ValidateNIN: BVN/NIN detail mismatch: %v", err)

@@ -87,6 +87,26 @@ type OptimusNINValidationRequest struct {
 
 type OptimusVerificationResponse struct {
 	VerificationID string `json:"verification_id"`
+	// ProviderReferenceID is Optimus's own reference id for this check (from the
+	// response's Data field). Only present for BVN/NIN validation, since that's
+	// what starts an Optimus OTP challenge - empty/omitted for other verification
+	// types (email, phone). The client needs it for /otp/verify and /otp/resend.
+	ProviderReferenceID string `json:"provider_reference_id,omitempty"`
+}
+
+// VerifyOTPRequest confirms the OTP Optimus sent for a given reference id
+// (e.g. after BVN/NIN validation). Generic: works for any Optimus OTP
+// challenge, not tied to a specific verification type.
+type VerifyOTPRequest struct {
+	PhoneNo     string `json:"phone_no" binding:"required"`
+	OTPToken    string `json:"otp_token" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	ReferenceID string `json:"reference_id" binding:"required"`
+}
+
+// ResendOTPRequest asks Optimus to resend the OTP tied to a reference id.
+type ResendOTPRequest struct {
+	ReferenceID string `json:"reference_id" binding:"required"`
 }
 
 type OptimusResponse struct {
