@@ -128,28 +128,28 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, 
 
 		if rec == nil {
 			log.Println("auth service: verification not found")
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.Status != models.VerificationStatusVerified {
 			log.Println("auth service: verification not verified")
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
 			log.Println("auth service: verification phone not verified")
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		now := time.Now().UTC()
 		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
 			log.Println("auth service: verification expired")
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
 			log.Println("auth service: failed to mark verification used")
-			return appErr.ErrUnauthorized
+			return err
 		}
 
 		hashedPin, err := HashPassword(req.NewPin)

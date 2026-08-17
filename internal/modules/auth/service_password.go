@@ -351,24 +351,24 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 			return err
 		}
 		if rec == nil {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.Status != models.VerificationStatusVerified {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		now := time.Now().UTC()
 		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
-			return appErr.ErrUnauthorized
+			return err
 		}
 
 		if err := serviceRepo.UpdateUserPassword(ctx, user.ID, hashedPassword); err != nil {
