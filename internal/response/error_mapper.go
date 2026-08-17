@@ -145,7 +145,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_CHANNEL",
-				Message: "invalid channel",
+				Message: appErr.ErrInvalidChannel.Error(),
 			},
 		}
 
@@ -401,15 +401,6 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case errors.Is(err, appErr.ErrInvalidChannel):
-		return ErrorMapping{
-			Status: http.StatusInternalServerError,
-			Error: APIError{
-				Code:    "INVALID_CHANNEL",
-				Message: "invalid channel",
-			},
-		}
-
 	case errors.Is(err, appErr.ErrTooManyRequests):
 		return ErrorMapping{
 			Status: http.StatusTooManyRequests,
@@ -550,7 +541,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_CURSOR",
-				Message: "Invalid request body",
+				Message: appErr.ErrInvalidCursor.Error(),
 			},
 		}
 
@@ -658,7 +649,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusInternalServerError,
 			Error: APIError{
 				Code:    "ACCESS_TOKEN_ISSUE",
-				Message: "Error issuing access token",
+				Message: "We couldn't refresh your session. Please log in again.",
 			},
 		}
 
@@ -667,7 +658,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusInternalServerError,
 			Error: APIError{
 				Code:    "REFRESH_TOKEN_ISSUE",
-				Message: "Error issuing refresh token",
+				Message: "We couldn't refresh your session. Please log in again.",
 			},
 		}
 
@@ -736,10 +727,10 @@ func MapError(err error) ErrorMapping {
 
 	case errors.Is(err, appErr.ErrInvalidExpoToken):
 		return ErrorMapping{
-			Status: http.StatusInternalServerError,
+			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_EXPO_TOKEN",
-				Message: "An unexpected error occured, please try again later",
+				Message: "Unable to register this device for notifications. Please update the app and try again.",
 			},
 		}
 

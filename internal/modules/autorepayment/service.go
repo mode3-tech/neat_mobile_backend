@@ -153,9 +153,11 @@ func (s *Service) processSingle(ctx context.Context, row DueRepaymentRow) {
 		return
 	}
 
-	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
+	charges := int64(math.Round(resp.Transfer.Charges * 100))
+	vat := int64(math.Round(resp.Transfer.Vat * 100))
+	totalDebit := amountKobo + charges + vat
 	if err := s.walletRepository.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference,
-		transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit); err != nil {
+		transaction.TransactionStatusSuccessful, walletUser.WalletID, totalDebit, charges, vat); err != nil {
 		log.Printf("auto-repayment: failed to complete debit for repayment %d: %v", row.RepaymentID, err)
 		_ = s.repository.UpdateAttemptStatus(ctx, attemptID, AutoRepaymentAttemptStatusFailed, err.Error(), resp.Transfer.TransactionReference)
 		return

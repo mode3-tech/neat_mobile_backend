@@ -203,11 +203,13 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
+	charges := int64(math.Round(resp.Transfer.Charges * 100))
+	vat := int64(math.Round(resp.Transfer.Vat * 100))
+	totalDebit := amountKobo + charges + vat
 
 	log.Printf("wallet service: transfer response: %v", resp)
 
-	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit); err != nil {
+	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit, charges, vat); err != nil {
 		log.Printf("wallet service: failed to complete debit transaction: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
@@ -295,9 +297,11 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		return fmt.Errorf("%w: %s", ErrTransferProviderFailed, msg)
 	}
 
-	totalDebit := amountKobo + int64(math.Round(resp.Transfer.Charges*100)) + int64(math.Round(resp.Transfer.Vat*100))
+	charges := int64(math.Round(resp.Transfer.Charges * 100))
+	vat := int64(math.Round(resp.Transfer.Vat * 100))
+	totalDebit := amountKobo + charges + vat
 	return s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference,
-		transaction.TransactionStatusPending, w.InternalWalletID, totalDebit)
+		transaction.TransactionStatusPending, w.InternalWalletID, totalDebit, charges, vat)
 }
 
 // func (s *Service) InitiateBulkTransfer(ctx context.Context, mobileUserID string, req *BulkTransferRequest) (*BulkTransferResponse, error) {
