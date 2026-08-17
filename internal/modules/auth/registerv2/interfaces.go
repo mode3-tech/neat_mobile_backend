@@ -19,6 +19,11 @@ type ProviderPreferenceRepository interface {
 type OptimusValidator interface {
 	ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (*OptimusResponse, error)
 	ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (*OptimusResponse, error)
+	// VerifyOTPWithOptimus and ResendOTPWithOptimus are generic: the reference id
+	// alone identifies which OTP challenge to act on, regardless of whether it
+	// came from BVN validation, NIN validation, or anything else.
+	VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, email, referenceID string) error
+	ResendOTPWithOptimus(ctx context.Context, referenceID string) error
 }
 
 // SessionIssuer is satisfied by *auth.Service - reused so registerv2 issues
