@@ -9,7 +9,8 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 	{
 		optimus.POST("/otp/phone/request", handler.RequestPhoneOTP)
 		optimus.POST("/otp/phone/verify", handler.VerifyPhoneOTP)
-		optimus.POST("/verify/email", handler.StartEmailVerification)
+		optimus.POST("/otp/email/request", handler.RequestEmailOTP)
+		optimus.POST("/otp/email/verify", handler.VerifyEmailOTP)
 		optimus.POST("/validate/bvn", handler.ValidateBVN)
 		optimus.POST("/validate/nin", handler.ValidateNIN)
 		optimus.POST("/otp/verify", handler.VerifyOTP)

@@ -350,11 +350,28 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		// Error bodies are also PGP-encrypted; attempt to decrypt before logging.
-		if plainErr, err := pgpDecrypt(o.PrivateKey, strings.TrimSpace(string(respBody))); err == nil {
-			log.Printf("Optimus wallet generation failed status=%d error=%s", resp.StatusCode, plainErr)
+
+		var result registerv2.OptimusResponse
+		if decoded, decErr := o.decodeOptimusEnvelope(respBody); decErr == nil {
+			if jsonErr := json.Unmarshal(decoded, &result); jsonErr != nil {
+				log.Printf("Optimus wallet generation failed status=%d body=%s", resp.StatusCode, decoded)
+			}
 		} else {
-			log.Printf("Optimus wallet generation failed status=%d body=%s", resp.StatusCode, respBody)
+			log.Printf("Optimus wallet generation decrypt failed status=%d body=%s", resp.StatusCode, respBody)
+		}
+		log.Printf("Optimus wallet generation failed status=%d response=%+v", resp.StatusCode, result)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable (e.g. "No record found for customer"). 5xx responses
+		// stay generic since they're infra-side failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return nil, fmt.Errorf("%s", message)
+			}
 		}
 		return nil, fmt.Errorf("Optimus wallet generation failed with status: %d", resp.StatusCode)
 	}
@@ -473,15 +490,21 @@ func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any
 		return nil, decodeErr
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		message := strings.TrimSpace(result.ResponseMessage)
-		if message == "" && result.Error != nil {
-			message = fmt.Sprint(result.Error)
-		}
-		if message == "" {
-			message = "we could not verify your details. Please check them and try again"
-		}
 		log.Printf("optimus: validation request failed path=%s status=%d response=%+v", path, resp.StatusCode, result)
-		return nil, fmt.Errorf("%s", message)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return nil, fmt.Errorf("%s", message)
+			}
+		}
+		return nil, fmt.Errorf("we could not verify your details. Please check them and try again")
 	}
 	return result, nil
 }
@@ -555,20 +578,24 @@ func (o *Optimus) VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, ema
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		var result registerv2.OptimusResponse
 		if decoded, decErr := o.decodeOptimusEnvelope(respBody); decErr == nil {
-			var result registerv2.OptimusResponse
-			if jsonErr := json.Unmarshal(decoded, &result); jsonErr == nil {
-				message := strings.TrimSpace(result.ResponseMessage)
-				if message == "" && result.Error != nil {
-					message = fmt.Sprint(result.Error)
-				}
-				if message != "" {
-					log.Printf("optimus: otp verify failed status=%d response=%+v", resp.StatusCode, result)
-					return fmt.Errorf("optimus: otp verification failed: %s", message)
-				}
+			_ = json.Unmarshal(decoded, &result)
+		}
+		log.Printf("optimus: otp verify failed status=%d body=%s response=%+v", resp.StatusCode, respBody, result)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return fmt.Errorf("optimus: otp verification failed: %s", message)
 			}
 		}
-		log.Printf("optimus: otp verify failed status=%d body=%s", resp.StatusCode, respBody)
 		return fmt.Errorf("optimus: otp verification failed with status %d", resp.StatusCode)
 	}
 
@@ -629,14 +656,19 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 	log.Printf("optimus: otp resend decoded response status=%d response=%+v", resp.StatusCode, result)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		message := strings.TrimSpace(result.ResponseMessage)
-		if message == "" && result.Error != nil {
-			message = fmt.Sprint(result.Error)
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return "", fmt.Errorf("%s", message)
+			}
 		}
-		if message == "" {
-			message = fmt.Sprintf("otp resend failed with status %d", resp.StatusCode)
-		}
-		return "", fmt.Errorf("%s", message)
+		return "", fmt.Errorf("otp resend failed with status %d", resp.StatusCode)
 	}
 
 	newReferenceID := strings.TrimSpace(result.Data)
@@ -676,12 +708,25 @@ func (o *Optimus) ValidateAccount(ctx context.Context, accountNumber string) err
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		if plainErr, decErr := pgpDecrypt(o.PrivateKey, strings.TrimSpace(string(respBody))); decErr == nil {
-			log.Printf("optimus: account validation failed status=%d error=%s", resp.StatusCode, plainErr)
-			return fmt.Errorf("optimus: account validation failed: %s", plainErr)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		var result registerv2.OptimusResponse
+		if decoded, decErr := o.decodeOptimusEnvelope(respBody); decErr == nil {
+			_ = json.Unmarshal(decoded, &result)
 		}
-		log.Printf("optimus: account validation failed status=%d body=%s", resp.StatusCode, respBody)
+		log.Printf("optimus: account validation failed status=%d body=%s response=%+v", resp.StatusCode, respBody, result)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return fmt.Errorf("optimus: account validation failed: %s", message)
+			}
+		}
 		return fmt.Errorf("optimus: account validation failed with status %d", resp.StatusCode)
 	}
 
@@ -736,15 +781,21 @@ func (o *Optimus) UpgradeAccount(ctx context.Context, payload *OptimusAccountUpg
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		message := strings.TrimSpace(result.ResponseMessage)
-		if message == "" && result.Error != nil {
-			message = fmt.Sprint(result.Error)
-		}
-		if message == "" {
-			message = fmt.Sprintf("account upgrade request failed with status %d", resp.StatusCode)
-		}
 		log.Printf("optimus: account upgrade request failed status=%d body=%s", resp.StatusCode, decoded)
-		return nil, fmt.Errorf("optimus: %s", message)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return nil, fmt.Errorf("optimus: %s", message)
+			}
+		}
+		return nil, fmt.Errorf("account upgrade request failed with status %d", resp.StatusCode)
 	}
 
 	log.Printf("optimus: account upgrade request succeeded")
@@ -793,15 +844,21 @@ func (o *Optimus) CheckAccountUpgradeStatus(ctx context.Context, accountNumber s
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		message := strings.TrimSpace(result.ResponseMessage)
-		if message == "" && result.Error != nil {
-			message = fmt.Sprint(result.Error)
-		}
-		if message == "" {
-			message = fmt.Sprintf("account upgrade status request failed with status %d", resp.StatusCode)
-		}
 		log.Printf("optimus: account upgrade status request failed status=%d body=%s", resp.StatusCode, decoded)
-		return nil, fmt.Errorf("optimus: %s", message)
+
+		// Surface Optimus's own message for anything below 500 - it's
+		// user-actionable. 5xx responses stay generic since they're infra-side
+		// failures, not user-fixable.
+		if resp.StatusCode < 500 {
+			message := strings.TrimSpace(result.ResponseMessage)
+			if message == "" && result.Error != nil {
+				message = fmt.Sprint(result.Error)
+			}
+			if message != "" {
+				return nil, fmt.Errorf("optimus: %s", message)
+			}
+		}
+		return nil, fmt.Errorf("account upgrade status request failed with status %d", resp.StatusCode)
 	}
 
 	log.Printf("optimus: account upgrade status request succeeded")

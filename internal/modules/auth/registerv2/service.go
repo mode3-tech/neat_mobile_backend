@@ -24,7 +24,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const verificationExpiry = 15 * time.Minute
+const verificationExpiry = 30 * time.Minute
 
 type Service struct {
 	repo               *Repository
@@ -218,7 +218,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		IsPhoneVerified:        true,
 		IsBvnVerified:          true,
 		IsNinVerified:          true,
-		IsBiometricsEnabled:    req.IsBiomtricsEnabled,
+		IsBiometricsEnabled:    *req.IsBiomtricsEnabled,
 		IsNotificationsEnabled: true,
 		ActivationCapAmount:    s.activationCapKobo,
 		ActivationCapExpiresAt: &capExpiresAt,
@@ -369,44 +369,47 @@ func (s *Service) VerifyPhoneOTP(ctx context.Context, otpID, code string) (strin
 	return result.VerificationID, nil
 }
 
-// StartEmailVerification creates a pending record for an email address.
-// It does not mark the address verified; that must happen after an OTP flow.
-func (s *Service) StartEmailVerification(ctx context.Context, email string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email {
+// RequestEmailOTP sends an OTP to the given email address, delegating to the
+// same otp.OTPManager used for phone (see RequestPhoneOTP) but over the email
+// channel.
+func (s *Service) RequestEmailOTP(ctx context.Context, email string) (string, error) {
+	if s.otpManager == nil {
+		return "", fmt.Errorf("otp service is not configured")
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	address, err := mail.ParseAddress(normalized)
+	if err != nil || address.Address != normalized {
 		return "", fmt.Errorf("invalid email address")
 	}
 
-	return s.createPendingContactVerification(ctx, models.VerificationTypeEmail, email, maskEmail(email))
-}
-
-func (s *Service) createPendingContactVerification(ctx context.Context, verificationType, subject, masked string) (string, error) {
-	now := time.Now().UTC()
-	expiresAt := now.Add(verificationExpiry)
-	hash := sha256.Sum256([]byte(subject))
-
-	record := &models.VerificationRecord{
-		ID:            uuid.NewString(),
-		Type:          verificationType,
-		Provider:      "optimus",
-		Status:        models.VerificationStatusPending,
-		SubjectHash:   hex.EncodeToString(hash[:]),
-		SubjectMasked: &masked,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-		ExpiresAt:     &expiresAt,
-	}
-	if verificationType == models.VerificationTypePhone {
-		record.VerifiedPhone = &subject
-	} else {
-		record.VerifiedEmail = &subject
-	}
-
-	if err := s.repo.AddVerification(ctx, record); err != nil {
+	result, err := s.otpManager.Issue(ctx, otp.IssueOTPInput{
+		Purpose:     otp.PurposeSubmittedContact,
+		Channel:     otp.ChannelEmail,
+		Destination: normalized,
+	})
+	if err != nil {
 		return "", err
 	}
-	return record.ID, nil
+	return result.OTPID, nil
+}
+
+// VerifyEmailOTP confirms the code sent by RequestEmailOTP and returns the
+// resulting verification ID for use in the final /register call.
+func (s *Service) VerifyEmailOTP(ctx context.Context, otpID, code string) (string, error) {
+	if s.otpManager == nil {
+		return "", fmt.Errorf("otp service is not configured")
+	}
+
+	result, err := s.otpManager.Verify(ctx, otp.VerifyOTPInput{
+		Purpose: otp.PurposeSubmittedContact,
+		OTPID:   strings.TrimSpace(otpID),
+		Code:    strings.TrimSpace(code),
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.VerificationID, nil
 }
 
 func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (string, string, error) {

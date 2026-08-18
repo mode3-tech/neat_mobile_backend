@@ -77,7 +77,7 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedNIN := MaskSub(nin)
 	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(resp.Data.TelephoneNo)
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{
@@ -365,7 +365,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{

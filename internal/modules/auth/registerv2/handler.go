@@ -1,6 +1,9 @@
 package registerv2
 
 import (
+	"bytes"
+	"io"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
 	"net/http"
@@ -50,19 +53,42 @@ func (h *Handler) VerifyPhoneOTP(c *gin.Context) {
 	h.writeVerificationSuccess(c, verificationID, "", "Phone number verified.")
 }
 
-func (h *Handler) StartEmailVerification(c *gin.Context) {
+// RequestEmailOTP sends an OTP to the given email address, mirroring
+// RequestPhoneOTP but over the email channel.
+func (h *Handler) RequestEmailOTP(c *gin.Context) {
 	var request OptimusEmailValidationRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		h.writeInvalidRequest(c)
 		return
 	}
 
-	verificationID, err := h.service.StartEmailVerification(c.Request.Context(), request.Email)
+	otpID, err := h.service.RequestEmailOTP(c.Request.Context(), request.Email)
 	if err != nil {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "", "Email verification started. Confirm the email OTP to complete verification.")
+	c.JSON(http.StatusOK, response.APIResponse[RequestEmailOTPResponse]{
+		Status:  "success",
+		Message: "OTP sent. Confirm the code to complete email verification.",
+		Data:    &RequestEmailOTPResponse{OTPID: otpID},
+	})
+}
+
+// VerifyEmailOTP confirms the code sent by RequestEmailOTP and returns the
+// verification id for use in the final /register call.
+func (h *Handler) VerifyEmailOTP(c *gin.Context) {
+	var request VerifyEmailOTPRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+
+	verificationID, err := h.service.VerifyEmailOTP(c.Request.Context(), request.OTPID, request.Code)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	h.writeVerificationSuccess(c, verificationID, "", "Email verified.")
 }
 
 func (h *Handler) ValidateBVN(c *gin.Context) {
@@ -136,8 +162,13 @@ func (h *Handler) ResendOTP(c *gin.Context) {
 }
 
 func (h *Handler) Register(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("registerv2: register request payload: %s", bodyBytes)
+
 	var request OptimusRegisterRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Printf("registerv2: register request binding failed: %v", err)
 		h.writeInvalidRequest(c)
 		return
 	}

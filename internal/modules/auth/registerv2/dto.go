@@ -29,7 +29,7 @@ type OptimusRegisterRequest struct {
 	ConfirmPassword       string              `json:"confirm_password" binding:"required"`
 	TransactionPin        string              `json:"transaction_pin" binding:"required"`
 	ConfirmTransactionPin string              `json:"confirm_transaction_pin" binding:"required"`
-	IsBiomtricsEnabled    bool                `json:"is_biomtrics_enabled" binding:"required"`
+	IsBiomtricsEnabled    *bool               `json:"is_biometrics_enabled" binding:"required"`
 	ReferralCode          string              `json:"referral_code" binding:"omitempty"`
 	Device                DeviceRegisteration `json:"device" binding:"required"`
 }
@@ -61,9 +61,20 @@ type VerifyPhoneOTPRequest struct {
 	Code  string `json:"code" binding:"required"`
 }
 
-// OptimusEmailValidationRequest starts verification of the customer's email.
+// OptimusEmailValidationRequest requests an OTP be sent to the given email.
 type OptimusEmailValidationRequest struct {
 	Email string `json:"email" binding:"required,email"`
+}
+
+// RequestEmailOTPResponse carries the OTP ID needed to verify the code.
+type RequestEmailOTPResponse struct {
+	OTPID string `json:"otp_id"`
+}
+
+// VerifyEmailOTPRequest confirms the code sent by OptimusEmailValidationRequest.
+type VerifyEmailOTPRequest struct {
+	OTPID string `json:"otp_id" binding:"required"`
+	Code  string `json:"code" binding:"required"`
 }
 
 type OptimusBVNValidationRequest struct {
