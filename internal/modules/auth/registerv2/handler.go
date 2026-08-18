@@ -123,13 +123,15 @@ func (h *Handler) ResendOTP(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.ResendOTP(c.Request.Context(), request.ReferenceID); err != nil {
+	newReferenceID, err := h.service.ResendOTP(c.Request.Context(), request.ReferenceID)
+	if err != nil {
 		h.writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, response.APIResponse[any]{
+	c.JSON(http.StatusOK, response.APIResponse[ResendOTPResponse]{
 		Status:  "success",
 		Message: "OTP resent successfully.",
+		Data:    &ResendOTPResponse{ReferenceID: newReferenceID},
 	})
 }
 

@@ -472,10 +472,11 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 	return s.optimus.VerifyOTPWithOptimus(ctx, phone, otpToken, email, referenceID)
 }
 
-// ResendOTP asks Optimus to resend the OTP tied to referenceID.
-func (s *Service) ResendOTP(ctx context.Context, referenceID string) error {
+// ResendOTP asks Optimus to resend the OTP tied to referenceID, returning the
+// new reference id the caller must use for the next verify/resend.
+func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, error) {
 	if s.optimus == nil {
-		return fmt.Errorf("optimus validation service is not configured")
+		return "", fmt.Errorf("optimus validation service is not configured")
 	}
 	return s.optimus.ResendOTPWithOptimus(ctx, referenceID)
 }

@@ -23,7 +23,9 @@ type OptimusValidator interface {
 	// alone identifies which OTP challenge to act on, regardless of whether it
 	// came from BVN validation, NIN validation, or anything else.
 	VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, email, referenceID string) error
-	ResendOTPWithOptimus(ctx context.Context, referenceID string) error
+	// ResendOTPWithOptimus returns the new reference id Optimus issues for the
+	// resent OTP - callers must use it for the next verify/resend, not the old one.
+	ResendOTPWithOptimus(ctx context.Context, referenceID string) (string, error)
 }
 
 // SessionIssuer is satisfied by *auth.Service - reused so registerv2 issues

@@ -104,6 +104,12 @@ type VerifyOTPRequest struct {
 	ReferenceID string `json:"reference_id" binding:"required"`
 }
 
+// ResendOTPResponse carries the new reference id issued for the resent OTP -
+// the client must use this one for the next verify/resend, not the old id.
+type ResendOTPResponse struct {
+	ReferenceID string `json:"reference_id"`
+}
+
 // ResendOTPRequest asks Optimus to resend the OTP tied to a reference id.
 type ResendOTPRequest struct {
 	ReferenceID string `json:"reference_id" binding:"required"`

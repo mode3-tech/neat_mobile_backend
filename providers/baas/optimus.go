@@ -578,21 +578,27 @@ func (o *Optimus) VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, ema
 // ResendOTPWithOptimus asks Optimus to resend the OTP tied to referenceID. The
 // reference id alone is enough for Optimus to identify which OTP challenge to
 // resend, regardless of what originally triggered it (BVN/NIN validation etc).
-func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) error {
+// Optimus issues a new reference id for the resent OTP, which is returned so
+// the caller can use it for the next verify/resend instead of the old one.
+func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) (string, error) {
 	token, err := o.getToken(ctx)
 	if err != nil {
 		log.Printf("optimus: failed to obtain access token for otp resend: %v", err)
-		return err
+		return "", err
 	}
 
+	// Mirrors /Customer/validate-otp (see VerifyOTPWithOptimus): WalletBaseURL
+	// already ends in the API version segment (.../opti-finserve-api/v1), so no
+	// extra "/api/v1" prefix here - that was the same wrong assumption that
+	// caused validate-otp to 404 until it was moved off AuthBaseURL.
 	query := url.Values{}
 	query.Set("referenceId", strings.TrimSpace(referenceID))
-	requestURL := strings.TrimSpace(o.AuthBaseURL) + "/api/v1/Otp/resend?" + query.Encode()
+	requestURL := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/Otp/resend?" + query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		log.Printf("optimus: build otp resend request failed: %v", err)
-		return fmt.Errorf("optimus: build otp resend request: %w", err)
+		return "", fmt.Errorf("optimus: build otp resend request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
@@ -600,14 +606,14 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 	resp, err := o.Client.Do(req)
 	if err != nil {
 		log.Printf("optimus: otp resend request failed: %v", err)
-		return fmt.Errorf("optimus: otp resend request failed: %w", err)
+		return "", fmt.Errorf("optimus: otp resend request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		log.Printf("optimus: read otp resend response failed: %v", err)
-		return fmt.Errorf("optimus: read otp resend response: %w", err)
+		return "", fmt.Errorf("optimus: read otp resend response: %w", err)
 	}
 
 	decoded, decodeErr := o.decodeOptimusEnvelope(body)
@@ -620,6 +626,7 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 	if err := json.Unmarshal(decoded, &result); err != nil {
 		log.Printf("optimus: decode otp resend response failed status=%d body=%s", resp.StatusCode, decoded)
 	}
+	log.Printf("optimus: otp resend decoded response status=%d response=%+v", resp.StatusCode, result)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message := strings.TrimSpace(result.ResponseMessage)
@@ -629,12 +636,12 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 		if message == "" {
 			message = fmt.Sprintf("otp resend failed with status %d", resp.StatusCode)
 		}
-		log.Printf("optimus: otp resend failed status=%d response=%+v", resp.StatusCode, result)
-		return fmt.Errorf("%s", message)
+		return "", fmt.Errorf("%s", message)
 	}
 
-	log.Printf("optimus: otp resend succeeded referenceId=%s", referenceID)
-	return nil
+	newReferenceID := strings.TrimSpace(result.Data)
+	log.Printf("optimus: otp resend succeeded oldReferenceId=%s newReferenceId=%s", referenceID, newReferenceID)
+	return newReferenceID, nil
 }
 
 func (o *Optimus) ValidateAccount(ctx context.Context, accountNumber string) error {
