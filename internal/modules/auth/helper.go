@@ -91,10 +91,18 @@ func namesMatch(a, b string) bool {
 // bvnNinDOBLayouts are the full-date layouts tried when comparing BVN/NIN
 // provider DOBs. Scoped to this comparison only - NOT used for timeutil.ParseDOB,
 // which deliberately rejects YYYY-MM-DD for the app's own DOB input fields.
-// Different BVN/NIN providers may format DOB differently, so both are tried
-// here; they're unambiguous relative to each other since one starts with a
-// 4-digit year and the other doesn't.
-var bvnNinDOBLayouts = []string{"02-01-2006", "2006-01-02"}
+// Different BVN/NIN providers may format DOB differently (numeric, ISO, or
+// named-month like "16-Aug-2002"), so all known shapes are tried here; they're
+// unambiguous relative to each other (numeric day/month vs. leading 4-digit
+// year vs. a month name in one position or the other).
+var bvnNinDOBLayouts = []string{
+	"02-01-2006",      // DD-MM-YYYY
+	"2006-01-02",      // YYYY-MM-DD
+	"02-Jan-2006",     // DD-Mon-YYYY, e.g. 16-Aug-2002
+	"Jan-02-2006",     // Mon-DD-YYYY, e.g. Aug-16-2002
+	"02-January-2006", // DD-Month-YYYY, e.g. 16-August-2002
+	"January-02-2006", // Month-DD-YYYY, e.g. August-16-2002
+}
 
 // parseBVNNinDOB tries each known BVN/NIN provider DOB layout in turn.
 func parseBVNNinDOB(value string) (time.Time, bool) {
