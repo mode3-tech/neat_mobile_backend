@@ -26,16 +26,29 @@ import (
 
 const verificationExpiry = 30 * time.Minute
 
+const (
+	// bvnValidateMaxAttempts is the initial attempt plus two retries.
+	bvnValidateMaxAttempts = 3
+	bvnValidateRetryDelay  = 750 * time.Millisecond
+	// bvnValidateOverallBudget caps the whole retry loop, including the
+	// Optimus client's own 15s-per-call timeout (providers/baas/optimus.go) -
+	// three naive full-length attempts could otherwise exceed the server's
+	// 30s WriteTimeout (internal/server/server.go) and get the response cut
+	// off mid-flight. Kept comfortably under that.
+	bvnValidateOverallBudget = 25 * time.Second
+)
+
 type Service struct {
-	repo               *Repository
-	providerPreference ProviderPreferenceRepository
-	optimus            OptimusValidator
-	walletGenerator    auth.WalletService
-	sessionIssuer      SessionIssuer
-	otpManager         otp.OTPManager
-	tx                 *tx.Transactor
-	activationCapKobo  int64
-	optimusProductID   string
+	repo                    *Repository
+	providerPreference      ProviderPreferenceRepository
+	optimus                 OptimusValidator
+	walletGenerator         auth.WalletService
+	providusWalletGenerator auth.WalletService
+	sessionIssuer           SessionIssuer
+	otpManager              otp.OTPManager
+	tx                      *tx.Transactor
+	activationCapKobo       int64
+	optimusProductID        string
 }
 
 func NewService(
@@ -43,6 +56,7 @@ func NewService(
 	providerPreference ProviderPreferenceRepository,
 	optimus OptimusValidator,
 	walletGenerator auth.WalletService,
+	providusWalletGenerator auth.WalletService,
 	sessionIssuer SessionIssuer,
 	otpManager otp.OTPManager,
 	transactor *tx.Transactor,
@@ -50,15 +64,16 @@ func NewService(
 	optimusProductID string,
 ) *Service {
 	return &Service{
-		repo:               repo,
-		providerPreference: providerPreference,
-		optimus:            optimus,
-		walletGenerator:    walletGenerator,
-		sessionIssuer:      sessionIssuer,
-		otpManager:         otpManager,
-		tx:                 transactor,
-		activationCapKobo:  activationCapKobo,
-		optimusProductID:   optimusProductID,
+		repo:                    repo,
+		providerPreference:      providerPreference,
+		optimus:                 optimus,
+		walletGenerator:         walletGenerator,
+		providusWalletGenerator: providusWalletGenerator,
+		sessionIssuer:           sessionIssuer,
+		otpManager:              otpManager,
+		tx:                      transactor,
+		activationCapKobo:       activationCapKobo,
+		optimusProductID:        optimusProductID,
 	}
 }
 
@@ -117,40 +132,68 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		return nil, fmt.Errorf("email is not verified")
 	}
 
-	bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
-	bvnRecord, err := s.repo.GetVerifiedByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
-	if err != nil {
-		return nil, err
-	}
-	if bvnRecord == nil {
-		return nil, fmt.Errorf("bvn is not verified")
-	}
-
-	ninHash := sha256.Sum256([]byte(strings.TrimSpace(req.NIN)))
-	ninRecord, err := s.repo.GetVerifiedByTypeAndHash(ctx, models.VerificationTypeNIN, hex.EncodeToString(ninHash[:]))
-	if err != nil {
-		return nil, err
-	}
-	if ninRecord == nil {
-		return nil, fmt.Errorf("nin is not verified")
-	}
+	// NIN is collected and persisted below but no longer gates registration -
+	// it isn't sent to either provider's wallet-creation call, so validating
+	// it up front only added friction without changing the outcome.
 
 	provider, err := s.CurrentProvider(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// bvnRecord is only set (and later marked used) when Optimus actually
+	// verified this BVN during onboarding - nil whenever Providus is the
+	// primary provider or Optimus's validation/OTP never completed.
+	var bvnRecord *models.VerificationRecord
+	var walletGenerator auth.WalletService
+
 	switch strings.TrimSpace(provider) {
+	case "providus":
+		// Providus validates the BVN itself as part of wallet creation, so
+		// there's nothing to look up here and no fallback needed on this path.
+		walletGenerator = s.providusWalletGenerator
+
 	case "optimus":
 		if s.optimus == nil {
 			log.Println("optimus service is not configured")
 			return nil, fmt.Errorf("optimus service is not configured")
 		}
 
+		bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
+		latestBVNRecord, err := s.repo.GetLatestByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case latestBVNRecord == nil:
+			// /auth/validate/bvn was never called for this BVN - fallback only
+			// applies to calls that were made and Optimus rejected, so this is
+			// a hard stop, not a fallback trigger.
+			return nil, fmt.Errorf("bvn is not verified")
+
+		case latestBVNRecord.Status == models.VerificationStatusVerified:
+			// Optimus validated the BVN and its OTP challenge was confirmed - use it.
+			bvnRecord = latestBVNRecord
+			walletGenerator = s.walletGenerator
+
+		case latestBVNRecord.Status == models.VerificationStatusFailed:
+			// Optimus's validate-bvn call itself rejected this BVN - fall back
+			// to Providus, which performs its own check as part of wallet
+			// creation.
+			walletGenerator = s.providusWalletGenerator
+
+		default:
+			// Pending: validate-bvn succeeded but the OTP challenge was never
+			// confirmed (or failed). This is not a fallback case - falling back
+			// here would let someone route around the OTP consent step just by
+			// not completing it, so the user must resolve it instead.
+			return nil, fmt.Errorf("bvn otp verification is not complete")
+		}
+
 	default:
 		return nil, fmt.Errorf("registration provider %q is not supported by this flow", provider)
 	}
-	if s.walletGenerator == nil {
+	if walletGenerator == nil {
 		return nil, fmt.Errorf("wallet generation service is not configured")
 	}
 
@@ -162,7 +205,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	mobileUserID := uuid.NewString()
 	internalWalletID := uuid.NewString()
 
-	walletResp, err := s.walletGenerator.GenerateWallet(ctx, &auth.WalletPayload{
+	walletResp, err := walletGenerator.GenerateWallet(ctx, &auth.WalletPayload{
 		RequestID:         mobileUserID,
 		BVN:               strings.TrimSpace(req.BVN),
 		FirstName:         strings.TrimSpace(req.FirstName),
@@ -256,13 +299,16 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	}
 
 	now := time.Now().UTC()
-	usedVerificationIDs := []string{phoneRecord.ID, emailRecord.ID, bvnRecord.ID, ninRecord.ID}
+	usedVerificationIDs := []string{phoneRecord.ID, emailRecord.ID}
+	if bvnRecord != nil {
+		usedVerificationIDs = append(usedVerificationIDs, bvnRecord.ID)
+	}
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := auth.NewRespository(txDB)
+		authRepo := auth.NewRespository(txDB, s.repo.cipher)
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
-		verificationRepo := &Repository{db: txDB}
+		verificationRepo := NewRepository(txDB, s.repo.cipher)
 
 		if _, txErr := authRepo.CreateUser(ctx, user); txErr != nil {
 			return txErr
@@ -412,32 +458,90 @@ func (s *Service) VerifyEmailOTP(ctx context.Context, otpID, code string) (strin
 	return result.VerificationID, nil
 }
 
-func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (string, string, error) {
+// validateBVNWithRetries calls Optimus's validate-bvn up to
+// bvnValidateMaxAttempts times, stopping early on the first attempt that
+// transports successfully and comes back as an Optimus success. Everything
+// else - transport errors, timeouts, and explicit Optimus rejections alike -
+// is retried, since a single failure can't tell an incorrect BVN apart from a
+// momentary Optimus outage. request.RequestId is reused across attempts so
+// they're correlated as the same logical check on Optimus's side.
+func (s *Service) validateBVNWithRetries(ctx context.Context, request OptimusBVNValidationRequest) (*OptimusResponse, error) {
+	budgetCtx, cancel := context.WithTimeout(ctx, bvnValidateOverallBudget)
+	defer cancel()
+
+	var response *OptimusResponse
+	var err error
+	for attempt := 1; attempt <= bvnValidateMaxAttempts; attempt++ {
+		response, err = s.optimus.ValidateBVN(budgetCtx, request)
+		if err == nil && response != nil && isOptimusSuccess(response.ResponseCode) {
+			return response, nil
+		}
+		if err == nil {
+			err = optimusResponseError(response)
+		}
+		if attempt == bvnValidateMaxAttempts {
+			break
+		}
+		select {
+		case <-budgetCtx.Done():
+			return nil, err
+		case <-time.After(bvnValidateRetryDelay):
+		}
+	}
+	return nil, err
+}
+
+// ValidateBVN kicks off BVN validation for the active provider. When Providus
+// is the current preference, it short-circuits immediately: Providus checks
+// the BVN itself as part of wallet creation, so there's no separate
+// validation call or OTP challenge to run here (requiresOTP comes back
+// false, verificationID/providerReferenceID empty). When Optimus is active,
+// this behaves as before - a real validate-bvn call that starts an Optimus
+// OTP challenge the client must confirm via VerifyOTP (requiresOTP true).
+func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (verificationID, providerReferenceID string, requiresOTP bool, err error) {
+	provider, err := s.CurrentProvider(ctx)
+	if err != nil {
+		return "", "", false, err
+	}
+	if strings.TrimSpace(provider) == "providus" {
+		return "", "", false, nil
+	}
+
 	if s.optimus == nil {
-		return "", "", fmt.Errorf("optimus validation service is not configured")
+		return "", "", false, fmt.Errorf("optimus validation service is not configured")
 	}
 
 	// RequestId is our correlation ID for this call, not client input -
 	// always generated server-side, overwriting anything the caller sent.
 	request.RequestId = uuid.NewString()
 
-	response, err := s.optimus.ValidateBVN(ctx, request)
+	// Retried below before we conclude anything - a single failure here could
+	// just as easily be a momentary Optimus blip as a genuinely incorrect BVN,
+	// and only the latter should count against this BVN for fallback purposes.
+	response, err := s.validateBVNWithRetries(ctx, request)
 	if err != nil {
-		return "", "", err
-	}
-	if response == nil || !isOptimusSuccess(response.ResponseCode) {
-		return "", "", optimusResponseError(response)
+		// Record the failure so Register can tell "validate-bvn was called and
+		// consistently failed" (fallback-eligible) apart from "never called"
+		// (not fallback-eligible).
+		if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, err); recordErr != nil {
+			log.Printf("ValidateBVN: failed to record failed verification: %v", recordErr)
+		}
+		return "", "", false, err
 	}
 
 	// response.Data carries Optimus's own reference id for this check, which the
 	// client needs later for /otp/verify and /otp/resend - store it as the
 	// record's provider verification id rather than our own request.RequestId.
-	providerReferenceID := strings.TrimSpace(response.Data)
-	verificationID, err := s.createVerifiedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, providerReferenceID)
+	// Record starts pending, not verified - VerifyOTP flips it to verified
+	// once the OTP challenge this call just triggered is actually confirmed,
+	// so an unconfirmed/failed OTP correctly falls through to Providus at
+	// Register instead of silently counting as an Optimus-verified BVN.
+	providerReferenceID = strings.TrimSpace(response.Data)
+	verificationID, err = s.createPendingIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, providerReferenceID)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
-	return verificationID, providerReferenceID, nil
+	return verificationID, providerReferenceID, true, nil
 }
 
 func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
@@ -457,34 +561,78 @@ func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationR
 		return "", "", optimusResponseError(response)
 	}
 
+	// See the matching comment in ValidateBVN: record starts pending, not
+	// verified, until VerifyOTP confirms the OTP challenge this call triggered.
 	providerReferenceID := strings.TrimSpace(response.Data)
-	verificationID, err := s.createVerifiedIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, providerReferenceID)
+	verificationID, err := s.createPendingIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, providerReferenceID)
 	if err != nil {
 		return "", "", err
 	}
 	return verificationID, providerReferenceID, nil
 }
 
-// VerifyOTP confirms the OTP Optimus sent for referenceID. Generic - works for
-// any Optimus OTP challenge (BVN/NIN validation today), since the reference id
-// alone is what Optimus uses to identify which challenge this is.
+// VerifyOTP confirms the OTP Optimus sent for referenceID and, on success,
+// flips the matching pending BVN/NIN verification record to verified. Generic
+// - works for any Optimus OTP challenge (BVN/NIN validation today), since the
+// reference id alone is what Optimus uses to identify which challenge this is.
 func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referenceID string) error {
 	if s.optimus == nil {
 		return fmt.Errorf("optimus validation service is not configured")
 	}
-	return s.optimus.VerifyOTPWithOptimus(ctx, phone, otpToken, email, referenceID)
+	if err := s.optimus.VerifyOTPWithOptimus(ctx, phone, otpToken, email, referenceID); err != nil {
+		return err
+	}
+	return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
 }
 
 // ResendOTP asks Optimus to resend the OTP tied to referenceID, returning the
-// new reference id the caller must use for the next verify/resend.
+// new reference id the caller must use for the next verify/resend. Also
+// repoints the pending verification record at the new reference id - without
+// this, VerifyOTP's later lookup (by provider reference id) would miss the
+// record entirely, since the client is required to verify against the new id.
 func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, error) {
 	if s.optimus == nil {
 		return "", fmt.Errorf("optimus validation service is not configured")
 	}
-	return s.optimus.ResendOTPWithOptimus(ctx, referenceID)
+	newReferenceID, err := s.optimus.ResendOTPWithOptimus(ctx, referenceID)
+	if err != nil {
+		return "", err
+	}
+	if err := s.repo.UpdateProviderVerificationReference(ctx, strings.TrimSpace(referenceID), strings.TrimSpace(newReferenceID)); err != nil {
+		return "", err
+	}
+	return newReferenceID, nil
 }
 
-func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verificationType, identityNumber, providerReferenceID string) (string, error) {
+// createFailedIdentityVerification records that Optimus's validate-bvn/nin
+// call itself rejected identityNumber (as opposed to it never being called at
+// all, or being called but never completing its OTP challenge). Register uses
+// this to know a Providus fallback is actually warranted.
+func (s *Service) createFailedIdentityVerification(ctx context.Context, verificationType, identityNumber string, failureErr error) error {
+	now := time.Now().UTC()
+	hash := sha256.Sum256([]byte(identityNumber))
+	masked := maskIdentityNumber(identityNumber)
+	reason := failureErr.Error()
+
+	record := &models.VerificationRecord{
+		ID:            uuid.NewString(),
+		Type:          verificationType,
+		Provider:      "optimus",
+		Status:        models.VerificationStatusFailed,
+		SubjectHash:   hex.EncodeToString(hash[:]),
+		SubjectMasked: &masked,
+		FailureReason: &reason,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	return s.repo.AddVerification(ctx, record)
+}
+
+// createPendingIdentityVerification records a BVN/NIN check that has passed
+// Optimus's initial validate call but not yet its OTP challenge. Status stays
+// pending - and therefore invisible to Register's verified-record lookup -
+// until VerifyOTP confirms the OTP.
+func (s *Service) createPendingIdentityVerification(ctx context.Context, verificationType, identityNumber, providerReferenceID string) (string, error) {
 	now := time.Now().UTC()
 	expiresAt := now.Add(verificationExpiry)
 	hash := sha256.Sum256([]byte(identityNumber))
@@ -494,12 +642,11 @@ func (s *Service) createVerifiedIdentityVerification(ctx context.Context, verifi
 		ID:                     uuid.NewString(),
 		Type:                   verificationType,
 		Provider:               "optimus",
-		Status:                 models.VerificationStatusVerified,
+		Status:                 models.VerificationStatusPending,
 		SubjectHash:            hex.EncodeToString(hash[:]),
 		SubjectMasked:          &masked,
 		ProviderVerificationID: stringPointer(strings.TrimSpace(providerReferenceID)),
 		VerifiedID:             &identityNumber,
-		VerifiedAt:             &now,
 		ExpiresAt:              &expiresAt,
 		CreatedAt:              now,
 		UpdatedAt:              now,

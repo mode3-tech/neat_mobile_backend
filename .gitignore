@@ -8,3 +8,4 @@
 *.asc
 /tmp/*
 /tmp/*
+*.postman_collection_new

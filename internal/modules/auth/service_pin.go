@@ -114,8 +114,8 @@ func (s *Service) ResetTransactionPin(ctx context.Context, mobileUserID string, 
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 
 		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
@@ -301,8 +301,8 @@ func (s *Service) ChangeTransactionPin(ctx context.Context, mobileUserID string,
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err

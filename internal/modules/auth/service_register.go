@@ -92,7 +92,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	var claimToken string
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 
 		existingJob, err := authRepo.GetRegistrationJobByIdempotencyKey(ctx, idempotencyKey)
 		switch {

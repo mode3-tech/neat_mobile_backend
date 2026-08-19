@@ -180,6 +180,82 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// BVN/NIN encryption at rest: add deterministic hash columns for
+	// lookups/dedup (bvn/nin themselves become non-deterministic ciphertext
+	// once the application starts writing through internal/crypto.FieldCipher,
+	// so equality queries can no longer run against those columns directly).
+	// Columns are added nullable and backfilled here - from plaintext, since
+	// this runs before the app's write path switches over - then made unique;
+	// the app never needs NOT NULL on these since existing rows populated
+	// before this migration ran are backfilled in the same pass.
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema() AND table_name = 'wallet_users'
+			) THEN
+				ALTER TABLE wallet_users
+				ADD COLUMN IF NOT EXISTS bvn_hash text,
+				ADD COLUMN IF NOT EXISTS nin_hash text;
+			END IF;
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = current_schema() AND table_name = 'wallet_bvn_records'
+			) THEN
+				ALTER TABLE wallet_bvn_records
+				ADD COLUMN IF NOT EXISTS bvn_hash text;
+			END IF;
+		END $$;
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		UPDATE wallet_users
+		SET bvn_hash = encode(sha256(convert_to(trim(bvn), 'UTF8')), 'hex')
+		WHERE bvn_hash IS NULL AND bvn IS NOT NULL AND bvn <> '';
+	`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`
+		UPDATE wallet_users
+		SET nin_hash = encode(sha256(convert_to(trim(nin), 'UTF8')), 'hex')
+		WHERE nin_hash IS NULL AND nin IS NOT NULL AND nin <> '';
+	`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`
+		UPDATE wallet_bvn_records
+		SET bvn_hash = encode(sha256(convert_to(trim(bvn), 'UTF8')), 'hex')
+		WHERE bvn_hash IS NULL AND bvn IS NOT NULL AND bvn <> '';
+	`).Error; err != nil {
+		return err
+	}
+
+	// Real uniqueness enforcement moves to the hash columns; the old
+	// uq_user_bvn/uq_user_nin indexes (further down) and wallet_bvn_records'
+	// original unique index on bvn are left in place but become vestigial
+	// once bvn/nin hold ciphertext - AES-GCM's random nonce means no two
+	// encryptions of the same value ever collide, so those old indexes can
+	// never be violated and are harmless to leave rather than risk dropping
+	// an index under a guessed name.
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_bvn_hash ON wallet_users(bvn_hash) WHERE bvn_hash IS NOT NULL;
+	`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_nin_hash ON wallet_users(nin_hash) WHERE nin_hash IS NOT NULL;
+	`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_bvn_records_bvn_hash ON wallet_bvn_records(bvn_hash) WHERE bvn_hash IS NOT NULL;
+	`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},

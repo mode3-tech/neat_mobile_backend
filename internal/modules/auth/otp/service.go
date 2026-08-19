@@ -277,7 +277,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		r := NewRepository(txDB)
-		verificationRepo := verification.NewVerification(txDB)
+		verificationRepo := verification.NewVerification(txDB, s.verification.Cipher())
 
 		var active *OTPModel
 		var err error
@@ -536,7 +536,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 
 	err = s.tx.WithTx(ctx, func(tx *gorm.DB) error {
 		r := NewRepository(tx)
-		verificationRepo := verification.NewVerification(tx)
+		verificationRepo := verification.NewVerification(tx, s.verification.Cipher())
 
 		active, err := r.GetActiveOTP(ctx, normalizedDestination, purpose)
 		if err != nil {
