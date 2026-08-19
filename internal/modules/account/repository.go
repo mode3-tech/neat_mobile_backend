@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/models"
@@ -13,11 +14,12 @@ import (
 )
 
 type Repository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *gorm.DB, cipher *crypto.FieldCipher) *Repository {
+	return &Repository{db: db, cipher: cipher}
 }
 
 func (r *Repository) GetDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
@@ -61,7 +63,17 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_referral_codes ON wallet_referral_codes.mobile_user_id = wallet_users.id").
 		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
-	return &row, err
+	if err != nil {
+		return &row, err
+	}
+	if row.BVN != "" {
+		plain, decErr := r.cipher.Decrypt(row.BVN)
+		if decErr != nil {
+			return nil, decErr
+		}
+		row.BVN = plain
+	}
+	return &row, nil
 }
 
 const dashboardLoansQuery = `

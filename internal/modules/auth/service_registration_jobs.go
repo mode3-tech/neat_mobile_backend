@@ -60,7 +60,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 	}
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
 

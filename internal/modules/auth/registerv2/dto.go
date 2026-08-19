@@ -103,6 +103,11 @@ type OptimusVerificationResponse struct {
 	// what starts an Optimus OTP challenge - empty/omitted for other verification
 	// types (email, phone). The client needs it for /otp/verify and /otp/resend.
 	ProviderReferenceID string `json:"provider_reference_id,omitempty"`
+	// RequiresOTP tells the client whether to show the Optimus OTP screen for
+	// this BVN check. False whenever Providus is the active provider (it
+	// validates the BVN inline at wallet-creation time, no separate OTP step)
+	// or for verification types that never trigger one (phone, email).
+	RequiresOTP bool `json:"requires_otp"`
 }
 
 // VerifyOTPRequest confirms the OTP Optimus sent for a given reference id

@@ -565,7 +565,7 @@ func MapError(err error) ErrorMapping {
 
 	case errors.Is(err, appErr.ErrNoLoansFound):
 		return ErrorMapping{
-			Status: http.StatusNotFound,
+			Status: http.StatusOK,
 			Error: APIError{
 				Code:    "NO_LOANS_FOUND",
 				Message: "No loans found for user",

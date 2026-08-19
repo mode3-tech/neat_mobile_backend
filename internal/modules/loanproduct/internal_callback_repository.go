@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/models"
 	"time"
 
@@ -49,7 +50,8 @@ const cbaApplicationSelectColumns = `
 `
 
 type InternalRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
 const (
@@ -130,8 +132,23 @@ type cbaBVNRecordReadRow struct {
 	WalletBankCode         *string    `gorm:"column:wallet_bank_code"`
 }
 
-func NewInternalRepository(db *gorm.DB) *InternalRepository {
-	return &InternalRepository{db: db}
+func NewInternalRepository(db *gorm.DB, cipher *crypto.FieldCipher) *InternalRepository {
+	return &InternalRepository{db: db, cipher: cipher}
+}
+
+// decryptCBAApplicationRowBVN reverses the encryption applied to
+// wallet_bvn_records.bvn - these rows feed CBA-facing endpoints that need the
+// real BVN. Safe on rows written before encryption was introduced.
+func (r *InternalRepository) decryptCBAApplicationRowBVN(row *cbaApplicationReadRow) error {
+	if row == nil || row.BVN == nil {
+		return nil
+	}
+	plain, err := r.cipher.Decrypt(*row.BVN)
+	if err != nil {
+		return err
+	}
+	row.BVN = &plain
+	return nil
 }
 
 func (r *InternalRepository) logInternalCallbackQuery(name string, startedAt time.Time, detail string, err error) {
@@ -171,7 +188,7 @@ func (r *InternalRepository) logInternalCallbackQuery(name string, startedAt tim
 func (r *InternalRepository) WithTx(ctx context.Context, fn func(*InternalRepository) error) error {
 	startedAt := time.Now()
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(NewInternalRepository(tx))
+		return fn(NewInternalRepository(tx, r.cipher))
 	})
 	r.logInternalCallbackQuery("WithTx", startedAt, "", err)
 	return err
@@ -236,12 +253,18 @@ func (r *InternalRepository) ListLoanApplicationsForCBA(ctx context.Context) ([]
 			wallet_bvn_records.landmark
 		`).
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
-		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn_hash = wallet_users.bvn_hash").
 		Order("wallet_loan_applications.created_at DESC").
 		Find(&rows).Error
 	r.logInternalCallbackQuery("ListLoanApplicationsForCBA", startedAt, fmt.Sprintf("rows=%d", len(rows)), err)
 	if err != nil {
 		return nil, err
+	}
+
+	for i := range rows {
+		if err := r.decryptCBAApplicationRowBVN(&rows[i]); err != nil {
+			return nil, err
+		}
 	}
 
 	return rows, nil
@@ -255,7 +278,7 @@ func (r *InternalRepository) GetMostRecentEmbryoLoanApplicationForCBA(ctx contex
 		Table("wallet_loan_applications").
 		Select(cbaApplicationSelectColumns).
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
-		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn_hash = wallet_users.bvn_hash").
 		Where("wallet_loan_applications.mobile_user_id = ?", mobileUserID).
 		Where(
 			"(wallet_loan_applications.loan_status = ? OR wallet_users.customer_status = ?)",
@@ -266,6 +289,9 @@ func (r *InternalRepository) GetMostRecentEmbryoLoanApplicationForCBA(ctx contex
 		Take(&row).Error
 	r.logInternalCallbackQuery("GetMostRecentEmbryoLoanApplicationForCBA", startedAt, fmt.Sprintf("mobile_user_id=%s", mobileUserID), err)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.decryptCBAApplicationRowBVN(&row); err != nil {
 		return nil, err
 	}
 
@@ -280,12 +306,15 @@ func (r *InternalRepository) GetLoanApplicationForCBAByRef(ctx context.Context, 
 		Table("wallet_loan_applications").
 		Select(cbaApplicationSelectColumns).
 		Joins("LEFT JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
-		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn_hash = wallet_users.bvn_hash").
 		Where("wallet_loan_applications.application_ref = ?", applicationRef).
 		Order("wallet_loan_applications.created_at DESC").
 		Take(&row).Error
 	r.logInternalCallbackQuery("GetLoanApplicationForCBAByRef", startedAt, fmt.Sprintf("application_ref=%s", applicationRef), err)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.decryptCBAApplicationRowBVN(&row); err != nil {
 		return nil, err
 	}
 
@@ -308,7 +337,7 @@ func (r *InternalRepository) ListEmbryoLoanApplicationSummariesForCBA(ctx contex
 
 	listStartedAt := time.Now()
 	err := r.embryoLoanApplicationSummariesBaseQuery(ctx).
-		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.bvn_hash = wallet_users.bvn_hash").
 		Select(`
 			wallet_loan_applications.application_ref,
 			wallet_loan_applications.mobile_user_id,
@@ -372,7 +401,7 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 			wallet_customer_wallets.bank_code AS wallet_bank_code
 		`).
 		Joins("INNER JOIN wallet_users ON wallet_users.id = wallet_loan_applications.mobile_user_id").
-		Joins("INNER JOIN wallet_bvn_records ON wallet_bvn_records.bvn = wallet_users.bvn").
+		Joins("INNER JOIN wallet_bvn_records ON wallet_bvn_records.bvn_hash = wallet_users.bvn_hash").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_loan_applications.mobile_user_id").
 		Where("wallet_loan_applications.mobile_user_id = ?", mobileUserID).
 		Order("wallet_loan_applications.created_at DESC").
@@ -380,6 +409,13 @@ func (r *InternalRepository) GetLoanApplicationBVNRecordForCBA(ctx context.Conte
 	r.logInternalCallbackQuery("GetLoanApplicationBVNRecordForCBA", startedAt, fmt.Sprintf("mobile_user_id=%s", mobileUserID), err)
 	if err != nil {
 		return nil, err
+	}
+	if row.BVN != nil {
+		plain, decErr := r.cipher.Decrypt(*row.BVN)
+		if decErr != nil {
+			return nil, decErr
+		}
+		row.BVN = &plain
 	}
 
 	return &row, nil
@@ -440,7 +476,7 @@ func (r *InternalRepository) LinkWalletUserCoreCustomerIDByBVN(ctx context.Conte
 	startedAt := time.Now()
 	tx := r.db.WithContext(ctx).
 		Table("wallet_users").
-		Where("bvn = ?", bvn).
+		Where("bvn_hash = ?", crypto.Hash(bvn)).
 		Update("core_customer_id", coreCustomerID)
 	r.logInternalCallbackQuery("LinkWalletUserCoreCustomerIDByBVN", startedAt, fmt.Sprintf("core_customer_id=%s rows_affected=%d", coreCustomerID, tx.RowsAffected), tx.Error)
 	if tx.Error != nil {

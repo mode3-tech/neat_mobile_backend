@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
@@ -27,9 +28,10 @@ type Service struct {
 	walletService       WalletService
 	deviceService       DeviceService
 	userService         UserService
+	cipher              *crypto.FieldCipher
 }
 
-func NewService(repo *Repository, loanService LoanService, xpressWalletService XpressWalletService, tx *tx.Transactor, walletService WalletService, deviceService DeviceService, userService UserService) *Service {
+func NewService(repo *Repository, loanService LoanService, xpressWalletService XpressWalletService, tx *tx.Transactor, walletService WalletService, deviceService DeviceService, userService UserService, cipher *crypto.FieldCipher) *Service {
 	return &Service{
 		repo:                repo,
 		loanService:         loanService,
@@ -38,6 +40,7 @@ func NewService(repo *Repository, loanService LoanService, xpressWalletService X
 		walletService:       walletService,
 		deviceService:       deviceService,
 		userService:         userService,
+		cipher:              cipher,
 	}
 }
 
@@ -237,7 +240,7 @@ func (s *Service) CloseAccount(ctx context.Context, payload *AccountClosureReque
 		repo := NewRepository(txDB)
 		userRepo := user.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
-		authRepo := auth.NewRespository(txDB)
+		authRepo := auth.NewRespository(txDB, s.cipher)
 		autoRepaymentRepo := autorepayment.NewRepository(txDB)
 
 		now := time.Now().UTC()

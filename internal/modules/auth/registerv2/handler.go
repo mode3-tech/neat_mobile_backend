@@ -50,7 +50,7 @@ func (h *Handler) VerifyPhoneOTP(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "", "Phone number verified.")
+	h.writeVerificationSuccess(c, verificationID, "", false, "Phone number verified.")
 }
 
 // RequestEmailOTP sends an OTP to the given email address, mirroring
@@ -88,7 +88,7 @@ func (h *Handler) VerifyEmailOTP(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, "", "Email verified.")
+	h.writeVerificationSuccess(c, verificationID, "", false, "Email verified.")
 }
 
 func (h *Handler) ValidateBVN(c *gin.Context) {
@@ -98,12 +98,17 @@ func (h *Handler) ValidateBVN(c *gin.Context) {
 		return
 	}
 
-	verificationID, providerReferenceID, err := h.service.ValidateBVN(c.Request.Context(), request)
+	verificationID, providerReferenceID, requiresOTP, err := h.service.ValidateBVN(c.Request.Context(), request)
 	if err != nil {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, providerReferenceID, "BVN validated successfully.")
+
+	message := "BVN validated successfully."
+	if !requiresOTP {
+		message = "BVN check queued. Continue to the next step."
+	}
+	h.writeVerificationSuccess(c, verificationID, providerReferenceID, requiresOTP, message)
 }
 
 func (h *Handler) ValidateNIN(c *gin.Context) {
@@ -118,7 +123,7 @@ func (h *Handler) ValidateNIN(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	h.writeVerificationSuccess(c, verificationID, providerReferenceID, "NIN validated successfully.")
+	h.writeVerificationSuccess(c, verificationID, providerReferenceID, true, "NIN validated successfully.")
 }
 
 // VerifyOTP confirms the OTP Optimus sent for a reference id (e.g. from
@@ -186,8 +191,8 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
-func (h *Handler) writeVerificationSuccess(c *gin.Context, verificationID, providerReferenceID, message string) {
-	data := OptimusVerificationResponse{VerificationID: verificationID, ProviderReferenceID: providerReferenceID}
+func (h *Handler) writeVerificationSuccess(c *gin.Context, verificationID, providerReferenceID string, requiresOTP bool, message string) {
+	data := OptimusVerificationResponse{VerificationID: verificationID, ProviderReferenceID: providerReferenceID, RequiresOTP: requiresOTP}
 	c.JSON(http.StatusOK, response.APIResponse[OptimusVerificationResponse]{
 		Status:  "success",
 		Message: message,

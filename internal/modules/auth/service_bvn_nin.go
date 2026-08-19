@@ -503,8 +503,8 @@ func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *model
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
-		verificationRepo := verification.NewVerification(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
+		verificationRepo := verification.NewVerification(txDB, s.verification.Cipher())
 
 		if err := verificationRepo.AddVerification(ctx, verificationRecord); err != nil {
 			log.Printf("saveVerifiedBVN: tx AddVerification failed: %v", err)

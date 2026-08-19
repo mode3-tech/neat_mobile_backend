@@ -9,6 +9,7 @@ import (
 	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/middleware"
@@ -93,6 +94,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, errors.New("jwt secret can't be empty")
 	}
 
+	bvnNinCipher, err := crypto.NewFieldCipherFromBase64(cfg.BVNNINEncryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("bvn/nin encryption key: %w", err)
+	}
+
 	s3bucketConfig := s3bucket.BackblazeConfig{
 		KeyID:                  cfg.B2KeyID,
 		AppKey:                 cfg.B2AppKey,
@@ -124,8 +130,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	deviceRepo := device.NewRepository(db)
 	deviceService := device.NewService(*deviceRepo)
 
-	authRepo := auth.NewRespository(db)
-	verificationRepo := verification.NewVerification(db)
+	authRepo := auth.NewRespository(db, bvnNinCipher)
+	verificationRepo := verification.NewVerification(db, bvnNinCipher)
 	ninPremblyProvider := ninPrembly.NewPrembly(cfg.PremblyAPIKey)
 	ninTendarProvider := ninTendar.NewTendar(cfg.TendarAPIKey)
 	loginRateLimiter := middleware.NewLoginRateLimiter(middleware.LoginRateLimiterConfig{
@@ -173,8 +179,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, deviceValidator, loginRateLimiter.Middleware())
 
 	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
-	optimusRegistrationRepo := registerv2.NewRepository(db)
-	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID)
+	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
+	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID)
 	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)
@@ -257,7 +263,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	accountClosureRepo := accountclosure.NewRepository(db)
 	userService := user.NewService(user.NewRepository(db))
-	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService)
+	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService, bvnNinCipher)
 	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
 	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
 
@@ -285,7 +291,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
-	accountRepo := account.NewRepository(db)
+	accountRepo := account.NewRepository(db, bvnNinCipher)
 	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
@@ -349,7 +355,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		statementWorkerWG.Wait()
 	}
 
-	internalLoanRepo := loanproduct.NewInternalRepository(db)
+	internalLoanRepo := loanproduct.NewInternalRepository(db, bvnNinCipher)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
 	internalLoanHandler := loanproduct.NewInternalHandler(internalLoanService)
 	internalAuth := middleware.InternalHMACAuth(cfg.CBAWebhookSecret)
@@ -358,7 +364,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
 
-	reportingRepo := reporting.NewRepository(db)
+	reportingRepo := reporting.NewRepository(db, bvnNinCipher)
 	reportingService := reporting.NewService(reportingRepo)
 	reportingHandler := reporting.NewHandler(reportingService)
 	reporting.RegisterInternalRoutes(internalV1, reportingHandler, internalAuth)

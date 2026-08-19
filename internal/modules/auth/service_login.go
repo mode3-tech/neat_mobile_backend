@@ -150,7 +150,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewRepository(txDB)
 		otpRepo := authotp.NewRepository(txDB)
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 
 		sessionTokenHash := sha256.Sum256([]byte(sessionToken))
 		hashedSessionToken := hex.EncodeToString(sessionTokenHash[:])
@@ -291,7 +291,7 @@ func (s *Service) startNewDeviceFlow(ctx context.Context, userID, phone, deviceI
 		}
 		sessionToken = token
 
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 		if err := authRepo.DeactiveOlderDevices(ctx, userID, deviceID); err != nil {
 			return err
 		}
@@ -438,7 +438,7 @@ func (s *Service) ResendNewDeviceOTP(ctx context.Context, req ResendNewDeviceOTP
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewRepository(txDB)
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 
 		sum := sha256.Sum256([]byte(req.SessionToken))
 		session, err := deviceRepo.GetPendingSessionByHash(ctx, hex.EncodeToString(sum[:]))

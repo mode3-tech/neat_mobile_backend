@@ -11,6 +11,7 @@ type Config struct {
 	DBUrl                      string
 	JWTSecret                  string
 	Pepper                     string
+	BVNNINEncryptionKey        string
 	TermiiApiKey               string
 	TermiiSenderID             string
 	SMTPHost                   string
@@ -84,6 +85,7 @@ func Load() Config {
 		DBUrl:                      getEnv("DB_URL", ""),
 		JWTSecret:                  getEnv("JWT_SECRET", ""),
 		Pepper:                     getEnv("PEPPER", ""),
+		BVNNINEncryptionKey:        getEnv("BVN_NIN_ENCRYPTION_KEY", ""),
 		TermiiApiKey:               getEnv("TERMII_APIKEY", ""),
 		TermiiSenderID:             getEnv("TERMII_SENDERID", ""),
 		SMTPHost:                   getEnv("SMTP_HOST", ""),

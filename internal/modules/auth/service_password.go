@@ -129,8 +129,8 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID string, req C
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 
 		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
@@ -344,8 +344,8 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err

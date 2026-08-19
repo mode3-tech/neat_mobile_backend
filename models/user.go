@@ -28,6 +28,14 @@ type User struct {
 	DOB                          time.Time       `gorm:"column:dob;not null"`
 	BVN                          string          `gorm:"column:bvn;not null"`
 	NIN                          string          `gorm:"column:nin;not null"`
+	// BVNHash/NINHash are deterministic SHA-256 digests used for lookups/dedup
+	// now that BVN/NIN are stored encrypted (non-deterministic ciphertext, so
+	// equality queries can't run against the columns above directly). The
+	// unique constraints enforcing real dedup live on these hash columns, added
+	// via raw SQL in internal/database/database.go rather than a struct tag -
+	// see Migrate() for why.
+	BVNHash string `gorm:"column:bvn_hash"`
+	NINHash string `gorm:"column:nin_hash"`
 	CustomerStatus               *CustomerStatus `gorm:"column:customer_status;default:embryo"`
 	Username                     *string         `gorm:"column:username"`
 	CoreCustomerID               *string         `gorm:"column:core_customer_id"`
