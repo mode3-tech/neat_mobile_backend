@@ -22,9 +22,16 @@ type SettlementAccount struct {
 	AccountName   string
 }
 
+// defaultTransferProviderName is used wherever a call isn't scoped to a
+// specific wallet (e.g. the generic bank-list/bank-details lookups shown
+// before a user has picked a beneficiary) and by webhook processing, which is
+// inherently provider-specific to whichever provider sent the webhook - not
+// something to dispatch by wallet.Provider.
+const defaultTransferProviderName = "providus"
+
 type Service struct {
 	repo               *Repository
-	providusService    ProvidusService
+	transferProviders  map[string]TransferProviderService
 	pinVerifier        *authchecker.Verifier
 	settlementAccount  SettlementAccount
 	deviceVerifier     DeviceVerifier
@@ -34,10 +41,10 @@ type Service struct {
 	outgoingSMSService OutgoingSMSService
 }
 
-func NewService(repo *Repository, providusService ProvidusService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService) *Service {
+func NewService(repo *Repository, transferProviders map[string]TransferProviderService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService) *Service {
 	return &Service{
 		repo:               repo,
-		providusService:    providusService,
+		transferProviders:  transferProviders,
 		pinVerifier:        pinVerifier,
 		settlementAccount:  settlementAccount,
 		deviceVerifier:     deviceVerifier,
@@ -48,8 +55,32 @@ func NewService(repo *Repository, providusService ProvidusService, pinVerifier *
 	}
 }
 
+// defaultTransferProvider is Providus, used by calls not scoped to a specific
+// wallet - see defaultTransferProviderName.
+func (s *Service) defaultTransferProvider() TransferProviderService {
+	return s.transferProviders[defaultTransferProviderName]
+}
+
+// transferProviderForWallet resolves which provider adapter actually issued
+// w's account - NUBANs aren't portable between providers, so a transfer must
+// go through whoever created the wallet, not a global preference. Wallets
+// predating the Provider column (or any unrecognized value) default to
+// Providus, matching the backfill migration and WALLET_PROVIDER's own default.
+func (s *Service) transferProviderForWallet(w *CustomerWallet) (TransferProviderService, error) {
+	name := strings.TrimSpace(w.Provider)
+	if name == "" {
+		name = defaultTransferProviderName
+	}
+	provider, ok := s.transferProviders[name]
+	if !ok || provider == nil {
+		log.Printf("wallet service: no transfer provider configured for %q", name)
+		return nil, fmt.Errorf("wallet service: no transfer provider configured for %q", name)
+	}
+	return provider, nil
+}
+
 func (s *Service) FetchBanks(ctx context.Context) ([]Bank, error) {
-	banks, err := s.providusService.FetchBanks(ctx)
+	banks, err := s.defaultTransferProvider().FetchBanks(ctx)
 	if err != nil {
 		return nil, appErr.ErrFetchingBanks
 	}
@@ -58,7 +89,7 @@ func (s *Service) FetchBanks(ctx context.Context) ([]Bank, error) {
 }
 
 func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error) {
-	bankDetails, err := s.providusService.FetchBankDetails(ctx, accountNumber, bankCode)
+	bankDetails, err := s.defaultTransferProvider().FetchBankDetails(ctx, accountNumber, bankCode)
 	if err != nil {
 		return nil, appErr.ErrFetchingBankDetails
 	}
@@ -86,23 +117,34 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	customerDetails, err := s.providusService.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+	transferProvider, err := s.transferProviderForWallet(wallet)
 	if err != nil {
-		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		log.Printf("wallet service: failed to get customer details: %v", err)
+		log.Printf("wallet service: %v", err)
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	if customerDetails == nil {
-		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		log.Printf("wallet service: provider returned nil customer details")
-		return nil, appErr.ErrFundsTransfer
-	}
+	// Optimus has no GetCustomerDetails/balance-lookup equivalent, so this
+	// check only runs for Providus - Optimus's own transfer endpoint is the
+	// source of truth on sufficiency and will reject the request itself.
+	if strings.TrimSpace(wallet.Provider) != "optimus" {
+		customerDetails, err := transferProvider.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+		if err != nil {
+			_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+			log.Printf("wallet service: failed to get customer details: %v", err)
+			return nil, appErr.ErrFundsTransfer
+		}
 
-	if customerDetails.Customer.AvailableBalance < req.Amount {
-		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
-		log.Printf("wallet service: insufficient balance")
-		return nil, appErr.ErrInsufficientBalance
+		if customerDetails == nil {
+			_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+			log.Printf("wallet service: provider returned nil customer details")
+			return nil, appErr.ErrFundsTransfer
+		}
+
+		if customerDetails.Customer.AvailableBalance < req.Amount {
+			_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
+			log.Printf("wallet service: insufficient balance")
+			return nil, appErr.ErrInsufficientBalance
+		}
 	}
 
 	req.Amount = req.Amount * 100 // convert Naira → kobo for storage and downstream use
@@ -180,7 +222,11 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
-	resp, err := s.providusService.InitiateTransfer(ctx, wallet.WalletCustomerID, req)
+	resp, err := transferProvider.InitiateTransfer(ctx, TransferSource{
+		WalletCustomerID: wallet.WalletCustomerID,
+		AccountNumber:    wallet.AccountNumber,
+		BankCode:         wallet.BankCode,
+	}, req)
 	if err != nil {
 		_ = s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed)
 		log.Printf("wallet service: failed to initiate transfer: %v", err)
@@ -239,18 +285,28 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		return appErr.ErrMakingLoanRepayment
 	}
 
-	customerDetails, err := s.providusService.GetCustomerDetails(ctx, w.WalletCustomerID)
+	transferProvider, err := s.transferProviderForWallet(w)
 	if err != nil {
-		log.Printf("wallet service: failed to get customer details: %v", err)
+		log.Printf("wallet service: %v", err)
 		return appErr.ErrMakingLoanRepayment
 	}
-	if customerDetails == nil {
-		log.Printf("wallet service: provider returned nil customer details")
-		return appErr.ErrMakingLoanRepayment
-	}
-	if customerDetails.Customer.AvailableBalance < amountNaira {
-		log.Println("insufficient balance")
-		return appErr.ErrInsufficientBalance
+
+	// See the matching comment in InitiateTransfer: Optimus has no
+	// GetCustomerDetails/balance-lookup equivalent.
+	if strings.TrimSpace(w.Provider) != "optimus" {
+		customerDetails, err := transferProvider.GetCustomerDetails(ctx, w.WalletCustomerID)
+		if err != nil {
+			log.Printf("wallet service: failed to get customer details: %v", err)
+			return appErr.ErrMakingLoanRepayment
+		}
+		if customerDetails == nil {
+			log.Printf("wallet service: provider returned nil customer details")
+			return appErr.ErrMakingLoanRepayment
+		}
+		if customerDetails.Customer.AvailableBalance < amountNaira {
+			log.Println("insufficient balance")
+			return appErr.ErrInsufficientBalance
+		}
 	}
 
 	amountKobo := int64(math.Round(amountNaira * 100))
@@ -277,7 +333,11 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		return fmt.Errorf("failed to create transaction record: %w", err)
 	}
 
-	resp, err := s.providusService.InitiateTransfer(ctx, w.WalletCustomerID, &TransferRequest{
+	resp, err := transferProvider.InitiateTransfer(ctx, TransferSource{
+		WalletCustomerID: w.WalletCustomerID,
+		AccountNumber:    w.AccountNumber,
+		BankCode:         w.BankCode,
+	}, &TransferRequest{
 		Amount:        float64(amountKobo),
 		SortCode:      s.settlementAccount.BankCode,
 		AccountNumber: s.settlementAccount.AccountNumber,
@@ -492,7 +552,7 @@ func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string)
 }
 
 func (s *Service) resolveBankDetails(ctx context.Context, sortCode string) (string, error) {
-	banks, err := s.providusService.FetchBanks(ctx)
+	banks, err := s.defaultTransferProvider().FetchBanks(ctx)
 	if err != nil {
 		log.Printf("wallet service: failed to fetch banks - %s", err)
 		return "", err

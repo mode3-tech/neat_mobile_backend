@@ -71,6 +71,12 @@ type Service struct {
 	optimusKYC           OptimusKYCValidation
 	activationCapKobo    int64
 	referralsRepo        *referrals.Repository
+	// walletProviderName is which BaaS provider ("optimus" or "providus")
+	// walletService is actually wired to for this legacy async registration
+	// flow - unlike registerv2, there's no per-request fallback here, so
+	// whichever provider was configured at startup is the one every wallet
+	// this flow creates gets stamped with.
+	walletProviderName string
 }
 
 func NewService(
@@ -96,6 +102,7 @@ func NewService(
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
 	productID string,
 	activationCapKobo int64,
+	walletProviderName string,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -121,6 +128,7 @@ func NewService(
 		cbaWalletUpdateSem:   cbaWalletUpdateSem,
 		productID:            productID,
 		activationCapKobo:    activationCapKobo,
+		walletProviderName:   walletProviderName,
 	}
 }
 

@@ -74,7 +74,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			return txErr
 		}
 
-		walletRecord, txErr := buildWalletRecordFromSnapshot(job.MobileUserID, job.InternalWalletID, walletResp, snapshot)
+		walletRecord, txErr := buildWalletRecordFromSnapshot(job.MobileUserID, job.InternalWalletID, walletResp, snapshot, s.walletProviderName)
 		if txErr != nil {
 			return txErr
 		}
@@ -354,7 +354,7 @@ func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, sn
 	}
 }
 
-func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, walletResp *WalletResponse, snapshot *registrationJobSnapshot) (*wallet.CustomerWallet, error) {
+func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, walletResp *WalletResponse, snapshot *registrationJobSnapshot, provider string) (*wallet.CustomerWallet, error) {
 	if err := normalizeWalletResponse(walletResp, snapshot); err != nil {
 		return nil, err
 	}
@@ -379,6 +379,7 @@ func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, wallet
 		Mode:             walletResp.Customer.Mode,
 		BankName:         walletResp.Wallet.BankName,
 		BankCode:         walletResp.Wallet.BankCode,
+		Provider:         provider,
 		AccountNumber:    walletResp.Wallet.AccountNumber,
 		AccountName:      walletResp.Wallet.AccountName,
 		AccountRef:       walletResp.Wallet.AccountReference,

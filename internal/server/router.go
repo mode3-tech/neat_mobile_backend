@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
+	optimusadapter "neat_mobile_app_backend/internal/adapters/optimus"
 	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
@@ -172,7 +173,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
 	authHandler := auth.NewHandler(authService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 	deviceValidator := middleware.DeviceValidator(deviceService)
@@ -248,7 +249,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := authchecker.New(walletRepo)
-	walletService := wallet.NewService(walletRepo, providusadapter.New(providusWalletService), walletPinVerifier, wallet.SettlementAccount{
+	// Transfers must route to whichever provider actually issued the source
+	// wallet's NUBAN (accounts aren't portable between providers) - reuses
+	// optimusRegistrationClient rather than constructing a second Optimus
+	// client, since it's the same credentials/base URLs.
+	transferProviders := map[string]wallet.TransferProviderService{
+		"providus": providusadapter.New(providusWalletService),
+		"optimus":  optimusadapter.New(optimusRegistrationClient),
+	}
+	walletService := wallet.NewService(walletRepo, transferProviders, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
