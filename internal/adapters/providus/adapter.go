@@ -1,8 +1,8 @@
 // Package providus adapts the concrete *baas.Providus client to the wallet
-// package's ProvidusService interface. The wallet package defines its own local
-// DTOs so it does not import providers/baas; importing it would form the cycle
-// wallet -> baas -> auth -> wallet. This adapter is the single place that
-// depends on both packages and converts between their (identical) DTOs.
+// package's TransferProviderService interface. The wallet package defines its
+// own local DTOs so it does not import providers/baas; importing it would form
+// the cycle wallet -> baas -> auth -> wallet. This adapter is the single place
+// that depends on both packages and converts between their (identical) DTOs.
 package providus
 
 import (
@@ -12,12 +12,12 @@ import (
 	"neat_mobile_app_backend/providers/baas"
 )
 
-// Adapter wraps *baas.Providus so it satisfies wallet.ProvidusService.
+// Adapter wraps *baas.Providus so it satisfies wallet.TransferProviderService.
 type Adapter struct {
 	p *baas.Providus
 }
 
-// New returns an Adapter that implements wallet.ProvidusService.
+// New returns an Adapter that implements wallet.TransferProviderService.
 func New(p *baas.Providus) *Adapter {
 	return &Adapter{p: p}
 }
@@ -60,13 +60,13 @@ func (a *Adapter) GetCustomerDetails(ctx context.Context, customerID string) (*w
 	}, nil
 }
 
-func (a *Adapter) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
+func (a *Adapter) InitiateTransfer(ctx context.Context, source wallet.TransferSource, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
 	var req *baas.TransferRequest
 	if transferInfo != nil {
 		r := baas.TransferRequest(*transferInfo)
 		req = &r
 	}
-	res, err := a.p.InitiateTransfer(ctx, providusCustomerID, req)
+	res, err := a.p.InitiateTransfer(ctx, source.WalletCustomerID, req)
 	if err != nil {
 		return nil, err
 	}

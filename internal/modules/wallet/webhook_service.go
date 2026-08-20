@@ -53,7 +53,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 				return
 			}
 
-			customerDetails, err := s.providusService.GetCustomerDetails(context.Background(), wallet.WalletCustomerID)
+			customerDetails, err := s.defaultTransferProvider().GetCustomerDetails(context.Background(), wallet.WalletCustomerID)
 			if err != nil {
 				log.Printf("baas: skipping debit sms, failed to get customer details: customer_id=%s err=%v", wallet.WalletCustomerID, err)
 				return
@@ -163,7 +163,7 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 	}
 
 	go func() {
-		customerDetails, err := s.providusService.GetCustomerDetails(context.Background(), wallet.WalletCustomerID)
+		customerDetails, err := s.defaultTransferProvider().GetCustomerDetails(context.Background(), wallet.WalletCustomerID)
 		if err != nil {
 			log.Printf("baas: failed to get customer details: %v", err)
 			return

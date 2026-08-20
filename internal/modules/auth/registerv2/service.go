@@ -146,12 +146,19 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	// primary provider or Optimus's validation/OTP never completed.
 	var bvnRecord *models.VerificationRecord
 	var walletGenerator auth.WalletService
+	// actualProvider tracks which provider's wallet-creation call is actually
+	// used, as distinct from the preference in `provider` - the "optimus"
+	// preference can still fall through to Providus below, and the wallet
+	// record needs to know which provider genuinely issued the account (NUBANs
+	// aren't portable between providers, so transfers need to route correctly).
+	var actualProvider string
 
 	switch strings.TrimSpace(provider) {
 	case "providus":
 		// Providus validates the BVN itself as part of wallet creation, so
 		// there's nothing to look up here and no fallback needed on this path.
 		walletGenerator = s.providusWalletGenerator
+		actualProvider = "providus"
 
 	case "optimus":
 		if s.optimus == nil {
@@ -175,12 +182,14 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			// Optimus validated the BVN and its OTP challenge was confirmed - use it.
 			bvnRecord = latestBVNRecord
 			walletGenerator = s.walletGenerator
+			actualProvider = "optimus"
 
 		case latestBVNRecord.Status == models.VerificationStatusFailed:
 			// Optimus's validate-bvn call itself rejected this BVN - fall back
 			// to Providus, which performs its own check as part of wallet
 			// creation.
 			walletGenerator = s.providusWalletGenerator
+			actualProvider = "providus"
 
 		default:
 			// Pending: validate-bvn succeeded but the OTP challenge was never
@@ -287,6 +296,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		Mode:             walletResp.Customer.Mode,
 		BankName:         walletResp.Wallet.BankName,
 		BankCode:         walletResp.Wallet.BankCode,
+		Provider:         actualProvider,
 		AccountNumber:    walletResp.Wallet.AccountNumber,
 		AccountName:      walletResp.Wallet.AccountName,
 		AccountRef:       walletResp.Wallet.AccountReference,

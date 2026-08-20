@@ -2,6 +2,9 @@ package database
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/account"
 	"neat_mobile_app_backend/internal/modules/accountclosure"
 	"neat_mobile_app_backend/internal/modules/auth"
@@ -17,6 +20,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/models"
+	"os"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -303,6 +307,22 @@ func Migrate(db *gorm.DB) error {
 		UPDATE wallet_users
 		SET email = address, address = email
 		WHERE email NOT LIKE '%@%' AND email != '' AND address IS NOT NULL AND address != '';
+	`).Error; err != nil {
+		return err
+	}
+
+	// Backfill wallet_customer_wallets.provider for rows that predate the
+	// column - NUBANs aren't portable between providers, so transfers need to
+	// know which one actually issued each account. Matched by bank_code
+	// (000036 = Optimus Bank, 100040 = Xpress Wallet/Providus); anything
+	// unmatched defaults to providus, matching WALLET_PROVIDER's own default.
+	if err := db.Exec(`
+		UPDATE wallet_customer_wallets
+		SET provider = CASE
+			WHEN bank_code = '000036' THEN 'optimus'
+			ELSE 'providus'
+		END
+		WHERE provider IS NULL OR provider = '';
 	`).Error; err != nil {
 		return err
 	}
@@ -642,5 +662,114 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := backfillBVNNINEncryption(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// encryptedValuePrefix must match internal/crypto/field.go's versionPrefix -
+// it's how backfillEncryptedColumn tells an already-encrypted value apart
+// from plaintext still waiting to be backfilled.
+const encryptedValuePrefix = "v1:"
+
+const backfillPageSize = 500
+
+// backfillBVNNINEncryption encrypts any wallet_users/wallet_bvn_records/
+// wallet_verification_records row still holding plaintext BVN/NIN. The
+// earlier hash-column backfill (above, in this same function) could run in
+// pure SQL since hashing needs no secret; this can't, since AES-GCM
+// encryption needs the app's key, not just the database - so it was deferred
+// until now. Self-contained (reads BVN_NIN_ENCRYPTION_KEY directly) rather
+// than adding a parameter to Migrate, so every existing caller of Migrate
+// (router.go, the cmd/seed-* scripts) keeps compiling unchanged.
+func backfillBVNNINEncryption(db *gorm.DB) error {
+	cipher, err := crypto.NewFieldCipherFromBase64(os.Getenv("BVN_NIN_ENCRYPTION_KEY"))
+	if err != nil {
+		return fmt.Errorf("bvn/nin encryption key: %w", err)
+	}
+
+	if err := backfillEncryptedColumn(db, cipher, "wallet_users", "bvn"); err != nil {
+		return fmt.Errorf("backfill wallet_users.bvn: %w", err)
+	}
+	if err := backfillEncryptedColumn(db, cipher, "wallet_users", "nin"); err != nil {
+		return fmt.Errorf("backfill wallet_users.nin: %w", err)
+	}
+	if err := backfillEncryptedColumn(db, cipher, "wallet_bvn_records", "bvn"); err != nil {
+		return fmt.Errorf("backfill wallet_bvn_records.bvn: %w", err)
+	}
+	if err := backfillEncryptedColumn(db, cipher, "wallet_verification_records", "verified_id"); err != nil {
+		return fmt.Errorf("backfill wallet_verification_records.verified_id: %w", err)
+	}
+	return nil
+}
+
+// backfillEncryptedColumn walks table in keyset-paginated pages (by id, not
+// OFFSET, so rows inserted concurrently during the run can't cause other
+// rows to be skipped or repeated), encrypting any row whose column is
+// non-empty and not already ciphertext. Idempotent - already-encrypted rows
+// are skipped, so this is a no-op on every deploy after the first successful
+// run. Each row commits independently rather than the whole table in one
+// transaction, so this doesn't hold locks against live traffic for its full
+// runtime. A single row's encrypt/write failure is logged and skipped rather
+// than aborting the run - one bad row shouldn't block the rest or app boot.
+func backfillEncryptedColumn(db *gorm.DB, cipher *crypto.FieldCipher, table, column string) error {
+	type row struct {
+		ID    string
+		Value string
+	}
+
+	lastID := ""
+	scanned := 0
+	encryptedCount := 0
+
+	for {
+		var rows []row
+		query := db.Table(table).
+			Select("id, " + column + " AS value").
+			Where(column+" IS NOT NULL AND "+column+" != '' AND "+column+" NOT LIKE ?", encryptedValuePrefix+"%")
+		if lastID != "" {
+			query = query.Where("id > ?", lastID)
+		}
+		if err := query.Order("id ASC").Limit(backfillPageSize).Scan(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			break
+		}
+
+		for _, r := range rows {
+			scanned++
+			lastID = r.ID
+
+			ciphertext, err := cipher.Encrypt(r.Value)
+			if err != nil {
+				log.Printf("backfill %s.%s: encrypt failed id=%s err=%v", table, column, r.ID, err)
+				continue
+			}
+
+			// Re-checking the old value in WHERE guards against clobbering a
+			// row that changed between the read above and this write - low
+			// probability since BVN/NIN are effectively write-once after
+			// registration, but cheap to guard against.
+			result := db.Table(table).
+				Where("id = ? AND "+column+" = ?", r.ID, r.Value).
+				Update(column, ciphertext)
+			if result.Error != nil {
+				log.Printf("backfill %s.%s: update failed id=%s err=%v", table, column, r.ID, result.Error)
+				continue
+			}
+			if result.RowsAffected > 0 {
+				encryptedCount++
+			}
+		}
+
+		if len(rows) < backfillPageSize {
+			break
+		}
+	}
+
+	log.Printf("backfill %s.%s: scanned=%d encrypted=%d", table, column, scanned, encryptedCount)
 	return nil
 }

@@ -28,11 +28,26 @@ type BankDetails struct {
 	AccountNumber string `json:"accountNumber"`
 }
 
-type ProvidusService interface {
+// TransferSource identifies which account a transfer debits, in whatever
+// shape each provider actually needs: Providus keys transfers off a customer
+// ID, Optimus off the account number itself (plus its bank code, to tell
+// intrabank from interbank transfers) - callers populate all three from the
+// source wallet row and let the adapter pick what it needs.
+type TransferSource struct {
+	WalletCustomerID string
+	AccountNumber    string
+	BankCode         string
+}
+
+// TransferProviderService is implemented by an adapter per BaaS provider
+// (Providus, Optimus) capable of transfers - despite the DTO names below
+// (kept for backwards compatibility with the original Providus-only
+// interface), nothing here is Providus-specific.
+type TransferProviderService interface {
 	FetchBanks(ctx context.Context) ([]Bank, error)
 	FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error)
 	GetCustomerDetails(ctx context.Context, customerID string) (*ProvidusCustomerDetailsResponse, error)
-	InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *TransferRequest) (*TransferResponse, error)
+	InitiateTransfer(ctx context.Context, source TransferSource, transferInfo *TransferRequest) (*TransferResponse, error)
 }
 
 type DeviceVerifier interface {

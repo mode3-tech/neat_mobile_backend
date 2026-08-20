@@ -94,6 +94,7 @@ func newTestService(deps serviceDeps) *Service {
 		make(chan struct{}),
 		"",
 		0,
+		"",
 	)
 }
 
