@@ -244,18 +244,36 @@ func Migrate(db *gorm.DB) error {
 	// encryptions of the same value ever collide, so those old indexes can
 	// never be violated and are harmless to leave rather than risk dropping
 	// an index under a guessed name.
+	//
+	// These are non-partial (no WHERE ... IS NOT NULL) deliberately: Postgres
+	// can only match a plain ON CONFLICT (col) clause (e.g.
+	// CreateBVNRecord's, internal/modules/auth/repository.go) against a
+	// non-partial unique index, or a partial one whose predicate is repeated
+	// verbatim in the ON CONFLICT clause. An earlier partial version of these
+	// indexes caused every CreateBVNRecord call to fail with "no unique or
+	// exclusion constraint matching the ON CONFLICT specification"
+	// (SQLSTATE 42P10) - dropping the predicate isn't a uniqueness regression
+	// since Postgres already treats multiple NULLs as non-conflicting under a
+	// standard unique index, and bvn_hash/nin_hash are populated for every
+	// real row anyway (backfilled above for old rows, always set on new ones).
+	// DROP+CREATE (not just CREATE IF NOT EXISTS) so this actually replaces
+	// the broken partial index already deployed under this name, not just a
+	// no-op on the name match.
 	if err := db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_bvn_hash ON wallet_users(bvn_hash) WHERE bvn_hash IS NOT NULL;
+		DROP INDEX IF EXISTS uq_wallet_users_bvn_hash;
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_bvn_hash ON wallet_users(bvn_hash);
 	`).Error; err != nil {
 		return err
 	}
 	if err := db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_nin_hash ON wallet_users(nin_hash) WHERE nin_hash IS NOT NULL;
+		DROP INDEX IF EXISTS uq_wallet_users_nin_hash;
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_users_nin_hash ON wallet_users(nin_hash);
 	`).Error; err != nil {
 		return err
 	}
 	if err := db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_bvn_records_bvn_hash ON wallet_bvn_records(bvn_hash) WHERE bvn_hash IS NOT NULL;
+		DROP INDEX IF EXISTS uq_wallet_bvn_records_bvn_hash;
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_bvn_records_bvn_hash ON wallet_bvn_records(bvn_hash);
 	`).Error; err != nil {
 		return err
 	}
