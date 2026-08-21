@@ -171,12 +171,21 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 
+	deviceValidator := middleware.DeviceValidator(deviceService)
+
+	transactionRepo := transaction.NewRepository(db)
+	transactionService := transaction.NewServie(transactionRepo)
+
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
-	authHandler := auth.NewHandler(authService)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider, transactionService)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
-	deviceValidator := middleware.DeviceValidator(deviceService)
+
+	transactionHandler := transaction.NewHandler(transactionService)
+	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+
+	authHandler := auth.NewHandler(authService)
+
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, deviceValidator, loginRateLimiter.Middleware())
 
 	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
@@ -276,10 +285,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
 	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
 
-	transactionRepo := transaction.NewRepository(db)
-	transactionService := transaction.NewServie(transactionRepo)
-	transactionHandler := transaction.NewHandler(transactionService)
-	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+	//transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
 
 	xpressPayments, xpressErr := vasprovider.NewXpressPayments(cfg.XpressPublicKey, cfg.XpressPrivateKey, cfg.XpressBaseURL)
 	if xpressErr != nil {
@@ -397,7 +403,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	referralsRepo := referrals.NewRepository(db)
 	authService.ConfigureReferralsRepo(referralsRepo)
-	referralsService := referrals.NewService(referralsRepo)
+	referralsService := referrals.NewService(referralsRepo, transactionService)
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
 

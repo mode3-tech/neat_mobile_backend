@@ -95,6 +95,7 @@ func newTestService(deps serviceDeps) *Service {
 		"",
 		0,
 		"",
+		nil,
 	)
 }
 
