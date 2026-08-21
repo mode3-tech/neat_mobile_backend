@@ -45,6 +45,10 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 	return result, nil
 }
 
+func (s *Service) AddTransaction(ctx context.Context, transaction *Transaction) error {
+	return s.repo.AddTransaction(ctx, transaction)
+}
+
 func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor string, limit int) (*PagedTransactionResponse, error) {
 	if limit < 0 || limit > 50 {
 		limit = 20

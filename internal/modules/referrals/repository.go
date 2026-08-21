@@ -2,6 +2,7 @@ package referrals
 
 import (
 	"context"
+	"neat_mobile_app_backend/models"
 
 	"gorm.io/gorm"
 )
@@ -24,6 +25,32 @@ func (r *Repository) FindReferralByCode(ctx context.Context, code string) (*Refe
 
 func (r *Repository) RedeemReferral(ctx context.Context, redeemedReferral *ReferralRedemption) error {
 	return r.db.WithContext(ctx).Create(redeemedReferral).Error
+}
+
+func (r *Repository) GetLatestCashback(ctx context.Context, mobileUserID string) (*models.Cashback, error) {
+	var cashback models.Cashback
+	if err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ?", mobileUserID).
+		Order("created_at DESC").
+		First(&cashback).Error; err != nil {
+		return nil, err
+	}
+	return &cashback, nil
+}
+
+func (r *Repository) CreateCashback(ctx context.Context, cashback *models.Cashback) error {
+	return r.db.WithContext(ctx).Create(cashback).Error
+}
+
+func (r *Repository) GetUserWalletID(ctx context.Context, mobileUserID string) (string, error) {
+	var user models.User
+	if err := r.db.WithContext(ctx).
+		Select("id", "wallet_id").
+		Where("id = ?", mobileUserID).
+		First(&user).Error; err != nil {
+		return "", err
+	}
+	return user.WalletID, nil
 }
 
 func (r *Repository) FetchRedeemReferrals(ctx context.Context, page, pageSize int) ([]RedeemedReferral, error) {

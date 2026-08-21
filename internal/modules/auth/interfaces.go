@@ -5,6 +5,7 @@ import (
 	"neat_mobile_app_backend/internal"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/loanproduct"
+	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/providers/bvn"
 	"neat_mobile_app_backend/providers/nin"
 	"time"
@@ -69,4 +70,8 @@ type DeviceVerifier interface {
 
 type OptimusKYCValidation interface {
 	VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, email, referenceID string) error
+}
+
+type TransactionService interface {
+	AddTransaction(ctx context.Context, transaction *transaction.Transaction) error
 }

@@ -315,6 +315,7 @@ func Migrate(db *gorm.DB) error {
 		&models.ClosureReferenceCounter{},
 		&referrals.ReferralCode{},
 		&referrals.ReferralRedemption{},
+		&models.Cashback{},
 		&registerv2.ProviderPreference{},
 	); err != nil {
 		return err
