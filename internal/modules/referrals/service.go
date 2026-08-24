@@ -13,14 +13,12 @@ import (
 )
 
 type Service struct {
-	repo               *Repository
-	transactionService TransactionService
+	repo *Repository
 }
 
-func NewService(repo *Repository, transactionService TransactionService) *Service {
-	return &Service{repo: repo, transactionService: transactionService}
+func NewService(repo *Repository) *Service {
+	return &Service{repo: repo}
 }
-
 
 func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code string) error {
 	referral, err := s.repo.FindReferralByCode(ctx, code)
@@ -54,60 +52,59 @@ func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code str
 // totals (cashback_before -> cashback_after) and mirrored by a credit row in
 // wallet_transactions whose balance_before/balance_after snapshot the cashback
 // ledger.
+
 func (s *Service) CreditReferralCashback(ctx context.Context, referrerUserID string) error {
-	if s.transactionService == nil {
-		return errors.New("transaction service not configured")
-	}
+	return s.repo.WithTx(ctx, func(r *Repository) error {
 
-	var before int64
-	last, err := s.repo.GetLatestCashback(ctx, referrerUserID)
-	switch {
-	case err == nil:
-		before = last.CashbackAfter
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		before = 0
-	default:
-		return err
-	}
+		walletID, err := r.GetUserWalletIDForUpdate(ctx, referrerUserID)
+		if err != nil {
+			return err
+		}
 
-	after := before + ReferralCashbackAmountKobo
+		var before int64
+		last, err := r.GetLatestCashback(ctx, referrerUserID)
+		switch {
+		case err == nil:
+			before = last.CashbackAfter
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			before = 0
+		default:
+			return err
+		}
+		after := before + ReferralCashbackAmountKobo
 
-	cashback := &models.Cashback{
-		ID:             uuid.NewString(),
-		MobileUserID:   referrerUserID,
-		CashbackBefore: before,
-		CashbackAfter:  after,
-		Source:         CashbackSourceReferral,
-		CreatedAt:      time.Now().UTC(),
-	}
-	if err := s.repo.CreateCashback(ctx, cashback); err != nil {
-		return err
-	}
+		cashback := &models.Cashback{
+			ID:             uuid.NewString(),
+			MobileUserID:   referrerUserID,
+			CashbackBefore: before,
+			CashbackAfter:  after,
+			Source:         CashbackSourceReferral,
+			CreatedAt:      time.Now().UTC(),
+		}
+		if err := r.CreateCashback(ctx, cashback); err != nil {
+			return err
+		}
 
-	walletID, err := s.repo.GetUserWalletID(ctx, referrerUserID)
-	if err != nil {
-		return err
-	}
+		narration := "Referral cashback"
+		txRow := &transaction.Transaction{
+			ID:            uuid.NewString(),
+			MobileUserID:  referrerUserID,
+			WalletID:      walletID,
+			Type:          transaction.TransactionTypeCredit,
+			Category:      transaction.TransactionCategoryCashback,
+			Amount:        ReferralCashbackAmountKobo,
+			BalanceBefore: before,
+			BalanceAfter:  after,
+			Reference:     uuid.NewString(),
+			Status:        transaction.TransactionStatusSuccessful,
+			Source:        transaction.TransactionSourceReferral,
+			Description:   "Referral cashback",
+			Narration:     &narration,
+			CreatedAt:     time.Now().UTC(),
+		}
 
-	narration := "Referral cashback"
-	txRow := &transaction.Transaction{
-		ID:            uuid.NewString(),
-		MobileUserID:  referrerUserID,
-		WalletID:      walletID,
-		Type:          transaction.TransactionTypeCredit,
-		Category:      transaction.TransactionCategoryCashback,
-		Amount:        ReferralCashbackAmountKobo,
-		BalanceBefore: before,
-		BalanceAfter:  after,
-		Reference:     uuid.NewString(),
-		Status:        transaction.TransactionStatusSuccessful,
-		Source:        transaction.TransactionSourceReferral,
-		Description:   "Referral cashback",
-		Narration:     &narration,
-		CreatedAt:     time.Now().UTC(),
-	}
-
-	return s.transactionService.AddTransaction(ctx, txRow)
+		return transaction.NewServie(transaction.NewRepository(r.db)).AddTransaction(ctx, txRow)
+	})
 }
 
 func (s *Service) FetchRedeemReferrals(ctx context.Context, page, pageSize int) ([]RedeemedReferral, error) {

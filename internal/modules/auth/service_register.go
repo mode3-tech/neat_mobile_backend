@@ -10,7 +10,6 @@ import (
 	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
-	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"neat_mobile_app_backend/models"
@@ -278,17 +277,18 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}
 
 	referrerUserID := ""
+	referralCode := ""
 	if code := strings.TrimSpace(req.ReferralCode); code != "" {
-		
 		referral, err := s.referralsRepo.FindReferralByCode(ctx, code)
-		if err != nil || referral == nil {
-			log.Printf("registration: invalid referral code %q provided, continuing without referrer: %v", code, err)
-		} else {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("registration: invalid referral code %q provided, continuing without referrer", code)
+		case err != nil || referral == nil:
+			log.Printf("registration: referral code lookup failed for %q: %v", code, err)
+			return nil, appErr.ErrInvalidReferralCode
+		default:
 			referrerUserID = referral.MobileUserID
-
-			if creditErr := referrals.NewService(s.referralsRepo, s.transactionService).CreditReferralCashback(ctx, referrerUserID); creditErr != nil {
-				log.Printf("registration: referral cashback credit failed referrer=%s: %v", referrerUserID, creditErr)
-			}
+			referralCode = code
 		}
 	}
 
@@ -398,6 +398,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		MaritalStatus:  maritalStatus,
 		ProductID:      s.productID,
 		ReferrerUserID: referrerUserID,
+		ReferralCode:   referralCode,
 	}, nil
 }
 

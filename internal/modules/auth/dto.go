@@ -29,6 +29,7 @@ type registrationJobSnapshot struct {
 	WalletEmail         string              `json:"wallet_email"`
 	WalletAddress       string              `json:"wallet_address"`
 	ReferrerUserID      string              `json:"referrer_user_id"`
+	ReferralCode        string              `json:"referral_code,omitempty"`
 }
 
 type registrationIdempotencyPayload struct {

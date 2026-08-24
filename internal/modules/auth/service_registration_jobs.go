@@ -115,14 +115,25 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 		walletResp.Wallet.BankName,
 	)
 
-	if snapshot.ReferrerUserID != "" && s.referralsRepo != nil {
-		if redeemErr := s.referralsRepo.RedeemReferral(ctx, &referrals.ReferralRedemption{
-			ID:             uuid.NewString(),
-			ReferrerUserID: snapshot.ReferrerUserID,
-			ReferredUserID: job.MobileUserID,
-		}); redeemErr != nil {
-			log.Printf("referral redemption failed job_id=%s referrer=%s referred=%s: %v",
-				job.ID, snapshot.ReferrerUserID, job.MobileUserID, redeemErr)
+	if s.referralsRepo != nil {
+		switch {
+		case snapshot.ReferralCode != "":
+			
+			referralsService := referrals.NewService(s.referralsRepo)
+			if redeemErr := referralsService.RedeemReferralCode(ctx, job.MobileUserID, snapshot.ReferralCode); redeemErr != nil {
+				log.Printf("referral redemption failed job_id=%s referrer=%s referred=%s: %v",
+					job.ID, snapshot.ReferrerUserID, job.MobileUserID, redeemErr)
+			}
+		case snapshot.ReferrerUserID != "":
+		
+			if redeemErr := s.referralsRepo.RedeemReferral(ctx, &referrals.ReferralRedemption{
+				ID:             uuid.NewString(),
+				ReferrerUserID: snapshot.ReferrerUserID,
+				ReferredUserID: job.MobileUserID,
+			}); redeemErr != nil {
+				log.Printf("referral redemption failed job_id=%s referrer=%s referred=%s: %v",
+					job.ID, snapshot.ReferrerUserID, job.MobileUserID, redeemErr)
+			}
 		}
 	}
 }

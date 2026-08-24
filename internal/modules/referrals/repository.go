@@ -5,6 +5,7 @@ import (
 	"neat_mobile_app_backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -51,6 +52,29 @@ func (r *Repository) GetUserWalletID(ctx context.Context, mobileUserID string) (
 		return "", err
 	}
 	return user.WalletID, nil
+}
+
+
+func (r *Repository) GetUserWalletIDForUpdate(ctx context.Context, mobileUserID string) (string, error) {
+	var user models.User
+	if err := r.db.WithContext(ctx).
+		Select("id", "wallet_id").
+		Where("id = ?", mobileUserID).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&user).Error; err != nil {
+		return "", err
+	}
+	return user.WalletID, nil
+}
+
+// WithTx runs fn with a repository bound to a database transaction. When the
+// underlying db is already inside a transaction (e.g. called from registerv2's
+// registration transaction), gorm uses savepoints so the work joins the outer
+// transaction.
+func (r *Repository) WithTx(ctx context.Context, fn func(txRepo *Repository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
+		return fn(&Repository{db: txDB})
+	})
 }
 
 func (r *Repository) FetchRedeemReferrals(ctx context.Context, page, pageSize int) ([]RedeemedReferral, error) {

@@ -12,7 +12,6 @@ import (
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/referrals"
-	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
@@ -355,10 +354,8 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		}
 
 		if strings.TrimSpace(req.ReferralCode) != "" {
-			
 			referralsRepo := referrals.NewRepository(txDB)
-			txBoundTxService := transaction.NewServie(transaction.NewRepository(txDB))
-			if txErr := referrals.NewService(referralsRepo, txBoundTxService).RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
+			if txErr := referrals.NewService(referralsRepo).RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
 				log.Printf("registerv2: referral redemption failed user=%s code=%s: %v", mobileUserID, req.ReferralCode, txErr)
 			}
 		}

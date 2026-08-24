@@ -178,7 +178,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider, transactionService)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 
 	transactionHandler := transaction.NewHandler(transactionService)
@@ -284,8 +284,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService, bvnNinCipher)
 	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
 	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
-
-	//transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
 
 	xpressPayments, xpressErr := vasprovider.NewXpressPayments(cfg.XpressPublicKey, cfg.XpressPrivateKey, cfg.XpressBaseURL)
 	if xpressErr != nil {
@@ -403,7 +401,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	referralsRepo := referrals.NewRepository(db)
 	authService.ConfigureReferralsRepo(referralsRepo)
-	referralsService := referrals.NewService(referralsRepo, transactionService)
+	referralsService := referrals.NewService(referralsRepo)
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
 
