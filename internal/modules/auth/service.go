@@ -77,7 +77,6 @@ type Service struct {
 	// whichever provider was configured at startup is the one every wallet
 	// this flow creates gets stamped with.
 	walletProviderName string
-	transactionService TransactionService
 }
 
 func NewService(
@@ -104,7 +103,6 @@ func NewService(
 	productID string,
 	activationCapKobo int64,
 	walletProviderName string,
-	transactionService TransactionService,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -131,7 +129,6 @@ func NewService(
 		productID:            productID,
 		activationCapKobo:    activationCapKobo,
 		walletProviderName:   walletProviderName,
-		transactionService: transactionService,
 	}
 }
 
