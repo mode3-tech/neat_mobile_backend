@@ -173,6 +173,14 @@ func (r *Repository) GetValidationRow(ctx context.Context, verificationID string
 	if err != nil {
 		return nil, err
 	}
+
+	if record.VerifiedID != nil {
+		plain, err := r.cipher.Decrypt(*record.VerifiedID)
+		if err != nil {
+			return nil, err
+		}
+		record.VerifiedID = &plain
+	}
 	return &record, nil
 }
 
