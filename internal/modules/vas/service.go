@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/providers/vas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
@@ -158,6 +159,9 @@ func (s *Service) FetchProductsByCategoryIDAndBillerID(ctx context.Context, payl
 }
 
 func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
+	if payload.UseCashback {
+		return s.getAirtimeWithCashback(ctx, payload, mobileUserID)
+	}
 	requestID := uuid.NewString()
 	log.Printf("vas service: request ID: %s\n", requestID)
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
@@ -309,6 +313,9 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 }
 
 func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
+	if payload.UseCashback {
+		return s.getDataWithCashback(ctx, payload, mobileUserID)
+	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
@@ -465,6 +472,9 @@ func (s *Service) validateElectricity(ctx context.Context, payload ElectricityVa
 }
 
 func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayload, mobileUserID string) (*vasprovider.PayElectricityResponse, error) {
+	if payload.UseCashback {
+		return s.payElectricityWithCashback(ctx, payload, mobileUserID)
+	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
@@ -652,6 +662,9 @@ func (s *Service) ValidateCable(ctx context.Context, payload ValidateCablePayloa
 }
 
 func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileUserID string) (*vasprovider.PayCableResponse, error) {
+	if payload.UseCashback {
+		return s.payCableWithCashback(ctx, payload, mobileUserID)
+	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
@@ -876,4 +889,430 @@ func (s *Service) hasSufficientBalance(ctx context.Context, customerID string, a
 		return false, appErr.ErrInsufficientBalance
 	}
 	return true, nil
+}
+
+func (s *Service) checkCashbackBalance(ctx context.Context, mobileUserID string, amountKobo int64) (int64, error) {
+	balance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
+	if err != nil {
+		return 0, err
+	}
+	if balance < amountKobo {
+		return 0, appErr.ErrInsufficientCashback
+	}
+	return balance, nil
+}
+
+func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, requestID string, cashbackBefore, amountKobo int64, mobileUserID string) {
+	status, checkErr := s.XpressPayments.CheckStatus(ctx, requestID)
+	if checkErr == nil {
+		switch status.ResponseCode {
+		case "00":
+			if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS); spendErr != nil {
+				log.Printf("vas service: cashback spend failed after ambiguous success txID=%s: %v", txID, spendErr)
+			}
+			return
+		case "01":
+			if err := s.Txr.UpdateTransactionStatus(ctx, txID, cashbackBefore, TransactionStatusReversalPending); err != nil {
+				log.Printf("vas service: failed to mark cashback txn reversal_pending txID=%s: %v", txID, err)
+			}
+			return
+		}
+	}
+	if err := s.Txr.UpdateTransactionStatus(ctx, txID, cashbackBefore, TransactionStatusReversed); err != nil {
+		log.Printf("vas service: failed to mark cashback txn reversed txID=%s: %v", txID, err)
+	}
+}
+
+func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
+	requestID := uuid.NewString()
+	uniqueCode := strings.TrimSpace(payload.UniqueCode)
+
+	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
+	if err != nil {
+		return nil, err
+	}
+	amount := payload.Amount
+	if amount < 100 || amount > 10000 {
+		return nil, appErr.ErrInvalidISPAmount
+	}
+
+	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	cashbackBefore, err := s.checkCashbackBalance(ctx, mobileUserID, amount*100)
+	if err != nil {
+		return nil, err
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryAirtime,
+		Description:         "Airtime",
+		Amount:              amount * 100,
+		BalanceBefore:       cashbackBefore,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: localizedPhone,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        true,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+
+	result, err := s.XpressPayments.GetAirtime(ctx, requestID, uniqueCode, localizedPhone, amount)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingAirtime
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	if _, err := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, amount*100, referrals.CashbackSourceVAS); err != nil {
+		log.Printf("vas service: cashback spend failed on success txID=%s: %v", txID, err)
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	return result, nil
+}
+
+func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
+	requestID := uuid.NewString()
+	uniqueCode := strings.TrimSpace(payload.UniqueCode)
+	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
+	if err != nil {
+		return nil, err
+	}
+	amount := payload.Amount
+	if amount < 100 || amount > 10000 {
+		return nil, appErr.ErrInvalidISPAmount
+	}
+
+	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrGettingData
+	}
+
+	cashbackBefore, err := s.checkCashbackBalance(ctx, mobileUserID, amount*100)
+	if err != nil {
+		return nil, err
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryMobileData,
+		Amount:              amount * 100,
+		BalanceBefore:       cashbackBefore,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: localizedPhone,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        true,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+
+	result, err := s.XpressPayments.GetData(ctx, requestID, uniqueCode, localizedPhone, amount)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingData
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingData
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrGettingData
+	}
+
+	if _, err := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, amount*100, referrals.CashbackSourceVAS); err != nil {
+		log.Printf("vas service: cashback spend failed on success txID=%s: %v", txID, err)
+		return nil, appErr.ErrGettingData
+	}
+
+	return result, nil
+}
+
+func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayElectricityPayload, mobileUserID string) (*vasprovider.PayElectricityResponse, error) {
+	requestID := uuid.NewString()
+	uniqueCode := strings.TrimSpace(payload.UniqueCode)
+	accountNumber := strings.TrimSpace(payload.AccountNumber)
+	amount := payload.Amount
+
+	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+	if err != nil || user == nil {
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	cashbackBefore, err := s.checkCashbackBalance(ctx, mobileUserID, amount*100)
+	if err != nil {
+		return nil, err
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	validationResult, err := s.validateElectricity(ctx, ElectricityValidationPayload{
+		UniqueCode: uniqueCode, AccountNumber: accountNumber, AccountType: payload.AccountType,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if validationResult != nil {
+		if validationResult.Data.AccountNumber != accountNumber {
+			return nil, appErr.ErrInvalidAccountNumber
+		}
+		if string(validationResult.Data.AccountType) != string(payload.AccountType) {
+			return nil, appErr.ErrInvalidAccountType
+		}
+		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
+			return nil, &appErr.XpressPayProviderError{Code: validationResult.ResponseCode, Message: validationResult.ResponseMessage}
+		}
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryElectricity,
+		Amount:              amount * 100,
+		Description:         "Electricity",
+		BalanceBefore:       cashbackBefore,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: accountNumber,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        true,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+
+	address := ""
+	if user.Address != nil {
+		address = *user.Address
+	}
+	result, err := s.XpressPayments.PayElectricityBill(
+		ctx, requestID, uniqueCode, accountNumber,
+		user.FullName, address, user.Phone,
+		vasprovider.AccountType(payload.AccountType), amount,
+	)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingElectricityBill
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, amount*100, referrals.CashbackSourceVAS); spendErr != nil {
+		log.Printf("vas service: cashback spend failed on electricity success txID=%s: %v", txID, spendErr)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	if result.Data.Token != "" {
+		tokenMetadata := map[string]any{
+			"provider": ExtractBillingCompanyName(uniqueCode),
+			"type":     "electricity",
+			"token":    result.Data.Token,
+			"units":    result.Data.Unit,
+		}
+		if updateErr := s.Repo.UpdateTransactionMetadata(ctx, txID, tokenMetadata); updateErr != nil {
+			log.Printf("vas service: failed to store electricity token in metadata - %s", updateErr)
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayload, mobileUserID string) (*vasprovider.PayCableResponse, error) {
+	requestID := uuid.NewString()
+	uniqueCode := strings.TrimSpace(payload.UniqueCode)
+	accountNumber := strings.TrimSpace(payload.AccountNumber)
+	amount := payload.Amount
+
+	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
+	if err != nil {
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+	if err != nil || user == nil {
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	cashbackBefore, err := s.checkCashbackBalance(ctx, mobileUserID, amount*100)
+	if err != nil {
+		return nil, err
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	validateResult, err := s.ValidateCable(ctx, ValidateCablePayload{
+		UniqueCode: uniqueCode, AccountNumber: accountNumber, NoOfMonth: payload.NoOfMonth,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if validateResult.Data.AccountNumber != accountNumber {
+		return nil, appErr.ErrInvalidAccountNumber
+	}
+	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
+		return nil, &appErr.XpressPayProviderError{Code: validateResult.ResponseCode, Message: validateResult.ResponseMessage}
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryTV,
+		Amount:              amount * 100,
+		Description:         "TV",
+		BalanceBefore:       cashbackBefore,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: accountNumber,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        true,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+
+	normalizedPhone, err := phone.ToLocalFormat(user.Phone)
+	if err != nil {
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	result, err := s.XpressPayments.PayCableBill(
+		ctx, requestID, uniqueCode, accountNumber,
+		payload.AccountType, user.FullName, normalizedPhone,
+		payload.NoOfMonth, amount,
+	)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingCableBill
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, cashbackBefore, amount*100, mobileUserID)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, amount*100, referrals.CashbackSourceVAS); spendErr != nil {
+		log.Printf("vas service: cashback spend failed on cable success txID=%s: %v", txID, spendErr)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	return result, nil
 }

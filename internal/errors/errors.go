@@ -97,6 +97,7 @@ var (
 	ErrSMSServiceNotConfigured         = errors.New("SMS service not configured")
 	ErrRequestingForCard               = errors.New("Failed to request for card")
 	ErrInsufficientBalance             = errors.New("Balance is too low for this transaction")
+	ErrInsufficientCashback            = errors.New("Insufficient cashback balance for this purchase")
 	ErrNewUserTransferRestriction      = errors.New("New users are restricted from making transfers greater than NGN 20,000 for the first 24 hours after registration")
 	ErrValidatingBVNWithFace           = errors.New("Failed to match bvn with face")
 	ErrBVNWithFaceVerificationNotFound = errors.New("BVN with face verification not found or incomplete")
