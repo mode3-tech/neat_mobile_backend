@@ -2,8 +2,11 @@ package vas
 
 import (
 	"context"
+	"neat_mobile_app_backend/models"
+	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -63,4 +66,81 @@ func (r *Repository) FetchVASBeneficiaries(ctx context.Context, mobileUserID, bi
 		return nil, err
 	}
 	return beneficiaries, nil
+}
+
+func (r *Repository) GetLatestCashbackBalance(ctx context.Context, mobileUserID string) (int64, error) {
+	var cashback models.Cashback
+	err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ?", mobileUserID).
+		Order("created_at DESC").
+		First(&cashback).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return cashback.CashbackAfter, nil
+}
+
+
+func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUserID string, amountKobo int64, source string) (int64, error) {
+	var after int64
+	err := r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
+		var user models.User
+		if err := txDB.WithContext(ctx).
+			Select("id", "wallet_id").
+			Where("id = ?", mobileUserID).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&user).Error; err != nil {
+			return err
+		}
+
+		var last models.Cashback
+		var before int64
+		switch err := txDB.WithContext(ctx).
+			Where("mobile_user_id = ?", mobileUserID).
+			Order("created_at DESC").
+			First(&last).Error; {
+		case err == nil:
+			before = last.CashbackAfter
+		case err == gorm.ErrRecordNotFound:
+			before = 0
+		default:
+			return err
+		}
+
+		if before < amountKobo {
+			return gorm.ErrRecordNotFound
+		}
+		after = before - amountKobo
+
+		cashbackRow := &models.Cashback{
+			ID:             txID + "-cashback",
+			MobileUserID:   mobileUserID,
+			CashbackBefore: before,
+			CashbackAfter:  after,
+			Source:         source,
+			CreatedAt:      time.Now().UTC(),
+		}
+		if err := txDB.WithContext(ctx).Create(cashbackRow).Error; err != nil {
+			return err
+		}
+
+		return txDB.WithContext(ctx).
+			Model(&Transaction{}).
+			Where("id = ?", txID).
+			Updates(map[string]interface{}{
+				"status":         TransactionStatusSuccessful,
+				"balance_after":  after,
+				"used_cashback":  true,
+			}).Error
+	})
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, gorm.ErrRecordNotFound
+		}
+		return 0, err
+	}
+	return after, nil
 }
