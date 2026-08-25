@@ -932,6 +932,15 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrInsufficientCashback):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "INSUFFICIENT_CASHBACK",
+				Message: appErr.ErrInsufficientCashback.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrNewUserTransferRestriction):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
