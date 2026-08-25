@@ -271,11 +271,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	return s.issueForgotPasswordOTP(ctx, req)
 }
 
-func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, req VerifyForgotPasswordOTPRequest) (*VerifyForgotPasswordOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, req VerifyForgotPasswordOTPRequest) (*VerifyForgotPasswordOTPResponse, error) {
 	if strings.TrimSpace(req.OTPID) == "" {
 		return nil, errors.New("otp id is required")
 	}
