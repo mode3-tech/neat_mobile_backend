@@ -21,6 +21,7 @@ type AccountSummary struct {
 	ActiveLoans            []ActiveLoan `json:"active_loans"`
 	IsNotificationsEnabled bool         `json:"is_notifications_enabled"`
 	ReferralCode           string       `json:"referral_code"`
+	CashbackBalance        float64      `json:"cashback_balance"`
 }
 
 type ActiveLoan struct {

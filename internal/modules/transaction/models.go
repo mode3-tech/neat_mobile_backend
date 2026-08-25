@@ -27,6 +27,7 @@ type Transaction struct {
 	Status              TransactionStatus   `gorm:"type:text;not null"` // "pending"|"successful"|"failed"|"reversed"
 	Source              TransactionSource   `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
 	Metadata            types.JSONMap       `gorm:"type:jsonb"`
+	UsedCashback        bool                `gorm:"column:used_cashback;type:boolean;not null;default:false"`
 	CreatedAt           time.Time           `gorm:"autoCreateTime"`
 	UpdatedAt           *time.Time          `gorm:"autoUpdateTime"`
 }
