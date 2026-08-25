@@ -622,18 +622,6 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 }
 
 func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized.",
-			},
-		})
-		return
-	}
-
 	var req VerifyForgotPasswordOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
