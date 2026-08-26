@@ -194,10 +194,6 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 
 	amountKobo := amount * 100
-	if payload.UseCashback && cashbackBalance > 0 {
-		return s.getAirtimeWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
-	}
-
 	if payload.UseCashback {
 		return s.getAirtimeWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
 	}
@@ -350,10 +346,6 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	}
 
 	amountKobo := amount * 100
-	if payload.UseCashback && cashbackBalance > 0 {
-		return s.getDataWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
-	}
-
 	if payload.UseCashback {
 		return s.getDataWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
 	}
@@ -517,10 +509,6 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	}
 
 	amountKobo := amount * 100
-	if payload.UseCashback && cashbackBalance > 0 {
-		return s.payElectricityWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
-	}
-
 	if payload.UseCashback {
 		return s.payElectricityWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
 	}
@@ -718,10 +706,6 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	}
 
 	amountKobo := amount * 100
-	if payload.UseCashback && cashbackBalance > 0 {
-		return s.payCableWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
-	}
-
 	if payload.UseCashback {
 		return s.payCableWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
 	}
