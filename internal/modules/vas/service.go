@@ -160,9 +160,6 @@ func (s *Service) FetchProductsByCategoryIDAndBillerID(ctx context.Context, payl
 }
 
 func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
-	if payload.UseCashback {
-		return s.getAirtimeWithCashback(ctx, payload, mobileUserID)
-	}
 	requestID := uuid.NewString()
 	log.Printf("vas service: request ID: %s\n", requestID)
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
@@ -198,6 +195,10 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 
 	amountKobo := amount * 100
 	if payload.UseCashback && cashbackBalance > 0 {
+		return s.getAirtimeWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
+	}
+
+	if payload.UseCashback {
 		return s.getAirtimeWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
 	}
 
@@ -319,9 +320,6 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 }
 
 func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID string) (*vasprovider.ISPResponse, error) {
-	if payload.UseCashback {
-		return s.getDataWithCashback(ctx, payload, mobileUserID)
-	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
@@ -353,6 +351,10 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 
 	amountKobo := amount * 100
 	if payload.UseCashback && cashbackBalance > 0 {
+		return s.getDataWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
+	}
+
+	if payload.UseCashback {
 		return s.getDataWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
 	}
 
@@ -488,22 +490,10 @@ func (s *Service) validateElectricity(ctx context.Context, payload ElectricityVa
 }
 
 func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayload, mobileUserID string) (*vasprovider.PayElectricityResponse, error) {
-	if payload.UseCashback {
-		return s.payElectricityWithCashback(ctx, payload, mobileUserID)
-	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
 	amount := payload.Amount
-
-	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
-	if err != nil {
-		log.Printf("vas service: failed to get user - %s\n", err)
-		return nil, appErr.ErrPayingElectricityBill
-	}
-	if user == nil {
-		return nil, appErr.ErrPayingElectricityBill
-	}
 
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
@@ -517,8 +507,21 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
+	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get user - %s\n", err)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+	if user == nil {
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
 	amountKobo := amount * 100
 	if payload.UseCashback && cashbackBalance > 0 {
+		return s.payElectricityWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
+	}
+
+	if payload.UseCashback {
 		return s.payElectricityWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
 	}
 
@@ -688,9 +691,6 @@ func (s *Service) ValidateCable(ctx context.Context, payload ValidateCablePayloa
 }
 
 func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileUserID string) (*vasprovider.PayCableResponse, error) {
-	if payload.UseCashback {
-		return s.payCableWithCashback(ctx, payload, mobileUserID)
-	}
 	requestID := uuid.NewString()
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
@@ -719,6 +719,10 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 
 	amountKobo := amount * 100
 	if payload.UseCashback && cashbackBalance > 0 {
+		return s.payCableWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
+	}
+
+	if payload.UseCashback {
 		return s.payCableWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
 	}
 
@@ -936,7 +940,7 @@ func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, request
 		if checkErr == nil {
 			switch status.ResponseCode {
 			case "00":
-				balanceAfter := balanceBefore - ((walletKobo + int64(txFee)*100))
+				balanceAfter := balanceBefore - (walletKobo + int64(txFee)*100)
 				if cashbackCapped > 0 {
 					if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackCapped, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); spendErr != nil {
 						log.Printf("vas service: cashback spend failed after ambiguous success txID=%s: %v", txID, spendErr)
@@ -948,14 +952,14 @@ func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, request
 				}
 				return
 			case "01":
-				debitedBalance := balanceBefore - ((walletKobo + int64(txFee)*100))
+				debitedBalance := balanceBefore - (walletKobo + int64(txFee)*100)
 				if err := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); err != nil {
 					log.Printf("vas service: failed to mark cashback txn reversal_pending txID=%s: %v", txID, err)
 				}
 				return
 			}
 		}
-		debitedBalance := balanceBefore - ((walletKobo + int64(txFee)*100))
+		debitedBalance := balanceBefore - (walletKobo + int64(txFee)*100)
 		if err := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); err != nil {
 			log.Printf("vas service: failed to mark cashback txn reversal_pending txID=%s: %v", txID, err)
 		}
@@ -1066,7 +1070,7 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 		return nil, appErr.ErrGettingAirtime
 	}
 
-	balanceAfter := wallet.AvailableBalance - ((walletKobo + int64(txFee)*100))
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
 	if cashbackCapped > 0 {
 		if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackCapped, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); spendErr != nil {
 			log.Printf("vas service: cashback spend failed txID=%s: %v", txID, spendErr)
@@ -1189,7 +1193,7 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 		return nil, appErr.ErrGettingData
 	}
 
-	balanceAfter := wallet.AvailableBalance - ((walletKobo + int64(txFee)*100))
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
 	if cashbackCapped > 0 {
 		if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackCapped, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); spendErr != nil {
 			log.Printf("vas service: cashback spend failed txID=%s: %v", txID, spendErr)
@@ -1338,7 +1342,7 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
-	balanceAfter := wallet.AvailableBalance - ((walletKobo + int64(txFee)*100))
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
 	if cashbackCapped > 0 {
 		if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackCapped, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); spendErr != nil {
 			log.Printf("vas service: cashback spend failed txID=%s: %v", txID, spendErr)
@@ -1480,7 +1484,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 		return nil, appErr.ErrPayingCableBill
 	}
 
-	balanceAfter := wallet.AvailableBalance - ((walletKobo + int64(txFee)*100))
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
 	if cashbackCapped > 0 {
 		if _, spendErr := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackCapped, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); spendErr != nil {
 			log.Printf("vas service: cashback spend failed txID=%s: %v", txID, spendErr)
