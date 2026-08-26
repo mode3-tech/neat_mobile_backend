@@ -2,6 +2,7 @@ package loanproduct
 
 import (
 	"context"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/models"
 	"time"
@@ -10,11 +11,12 @@ import (
 )
 
 type Repository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *gorm.DB, cipher *crypto.FieldCipher) *Repository {
+	return &Repository{db: db, cipher: cipher}
 }
 
 func (r *Repository) GetAllLoanProducts(ctx context.Context) ([]PartialLoanProduct, error) {
@@ -59,6 +61,17 @@ func (r *Repository) GetUser(ctx context.Context, userID string) (*row, error) {
 		Take(&row).Error; err != nil {
 		return nil, err
 	}
+
+	bvn, err := r.cipher.Decrypt(row.BVN)
+	if err != nil {
+		return nil, err
+	}
+	nin, err := r.cipher.Decrypt(row.NIN)
+	if err != nil {
+		return nil, err
+	}
+	row.BVN = bvn
+	row.NIN = nin
 
 	return &row, nil
 }
