@@ -941,6 +941,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrSelfReferral):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "SELF_REFERRAL",
+				Message: appErr.ErrSelfReferral.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrReferralAlreadyRedeemed):
+		return ErrorMapping{
+			Status: http.StatusConflict,
+			Error: APIError{
+				Code:    "REFERRAL_ALREADY_REDEEMED",
+				Message: appErr.ErrReferralAlreadyRedeemed.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrNewUserTransferRestriction):
 		return ErrorMapping{
 			Status: http.StatusForbidden,

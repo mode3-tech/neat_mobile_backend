@@ -293,6 +293,13 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
+		c.AddFunc("@every 1m", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if err := vasService.RetryPendingCashbackSettlements(ctx, 50); err != nil {
+				log.Printf("cashback settlement sweep: %v", err)
+			}
+		})
 	}
 
 	webhooksGroup := apiV1.Group("/wallet")
@@ -404,6 +411,13 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	referralsService := referrals.NewService(referralsRepo)
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
+	c.AddFunc("@every 5m", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := referralsService.RetryPendingReferralCredits(ctx, 50); err != nil {
+			log.Printf("referral cashback credit sweep: %v", err)
+		}
+	})
 
 	appVersionRepo := appversion.NewRepository(db)
 	appVersionService := appversion.NewService(appVersionRepo)

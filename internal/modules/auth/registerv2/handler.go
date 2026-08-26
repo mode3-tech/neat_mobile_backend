@@ -92,13 +92,13 @@ func (h *Handler) VerifyEmailOTP(c *gin.Context) {
 }
 
 func (h *Handler) ValidateBVN(c *gin.Context) {
-	var request OptimusBVNValidationRequest
+	var request ValidateBVNRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		h.writeInvalidRequest(c)
 		return
 	}
 
-	verificationID, providerReferenceID, requiresOTP, err := h.service.ValidateBVN(c.Request.Context(), request)
+	verificationID, providerReferenceID, requiresOTP, err := h.service.ValidateBVN(c.Request.Context(), request.toOptimusRequest())
 	if err != nil {
 		h.writeError(c, err)
 		return
@@ -112,13 +112,13 @@ func (h *Handler) ValidateBVN(c *gin.Context) {
 }
 
 func (h *Handler) ValidateNIN(c *gin.Context) {
-	var request OptimusNINValidationRequest
+	var request ValidateNINRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		h.writeInvalidRequest(c)
 		return
 	}
 
-	verificationID, providerReferenceID, err := h.service.ValidateNIN(c.Request.Context(), request)
+	verificationID, providerReferenceID, err := h.service.ValidateNIN(c.Request.Context(), request.toOptimusRequest())
 	if err != nil {
 		h.writeError(c, err)
 		return

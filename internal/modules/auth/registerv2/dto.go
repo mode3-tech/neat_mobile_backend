@@ -77,6 +77,11 @@ type VerifyEmailOTPRequest struct {
 	Code  string `json:"code" binding:"required"`
 }
 
+// OptimusBVNValidationRequest is Optimus's own wire format (PascalCase field
+// names, per their API contract) - never bound directly from a client
+// request. ValidateBVNRequest is what the client actually sends; its
+// toOptimusRequest() converts to this shape immediately before the provider
+// call.
 type OptimusBVNValidationRequest struct {
 	RequestId    string `json:"RequestId" binding:"-"`
 	Bvn          string `json:"Bvn" binding:"required,len=11,numeric"`
@@ -85,6 +90,26 @@ type OptimusBVNValidationRequest struct {
 	ReferralCode string `json:"ReferralCode" binding:"omitempty"`
 }
 
+// ValidateBVNRequest is the client-facing (snake_case) body for
+// POST /validate/bvn.
+type ValidateBVNRequest struct {
+	Bvn          string `json:"bvn" binding:"required,len=11,numeric"`
+	Dob          string `json:"dob" binding:"required"`
+	Email        string `json:"email" binding:"required,email"`
+	ReferralCode string `json:"referral_code" binding:"omitempty"`
+}
+
+func (r ValidateBVNRequest) toOptimusRequest() OptimusBVNValidationRequest {
+	return OptimusBVNValidationRequest{
+		Bvn:          r.Bvn,
+		Dob:          r.Dob,
+		Email:        r.Email,
+		ReferralCode: r.ReferralCode,
+	}
+}
+
+// OptimusNINValidationRequest is Optimus's own wire format - see
+// OptimusBVNValidationRequest. ValidateNINRequest is the client-facing shape.
 type OptimusNINValidationRequest struct {
 	RequestId    string `json:"RequestId" binding:"-"`
 	Nin          string `json:"Nin" binding:"required,len=11,numeric"`
@@ -94,6 +119,31 @@ type OptimusNINValidationRequest struct {
 	Dob          string `json:"Dob" binding:"required"`
 	Email        string `json:"Email" binding:"required,email"`
 	ReferralCode string `json:"ReferralCode" binding:"omitempty"`
+}
+
+// ValidateNINRequest is the client-facing (snake_case) body for NIN
+// validation. Kept for parity with ValidateBVNRequest even though
+// /validate/nin is not currently routed (see routes.go).
+type ValidateNINRequest struct {
+	Nin          string `json:"nin" binding:"required,len=11,numeric"`
+	FirstName    string `json:"first_name" binding:"required"`
+	LastName     string `json:"last_name" binding:"required"`
+	Gender       string `json:"gender" binding:"required"`
+	Dob          string `json:"dob" binding:"required"`
+	Email        string `json:"email" binding:"required,email"`
+	ReferralCode string `json:"referral_code" binding:"omitempty"`
+}
+
+func (r ValidateNINRequest) toOptimusRequest() OptimusNINValidationRequest {
+	return OptimusNINValidationRequest{
+		Nin:          r.Nin,
+		FirstName:    r.FirstName,
+		LastName:     r.LastName,
+		Gender:       r.Gender,
+		Dob:          r.Dob,
+		Email:        r.Email,
+		ReferralCode: r.ReferralCode,
+	}
 }
 
 type OptimusVerificationResponse struct {

@@ -2,6 +2,8 @@ package vas
 
 import (
 	"context"
+	"errors"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 	"time"
 
@@ -53,6 +55,131 @@ func (r *Repository) UpdateTransactionMetadata(ctx context.Context, txID string,
 		Update("metadata", metadata).Error
 }
 
+func (r *Repository) MarkCashbackSettlementPending(ctx context.Context, txID string, balanceAfter int64) error {
+	return r.db.WithContext(ctx).
+		Model(&Transaction{}).
+		Where("id = ?", txID).
+		Updates(map[string]interface{}{
+			"status":        TransactionStatusSuccessful,
+			"balance_after": balanceAfter,
+			"metadata": map[string]any{
+				"cashback_settlement": "pending",
+			},
+		}).Error
+}
+
+func (r *Repository) ClearCashbackSettlementPending(ctx context.Context, txID string) error {
+	return r.db.WithContext(ctx).Model(&Transaction{}).Where("id = ?", txID).
+		Update("metadata", nil).Error
+}
+
+func (r *Repository) ReserveCashbackSpend(ctx context.Context, txID, mobileUserID string, requestedKobo int64, source string) (int64, error) {
+	if requestedKobo <= 0 {
+		return 0, nil
+	}
+
+	var reserved int64
+	err := r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
+		var user models.User
+		if err := txDB.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id").
+			Where("id = ?", mobileUserID).
+			First(&user).Error; err != nil {
+			return err
+		}
+
+		var existing models.Cashback
+		if err := txDB.Where("transaction_id = ? AND entry_type = ?", txID, models.CashbackEntryDebit).
+			First(&existing).Error; err == nil {
+			reserved = existing.CashbackAmount
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		var last models.Cashback
+		before := int64(0)
+		if err := txDB.Where("mobile_user_id = ?", mobileUserID).
+			Order("created_at DESC").First(&last).Error; err == nil {
+			before = last.CashbackAfter
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if before <= 0 {
+			return txDB.Model(&Transaction{}).Where("id = ?", txID).Updates(map[string]interface{}{
+				"used_cashback":   false,
+				"cashback_amount": 0,
+			}).Error
+		}
+		reserved = requestedKobo
+		if reserved > before {
+			reserved = before
+		}
+		after := before - reserved
+		if err := txDB.Create(&models.Cashback{
+			ID:             txID + "-cashback",
+			MobileUserID:   mobileUserID,
+			CashbackBefore: before,
+			CashbackAfter:  after,
+			CashbackAmount: reserved,
+			Source:         source,
+			EntryType:      models.CashbackEntryDebit,
+			TransactionID:  &txID,
+			CreatedAt:      time.Now().UTC(),
+		}).Error; err != nil {
+			return err
+		}
+		return txDB.Model(&Transaction{}).Where("id = ?", txID).Updates(map[string]interface{}{
+			"used_cashback":   true,
+			"cashback_amount": reserved,
+		}).Error
+	})
+	return reserved, err
+}
+
+func (r *Repository) ReleaseCashbackSpend(ctx context.Context, txID, mobileUserID, source string) error {
+	return r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
+		var user models.User
+		if err := txDB.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id").Where("id = ?", mobileUserID).First(&user).Error; err != nil {
+			return err
+		}
+
+		var debit models.Cashback
+		if err := txDB.Where("transaction_id = ? AND entry_type = ?", txID, models.CashbackEntryDebit).
+			First(&debit).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		var reversal models.Cashback
+		if err := txDB.Where("transaction_id = ? AND entry_type = ?", txID, models.CashbackEntryReversal).
+			First(&reversal).Error; err == nil {
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var last models.Cashback
+		if err := txDB.Where("mobile_user_id = ?", mobileUserID).
+			Order("created_at DESC").First(&last).Error; err != nil {
+			return err
+		}
+		after := last.CashbackAfter + debit.CashbackAmount
+		return txDB.Create(&models.Cashback{
+			ID:             txID + "-cashback-reversal",
+			MobileUserID:   mobileUserID,
+			CashbackBefore: last.CashbackAfter,
+			CashbackAfter:  after,
+			CashbackAmount: debit.CashbackAmount,
+			Source:         source,
+			EntryType:      models.CashbackEntryReversal,
+			TransactionID:  &txID,
+			CreatedAt:      time.Now().UTC(),
+		}).Error
+	})
+}
+
 func (r *Repository) StoreVASAsBeneficiary(ctx context.Context, beneficiary *VASBeneficiary) error {
 	return r.db.WithContext(ctx).Create(beneficiary).Error
 }
@@ -95,6 +222,22 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 			return err
 		}
 
+		var reserved models.Cashback
+		if err := txDB.Where("transaction_id = ? AND entry_type = ?", txID, models.CashbackEntryDebit).
+			First(&reserved).Error; err == nil {
+			after = reserved.CashbackAfter
+			return txDB.Model(&Transaction{}).
+				Where("id = ?", txID).
+				Updates(map[string]interface{}{
+					"used_cashback":   true,
+					"cashback_amount": reserved.CashbackAmount,
+					"status":          status,
+					"balance_after":   balanceAfter,
+				}).Error
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
 		var last models.Cashback
 		var before int64
 		switch err := txDB.WithContext(ctx).
@@ -110,7 +253,7 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 		}
 
 		if before < cashbackKobo {
-			return gorm.ErrRecordNotFound
+			return appErr.ErrInsufficientCashback
 		}
 		after = before - cashbackKobo
 
@@ -121,6 +264,8 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 			CashbackAfter:  after,
 			CashbackAmount: cashbackKobo,
 			Source:         source,
+			EntryType:      models.CashbackEntryDebit,
+			TransactionID:  &txID,
 			CreatedAt:      time.Now().UTC(),
 		}
 		if err := txDB.WithContext(ctx).Create(cashbackRow).Error; err != nil {
@@ -138,8 +283,8 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 			}).Error
 	})
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return 0, gorm.ErrRecordNotFound
+		if errors.Is(err, appErr.ErrInsufficientCashback) {
+			return 0, appErr.ErrInsufficientCashback
 		}
 		return 0, err
 	}
