@@ -7,6 +7,7 @@ type Cashback struct {
 	MobileUserID   string    `gorm:"column:mobile_user_id;not null"`
 	CashbackBefore int64     `gorm:"column:cashback_before;type:bigint"`
 	CashbackAfter  int64     `gorm:"column:cashback_after;type:bigint"`
+	CashbackAmount int64     `gorm:"column:cashback_amount;type:bigint;not null;default:0"`
 	Source         string    `gorm:"column:cashback_source;type:text"` //e.g referral code, vas
 	CreatedAt      time.Time `gorm:"column:created_at;type:timestamptz;autoCreateTime"`
 }

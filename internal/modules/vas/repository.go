@@ -83,8 +83,7 @@ func (r *Repository) GetLatestCashbackBalance(ctx context.Context, mobileUserID 
 	return cashback.CashbackAfter, nil
 }
 
-
-func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUserID string, amountKobo int64, source string) (int64, error) {
+func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUserID string, cashbackKobo int64, source string, status TransactionStatus, balanceAfter int64) (int64, error) {
 	var after int64
 	err := r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
 		var user models.User
@@ -110,16 +109,17 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 			return err
 		}
 
-		if before < amountKobo {
+		if before < cashbackKobo {
 			return gorm.ErrRecordNotFound
 		}
-		after = before - amountKobo
+		after = before - cashbackKobo
 
 		cashbackRow := &models.Cashback{
 			ID:             txID + "-cashback",
 			MobileUserID:   mobileUserID,
 			CashbackBefore: before,
 			CashbackAfter:  after,
+			CashbackAmount: cashbackKobo,
 			Source:         source,
 			CreatedAt:      time.Now().UTC(),
 		}
@@ -131,9 +131,10 @@ func (r *Repository) CompleteCashbackSpend(ctx context.Context, txID, mobileUser
 			Model(&Transaction{}).
 			Where("id = ?", txID).
 			Updates(map[string]interface{}{
-				"status":         TransactionStatusSuccessful,
-				"balance_after":  after,
-				"used_cashback":  true,
+				"used_cashback":   true,
+				"cashback_amount": cashbackKobo,
+				"status":          status,
+				"balance_after":   balanceAfter,
 			}).Error
 	})
 	if err != nil {
