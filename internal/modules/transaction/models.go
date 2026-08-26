@@ -28,6 +28,7 @@ type Transaction struct {
 	Source              TransactionSource   `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
 	Metadata            types.JSONMap       `gorm:"type:jsonb"`
 	UsedCashback        bool                `gorm:"column:used_cashback;type:boolean;not null;default:false"`
+	CashbackAmount      int64               `gorm:"column:cashback_amount;type:bigint;not null;default:0"`
 	CreatedAt           time.Time           `gorm:"autoCreateTime"`
 	UpdatedAt           *time.Time          `gorm:"autoUpdateTime"`
 }
