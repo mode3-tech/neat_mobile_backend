@@ -63,9 +63,117 @@
     {
       "name": "VAS",
       "description": "Value-added services: airtime, data, electricity, and cable TV"
+    },
+    {
+      "name": "Registration v2",
+      "description": "Optimus/Providus onboarding flow for new mobile app registrations"
     }
   ],
   "paths": {
+    "/v2/auth/otp/phone/request": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Request a phone OTP",
+        "requestBody": { "required": true, "content": { "application/json": {         "schema": { "$ref": "#/components/schemas/V2RequestPhoneOTPRequest" }, "example": { "phone_number": "08031234567" } } } },
+        "responses": {
+          "200": { "description": "OTP sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RequestOTPResponse" }, "example": { "status": "success", "data": { "otp_id": "otp_123" } } } } },
+          "400": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/otp/phone/verify": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Verify a phone OTP",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerifyContactOTPRequest" }, "example": { "otp_id": "otp_123", "code": "123456" } } } },
+        "responses": {
+          "200": { "description": "Phone verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerificationResponse" }, "example": { "status": "success", "data": { "verification_id": "ver_phone_123", "requires_otp": false } } } } },
+          "400": { "description": "Invalid request or OTP", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/otp/email/request": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Request an email OTP",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2EmailOTPRequest" }, "example": { "email": "jane@example.com" } } } },
+        "responses": {
+          "200": { "description": "OTP sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RequestOTPResponse" }, "example": { "status": "success", "data": { "otp_id": "otp_456" } } } } },
+          "400": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/otp/email/verify": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Verify an email OTP",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerifyContactOTPRequest" }, "example": { "otp_id": "otp_456", "code": "123456" } } } },
+        "responses": {
+          "200": { "description": "Email verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerificationResponse" }, "example": { "status": "success", "data": { "verification_id": "ver_email_456", "requires_otp": false } } } } },
+          "400": { "description": "Invalid request or OTP", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/validate/bvn": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Validate a BVN",
+        "description": "Uses snake_case client fields. With Providus, requires_otp is false and both IDs are empty. With Optimus, requires_otp is true and provider_reference_id is used by the OTP endpoints.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2BVNValidationRequest" }, "example": { "bvn": "22222222222", "dob": "1990-01-01", "email": "jane@example.com", "referral_code": "JANE10" } } } },
+        "responses": {
+          "200": { "description": "BVN validation accepted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerificationResponse" }, "examples": { "providus": { "value": { "status": "success", "data": { "verification_id": "", "provider_reference_id": "", "requires_otp": false } } }, "optimus": { "value": { "status": "success", "data": { "verification_id": "ver_bvn_123", "provider_reference_id": "opt_ref_123", "requires_otp": true } } } } } } },
+          "400": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
+          "422": { "description": "Provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API422Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/otp/verify": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Verify an Optimus provider OTP",
+        "description": "Only used when /validate/bvn returns requires_otp=true.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2VerifyProviderOTPRequest" }, "example": { "phone_no": "08031234567", "otp_token": "123456", "email": "jane@example.com", "reference_id": "opt_ref_123" } } } },
+        "responses": {
+          "200": { "description": "OTP verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2EmptySuccessResponse" }, "example": { "status": "success", "message": "OTP verified successfully." } } } },
+          "400": { "description": "Invalid request or OTP", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
+          "422": { "description": "Provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API422Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/otp/resend": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Resend an Optimus provider OTP",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2ResendOTPRequest" }, "example": { "reference_id": "opt_ref_123" } } } },
+        "responses": {
+          "200": { "description": "OTP resent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2ResendOTPResponse" }, "example": { "status": "success", "data": { "reference_id": "opt_ref_456" } } } } },
+          "400": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
+          "422": { "description": "Provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API422Error" } } } }
+        }
+      }
+    },
+    "/v2/auth/register": {
+      "servers": [{ "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Complete synchronous registration",
+        "description": "Creates the account and returns tokens directly. There is no polling or claim step.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RegisterRequest" } } } },
+        "responses": {
+          "200": { "description": "Registration successful", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RegisterResponse" }, "example": { "status": "success", "data": { "access_token": "eyJ...", "refresh_token": "eyJ..." } } } } },
+          "400": { "description": "Invalid request or missing verification", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API400Error" } } } },
+          "422": { "description": "BVN/provider validation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API422Error" } } } },
+          "500": { "description": "Registration provider error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/API500Error" } } } }
+        }
+      }
+    },
     "/auth/register": {
       "post": {
         "tags": ["Auth"],
@@ -9060,6 +9168,132 @@
             "type": "string",
             "example": "ecdsa-p256-sha256"
           }
+        }
+      },
+      "V2RequestPhoneOTPRequest": {
+        "type": "object",
+        "required": ["phone_number"],
+        "properties": { "phone_number": { "type": "string", "example": "08031234567" } }
+      },
+      "V2EmailOTPRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": { "email": { "type": "string", "format": "email", "example": "jane@example.com" } }
+      },
+      "V2VerifyContactOTPRequest": {
+        "type": "object",
+        "required": ["otp_id", "code"],
+        "properties": {
+          "otp_id": { "type": "string", "example": "otp_123" },
+          "code": { "type": "string", "example": "123456" }
+        }
+      },
+      "V2RequestOTPResponse": {
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "OTP sent." },
+          "data": { "type": "object", "required": ["otp_id"], "properties": { "otp_id": { "type": "string", "example": "otp_123" } } }
+        }
+      },
+      "V2VerificationResponse": {
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "data": {
+            "type": "object",
+            "required": ["verification_id", "requires_otp"],
+            "properties": {
+              "verification_id": { "type": "string", "example": "ver_bvn_123" },
+              "provider_reference_id": { "type": "string", "example": "opt_ref_123" },
+              "requires_otp": { "type": "boolean", "example": true }
+            }
+          }
+        }
+      },
+      "V2VerifyProviderOTPRequest": {
+        "type": "object",
+        "required": ["phone_no", "otp_token", "email", "reference_id"],
+        "properties": {
+          "phone_no": { "type": "string", "example": "08031234567" },
+          "otp_token": { "type": "string", "example": "123456" },
+          "email": { "type": "string", "format": "email", "example": "jane@example.com" },
+          "reference_id": { "type": "string", "example": "opt_ref_123" }
+        }
+      },
+      "V2ResendOTPRequest": {
+        "type": "object",
+        "required": ["reference_id"],
+        "properties": { "reference_id": { "type": "string", "example": "opt_ref_123" } }
+      },
+      "V2ResendOTPResponse": {
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "data": { "type": "object", "required": ["reference_id"], "properties": { "reference_id": { "type": "string", "example": "opt_ref_456" } } }
+        }
+      },
+      "V2BVNValidationRequest": {
+        "type": "object",
+        "required": ["bvn", "dob", "email"],
+        "properties": {
+          "bvn": { "type": "string", "minLength": 11, "maxLength": 11, "example": "22222222222" },
+          "dob": { "type": "string", "example": "1990-01-01" },
+          "email": { "type": "string", "format": "email", "example": "jane@example.com" },
+          "referral_code": { "type": "string", "example": "JANE10" }
+        }
+      },
+      "V2EmptySuccessResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "OTP verified successfully." }
+        }
+      },
+      "V2RegisterResponse": {
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "data": {
+            "type": "object",
+            "required": ["access_token", "refresh_token"],
+            "properties": {
+              "access_token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiJ9..." },
+              "refresh_token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiJ9..." }
+            }
+          }
+        }
+      },
+      "V2RegisterRequest": {
+        "type": "object",
+        "required": ["first_name", "last_name", "dob", "email", "email_verification_id", "gender", "marital_status", "mothers_maiden_name", "address", "house_no", "phone_number", "phone_verification_id", "bvn", "nin", "password", "confirm_password", "transaction_pin", "confirm_transaction_pin", "is_biometrics_enabled", "device"],
+        "properties": {
+          "first_name": { "type": "string", "example": "Jane" },
+          "last_name": { "type": "string", "example": "Doe" },
+          "dob": { "type": "string", "example": "1990-01-01" },
+          "email": { "type": "string", "format": "email", "example": "jane@example.com" },
+          "email_verification_id": { "type": "string", "example": "ver_email_456" },
+          "gender": { "type": "string", "example": "female" },
+          "marital_status": { "type": "string", "example": "single" },
+          "mothers_maiden_name": { "type": "string", "example": "Williams" },
+          "address": { "type": "string", "example": "12 Broad Street" },
+          "house_no": { "type": "string", "example": "12" },
+          "phone_number": { "type": "string", "example": "08031234567" },
+          "phone_verification_id": { "type": "string", "example": "ver_phone_123" },
+          "bvn": { "type": "string", "minLength": 11, "maxLength": 11, "example": "22222222222" },
+          "nin": { "type": "string", "minLength": 11, "maxLength": 11, "example": "33333333333" },
+          "password": { "type": "string", "format": "password", "example": "strong-password" },
+          "confirm_password": { "type": "string", "format": "password", "example": "strong-password" },
+          "transaction_pin": { "type": "string", "minLength": 4, "maxLength": 6, "example": "1234" },
+          "confirm_transaction_pin": { "type": "string", "minLength": 4, "maxLength": 6, "example": "1234" },
+          "is_biometrics_enabled": { "type": "boolean", "example": true },
+          "referral_code": { "type": "string", "example": "JANE10" },
+          "device": { "$ref": "#/components/schemas/DeviceRegistrationRequest" }
         }
       },
       "DeviceRegistrationRequest": {

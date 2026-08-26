@@ -112,6 +112,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		LoanBalance:            loanBalance,
 		ActiveLoans:            activeLoans,
 		IsNotificationsEnabled: accountInfo.IsNotificationsEnabled,
+		CashbackBalance:        float64(accountInfo.CashbackBalance) / 100,
 	}, nil
 }
 

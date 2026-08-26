@@ -1,6 +1,15 @@
 package referrals
 
-import "time"
+import (
+	"time"
+)
+
+const ReferralCashbackAmountNaira int64 = 10
+
+const ReferralCashbackAmountKobo = ReferralCashbackAmountNaira * 100
+
+const CashbackSourceReferral = "referral"
+const CashbackSourceVAS = "vas"
 
 type RedeemedReferral struct {
 	ID           string    `gorm:"column:id"`

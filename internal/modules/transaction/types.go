@@ -26,6 +26,7 @@ const (
 	TransactionSourceLoanRepayment    TransactionSource = "loan_repayment"
 	TransactionSourceAutoRepayment    TransactionSource = "auto_repayment"
 	TransactionSourceCard             TransactionSource = "card"
+	TransactionSourceReferral         TransactionSource = "referral"
 )
 
 type TransactionCategory string
@@ -40,6 +41,7 @@ const (
 	TransactionCategoryElectricity   TransactionCategory = "electricity"
 	TransactionCategoryCardPayment   TransactionCategory = "card_payment"
 	TransactionCategoryLoanRepayment TransactionCategory = "loan_repayment"
+	TransactionCategoryCashback      TransactionCategory = "cashback"
 )
 
 var TransactionCategories = map[TransactionCategory]string{
@@ -52,4 +54,5 @@ var TransactionCategories = map[TransactionCategory]string{
 	TransactionCategoryElectricity:   "Electricity",
 	TransactionCategoryCardPayment:   "Card Payment",
 	TransactionCategoryLoanRepayment: "Loan Repayment",
+	TransactionCategoryCashback:      "Cashback",
 }

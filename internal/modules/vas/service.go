@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/vas"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"strings"
@@ -161,8 +163,6 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	requestID := uuid.NewString()
 	log.Printf("vas service: request ID: %s\n", requestID)
 	uniqueCode := strings.TrimSpace(payload.UniqueCode)
-	// categoryID := strings.TrimSpace(payload.CategoryID)
-	// billerID := strings.TrimSpace(payload.BillerID)
 
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
 	if err != nil {
@@ -187,6 +187,17 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrGettingAirtime
 	}
 
+	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	amountKobo := amount * 100
+	if payload.UseCashback {
+		return s.getAirtimeWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
+	}
+
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	log.Printf("vas service: wallet customer id: %s\n", wallet.WalletCustomerID)
 	if err != nil {
@@ -198,7 +209,6 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		return nil, appErr.ErrInsufficientBalance
 	}
 
-	// Check provider wallet balance before proceeding
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
@@ -206,10 +216,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
-		return nil, &appErr.XpressPayProviderError{
-			Code:    providerBal.ResponseCode,
-			Message: providerBal.ResponseMessage,
-		}
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
@@ -237,7 +244,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryAirtime,
 		Description:         "Airtime",
-		Amount:              amount * 100,
+		Amount:              amountKobo,
 		BalanceBefore:       wallet.AvailableBalance,
 		BalanceAfter:        0,
 		Reference:           ref,
@@ -332,6 +339,17 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrGettingData
 	}
 
+	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		return nil, appErr.ErrGettingData
+	}
+
+	amountKobo := amount * 100
+	if payload.UseCashback {
+		return s.getDataWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, localizedPhone, amount)
+	}
+
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
@@ -342,7 +360,6 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		return nil, appErr.ErrInsufficientBalance
 	}
 
-	// Check provider wallet balance before proceeding
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
@@ -377,7 +394,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		WalletID:            wallet.InternalWalletID,
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryMobileData,
-		Amount:              amount * 100,
+		Amount:              amountKobo,
 		BalanceBefore:       wallet.AvailableBalance,
 		Description:         "Mobile Data",
 		BalanceAfter:        0,
@@ -470,6 +487,18 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	accountNumber := strings.TrimSpace(payload.AccountNumber)
 	amount := payload.Amount
 
+	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get wallet balance - %s\n", err)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
 	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get user - %s\n", err)
@@ -479,10 +508,9 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
-	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
-	if err != nil {
-		log.Printf("vas service: failed to get wallet balance - %s\n", err)
-		return nil, appErr.ErrPayingElectricityBill
+	amountKobo := amount * 100
+	if payload.UseCashback {
+		return s.payElectricityWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
 	}
 
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
@@ -494,7 +522,6 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		return nil, appErr.ErrInsufficientBalance
 	}
 
-	// Check provider wallet balance before proceeding
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
@@ -560,7 +587,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		WalletID:            wallet.InternalWalletID,
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryElectricity,
-		Amount:              amount * 100,
+		Amount:              amountKobo,
 		Description:         fmt.Sprintf("Electricity"),
 		BalanceBefore:       wallet.AvailableBalance,
 		BalanceAfter:        0,
@@ -672,6 +699,17 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrPayingCableBill
 	}
 
+	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
+	if err != nil {
+		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	amountKobo := amount * 100
+	if payload.UseCashback {
+		return s.payCableWithCashback(ctx, payload, mobileUserID, wallet, cashbackBalance, amountKobo, requestID, uniqueCode, accountNumber, amount, user)
+	}
+
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
@@ -681,7 +719,6 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		return nil, appErr.ErrInsufficientBalance
 	}
 
-	// Check provider wallet balance before proceeding
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
@@ -737,7 +774,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		WalletID:            wallet.InternalWalletID,
 		Type:                TransactionTypeDebit,
 		Category:            TransactionCategoryTV,
-		Amount:              amount * 100,
+		Amount:              amountKobo,
 		Description:         fmt.Sprintf("TV"),
 		BalanceBefore:       wallet.AvailableBalance,
 		BalanceAfter:        0,
@@ -873,7 +910,674 @@ func (s *Service) hasSufficientBalance(ctx context.Context, customerID string, a
 	}
 	if customerWallet.Wallet.AvailableBalance < amount {
 		log.Println("vas service: insufficient balance")
-		return false, appErr.ErrInsufficientBalance
+		return false, nil
 	}
 	return true, nil
+}
+
+// recheckSufficientBalanceOrRelease re-verifies wallet sufficiency for the
+// wallet portion after the authoritative cashback reservation. The initial
+// sufficiency check runs against an optimistic split computed before the
+// cashback balance is locked and reserved, so if the reservation ends up
+// granting less cashback than assumed, the resulting wallet portion can be
+// larger than what was already checked. On failure it releases the cashback
+// reservation and marks the transaction failed.
+func (s *Service) recheckSufficientBalanceOrRelease(ctx context.Context, txID, mobileUserID string, wallet *CustomerWallet, walletNaira int64) error {
+	hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
+	if err == nil && hasBal {
+		return nil
+	}
+	if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+		log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+	}
+	if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
+		log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
+	}
+	if err != nil {
+		return err
+	}
+	return appErr.ErrInsufficientBalance
+}
+
+// handleFulfilFailureCashback handles the post-call failure path when cashback is used.
+// For ambiguous outcomes, it queries CheckStatus to resolve.
+// On deterministic failure, it reverses both the wallet and cashback portions.
+func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, requestID string, balanceBefore int64, walletKobo int64, cashbackCapped int64, txFee int, mobileUserID string, metadata map[string]any, customerID string, vasErr error) {
+	if errors.Is(vasErr, appErr.ErrVASAmbiguous) {
+		status, checkErr := s.XpressPayments.CheckStatus(ctx, requestID)
+		if checkErr == nil {
+			switch status.ResponseCode {
+			case "00":
+				balanceAfter := balanceBefore - (walletKobo + int64(txFee)*100)
+				s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+				return
+			case "01":
+				// True outcome still unknown — leave the cashback reservation in
+				// place (matching the wallet portion, which also stays debited)
+				// until a human resolves this ReversalPending transaction. Releasing
+				// it now would let the reserved cashback be re-spent elsewhere before
+				// we know whether the original purchase actually succeeded.
+				debitedBalance := balanceBefore - (walletKobo + int64(txFee)*100)
+				if err := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); err != nil {
+					log.Printf("vas service: failed to mark cashback txn reversal_pending txID=%s: %v", txID, err)
+				}
+				return
+			}
+		}
+		debitedBalance := balanceBefore - (walletKobo + int64(txFee)*100)
+		if err := s.Txr.UpdateTransactionStatus(ctx, txID, debitedBalance, TransactionStatusReversalPending); err != nil {
+			log.Printf("vas service: failed to mark cashback txn reversal_pending txID=%s: %v", txID, err)
+		}
+		return
+	}
+
+	// Deterministic failure — reverse both the wallet and cashback portions.
+	if cashbackCapped > 0 {
+		if err := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); err != nil {
+			log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, err)
+		}
+	}
+	if walletKobo > 0 {
+		reversalRef := uuid.NewString()
+		if _, creditErr := s.Baas.CreditCustomer(ctx, walletKobo/100, reversalRef, customerID, metadata); creditErr != nil {
+			log.Printf("vas service: failed to credit customer back after cashback VAS failure txID=%s: %v", txID, creditErr)
+		}
+	}
+	if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, balanceBefore, TransactionStatusReversed); updateErr != nil {
+		log.Printf("vas service: failed to mark cashback txn reversed txID=%s: %v", txID, updateErr)
+	}
+}
+
+func (s *Service) settleCashbackAfterProviderSuccess(ctx context.Context, txID, mobileUserID string, cashbackKobo int64, balanceAfter int64) {
+	if cashbackKobo == 0 {
+		if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
+			log.Printf("vas service: failed to update transaction successful txID=%s: %v", txID, err)
+		}
+		return
+	}
+
+	if _, err := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackKobo, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); err == nil {
+		return
+	} else {
+		log.Printf("vas service: cashback settlement pending after provider success txID=%s: %v", txID, err)
+	}
+
+	if err := s.Repo.MarkCashbackSettlementPending(ctx, txID, balanceAfter); err != nil {
+		log.Printf("vas service: failed to preserve successful transaction after cashback settlement failure txID=%s: %v", txID, err)
+	}
+}
+
+func (s *Service) RetryPendingCashbackSettlements(ctx context.Context, limit int) error {
+	if limit <= 0 {
+		limit = 50
+	}
+	var transactions []Transaction
+	if err := s.Repo.db.WithContext(ctx).
+		Where("metadata->>'cashback_settlement' = ?", "pending").
+		Order("created_at ASC").Limit(limit).Find(&transactions).Error; err != nil {
+		return err
+	}
+	for _, tx := range transactions {
+		if _, err := s.Repo.CompleteCashbackSpend(ctx, tx.ID, tx.MobileUserID, tx.CashbackAmount, referrals.CashbackSourceVAS, TransactionStatusSuccessful, tx.BalanceAfter); err != nil {
+			log.Printf("vas service: cashback settlement retry failed txID=%s: %v", tx.ID, err)
+			continue
+		}
+		if err := s.Repo.ClearCashbackSettlementPending(ctx, tx.ID); err != nil {
+			log.Printf("vas service: failed to clear cashback settlement marker txID=%s: %v", tx.ID, err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePayload, mobileUserID string, wallet *CustomerWallet, cashbackBalance, amountKobo int64, requestID, uniqueCode, localizedPhone string, amount int64) (*vasprovider.ISPResponse, error) {
+	cashbackCapped := cashbackBalance
+	if cashbackCapped > amountKobo {
+		cashbackCapped = amountKobo
+	}
+	walletKobo := amountKobo - cashbackCapped
+	walletNaira := walletKobo / 100
+
+	if walletNaira > 0 {
+		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
+		if err != nil {
+			return nil, err
+		}
+		if !hasBal {
+			return nil, appErr.ErrInsufficientBalance
+		}
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryAirtime,
+		Description:         "Airtime",
+		Amount:              walletKobo,
+		CashbackAmount:      cashbackCapped,
+		BalanceBefore:       wallet.AvailableBalance,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: localizedPhone,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        cashbackCapped > 0,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
+	if reserveErr != nil {
+		_ = s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed)
+		return nil, reserveErr
+	}
+	cashbackCapped = reserved
+	walletKobo = amountKobo - cashbackCapped
+	walletNaira = walletKobo / 100
+
+	if walletNaira > 0 {
+		if failErr := s.recheckSufficientBalanceOrRelease(ctx, txID, mobileUserID, wallet, walletNaira); failErr != nil {
+			return nil, failErr
+		}
+	}
+
+	metadata := map[string]any{
+		"isp":  ExtractBillingCompanyName(uniqueCode),
+		"type": "airtime",
+	}
+
+	var txFee int
+	if walletNaira > 0 {
+		debitResult, err := s.Baas.DebitCustomer(ctx, walletNaira, wallet.WalletCustomerID, ref, metadata)
+		if err != nil {
+			log.Printf("vas service: failed to debit wallet portion %d naira - %s\n", walletNaira, err)
+			if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+				log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+			}
+			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
+				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
+			}
+			return nil, appErr.ErrGettingAirtime
+		}
+		txFee = debitResult.Data.TransactionFee
+	}
+
+	result, err := s.XpressPayments.GetAirtime(ctx, requestID, uniqueCode, localizedPhone, amount)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, err)
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous)
+		return nil, appErr.ErrGettingAirtime
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID,
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage})
+		return nil, appErr.ErrGettingAirtime
+	}
+
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+
+	go func() {
+		bgCtx := context.Background()
+		bgCtx, cancel := context.WithTimeout(bgCtx, time.Second*5)
+		defer cancel()
+		beneficiary := VASBeneficiary{
+			ID:             uuid.NewString(),
+			MobileUserID:   mobileUserID,
+			PhoneNumber:    localizedPhone,
+			BillingCompany: strings.ToLower(ExtractBillingCompanyName(strings.TrimSpace(payload.UniqueCode))),
+		}
+		if err := s.Repo.StoreVASAsBeneficiary(bgCtx, &beneficiary); err != nil {
+			log.Printf("vas service: failed to store vas beneficiary - %s", err)
+		}
+	}()
+
+	return result, nil
+}
+
+func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, mobileUserID string, wallet *CustomerWallet, cashbackBalance, amountKobo int64, requestID, uniqueCode, localizedPhone string, amount int64) (*vasprovider.ISPResponse, error) {
+	cashbackCapped := cashbackBalance
+	if cashbackCapped > amountKobo {
+		cashbackCapped = amountKobo
+	}
+	walletKobo := amountKobo - cashbackCapped
+	walletNaira := walletKobo / 100
+
+	if walletNaira > 0 {
+		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
+		if err != nil {
+			return nil, err
+		}
+		if !hasBal {
+			return nil, appErr.ErrInsufficientBalance
+		}
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryMobileData,
+		Description:         "Mobile Data",
+		Amount:              walletKobo,
+		CashbackAmount:      cashbackCapped,
+		BalanceBefore:       wallet.AvailableBalance,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: localizedPhone,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        cashbackCapped > 0,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
+	if reserveErr != nil {
+		_ = s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed)
+		return nil, reserveErr
+	}
+	cashbackCapped = reserved
+	walletKobo = amountKobo - cashbackCapped
+	walletNaira = walletKobo / 100
+
+	if walletNaira > 0 {
+		if failErr := s.recheckSufficientBalanceOrRelease(ctx, txID, mobileUserID, wallet, walletNaira); failErr != nil {
+			return nil, failErr
+		}
+	}
+
+	metadata := map[string]any{
+		"isp":  ExtractBillingCompanyName(uniqueCode),
+		"type": "data",
+	}
+
+	var txFee int
+	if walletNaira > 0 {
+		debitResult, err := s.Baas.DebitCustomer(ctx, walletNaira, wallet.WalletCustomerID, ref, metadata)
+		if err != nil {
+			log.Printf("vas service: failed to debit wallet portion %d naira - %s\n", walletNaira, err)
+			if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+				log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+			}
+			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
+				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
+			}
+			return nil, appErr.ErrGettingData
+		}
+		txFee = debitResult.Data.TransactionFee
+	}
+
+	result, err := s.XpressPayments.GetData(ctx, requestID, uniqueCode, localizedPhone, amount)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, err)
+		return nil, appErr.ErrGettingData
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous)
+		return nil, appErr.ErrGettingData
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID,
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage})
+		return nil, appErr.ErrGettingData
+	}
+
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+
+	go func() {
+		bgCtx := context.Background()
+		bgCtx, cancel := context.WithTimeout(bgCtx, time.Second*5)
+		defer cancel()
+		beneficiary := VASBeneficiary{
+			ID:             uuid.NewString(),
+			MobileUserID:   mobileUserID,
+			PhoneNumber:    localizedPhone,
+			BillingCompany: strings.ToLower(ExtractBillingCompanyName(strings.TrimSpace(payload.UniqueCode))),
+		}
+		if err := s.Repo.StoreVASAsBeneficiary(bgCtx, &beneficiary); err != nil {
+			log.Printf("vas service: failed to store vas beneficiary - %s", err)
+		}
+	}()
+
+	return result, nil
+}
+
+func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayElectricityPayload, mobileUserID string, wallet *CustomerWallet, cashbackBalance, amountKobo int64, requestID, uniqueCode, accountNumber string, amount int64, user *user.UserWithAddress) (*vasprovider.PayElectricityResponse, error) {
+	cashbackCapped := cashbackBalance
+	if cashbackCapped > amountKobo {
+		cashbackCapped = amountKobo
+	}
+	walletKobo := amountKobo - cashbackCapped
+	walletNaira := walletKobo / 100
+
+	if walletNaira > 0 {
+		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
+		if err != nil {
+			return nil, err
+		}
+		if !hasBal {
+			return nil, appErr.ErrInsufficientBalance
+		}
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	validationResult, err := s.validateElectricity(ctx, ElectricityValidationPayload{
+		UniqueCode: uniqueCode, AccountNumber: accountNumber, AccountType: payload.AccountType,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if validationResult != nil {
+		if validationResult.Data.AccountNumber != accountNumber {
+			return nil, appErr.ErrInvalidAccountNumber
+		}
+		if string(validationResult.Data.AccountType) != string(payload.AccountType) {
+			return nil, appErr.ErrInvalidAccountType
+		}
+		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
+			return nil, &appErr.XpressPayProviderError{Code: validationResult.ResponseCode, Message: validationResult.ResponseMessage}
+		}
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryElectricity,
+		Description:         "Electricity",
+		Amount:              walletKobo,
+		CashbackAmount:      cashbackCapped,
+		BalanceBefore:       wallet.AvailableBalance,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: accountNumber,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        cashbackCapped > 0,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
+	if reserveErr != nil {
+		_ = s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed)
+		return nil, reserveErr
+	}
+	cashbackCapped = reserved
+	walletKobo = amountKobo - cashbackCapped
+	walletNaira = walletKobo / 100
+
+	if walletNaira > 0 {
+		if failErr := s.recheckSufficientBalanceOrRelease(ctx, txID, mobileUserID, wallet, walletNaira); failErr != nil {
+			return nil, failErr
+		}
+	}
+
+	metadata := map[string]any{
+		"provider": ExtractBillingCompanyName(uniqueCode),
+		"type":     "electricity",
+	}
+
+	var txFee int
+	if walletNaira > 0 {
+		debitResult, err := s.Baas.DebitCustomer(ctx, walletNaira, wallet.WalletCustomerID, ref, metadata)
+		if err != nil {
+			log.Printf("vas service: failed to debit wallet portion %d naira - %s\n", walletNaira, err)
+			if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+				log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+			}
+			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
+				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
+			}
+			return nil, appErr.ErrPayingElectricityBill
+		}
+		txFee = debitResult.Data.TransactionFee
+	}
+
+	address := ""
+	if user.Address != nil {
+		address = *user.Address
+	}
+	result, err := s.XpressPayments.PayElectricityBill(
+		ctx, requestID, uniqueCode, accountNumber,
+		user.FullName, address, user.Phone,
+		vasprovider.AccountType(payload.AccountType), amount,
+	)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, err)
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous)
+		return nil, appErr.ErrPayingElectricityBill
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID,
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage})
+		return nil, appErr.ErrPayingElectricityBill
+	}
+
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+
+	if result.Data.Token != "" {
+		tokenMetadata := map[string]any{
+			"provider": ExtractBillingCompanyName(uniqueCode),
+			"type":     "electricity",
+			"token":    result.Data.Token,
+			"units":    result.Data.Unit,
+		}
+		if updateErr := s.Repo.UpdateTransactionMetadata(ctx, txID, tokenMetadata); updateErr != nil {
+			log.Printf("vas service: failed to store electricity token in metadata - %s", updateErr)
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayload, mobileUserID string, wallet *CustomerWallet, cashbackBalance, amountKobo int64, requestID, uniqueCode, accountNumber string, amount int64, user *user.UserWithAddress) (*vasprovider.PayCableResponse, error) {
+	cashbackCapped := cashbackBalance
+	if cashbackCapped > amountKobo {
+		cashbackCapped = amountKobo
+	}
+	walletKobo := amountKobo - cashbackCapped
+	walletNaira := walletKobo / 100
+
+	if walletNaira > 0 {
+		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
+		if err != nil {
+			return nil, err
+		}
+		if !hasBal {
+			return nil, appErr.ErrInsufficientBalance
+		}
+	}
+
+	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
+	if err != nil {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
+		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
+	}
+	if providerBal.Data < float64(amount) {
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
+		return nil, err
+	}
+
+	validateResult, err := s.ValidateCable(ctx, ValidateCablePayload{
+		UniqueCode: uniqueCode, AccountNumber: accountNumber, NoOfMonth: payload.NoOfMonth,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if validateResult.Data.AccountNumber != accountNumber {
+		return nil, appErr.ErrInvalidAccountNumber
+	}
+	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
+		return nil, &appErr.XpressPayProviderError{Code: validateResult.ResponseCode, Message: validateResult.ResponseMessage}
+	}
+
+	txID, ref := uuid.NewString(), uuid.NewString()
+	txn := Transaction{
+		ID:                  txID,
+		MobileUserID:        mobileUserID,
+		WalletID:            wallet.InternalWalletID,
+		Type:                TransactionTypeDebit,
+		Category:            TransactionCategoryTV,
+		Description:         "TV",
+		Amount:              walletKobo,
+		CashbackAmount:      cashbackCapped,
+		BalanceBefore:       wallet.AvailableBalance,
+		BalanceAfter:        0,
+		Reference:           ref,
+		CounterpartyName:    ExtractBillingCompanyName(uniqueCode),
+		CounterpartyAccount: accountNumber,
+		Status:              TransactionStatusPending,
+		Source:              TransactionSourceDebit,
+		UsedCashback:        cashbackCapped > 0,
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
+		return nil, err
+	}
+	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
+	if reserveErr != nil {
+		_ = s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed)
+		return nil, reserveErr
+	}
+	cashbackCapped = reserved
+	walletKobo = amountKobo - cashbackCapped
+	walletNaira = walletKobo / 100
+
+	if walletNaira > 0 {
+		if failErr := s.recheckSufficientBalanceOrRelease(ctx, txID, mobileUserID, wallet, walletNaira); failErr != nil {
+			return nil, failErr
+		}
+	}
+
+	metadata := map[string]any{
+		"provider": ExtractBillingCompanyName(uniqueCode),
+		"type":     "cable",
+	}
+
+	var txFee int
+	if walletNaira > 0 {
+		debitResult, err := s.Baas.DebitCustomer(ctx, walletNaira, wallet.WalletCustomerID, ref, metadata)
+		if err != nil {
+			log.Printf("vas service: failed to debit wallet portion %d naira - %s\n", walletNaira, err)
+			if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+				log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+			}
+			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
+				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
+			}
+			return nil, appErr.ErrPayingCableBill
+		}
+		txFee = debitResult.Data.TransactionFee
+	}
+
+	normalizedPhone, err := phone.ToLocalFormat(user.Phone)
+	if err != nil {
+		if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
+			log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
+		}
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	result, err := s.XpressPayments.PayCableBill(
+		ctx, requestID, uniqueCode, accountNumber,
+		payload.AccountType, user.FullName, normalizedPhone,
+		payload.NoOfMonth, amount,
+	)
+	if err != nil {
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, err)
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	switch result.ResponseCode {
+	case "01":
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous)
+		return nil, appErr.ErrPayingCableBill
+	case "00":
+	default:
+		s.handleFulfilFailureCashback(ctx, txID, requestID, wallet.AvailableBalance, walletKobo, cashbackCapped, txFee, mobileUserID, metadata, wallet.WalletCustomerID,
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage})
+		return nil, appErr.ErrPayingCableBill
+	}
+
+	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+
+	return result, nil
 }

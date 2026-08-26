@@ -315,8 +315,62 @@ func Migrate(db *gorm.DB) error {
 		&models.ClosureReferenceCounter{},
 		&referrals.ReferralCode{},
 		&referrals.ReferralRedemption{},
+		&models.Cashback{},
 		&registerv2.ProviderPreference{},
 	); err != nil {
+		return err
+	}
+
+	// entry_type defaults new rows to 'credit'; AutoMigrate backfills that
+	// default onto pre-existing rows too, mislabeling historical VAS-spend
+	// (debit) ledger rows. Correct those before the CHECK constraint locks in.
+	if err := db.Exec(`
+		UPDATE wallet_cashbacks
+		SET entry_type = 'debit'
+		WHERE entry_type = 'credit' AND cashback_after < cashback_before
+	`).Error; err != nil {
+		return err
+	}
+
+	// cashback_status on referral redemptions defaults new rows to 'pending';
+	// AutoMigrate backfills that default onto pre-existing rows too, even
+	// though most were already credited under the prior best-effort logic.
+	// Mark any redemption whose referrer already has a referral cashback
+	// credit as 'credited'; genuinely uncredited ones are left 'pending' so
+	// RetryPendingReferralCredits finally pays them out.
+	if err := db.Exec(`
+		UPDATE wallet_referral_redemptions
+		SET cashback_status = 'credited'
+		WHERE cashback_status = 'pending'
+		  AND EXISTS (
+			SELECT 1 FROM wallet_transactions wt
+			WHERE wt.mobile_user_id = wallet_referral_redemptions.referrer_user_id
+			  AND wt.transaction_category = 'cashback'
+			  AND wt.source = 'referral'
+		  )
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint WHERE conname = 'wallet_cashbacks_non_negative_balance'
+			) THEN
+				ALTER TABLE wallet_cashbacks
+				ADD CONSTRAINT wallet_cashbacks_non_negative_balance
+				CHECK (cashback_before >= 0 AND cashback_after >= 0);
+			END IF;
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint WHERE conname = 'wallet_cashbacks_valid_entry_type'
+			) THEN
+				ALTER TABLE wallet_cashbacks
+				ADD CONSTRAINT wallet_cashbacks_valid_entry_type
+				CHECK (entry_type IN ('credit', 'debit', 'reversal'));
+			END IF;
+		END $$;
+	`).Error; err != nil {
 		return err
 	}
 
@@ -745,7 +799,7 @@ func backfillEncryptedColumn(db *gorm.DB, cipher *crypto.FieldCipher, table, col
 	for {
 		var rows []row
 		query := db.Table(table).
-			Select("id, " + column + " AS value").
+			Select("id, "+column+" AS value").
 			Where(column+" IS NOT NULL AND "+column+" != '' AND "+column+" NOT LIKE ?", encryptedValuePrefix+"%")
 		if lastID != "" {
 			query = query.Where("id > ?", lastID)

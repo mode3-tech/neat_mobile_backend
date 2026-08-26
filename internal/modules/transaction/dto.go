@@ -31,7 +31,11 @@ type TransactionResponse struct {
 	Status      TransactionStatus `json:"status" binding:"status"`
 	// Amount in naira. Stored as kobo; whole naira = kobo/100, trailing kobo =
 	// kobo%100 (e.g. 500050 kobo -> 5000.50).
-	Amount float64 `json:"amount"`
+	Amount         float64 `json:"amount"`
+	UsedCashback   bool    `json:"used_cashback"`
+	CashbackAmount float64 `json:"cashback_amount"`
+	// ActualAmount is the total cost of the purchase (wallet + cashback), in naira.
+	ActualAmount float64 `json:"actual_amount"`
 	// Charges and VAT in naira, converted from kobo the same way as Amount.
 	Charges float64 `json:"charges"`
 	VAT     float64 `json:"vat"`
