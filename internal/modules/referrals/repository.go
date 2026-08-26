@@ -28,6 +28,36 @@ func (r *Repository) RedeemReferral(ctx context.Context, redeemedReferral *Refer
 	return r.db.WithContext(ctx).Create(redeemedReferral).Error
 }
 
+func (r *Repository) FindRedemptionByReferredUser(ctx context.Context, mobileUserID string) (*ReferralRedemption, error) {
+	var redemption ReferralRedemption
+	if err := r.db.WithContext(ctx).
+		Where("referred_user_id = ?", mobileUserID).
+		First(&redemption).Error; err != nil {
+		return nil, err
+	}
+	return &redemption, nil
+}
+
+func (r *Repository) UpdateRedemptionCashbackStatus(ctx context.Context, redemptionID, status string) error {
+	return r.db.WithContext(ctx).
+		Model(&ReferralRedemption{}).
+		Where("id = ?", redemptionID).
+		Update("cashback_status", status).Error
+}
+
+func (r *Repository) FindPendingReferralCredits(ctx context.Context, limit int) ([]ReferralRedemption, error) {
+	var redemptions []ReferralRedemption
+	err := r.db.WithContext(ctx).
+		Where("cashback_status = ?", CashbackStatusPending).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&redemptions).Error
+	if err != nil {
+		return nil, err
+	}
+	return redemptions, nil
+}
+
 func (r *Repository) GetLatestCashback(ctx context.Context, mobileUserID string) (*models.Cashback, error) {
 	var cashback models.Cashback
 	if err := r.db.WithContext(ctx).
@@ -53,7 +83,6 @@ func (r *Repository) GetUserWalletID(ctx context.Context, mobileUserID string) (
 	}
 	return user.WalletID, nil
 }
-
 
 func (r *Repository) GetUserWalletIDForUpdate(ctx context.Context, mobileUserID string) (string, error) {
 	var user models.User
