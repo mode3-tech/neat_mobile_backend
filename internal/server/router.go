@@ -272,7 +272,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		AccountName:   cfg.LoanRepaymentAccountName,
 	}, deviceService, smsSender, notificationService, cfg.AppName, smsService)
 
-	loanRepo := loanproduct.NewRepository(db)
+	loanRepo := loanproduct.NewRepository(db, bvnNinCipher)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
