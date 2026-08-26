@@ -634,7 +634,7 @@ func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.VerifyForgotPasswordOTP(c.Request.Context(), deviceID, req)
+	resp, err := h.service.VerifyForgotPasswordOTP(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
