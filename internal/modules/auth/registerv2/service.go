@@ -356,7 +356,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		if strings.TrimSpace(req.ReferralCode) != "" {
 			referralsRepo := referrals.NewRepository(txDB)
 			if txErr := referrals.NewService(referralsRepo).RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
-				log.Printf("registerv2: referral redemption failed user=%s code=%s: %v", mobileUserID, req.ReferralCode, txErr)
+				return txErr
 			}
 		}
 

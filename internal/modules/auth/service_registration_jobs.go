@@ -98,6 +98,15 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			return txErr
 		}
 
+		if snapshot.ReferralCode != "" {
+			referralsRepo := referrals.NewRepository(txDB)
+			if txErr = referrals.NewService(referralsRepo).RedeemReferralCode(ctx, job.MobileUserID, snapshot.ReferralCode); txErr != nil {
+				return txErr
+			}
+		} else if snapshot.ReferrerUserID != "" {
+			return errors.New("registration referral snapshot has referrer without referral code")
+		}
+
 		return authRepo.MarkRegistrationJobCompleted(ctx, job.ID)
 	})
 	if err != nil {
@@ -115,16 +124,6 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 		walletResp.Wallet.BankName,
 	)
 
-	if snapshot.ReferrerUserID != "" && s.referralsRepo != nil {
-		if redeemErr := s.referralsRepo.RedeemReferral(ctx, &referrals.ReferralRedemption{
-			ID:             uuid.NewString(),
-			ReferrerUserID: snapshot.ReferrerUserID,
-			ReferredUserID: job.MobileUserID,
-		}); redeemErr != nil {
-			log.Printf("referral redemption failed job_id=%s referrer=%s referred=%s: %v",
-				job.ID, snapshot.ReferrerUserID, job.MobileUserID, redeemErr)
-		}
-	}
 }
 
 func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *RegistrationJob, snapshot *registrationJobSnapshot) (*WalletResponse, error) {

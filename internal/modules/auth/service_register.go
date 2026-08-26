@@ -277,12 +277,19 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 	}
 
 	referrerUserID := ""
+	referralCode := ""
 	if code := strings.TrimSpace(req.ReferralCode); code != "" {
 		referral, err := s.referralsRepo.FindReferralByCode(ctx, code)
-		if err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("registration: invalid referral code %q provided, continuing without referrer", code)
+		case err != nil || referral == nil:
+			log.Printf("registration: referral code lookup failed for %q: %v", code, err)
 			return nil, appErr.ErrInvalidReferralCode
+		default:
+			referrerUserID = referral.MobileUserID
+			referralCode = code
 		}
-		referrerUserID = referral.MobileUserID
 	}
 
 	passwordHash, err := HashPassword(req.Password)
@@ -391,6 +398,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		MaritalStatus:  maritalStatus,
 		ProductID:      s.productID,
 		ReferrerUserID: referrerUserID,
+		ReferralCode:   referralCode,
 	}, nil
 }
 

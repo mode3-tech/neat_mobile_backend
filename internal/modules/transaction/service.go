@@ -45,6 +45,10 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 	return result, nil
 }
 
+func (s *Service) AddTransaction(ctx context.Context, transaction *Transaction) error {
+	return s.repo.AddTransaction(ctx, transaction)
+}
+
 func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor string, limit int) (*PagedTransactionResponse, error) {
 	if limit < 0 || limit > 50 {
 		limit = 20
@@ -94,17 +98,20 @@ func (s *Service) UpdateTransactionStatus(ctx context.Context, txID string, bala
 // narration when present.
 func toTransactionResponse(t Transaction) TransactionResponse {
 	resp := TransactionResponse{
-		ID:          t.ID,
-		Type:        t.Type,
-		Description: t.Description,
-		Reference:   t.Reference,
-		Date:        t.CreatedAt.Format(time.RFC3339),
-		Status:      t.Status,
-		Amount:      float64(t.Amount) / 100, // kobo -> naira, keeping trailing kobo as decimals
-		Charges:     float64(t.Charges) / 100,
-		VAT:         float64(t.VAT) / 100,
-		SessionID:   t.SessionID,
-		Narration:   t.Narration,
+		ID:             t.ID,
+		Type:           t.Type,
+		Description:    t.Description,
+		Reference:      t.Reference,
+		Date:           t.CreatedAt.Format(time.RFC3339),
+		Status:         t.Status,
+		Amount:         float64(t.Amount) / 100,
+		UsedCashback:   t.UsedCashback,
+		CashbackAmount: float64(t.CashbackAmount) / 100,
+		ActualAmount:   float64(t.Amount+t.CashbackAmount) / 100,
+		Charges:        float64(t.Charges) / 100,
+		VAT:            float64(t.VAT) / 100,
+		SessionID:      t.SessionID,
+		Narration:      t.Narration,
 	}
 	if t.CounterpartyName != "" || t.CounterpartyAccount != "" || t.CounterpartyBank != "" {
 		resp.Counterparty = &Counterparty{
