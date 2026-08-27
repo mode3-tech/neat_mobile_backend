@@ -27,6 +27,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/referrals"
+	registerversion "neat_mobile_app_backend/internal/modules/register_version"
 	"neat_mobile_app_backend/internal/modules/reporting"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
@@ -423,6 +424,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	appVersionService := appversion.NewService(appVersionRepo)
 	appVersionHandler := appversion.NewHandler(appVersionService)
 	appversion.RegisterRoutes(r, appVersionHandler)
+
+	registerVersionRepo := registerversion.NewRepository(db)
+	registerVersionService := registerversion.NewService(registerVersionRepo)
+	registerVersionHandler := registerversion.NewHandler(registerVersionService)
+	registerversion.RegisterRoutes(r, registerVersionHandler)
+
 	return r, stopCron, nil
 }
 
