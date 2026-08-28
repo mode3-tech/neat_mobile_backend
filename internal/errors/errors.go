@@ -120,6 +120,8 @@ var (
 	ErrInvalidAccountType              = errors.New("Invalid electricity account type")
 	ErrEmailOutOfService               = errors.New("Email service is currently out of service, kindly skip")
 	ErrInvalidChannel                  = errors.New("Invalid phone or email")
+	ErrNINRecordMissingDOB             = errors.New("NIN verification record is missing date of birth")
+	ErrFaceCheckRecordFailed           = errors.New("Failed to save face verification record")
 	ErrProviderServiceUnavailable      = errors.New("Service is currently unavailable, please try again later")
 	ErrInvalidPassword                 = errors.New("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
 	ErrInvalidVerificationType         = errors.New("Invalid verification type")

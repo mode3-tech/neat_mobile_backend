@@ -17,6 +17,7 @@ import (
 
 const (
 	tendarNINURL         = "https://api.tendar.co/onboarding/api/v1/kyc/nigeria/nin/lookup"
+	tendarNINFaceURL     = "https://api.tendar.co/onboarding/api/v1/kyc/nigeria/nin/lookup/with-face"
 	tendarMaxRetries     = 2
 	tendarRetryBaseDelay = 200 * time.Millisecond
 	tendarErrorBodyLimit = 2048
@@ -39,6 +40,20 @@ type lookupResponse struct {
 			PhoneNumber string `json:"phone_number"`
 			Email       string `json:"email"`
 		} `json:"details"`
+	} `json:"data"`
+}
+
+
+type faceLookupResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+	Data    struct {
+		Verified bool   `json:"verified"`
+		FaceData struct {
+			Status     bool    `json:"status"`
+			Confidence float64 `json:"confidence"`
+			Message    string  `json:"message"`
+		} `json:"face_data"`
 	} `json:"data"`
 }
 
@@ -89,7 +104,7 @@ func (t *Tendar) ValidateNIN(ctx context.Context, number string) (*nin.Validatio
 		}
 
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-			providerErr := tendarHTTPError(response, duration)
+			providerErr := tendarHTTPError(response, duration, "tendar_nin")
 			response.Body.Close()
 			lastErr = providerErr
 			if attempt < tendarMaxRetries && providerErr.Retryable && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
@@ -129,14 +144,107 @@ func (t *Tendar) ValidateNIN(ctx context.Context, number string) (*nin.Validatio
 	return nil, lastErr
 }
 
-// func (t *Tendar) ValidateNINWithFace(ctx context.Context, )
+func (t *Tendar) ValidateNINWithFace(ctx context.Context, number, imageURL string) (*nin.NINWithFaceResponse, error) {
+	if strings.TrimSpace(t.apiKey) == "" {
+		log.Printf("tendar_nin_face request skipped: Tendar API key is not configured")
+		return nil, &appErr.TendarError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "NIN validation service is not configured",
+		}
+	}
 
-func tendarHTTPError(response *http.Response, duration time.Duration) *appErr.TendarError {
+	number = strings.TrimSpace(number)
+	imageURL = strings.TrimSpace(imageURL)
+	if number == "" {
+		return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: "NIN is required"}
+	}
+	if imageURL == "" {
+		return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: "image URL is required"}
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"nin":      number,
+		"image":    imageURL,
+		"send_otp": false,
+	})
+	if err != nil {
+		log.Printf("tendar_nin_face payload marshal failed: %v", err)
+		return nil, &appErr.TendarError{Status: http.StatusInternalServerError, Code: "CLIENT_ERROR", Message: "NIN face validation request could not be created"}
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= tendarMaxRetries; attempt++ {
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, tendarNINFaceURL, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("tendar_nin_face request creation failed: %v", err)
+			return nil, &appErr.TendarError{Status: http.StatusInternalServerError, Code: "CLIENT_ERROR", Message: "NIN face validation request could not be created"}
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "application/json")
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(t.apiKey))
+
+		start := time.Now()
+		response, err := t.httpClient.Do(request)
+		duration := time.Since(start)
+		if err != nil {
+			lastErr = tendarRequestError(err)
+			log.Printf("tendar_nin_face request failed attempt=%d/%d duration=%s err=%v", attempt+1, tendarMaxRetries+1, duration, err)
+			if attempt < tendarMaxRetries && shouldRetryRequestError(err) && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
+				continue
+			}
+			if ctx.Err() != nil {
+				return nil, tendarRequestError(ctx.Err())
+			}
+			return nil, lastErr
+		}
+
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			providerErr := tendarHTTPError(response, duration, "tendar_nin_face")
+			response.Body.Close()
+			lastErr = providerErr
+			if attempt < tendarMaxRetries && providerErr.Retryable && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
+				continue
+			}
+			if ctx.Err() != nil {
+				return nil, tendarRequestError(ctx.Err())
+			}
+			return nil, providerErr
+		}
+
+		var result faceLookupResponse
+		decodeErr := json.NewDecoder(response.Body).Decode(&result)
+		response.Body.Close()
+		if decodeErr != nil {
+			log.Printf("tendar_nin_face response decode failed duration=%s err=%v", duration, decodeErr)
+			return nil, &appErr.TendarError{Status: http.StatusBadGateway, Code: "INVALID_RESPONSE", Message: "NIN face validation service returned an invalid response", Retryable: true}
+		}
+		if result.Error {
+			message := strings.TrimSpace(result.Message)
+			if message == "" {
+				message = "NIN face validation service rejected the request"
+			}
+			return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: message}
+		}
+
+		return &nin.NINWithFaceResponse{
+			FaceData: nin.NINFaceValidationResult{
+				Matched:    result.Data.FaceData.Status,
+				Confidence: result.Data.FaceData.Confidence,
+				Message:    result.Data.FaceData.Message,
+			},
+		}, nil
+	}
+
+	return nil, lastErr
+}
+
+func tendarHTTPError(response *http.Response, duration time.Duration, operation string) *appErr.TendarError {
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, tendarErrorBodyLimit))
 	if readErr != nil {
-		log.Printf("tendar_nin error response read failed status=%d duration=%s err=%v", response.StatusCode, duration, readErr)
+		log.Printf("%s error response read failed status=%d duration=%s err=%v", operation, response.StatusCode, duration, readErr)
 	} else {
-		log.Printf("tendar_nin unexpected status=%d duration=%s response=%s", response.StatusCode, duration, strings.TrimSpace(string(body)))
+		log.Printf("%s unexpected status=%d duration=%s response=%s", operation, response.StatusCode, duration, strings.TrimSpace(string(body)))
 	}
 	return &appErr.TendarError{
 		Status:    response.StatusCode,

@@ -1004,6 +1004,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrNINRecordMissingDOB):
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "NIN_RECORD_MISSING_DOB",
+				Message: appErr.ErrNINRecordMissingDOB.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrFaceCheckRecordFailed):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FACE_CHECK_RECORD_FAILED",
+				Message: appErr.ErrFaceCheckRecordFailed.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrInvalidISPAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
