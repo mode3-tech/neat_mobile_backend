@@ -17,10 +17,24 @@ import (
 
 const (
 	tendarBVNURL         = "https://api.tendar.co/onboarding/api/v1/kyc/nigeria/bvn/lookup"
+	tendarBVNFaceURL     = "https://api.tendar.co/onboarding/api/v1/kyc/nigeria/bvn/lookup/with-face"
 	tendarMaxRetries     = 2
 	tendarRetryBaseDelay = 200 * time.Millisecond
 	tendarErrorBodyLimit = 2048
 )
+
+type faceLookupResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+	Data    struct {
+		Verified bool `json:"verified"`
+		FaceData struct {
+			Status     bool    `json:"status"`
+			Confidence float64 `json:"confidence"`
+			Message    string  `json:"message"`
+		} `json:"face_data"`
+	} `json:"data"`
+}
 
 type Tendar struct {
 	apiKey     string
@@ -81,7 +95,7 @@ func (t *Tendar) validWithTendar(ctx context.Context, BVN string) (*bvn.TendarBV
 
 		log.Printf("tendar_bvn request completed attempt=%d/%d status=%d duration=%s", attempt+1, tendarMaxRetries+1, resp.StatusCode, duration)
 		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-			providerErr := tendarHTTPError(resp, duration)
+			providerErr := tendarHTTPError(resp, duration, "tendar_bvn")
 			resp.Body.Close()
 			lastErr = providerErr
 			if attempt < tendarMaxRetries && providerErr.Retryable && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
@@ -110,12 +124,108 @@ func (t *Tendar) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvn.Te
 	return t.validWithTendar(ctx, bvn)
 }
 
-func tendarHTTPError(resp *http.Response, duration time.Duration) *appErr.TendarError {
+func (t *Tendar) ValidateBVNWithFace(ctx context.Context, number, imageURL string) (*bvn.BVNWithFaceResponse, error) {
+	if strings.TrimSpace(t.apiKey) == "" {
+		log.Printf("tendar_bvn_face request skipped: Tendar API key is not configured")
+		return nil, &appErr.TendarError{
+			Status:  http.StatusInternalServerError,
+			Code:    "CLIENT_ERROR",
+			Message: "BVN validation service is not configured",
+		}
+	}
+
+	number = strings.TrimSpace(number)
+	imageURL = strings.TrimSpace(imageURL)
+	if number == "" {
+		return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: "BVN is required"}
+	}
+	if imageURL == "" {
+		return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: "image URL is required"}
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"bvn":      number,
+		"image":    imageURL,
+		"send_otp": false,
+	})
+	if err != nil {
+		log.Printf("tendar_bvn_face payload marshal failed: %v", err)
+		return nil, &appErr.TendarError{Status: http.StatusInternalServerError, Code: "CLIENT_ERROR", Message: "BVN face validation request could not be created"}
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= tendarMaxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, tendarBVNFaceURL, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("tendar_bvn_face request creation failed: %v", err)
+			return nil, &appErr.TendarError{Status: http.StatusInternalServerError, Code: "CLIENT_ERROR", Message: "BVN face validation request could not be created"}
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(t.apiKey))
+
+		start := time.Now()
+		resp, err := t.httpClient.Do(req)
+		duration := time.Since(start)
+		if err != nil {
+			lastErr = tendarRequestError(err)
+			log.Printf("tendar_bvn_face request failed attempt=%d/%d duration=%s err=%v", attempt+1, tendarMaxRetries+1, duration, err)
+			if attempt < tendarMaxRetries && shouldRetryRequestError(err) && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
+				continue
+			}
+			if ctx.Err() != nil {
+				return nil, tendarRequestError(ctx.Err())
+			}
+			return nil, lastErr
+		}
+
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			providerErr := tendarHTTPError(resp, duration, "tendar_bvn_face")
+			resp.Body.Close()
+			lastErr = providerErr
+			if attempt < tendarMaxRetries && providerErr.Retryable && waitForRetry(ctx, tendarRetryBaseDelay*time.Duration(attempt+1)) {
+				continue
+			}
+			if ctx.Err() != nil {
+				return nil, tendarRequestError(ctx.Err())
+			}
+			return nil, providerErr
+		}
+
+		var result faceLookupResponse
+		decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if decodeErr != nil {
+			log.Printf("tendar_bvn_face response decode failed duration=%s err=%v", duration, decodeErr)
+			return nil, &appErr.TendarError{Status: http.StatusBadGateway, Code: "INVALID_RESPONSE", Message: "BVN face validation service returned an invalid response", Retryable: true}
+		}
+		if result.Error {
+			message := strings.TrimSpace(result.Message)
+			if message == "" {
+				message = "BVN face validation service rejected the request"
+			}
+			return nil, &appErr.TendarError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: message}
+		}
+
+		return &bvn.BVNWithFaceResponse{
+			FaceData: bvn.BVNFaceData{
+				Matched:    result.Data.FaceData.Status,
+				Confidence: result.Data.FaceData.Confidence,
+				Message:    result.Data.FaceData.Message,
+			},
+		}, nil
+	}
+
+	return nil, lastErr
+}
+
+func tendarHTTPError(resp *http.Response, duration time.Duration, operation string) *appErr.TendarError {
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, tendarErrorBodyLimit))
 	if readErr != nil {
-		log.Printf("tendar_bvn error response read failed status=%d duration=%s err=%v", resp.StatusCode, duration, readErr)
+		log.Printf("%s error response read failed status=%d duration=%s err=%v", operation, resp.StatusCode, duration, readErr)
 	} else {
-		log.Printf("tendar_bvn unexpected status=%d duration=%s response=%s", resp.StatusCode, duration, strings.TrimSpace(string(body)))
+		log.Printf("%s unexpected status=%d duration=%s response=%s", operation, resp.StatusCode, duration, strings.TrimSpace(string(body)))
 	}
 	return &appErr.TendarError{
 		Status:    resp.StatusCode,

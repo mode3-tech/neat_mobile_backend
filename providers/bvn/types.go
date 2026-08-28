@@ -116,6 +116,20 @@ type BVNWithFace struct {
 	Image  string `json:"image"`
 }
 
+// BVNFaceData is the provider-neutral face comparison result returned by the
+// BVN-with-face lookups of both Prembly and Tendar.
+type BVNFaceData struct {
+	Matched      bool
+	Confidence   float64
+	Message      string
+	ResponseCode string
+}
+
+// BVNWithFaceResponse is the provider-neutral result of a BVN-with-face lookup.
+type BVNWithFaceResponse struct {
+	FaceData BVNFaceData
+}
+
 type PremblyBVNWithFaceResponse struct {
 	Status       bool                           `json:"status"`
 	ResponseCode string                         `json:"response_code"`
