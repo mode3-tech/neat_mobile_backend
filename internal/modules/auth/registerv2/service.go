@@ -228,6 +228,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		ProductId:         s.optimusProductID,
 		Gender:            strings.TrimSpace(req.Gender),
 		MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
+		Metadata:          map[string]interface{}{},
 	})
 	if err != nil {
 		return nil, err
