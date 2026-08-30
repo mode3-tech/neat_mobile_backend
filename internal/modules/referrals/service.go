@@ -3,6 +3,7 @@ package referrals
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/transaction"
@@ -10,7 +11,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+)
+
+const (
+	referralCodeLength     = 6
+	maxGenerateCodeRetries = 5
 )
 
 type Service struct {
@@ -19,6 +26,36 @@ type Service struct {
 
 func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// GenerateAndAssignReferralCode creates a unique referral code for
+// mobileUserID, retrying on code collisions (the unique constraint on
+// `code` is the source of truth, not a check-then-insert).
+func (s *Service) GenerateAndAssignReferralCode(ctx context.Context, mobileUserID string) error {
+	for attempt := 1; attempt <= maxGenerateCodeRetries; attempt++ {
+		code, err := GenerateReferralCode(referralCodeLength)
+		if err != nil {
+			return err
+		}
+		row := &ReferralCode{ID: uuid.NewString(), Code: code, MobileUserID: mobileUserID}
+		err = s.repo.CreateReferralCode(ctx, row)
+		if err == nil {
+			return nil
+		}
+		if isUniqueViolation(err) {
+			continue
+		}
+		return err
+	}
+	return fmt.Errorf("exhausted %d attempts generating a unique referral code for user %s", maxGenerateCodeRetries, mobileUserID)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code string) error {

@@ -354,11 +354,16 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			}
 		}
 
+		referralsService := referrals.NewService(referrals.NewRepository(txDB))
+
 		if strings.TrimSpace(req.ReferralCode) != "" {
-			referralsRepo := referrals.NewRepository(txDB)
-			if txErr := referrals.NewService(referralsRepo).RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
+			if txErr := referralsService.RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
 				return txErr
 			}
+		}
+
+		if txErr := referralsService.GenerateAndAssignReferralCode(ctx, mobileUserID); txErr != nil {
+			return txErr
 		}
 
 		return nil
