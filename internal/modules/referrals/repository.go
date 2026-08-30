@@ -16,6 +16,10 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) CreateReferralCode(ctx context.Context, code *ReferralCode) error {
+	return r.db.WithContext(ctx).Create(code).Error
+}
+
 func (r *Repository) FindReferralByCode(ctx context.Context, code string) (*ReferralCode, error) {
 	var referral ReferralCode
 	if err := r.db.WithContext(ctx).Where("code = ?", code).First(&referral).Error; err != nil {
