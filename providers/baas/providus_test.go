@@ -101,6 +101,90 @@ func TestLookupWalletByCustomerID_NotFound(t *testing.T) {
 	}
 }
 
+func TestLookupCustomerByPhone_Success(t *testing.T) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET method, got %s", r.Method)
+		}
+		if r.URL.Path != "/customer/phone" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("phoneNumber"); got != "08030223346" {
+			t.Fatalf("unexpected phoneNumber query: %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer secret-key" {
+			t.Fatalf("unexpected authorization header: %q", got)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": true,
+			"customer": map[string]any{
+				"id":        "1149d065-c5c9-4382-aec6-323090f31d9d",
+				"firstName": "Emma",
+				"lastName":  "Godwin",
+				"walletId":  "0bea0968-c43a-47fe-a83a-f7b514194aba",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewProvidus("secret-key", server.URL)
+	customerID, found, err := client.LookupCustomerByPhone(context.Background(), "2348030223346")
+	if err != nil {
+		t.Fatalf("LookupCustomerByPhone returned error: %v", err)
+	}
+	if !found {
+		t.Fatal("expected customer lookup to be found")
+	}
+	if customerID != "1149d065-c5c9-4382-aec6-323090f31d9d" {
+		t.Fatalf("unexpected customer id: %q", customerID)
+	}
+}
+
+func TestLookupCustomerByPhone_NotFound(t *testing.T) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := NewProvidus("secret-key", server.URL)
+	customerID, found, err := client.LookupCustomerByPhone(context.Background(), "2348030223346")
+	if err != nil {
+		t.Fatalf("LookupCustomerByPhone returned error: %v", err)
+	}
+	if found {
+		t.Fatal("expected missing customer lookup to return found=false")
+	}
+	if customerID != "" {
+		t.Fatalf("expected empty customer id for missing customer, got %q", customerID)
+	}
+}
+
+func TestLookupCustomerByPhone_StatusFalse(t *testing.T) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": false, "customer": map[string]any{}})
+	}))
+	defer server.Close()
+
+	client := NewProvidus("secret-key", server.URL)
+	customerID, found, err := client.LookupCustomerByPhone(context.Background(), "2348030223346")
+	if err != nil {
+		t.Fatalf("LookupCustomerByPhone returned error: %v", err)
+	}
+	if found {
+		t.Fatal("expected status=false response to return found=false")
+	}
+	if customerID != "" {
+		t.Fatalf("expected empty customer id, got %q", customerID)
+	}
+}
+
 func TestSeedWalletPayload_Deterministic(t *testing.T) {
 	payload := &auth.WalletPayload{
 		BVN:         "12345678901",
