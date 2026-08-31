@@ -27,6 +27,7 @@ type JWTSigner interface {
 type WalletService interface {
 	GenerateWallet(ctx context.Context, walletInfo *WalletPayload) (*WalletResponse, error)
 	LookupWalletByCustomerID(ctx context.Context, customerID string) (*WalletResponse, bool, error)
+	LookupCustomerByPhone(ctx context.Context, phoneNumber string) (string, bool, error)
 }
 
 type TendarValidation interface {

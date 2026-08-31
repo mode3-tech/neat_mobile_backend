@@ -28,6 +28,15 @@ import (
 
 const verificationExpiry = 30 * time.Minute
 
+// recoverWalletByPhoneBackoff is the delay schedule recoverWalletByPhone
+// retries on - a var (not a const) so tests can shrink it instead of
+// sleeping through the real delays. Runs on the detached providerCtx, not
+// the client's connection, so being generous here is cheap - it only trades
+// off how long a genuinely failed registration takes to give up, not
+// perceived request latency for the client (who's very likely already gone
+// by the time GenerateWallet itself has failed).
+var recoverWalletByPhoneBackoff = []time.Duration{0, 5 * time.Second, 15 * time.Second, 30 * time.Second}
+
 const (
 	// bvnValidateMaxAttempts is the initial attempt plus two retries.
 	bvnValidateMaxAttempts = 3
@@ -226,7 +235,26 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	mobileUserID := uuid.NewString()
 	internalWalletID := uuid.NewString()
 
-	walletResp, err := walletGenerator.GenerateWallet(ctx, &auth.WalletPayload{
+	// We're about to trigger an external, irreversible side effect (wallet
+	// creation at the provider) - from here on, work must not be abortable
+	// just because the client disconnects (c.Request.Context() is canceled
+	// when that happens). A canceled ctx during this window previously left
+	// the provider account orphaned with nothing saved locally: the
+	// wallet-generation HTTP call itself can time out client-side (observed
+	// in production at just over its own client timeout) while the provider
+	// keeps processing and completes the account anyway, and any subsequent
+	// work on the original ctx would fail immediately once the client gave
+	// up. providerCtx keeps request-scoped values but drops the parent's
+	// cancellation, giving the provider call, the recovery lookup below, the
+	// DB write, and session issuance a guaranteed bounded runway of their own
+	// instead. 6 minutes comfortably covers the pathological worst case
+	// (GenerateWallet's own 60s timeout, plus recoverWalletByPhoneBackoff's
+	// retries each doing up to two lookup calls at 30s apiece) without being
+	// unbounded - actual completion is almost always much faster.
+	providerCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 6*time.Minute)
+	defer cancel()
+
+	walletResp, err := walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
 		RequestID:         mobileUserID,
 		BVN:               strings.TrimSpace(req.BVN),
 		FirstName:         strings.TrimSpace(req.FirstName),
@@ -243,22 +271,23 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		Metadata:          map[string]interface{}{},
 	})
 	if err != nil {
+		// A failure here is ambiguous - it may mean the provider never
+		// received the request, or it may mean our client gave up waiting
+		// while the provider kept processing and completed it anyway. Recover
+		// by phone number, which we always know up front - unlike the
+		// provider's own customerId, which we'd otherwise have no way to
+		// discover after a true timeout (the provider doesn't echo back
+		// anything we send as its customerId).
+		if recovered := s.recoverWalletByPhone(providerCtx, walletGenerator, normalizedPhone); recovered != nil {
+			walletResp, err = recovered, nil
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
 	if walletResp == nil || walletResp.Customer == nil || walletResp.Wallet == nil {
 		return nil, fmt.Errorf("wallet provider returned an incomplete response")
 	}
-
-	// The wallet now exists on the provider's side and can't be undone - from
-	// here on, work must not be abortable just because the client disconnects
-	// (c.Request.Context() is canceled when that happens). A canceled ctx at
-	// this exact point previously left the provider account orphaned with
-	// nothing saved locally, and the phone/BVN retry was then rejected by the
-	// provider as a duplicate. persistCtx keeps request-scoped values but
-	// drops the parent's cancellation, giving the DB write and session
-	// issuance a guaranteed bounded runway of their own.
-	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
-	defer cancel()
 
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
@@ -338,24 +367,24 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		usedVerificationIDs = append(usedVerificationIDs, bvnRecord.ID)
 	}
 
-	err = s.tx.WithTx(persistCtx, func(txDB *gorm.DB) error {
+	err = s.tx.WithTx(providerCtx, func(txDB *gorm.DB) error {
 		authRepo := auth.NewRespository(txDB, s.repo.cipher)
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
 		verificationRepo := NewRepository(txDB, s.repo.cipher)
 
-		if _, txErr := authRepo.CreateUser(persistCtx, user); txErr != nil {
+		if _, txErr := authRepo.CreateUser(providerCtx, user); txErr != nil {
 			return txErr
 		}
-		if txErr := authRepo.LinkBVNRecordToUser(persistCtx, user.BVN, user.ID); txErr != nil {
+		if txErr := authRepo.LinkBVNRecordToUser(providerCtx, user.BVN, user.ID); txErr != nil {
 			return txErr
 		}
-		if txErr := walletRepo.CreateWallet(persistCtx, walletRecord); txErr != nil {
+		if txErr := walletRepo.CreateWallet(providerCtx, walletRecord); txErr != nil {
 			return txErr
 		}
 
 		deviceService := device.NewService(*deviceRepo)
-		if txErr := deviceService.BindDevice(persistCtx, mobileUserID, &device.DeviceBindingRequest{
+		if txErr := deviceService.BindDevice(providerCtx, mobileUserID, &device.DeviceBindingRequest{
 			DeviceID:    req.Device.DeviceID,
 			PublicKey:   req.Device.PublicKey,
 			DeviceName:  req.Device.DeviceName,
@@ -372,7 +401,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			if id == "" {
 				continue
 			}
-			if txErr := verificationRepo.MarkVerificationUsed(persistCtx, id, now); txErr != nil {
+			if txErr := verificationRepo.MarkVerificationUsed(providerCtx, id, now); txErr != nil {
 				return txErr
 			}
 		}
@@ -380,12 +409,12 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		referralsService := referrals.NewService(referrals.NewRepository(txDB))
 
 		if strings.TrimSpace(req.ReferralCode) != "" {
-			if txErr := referralsService.RedeemReferralCode(persistCtx, mobileUserID, req.ReferralCode); txErr != nil {
+			if txErr := referralsService.RedeemReferralCode(providerCtx, mobileUserID, req.ReferralCode); txErr != nil {
 				return txErr
 			}
 		}
 
-		if txErr := referralsService.GenerateAndAssignReferralCode(persistCtx, mobileUserID); txErr != nil {
+		if txErr := referralsService.GenerateAndAssignReferralCode(providerCtx, mobileUserID); txErr != nil {
 			return txErr
 		}
 
@@ -398,7 +427,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if s.sessionIssuer == nil {
 		return nil, fmt.Errorf("session issuer is not configured")
 	}
-	session, err := s.sessionIssuer.IssueSessionTokens(persistCtx, mobileUserID, req.Device.DeviceID, ip)
+	session, err := s.sessionIssuer.IssueSessionTokens(providerCtx, mobileUserID, req.Device.DeviceID, ip)
 	if err != nil {
 		return nil, err
 	}
@@ -407,6 +436,47 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		AccessToken:  session.AccessToken,
 		RefreshToken: session.RefreshToken,
 	}, nil
+}
+
+// recoverWalletByPhone checks whether the wallet provider actually completed
+// wallet creation despite GenerateWallet returning an error to us - a
+// client-side timeout only means we stopped waiting, not that the provider
+// didn't finish. Phone number is always known up front, unlike the
+// provider's own customerId, so it's used to discover that id first
+// (LookupCustomerByPhone), then fetch the full wallet details by it
+// (LookupWalletByCustomerID). Retries with a short backoff since the
+// provider's own processing may still be finishing right after our client
+// gives up waiting. Returns nil if nothing could be recovered, in which case
+// the caller should surface the original GenerateWallet error.
+func (s *Service) recoverWalletByPhone(ctx context.Context, walletGenerator auth.WalletService, phone string) *auth.WalletResponse {
+	for i, delay := range recoverWalletByPhoneBackoff {
+		if delay > 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(delay):
+			}
+		}
+
+		customerID, found, err := walletGenerator.LookupCustomerByPhone(ctx, phone)
+		if err != nil {
+			log.Printf("registerv2: phone-based wallet recovery lookup failed (attempt %d) phone=%s: %v", i+1, phone, err)
+			continue
+		}
+		if !found {
+			continue
+		}
+
+		recovered, ok, err := walletGenerator.LookupWalletByCustomerID(ctx, customerID)
+		if err != nil {
+			log.Printf("registerv2: wallet lookup by recovered customer id failed customer_id=%s: %v", customerID, err)
+			continue
+		}
+		if ok && recovered != nil {
+			return recovered
+		}
+	}
+	return nil
 }
 
 // RequestPhoneOTP sends an OTP to the given phone number, delegating to the
