@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/database/tx"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -136,6 +138,16 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	// it isn't sent to either provider's wallet-creation call, so validating
 	// it up front only added friction without changing the outcome.
 
+	// A local user for this phone means registration already completed here
+	// previously - fail fast with a clear error rather than calling the
+	// wallet provider again, which would just be rejected as a duplicate.
+	authRepo := auth.NewRespository(s.repo.db, s.repo.cipher)
+	if _, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
+		return nil, appErr.ErrUserExists
+	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return nil, lookupErr
+	}
+
 	provider, err := s.CurrentProvider(ctx)
 	if err != nil {
 		return nil, err
@@ -237,6 +249,17 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		return nil, fmt.Errorf("wallet provider returned an incomplete response")
 	}
 
+	// The wallet now exists on the provider's side and can't be undone - from
+	// here on, work must not be abortable just because the client disconnects
+	// (c.Request.Context() is canceled when that happens). A canceled ctx at
+	// this exact point previously left the provider account orphaned with
+	// nothing saved locally, and the phone/BVN retry was then rejected by the
+	// provider as a duplicate. persistCtx keeps request-scoped values but
+	// drops the parent's cancellation, giving the DB write and session
+	// issuance a guaranteed bounded runway of their own.
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -315,24 +338,24 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		usedVerificationIDs = append(usedVerificationIDs, bvnRecord.ID)
 	}
 
-	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
+	err = s.tx.WithTx(persistCtx, func(txDB *gorm.DB) error {
 		authRepo := auth.NewRespository(txDB, s.repo.cipher)
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
 		verificationRepo := NewRepository(txDB, s.repo.cipher)
 
-		if _, txErr := authRepo.CreateUser(ctx, user); txErr != nil {
+		if _, txErr := authRepo.CreateUser(persistCtx, user); txErr != nil {
 			return txErr
 		}
-		if txErr := authRepo.LinkBVNRecordToUser(ctx, user.BVN, user.ID); txErr != nil {
+		if txErr := authRepo.LinkBVNRecordToUser(persistCtx, user.BVN, user.ID); txErr != nil {
 			return txErr
 		}
-		if txErr := walletRepo.CreateWallet(ctx, walletRecord); txErr != nil {
+		if txErr := walletRepo.CreateWallet(persistCtx, walletRecord); txErr != nil {
 			return txErr
 		}
 
 		deviceService := device.NewService(*deviceRepo)
-		if txErr := deviceService.BindDevice(ctx, mobileUserID, &device.DeviceBindingRequest{
+		if txErr := deviceService.BindDevice(persistCtx, mobileUserID, &device.DeviceBindingRequest{
 			DeviceID:    req.Device.DeviceID,
 			PublicKey:   req.Device.PublicKey,
 			DeviceName:  req.Device.DeviceName,
@@ -349,7 +372,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			if id == "" {
 				continue
 			}
-			if txErr := verificationRepo.MarkVerificationUsed(ctx, id, now); txErr != nil {
+			if txErr := verificationRepo.MarkVerificationUsed(persistCtx, id, now); txErr != nil {
 				return txErr
 			}
 		}
@@ -357,12 +380,12 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		referralsService := referrals.NewService(referrals.NewRepository(txDB))
 
 		if strings.TrimSpace(req.ReferralCode) != "" {
-			if txErr := referralsService.RedeemReferralCode(ctx, mobileUserID, req.ReferralCode); txErr != nil {
+			if txErr := referralsService.RedeemReferralCode(persistCtx, mobileUserID, req.ReferralCode); txErr != nil {
 				return txErr
 			}
 		}
 
-		if txErr := referralsService.GenerateAndAssignReferralCode(ctx, mobileUserID); txErr != nil {
+		if txErr := referralsService.GenerateAndAssignReferralCode(persistCtx, mobileUserID); txErr != nil {
 			return txErr
 		}
 
@@ -375,7 +398,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if s.sessionIssuer == nil {
 		return nil, fmt.Errorf("session issuer is not configured")
 	}
-	session, err := s.sessionIssuer.IssueSessionTokens(ctx, mobileUserID, req.Device.DeviceID, ip)
+	session, err := s.sessionIssuer.IssueSessionTokens(persistCtx, mobileUserID, req.Device.DeviceID, ip)
 	if err != nil {
 		return nil, err
 	}
