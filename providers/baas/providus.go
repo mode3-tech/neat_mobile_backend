@@ -13,7 +13,6 @@ import (
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
-	"neat_mobile_app_backend/internal/phone"
 
 	"net/http"
 	"net/url"
@@ -27,9 +26,10 @@ type Providus struct {
 	Client  *http.Client
 	// walletGenerationClient is used only by GenerateWallet, which needs more
 	// patience than debit/credit/lookup calls on Client - wallet creation is a
-	// one-time step where waiting longer reduces how often we hit the
-	// ambiguous "did it actually finish" recovery path at all, whereas
-	// money-movement operations should stay fail-fast on the shorter timeout.
+	// one-time step where waiting longer reduces how often a slow response
+	// gets treated as a failure even though the provider is still processing
+	// it, whereas money-movement operations should stay fail-fast on the
+	// shorter timeout.
 	walletGenerationClient *http.Client
 }
 
@@ -38,7 +38,7 @@ func NewProvidus(apiKey, baseURL string) *Providus {
 		APIKey:                 apiKey,
 		BaseURL:                baseURL,
 		Client:                 &http.Client{Timeout: 30 * time.Second},
-		walletGenerationClient: &http.Client{Timeout: 60 * time.Second},
+		walletGenerationClient: &http.Client{Timeout: 90 * time.Second},
 	}
 }
 
@@ -390,74 +390,6 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 	}
 
 	return mapped, true, nil
-}
-
-// LookupCustomerByPhone finds a customer's Providus customerId by phone
-// number - used to recover from a GenerateWallet call that timed out on our
-// side without a response, since we then have no customerId of our own to
-// look up with (Providus assigns its own, and doesn't echo back our
-// RequestID). Phone number is always known up front, so it closes that gap.
-func (p *Providus) LookupCustomerByPhone(ctx context.Context, phoneNumber string) (string, bool, error) {
-	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
-		log.Print("providus service not configured")
-		return "", false, errors.New("providus service not configured")
-	}
-
-	localPhone, err := phone.ToLocalFormat(phoneNumber)
-	if err != nil {
-		return "", false, err
-	}
-
-	endpoint := p.BaseURL + "/customer/phone?phoneNumber=" + url.QueryEscape(localPhone)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		log.Printf("providus customer-by-phone request failed: %v", err)
-		return "", false, err
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.APIKey)
-
-	resp, err := p.Client.Do(req)
-	if err != nil {
-		log.Printf("providus customer-by-phone request failed: %v", err)
-		return "", false, fmt.Errorf("providus customer-by-phone request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return "", false, nil
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		if len(respBody) == 0 {
-			log.Printf("providus customer-by-phone lookup failed with status: %d", resp.StatusCode)
-			return "", false, fmt.Errorf("providus customer-by-phone lookup failed with status: %d", resp.StatusCode)
-		}
-		log.Printf("providus customer-by-phone lookup failed: %s", extractErrorMessage(respBody))
-		return "", false, fmt.Errorf("providus customer-by-phone lookup failed: %s", extractErrorMessage(respBody))
-	}
-
-	var result struct {
-		Status   bool `json:"status"`
-		Customer struct {
-			ID string `json:"id"`
-		} `json:"customer"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("failed to decode providus customer-by-phone response: %v", err)
-		return "", false, fmt.Errorf("failed to decode providus customer-by-phone response: %w", err)
-	}
-
-	customerID := strings.TrimSpace(result.Customer.ID)
-	if !result.Status || customerID == "" {
-		return "", false, nil
-	}
-
-	return customerID, true, nil
 }
 
 func (p *Providus) FetchBanks(ctx context.Context) ([]Bank, error) {
