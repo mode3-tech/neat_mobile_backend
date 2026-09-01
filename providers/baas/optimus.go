@@ -422,15 +422,6 @@ func (o *Optimus) LookupWalletByCustomerID(ctx context.Context, customerID strin
 	return nil, true, nil
 }
 
-// LookupCustomerByPhone is not needed on the Optimus path - Optimus already
-// correlates wallet creation via our own RequestID, so there's no gap to
-// recover from the way there is on Providus. Always reports not-found so
-// callers fall through to their original error instead of mistakenly
-// treating this as a successful recovery.
-func (o *Optimus) LookupCustomerByPhone(ctx context.Context, phoneNumber string) (string, bool, error) {
-	return "", false, nil
-}
-
 // ValidateBVN validates a BVN through the Optimus wallet API. Optimus wraps
 // both successful and failed responses in its own response envelope, including
 // when the HTTP status itself is not 2xx.
