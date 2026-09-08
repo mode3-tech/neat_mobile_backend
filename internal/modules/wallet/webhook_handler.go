@@ -65,7 +65,11 @@ func (h *Handler) HandleBaaSEvent(c *gin.Context) {
 			log.Printf("baas webhook: failed to process account funded: %v", err)
 		}
 	default:
-		log.Printf("baas webhook: unknown event: %s", envelope.Event)
+		// Log the full raw body, not just the event name - this is the only
+		// record of what an unhandled event actually carries, and has
+		// previously been the only way to discover the shape of an event we
+		// weren't yet handling (e.g. customer_account_created).
+		log.Printf("baas webhook: unknown event=%q body=%s", envelope.Event, rawBody)
 	}
 
 	c.JSON(http.StatusOK, response.APIResponse[any]{

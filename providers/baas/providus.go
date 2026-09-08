@@ -214,6 +214,23 @@ func decorateStringWithSeed(value, seed string, usePrefix bool) string {
 	return value + "-" + seed
 }
 
+// providusWalletGenerationRequest is Providus's documented wallet-generation
+// request shape - deliberately narrower than the shared auth.WalletPayload,
+// which also carries fields only Optimus needs (RequestID, ProductId,
+// Gender, MaritalStatus, MothersMaidenName, HouseNo). Those have no json tag
+// on WalletPayload, so marshaling it directly (as this used to do) sent them
+// to Providus in PascalCase as extraneous, undocumented fields.
+type providusWalletGenerationRequest struct {
+	BVN         string                 `json:"bvn"`
+	FirstName   string                 `json:"firstName"`
+	LastName    string                 `json:"lastName"`
+	DateOfBirth string                 `json:"dateOfBirth"`
+	PhoneNumber string                 `json:"phoneNumber"`
+	Email       string                 `json:"email"`
+	Address     string                 `json:"address"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
@@ -221,7 +238,18 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 
 	url := p.BaseURL + "/wallet"
 
-	body, err := json.Marshal(walletInfo)
+	payload := providusWalletGenerationRequest{
+		BVN:         walletInfo.BVN,
+		FirstName:   walletInfo.FirstName,
+		LastName:    walletInfo.LastName,
+		DateOfBirth: walletInfo.DateOfBirth,
+		PhoneNumber: walletInfo.PhoneNumber,
+		Email:       walletInfo.Email,
+		Address:     walletInfo.Address,
+		Metadata:    walletInfo.Metadata,
+	}
+
+	body, err := json.Marshal(payload)
 	log.Printf("Providus wallet generation request payload: %s", string(body))
 	if err != nil {
 		return nil, &appErr.XpressWalletProviderError{Message: "failed to marshal wallet generation request"}

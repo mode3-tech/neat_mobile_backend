@@ -42,6 +42,7 @@ const (
 	TransactionCategoryCardPayment   TransactionCategory = "card_payment"
 	TransactionCategoryLoanRepayment TransactionCategory = "loan_repayment"
 	TransactionCategoryCashback      TransactionCategory = "cashback"
+	TransactionCategorySMS           TransactionCategory = "sms"
 )
 
 var TransactionCategories = map[TransactionCategory]string{
@@ -55,4 +56,5 @@ var TransactionCategories = map[TransactionCategory]string{
 	TransactionCategoryCardPayment:   "Card Payment",
 	TransactionCategoryLoanRepayment: "Loan Repayment",
 	TransactionCategoryCashback:      "Cashback",
+	TransactionCategorySMS:           "SMS Fee",
 }

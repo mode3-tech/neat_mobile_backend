@@ -1175,6 +1175,17 @@ func MapError(err error) ErrorMapping {
 			}
 		}
 
+		var smsLiveErr *appErr.SMSLiveError
+		if errors.As(err, &smsLiveErr) {
+			return ErrorMapping{
+				Status: http.StatusBadGateway,
+				Error: APIError{
+					Code:    "SMS_PROVIDER_ERROR",
+					Message: smsLiveErr.Message,
+				},
+			}
+		}
+
 		var zeptoErr *appErr.ZeptoError
 		if errors.As(err, &zeptoErr) {
 			// Infrastructure/config-side failures (expired credits, unverified

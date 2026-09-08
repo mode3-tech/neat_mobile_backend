@@ -67,3 +67,10 @@ type OutgoingSMSService interface {
 	UpdateOutgoingSMS(ctx context.Context, id string, status sms.OutgoingSMSStatus, sentAt *time.Time, reasonForFailure string) error
 	GetPendingOutgoingSMS(ctx context.Context, retryBackoff time.Duration) ([]sms.OutgoingSMS, error)
 }
+
+// SMSBillingRecovery is the fast-recovery hook called after a wallet credit
+// lands, so a customer's outstanding SMS charges get retried as soon as they
+// have funds again rather than waiting for the next reconciliation sweep.
+type SMSBillingRecovery interface {
+	CollectOutstanding(ctx context.Context, mobileUserID string)
+}

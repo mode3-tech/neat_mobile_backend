@@ -20,6 +20,11 @@ const (
 	TransactionStatusFailed          TransactionStatus = "failed"
 	TransactionStatusReversed        TransactionStatus = "reversed"
 	TransactionStatusReversalPending TransactionStatus = "reversal_pending"
+	// TransactionStatusRefundPending means the purchase is known to have
+	// failed and the refund (wallet credit-back and/or cashback release)
+	// hasn't fully completed yet — unlike ReversalPending, no further
+	// CheckStatus call is needed, only a refund retry.
+	TransactionStatusRefundPending TransactionStatus = "refund_pending"
 )
 
 type TransactionType string
@@ -68,31 +73,36 @@ var TransactionCategories = map[TransactionCategory]string{
 }
 
 type Transaction struct {
-	ID                  string              `gorm:"primaryKey;type:text"`
-	MobileUserID        string              `gorm:"type:text;not null;index"`
-	WalletID            string              `gorm:"type:text;not null;index"`
-	Type                TransactionType     `gorm:"type:text;not null"` // "credit" | "debit"
-	Category            TransactionCategory `gorm:"column:transaction_category;not null"`
-	Amount              int64               `gorm:"type:bigint;not null"`
-	Charges             int64               `gorm:"type:bigint;not null;default:0"`
-	VAT                 int64               `gorm:"bigint;not null;default:0"`
-	BalanceBefore       int64               `gorm:"type:bigint;not null"` // snapshot at time of tx
-	BalanceAfter        int64               `gorm:"type:bigint;not null"` // snapshot at time of tx
-	Reference           string              `gorm:"type:text;not null"`   // internal reference
-	ProviderReference   string              `gorm:"type:text;index"`      // Providus ref — idempotency key
-	SessionID           string              `gorm:"column:session_id"`
-	Narration           *string             `gorm:"type:text"`
-	Description         string              `gorm:"column:description;type:text"`
-	CounterpartyName    string              `gorm:"type:text"`
-	CounterpartyAccount string              `gorm:"type:text"`
-	CounterpartyBank    string              `gorm:"type:text"`
-	Status              TransactionStatus   `gorm:"type:text;not null"` // "pending"|"successful"|"failed"|"reversed"
-	Source              TransactionSource   `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
-	Metadata            types.JSONMap       `gorm:"type:jsonb"`
-	UsedCashback        bool                `gorm:"column:used_cashback;type:boolean;not null;default:false"`
-	CashbackAmount      int64               `gorm:"column:cashback_amount;type:bigint;not null;default:0"`
-	CreatedAt           time.Time           `gorm:"autoCreateTime"`
-	UpdatedAt           *time.Time          `gorm:"autoUpdateTime"`
+	ID                          string              `gorm:"primaryKey;type:text"`
+	MobileUserID                string              `gorm:"type:text;not null;index"`
+	WalletID                    string              `gorm:"type:text;not null;index"`
+	Type                        TransactionType     `gorm:"type:text;not null"` // "credit" | "debit"
+	Category                    TransactionCategory `gorm:"column:transaction_category;not null"`
+	Amount                      int64               `gorm:"type:bigint;not null"`
+	Charges                     int64               `gorm:"type:bigint;not null;default:0"`
+	VAT                         int64               `gorm:"bigint;not null;default:0"`
+	BalanceBefore               int64               `gorm:"type:bigint;not null"` // snapshot at time of tx
+	BalanceAfter                int64               `gorm:"type:bigint;not null"` // snapshot at time of tx
+	Reference                   string              `gorm:"type:text;not null"`   // internal reference
+	ProviderReference           string              `gorm:"type:text;index"`      // BaaS webhook ref for wallet credits; XpressPayments referenceId for VAS purchases
+	SessionID                   string              `gorm:"column:session_id"`
+	Narration                   *string             `gorm:"type:text"`
+	Description                 string              `gorm:"column:description;type:text"`
+	CounterpartyName            string              `gorm:"type:text"`
+	CounterpartyAccount         string              `gorm:"type:text"`
+	CounterpartyBank            string              `gorm:"type:text"`
+	Status                      TransactionStatus   `gorm:"type:text;not null"` // "pending"|"successful"|"failed"|"reversed"
+	Source                      TransactionSource   `gorm:"type:text;not null"` // "transfer"|"credit"|"loan_disbursement"|"loan_repayment" etc.
+	Metadata                    types.JSONMap       `gorm:"type:jsonb"`
+	UsedCashback                bool                `gorm:"column:used_cashback;type:boolean;not null;default:false"`
+	CashbackAmount              int64               `gorm:"column:cashback_amount;type:bigint;not null;default:0"`
+	VASRequestID                string              `gorm:"column:vas_request_id;type:text;index"`
+	WalletRefunded              bool                `gorm:"column:wallet_refunded;type:boolean;not null;default:false"`
+	CashbackReleased            bool                `gorm:"column:cashback_released;type:boolean;not null;default:false"`
+	ReconciliationAttempts      int                 `gorm:"column:reconciliation_attempts;type:int;not null;default:0"`
+	LastReconciliationAttemptAt *time.Time          `gorm:"column:last_reconciliation_attempt_at;type:timestamptz"`
+	CreatedAt                   time.Time           `gorm:"autoCreateTime"`
+	UpdatedAt                   *time.Time          `gorm:"autoUpdateTime"`
 }
 
 func (Transaction) TableName() string { return "wallet_transactions" }

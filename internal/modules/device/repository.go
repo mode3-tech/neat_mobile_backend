@@ -30,6 +30,15 @@ func (r *Repository) FindDevice(ctx context.Context, userID, deviceID string) (*
 	return &device, nil
 }
 
+// FindDeviceByID finds a globally unique registered device for biometric authentication.
+func (r *Repository) FindDeviceByID(ctx context.Context, deviceID string) (*UserDevice, error) {
+	var device UserDevice
+	if err := r.db.WithContext(ctx).Model(&UserDevice{}).Select("*").Where("device_id = ?", deviceID).First(&device).Error; err != nil {
+		return nil, err
+	}
+	return &device, nil
+}
+
 func (r *Repository) CreateChallenge(ctx context.Context, ch *DeviceChallenge) error {
 	now := time.Now().UTC()
 

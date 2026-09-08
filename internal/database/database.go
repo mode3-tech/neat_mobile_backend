@@ -16,6 +16,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/referrals"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
@@ -317,6 +318,7 @@ func Migrate(db *gorm.DB) error {
 		&referrals.ReferralRedemption{},
 		&models.Cashback{},
 		&registerv2.ProviderPreference{},
+		&smsbilling.SMSCharge{},
 	); err != nil {
 		return err
 	}

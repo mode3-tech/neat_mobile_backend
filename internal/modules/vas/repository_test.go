@@ -215,6 +215,176 @@ func TestReleaseCashbackSpend_NoOpWhenNoReservationExists(t *testing.T) {
 	}
 }
 
+func updateWalletTransactionsPattern() string {
+	return regexp.QuoteMeta(`UPDATE "wallet_transactions" SET`)
+}
+
+func selectStuckTransactionsPattern() string {
+	return `SELECT \* FROM "wallet_transactions" WHERE`
+}
+
+func TestMarkWalletRefunded_SetsFlag(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(updateWalletTransactionsPattern()).
+		WithArgs(true, sqlmock.AnyArg(), "tx-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.MarkWalletRefunded(context.Background(), "tx-1"); err != nil {
+		t.Fatalf("MarkWalletRefunded returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestUpdateTransactionProviderReference_SetsColumn(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(updateWalletTransactionsPattern()).
+		WithArgs("ref-456", sqlmock.AnyArg(), "tx-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.UpdateTransactionProviderReference(context.Background(), "tx-1", "ref-456"); err != nil {
+		t.Fatalf("UpdateTransactionProviderReference returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestMarkCashbackReleased_SetsFlag(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(updateWalletTransactionsPattern()).
+		WithArgs(true, sqlmock.AnyArg(), "tx-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.MarkCashbackReleased(context.Background(), "tx-1"); err != nil {
+		t.Fatalf("MarkCashbackReleased returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestMarkTransactionRefundPending_SetsStatusAndBalance(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(updateWalletTransactionsPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.MarkTransactionRefundPending(context.Background(), "tx-1", 42000); err != nil {
+		t.Fatalf("MarkTransactionRefundPending returned error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestClaimStuckTransactions_ZeroLimit_NoQuery(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	txns, err := repo.ClaimStuckTransactions(context.Background(), 0, 5*time.Minute, time.Minute, 20, 50)
+	if err != nil {
+		t.Fatalf("ClaimStuckTransactions returned error: %v", err)
+	}
+	if len(txns) != 0 {
+		t.Fatalf("len(txns) = %d, want 0", len(txns))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestClaimStuckTransactions_NoCandidates_SkipsBumpUpdate(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(selectStuckTransactionsPattern()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectCommit()
+
+	txns, err := repo.ClaimStuckTransactions(context.Background(), 50, 5*time.Minute, time.Minute, 20, 50)
+	if err != nil {
+		t.Fatalf("ClaimStuckTransactions returned error: %v", err)
+	}
+	if len(txns) != 0 {
+		t.Fatalf("len(txns) = %d, want 0", len(txns))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestClaimStuckTransactions_ClaimsAcrossBucketsAndBumpsAttempts(t *testing.T) {
+	repo, mock, cleanup := newMockVASRepository(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(selectStuckTransactionsPattern()).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "mobile_user_id", "status", "amount", "balance_before",
+			"used_cashback", "cashback_amount", "wallet_refunded", "cashback_released",
+			"vas_request_id", "reconciliation_attempts", "transaction_category",
+		}).
+			AddRow("tx-reversal", "user-1", string(TransactionStatusReversalPending), int64(50000), int64(100000), false, int64(0), false, false, "req-1", 3, string(TransactionCategoryAirtime)).
+			AddRow("tx-refund", "user-2", string(TransactionStatusRefundPending), int64(20000), int64(60000), true, int64(5000), false, false, "req-2", 1, string(TransactionCategoryMobileData)).
+			AddRow("tx-pending", "user-3", string(TransactionStatusPending), int64(10000), int64(30000), false, int64(0), false, false, "req-3", 0, string(TransactionCategoryElectricity)))
+	mock.ExpectExec(updateWalletTransactionsPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectCommit()
+
+	txns, err := repo.ClaimStuckTransactions(context.Background(), 50, 5*time.Minute, time.Minute, 20, 50)
+	if err != nil {
+		t.Fatalf("ClaimStuckTransactions returned error: %v", err)
+	}
+	if len(txns) != 3 {
+		t.Fatalf("len(txns) = %d, want 3", len(txns))
+	}
+
+	byID := map[string]Transaction{}
+	for _, txn := range txns {
+		byID[txn.ID] = txn
+	}
+
+	if got := byID["tx-reversal"].ReconciliationAttempts; got != 4 {
+		t.Fatalf("tx-reversal ReconciliationAttempts = %d, want 4 (bumped from 3)", got)
+	}
+	if byID["tx-reversal"].LastReconciliationAttemptAt == nil {
+		t.Fatalf("tx-reversal LastReconciliationAttemptAt not set")
+	}
+	if got := byID["tx-refund"].Status; got != TransactionStatusRefundPending {
+		t.Fatalf("tx-refund status = %s, want refund_pending", got)
+	}
+	if got := byID["tx-pending"].Status; got != TransactionStatusPending {
+		t.Fatalf("tx-pending status = %s, want pending", got)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestReleaseCashbackSpend_IdempotentWhenAlreadyReversed(t *testing.T) {
 	repo, mock, cleanup := newMockVASRepository(t)
 	defer cleanup()
