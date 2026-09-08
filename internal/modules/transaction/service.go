@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"errors"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"time"
 
@@ -20,6 +21,7 @@ func NewServie(repo *Repository) *Service {
 func (s *Service) FetchTransactionByID(ctx context.Context, txID string) (*TransactionResponse, error) {
 	tx, err := s.repo.FetchTransactionByID(ctx, txID)
 	if err != nil {
+		log.Printf("transaction service: failed to fetch transaction id=%s: %v", txID, err)
 		return nil, appErr.ErrFetchingTransactions
 	}
 	resp := toTransactionResponse(*tx)
@@ -33,6 +35,7 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErr.ErrNoTransactionsFound
 		}
+		log.Printf("transaction service: failed to fetch recent transactions for user=%s: %v", mobileUserID, err)
 		return nil, appErr.ErrFetchingTransactions
 	}
 
@@ -46,7 +49,11 @@ func (s *Service) FetchRecentTransactions(ctx context.Context, mobileUserID stri
 }
 
 func (s *Service) AddTransaction(ctx context.Context, transaction *Transaction) error {
-	return s.repo.AddTransaction(ctx, transaction)
+	if err := s.repo.AddTransaction(ctx, transaction); err != nil {
+		log.Printf("transaction service: failed to add transaction id=%s: %v", transaction.ID, err)
+		return err
+	}
+	return nil
 }
 
 func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor string, limit int) (*PagedTransactionResponse, error) {
@@ -65,6 +72,7 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 
 	txs, err := s.repo.FetchTransactionPaged(ctx, userID, cursorTime, limit)
 	if err != nil {
+		log.Printf("transaction service: failed to fetch paged transactions for user=%s: %v", userID, err)
 		return nil, appErr.ErrFetchingTransactions
 	}
 
@@ -86,11 +94,19 @@ func (s *Service) FetchTransactionsPaged(ctx context.Context, userID, cursor str
 }
 
 func (s *Service) CreateTransaction(ctx context.Context, txn *Transaction) error {
-	return s.repo.AddTransaction(ctx, txn)
+	if err := s.repo.AddTransaction(ctx, txn); err != nil {
+		log.Printf("transaction service: failed to create transaction id=%s: %v", txn.ID, err)
+		return err
+	}
+	return nil
 }
 
 func (s *Service) UpdateTransactionStatus(ctx context.Context, txID string, balanceAfter int64, status TransactionStatus) error {
-	return s.repo.UpdateTransactionStatus(ctx, txID, balanceAfter, status)
+	if err := s.repo.UpdateTransactionStatus(ctx, txID, balanceAfter, status); err != nil {
+		log.Printf("transaction service: failed to update transaction id=%s to status=%s: %v", txID, status, err)
+		return err
+	}
+	return nil
 }
 
 // toTransactionResponse maps a stored transaction to its API shape, including

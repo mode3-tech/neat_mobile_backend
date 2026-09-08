@@ -80,44 +80,32 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 	}, nil
 }
 
-func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID string) (*ChallengeRequestResponse, error) {
-	sub, _, jti, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
+// CreateChallenge creates a nonce for biometric authentication. The device ID only
+// identifies the registered key; authentication completes when its signature is
+// verified by VerifyDeviceChallenge.
+func (s *Service) CreateChallenge(ctx context.Context, deviceID string) (*ChallengeRequestResponse, error) {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return nil, appErr.ErrMissingDeviceID
+	}
+	if s.deviceRepo == nil {
+		return nil, errors.New("device repository not configured")
+	}
+
+	deviceRecord, err := s.deviceRepo.FindDeviceByID(ctx, deviceID)
 	if err != nil {
-		log.Printf("%s", err)
-		return nil, appErr.ErrDeviceNotAllowed
-	}
-
-	tokenRow, err := s.repo.GetRefreshTokenWithJTI(ctx, jti)
-	if err != nil {
-		log.Printf("%s", err)
-		return nil, appErr.ErrDeviceNotAllowed
-	}
-
-	receivedHash := sha256.Sum256([]byte(refreshToken))
-	if tokenRow.TokenHash != hex.EncodeToString(receivedHash[:]) {
-		log.Printf("%s", err)
-		return nil, appErr.ErrDeviceNotAllowed
-	}
-
-	if tokenRow.RevokedAt != nil {
-		log.Printf("%s", err)
-		return nil, appErr.ErrDeviceNotAllowed
-	}
-
-	if time.Now().UTC().After(tokenRow.ExpiresAt) {
-		log.Printf("%s", err)
-		return nil, appErr.ErrDeviceNotAllowed
-	}
-
-	mobileUserID := sub
-
-	_, err = s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID)
-	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrInvalidSession
+		}
 		return nil, err
 	}
+	if !deviceRecord.IsActive || !deviceRecord.IsTrusted || strings.TrimSpace(deviceRecord.PublicKey) == "" {
+		return nil, appErr.ErrInvalidSession
+	}
 
+	const ttl = 60 * time.Second
 	deviceService := device.NewService(*s.deviceRepo)
-	challenge, err := deviceService.CreateChallenge(ctx, mobileUserID, deviceID, 60*time.Second)
+	challenge, err := deviceService.CreateChallenge(ctx, deviceRecord.UserID, deviceRecord.DeviceID, ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +114,7 @@ func (s *Service) CreateChallenge(ctx context.Context, refreshToken, deviceID st
 		Status:    LoginStatusChallengeRequired,
 		Message:   "challenge created successfully",
 		Challenge: challenge,
-		ExpiresAt: time.Now().UTC().Add(60 * time.Second),
+		ExpiresAt: time.Now().UTC().Add(ttl),
 	}, nil
 }
 
@@ -382,12 +370,12 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 
 	deviceRecord, err := s.deviceVerifier.VerifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
 	if err != nil {
-		return nil, errors.New("device verification failed")
+		return nil, err
 	}
 
 	validSig, err := verifyDeviceSignature(deviceRecord.PublicKey, challenge, signature)
 	if err != nil || !validSig {
-		return nil, errors.New("device verification failed")
+		return nil, appErr.ErrInvalidSession
 	}
 
 	marked, err := s.deviceRepo.MarkChallengeUsed(ctx, storedChallenge.ID, now)

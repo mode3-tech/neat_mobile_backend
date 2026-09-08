@@ -2160,7 +2160,7 @@ paths:
       tags:
         - Auth
       summary: Request a biometric challenge
-      description: Generates a new cryptographic challenge for the authenticated user's device to sign for biometric login. Authenticated via refresh token — no access token required.
+      description: Generates a short-lived cryptographic challenge for a registered device to sign with its biometric-protected private key. No access or refresh token is required.
       parameters:
         - in: header
           name: X-Device-ID
@@ -2168,18 +2168,7 @@ paths:
           schema:
             type: string
           description: Registered device identifier.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - refresh_token
-              properties:
-                refresh_token:
-                  type: string
-                  description: Valid refresh token from a prior session.
+
       responses:
         "200":
           description: Challenge generated successfully
@@ -2188,13 +2177,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChallengeRequestSuccessResponse"
         "400":
-          description: Missing or invalid request body
+          description: Missing device ID
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid, expired, or revoked refresh token, or device not authorized
+          description: Device is not registered, active, trusted, or configured with a public key
           content:
             application/json:
               schema:
@@ -6520,7 +6509,29 @@ components:
               example: eyJhbGciOiJIUzI1NiJ9...
     V2RegisterRequest:
       type: object
-      required: [first_name, last_name, dob, email, email_verification_id, gender, marital_status, mothers_maiden_name, address, house_no, phone_number, phone_verification_id, bvn, nin, password, confirm_password, transaction_pin, confirm_transaction_pin, is_biometrics_enabled, device]
+      required:
+        [
+          first_name,
+          last_name,
+          dob,
+          email,
+          email_verification_id,
+          gender,
+          marital_status,
+          mothers_maiden_name,
+          address,
+          house_no,
+          phone_number,
+          phone_verification_id,
+          bvn,
+          nin,
+          password,
+          confirm_password,
+          transaction_pin,
+          confirm_transaction_pin,
+          is_biometrics_enabled,
+          device,
+        ]
       properties:
         first_name: { type: string, example: Jane }
         last_name: { type: string, example: Doe }
@@ -6534,12 +6545,17 @@ components:
         house_no: { type: string, example: "12" }
         phone_number: { type: string, example: "08031234567" }
         phone_verification_id: { type: string, example: ver_phone_123 }
-        bvn: { type: string, minLength: 11, maxLength: 11, example: "22222222222" }
-        nin: { type: string, minLength: 11, maxLength: 11, example: "33333333333" }
+        bvn:
+          { type: string, minLength: 11, maxLength: 11, example: "22222222222" }
+        nin:
+          { type: string, minLength: 11, maxLength: 11, example: "33333333333" }
         password: { type: string, format: password, example: strong-password }
-        confirm_password: { type: string, format: password, example: strong-password }
-        transaction_pin: { type: string, minLength: 4, maxLength: 6, example: "1234" }
-        confirm_transaction_pin: { type: string, minLength: 4, maxLength: 6, example: "1234" }
+        confirm_password:
+          { type: string, format: password, example: strong-password }
+        transaction_pin:
+          { type: string, minLength: 4, maxLength: 6, example: "1234" }
+        confirm_transaction_pin:
+          { type: string, minLength: 4, maxLength: 6, example: "1234" }
         is_biometrics_enabled: { type: boolean, example: true }
         referral_code: { type: string, example: JANE10 }
         device:

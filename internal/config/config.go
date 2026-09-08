@@ -56,7 +56,11 @@ type Config struct {
 	PDFShiftAPIKey             string
 	AppName                    string
 	TransferLimitAmount        string
+	SMSLiveBaseURL             string
+	SMSLiveAPIKey              string
+	SMSLiveSenderID            string
 	ActivationCapKobo          int64
+	SMSUnitPriceKobo           int64
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -130,7 +134,11 @@ func Load() Config {
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 		AppName:                    getEnv("APPNAME", "NeatPay"),
 		TransferLimitAmount:        getEnv("TRF_LIMIT_AMOUNT", ""),
+		SMSLiveBaseURL:             getEnv("SMS_LIVE_BASE_URL", ""),
+		SMSLiveAPIKey:              getEnv("SMS_LIVE_API_KEY", ""),
+		SMSLiveSenderID:            getEnv("SMS_LIVE_SENDER_ID", ""),
 		ActivationCapKobo:          int64(getEnvInt("ACTIVATION_CAP_KOBO", 2_000_000)),
+		SMSUnitPriceKobo:           int64(getEnvInt("SMS_UNIT_PRICE_KOBO", 600)),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),

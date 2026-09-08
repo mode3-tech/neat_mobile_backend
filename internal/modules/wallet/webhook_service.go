@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
@@ -79,7 +80,7 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 				log.Printf("baas: failed to normalize phone number: %v", err)
 				return
 			}
-			if err := s.SmsSender.Send(context.Background(), normalized, msg); err != nil {
+			if err := smsbilling.Dispatch(context.Background(), s.SmsSender, user.ID, normalized, msg, "debit_alert"); err != nil {
 				log.Printf("baas: failed to send debit sms: phone=%s err=%v", normalized, err)
 			}
 		}()
@@ -87,7 +88,12 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 	}
 
 	log.Printf("baas: reversing failed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
-	return s.repo.ReverseDebitTransaction(ctx, tx.ID, tx.WalletID)
+	if err := s.repo.ReverseDebitTransaction(ctx, tx.ID, tx.WalletID); err != nil {
+		log.Printf("baas: failed to reverse transfer tx=%s ref=%s: %v", tx.ID, data.TransactionReference, err)
+		return err
+	}
+	log.Printf("baas: successfully reversed transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
+	return nil
 }
 
 // fundedBeneficiaryAccountNumber returns the account number of the wallet to
@@ -174,10 +180,14 @@ func (s *Service) ProcessAccountFunded(ctx context.Context, data *AccountFundedD
 			log.Printf("baas: failed to normalize phone number: %v", err)
 			return
 		}
-		if err := s.SmsSender.Send(context.Background(), normalized, msg); err != nil {
+		if err := smsbilling.Dispatch(context.Background(), s.SmsSender, wallet.MobileUserID, normalized, msg, "credit_alert"); err != nil {
 			log.Printf("baas: failed to send credit sms: phone=%s err=%v", normalized, err)
 		}
 	}()
+
+	if s.SMSBilling != nil {
+		go s.SMSBilling.CollectOutstanding(context.Background(), wallet.MobileUserID)
+	}
 
 	if s.Notifier != nil {
 		go func() {

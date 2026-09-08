@@ -65,3 +65,18 @@ type TendarError struct {
 func (e TendarError) Error() string {
 	return e.Message
 }
+
+type SMSLiveErrorResponse struct {
+	Code    int64          `json:"code"`
+	Message string         `json:"message"`
+	Errors  []SMSLiveError `json:"errors"`
+}
+
+type SMSLiveError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+func (e SMSLiveErrorResponse) Error() string {
+	return e.Message
+}

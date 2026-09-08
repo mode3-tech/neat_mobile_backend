@@ -29,6 +29,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/referrals"
 	registerversion "neat_mobile_app_backend/internal/modules/register_version"
 	"neat_mobile_app_backend/internal/modules/reporting"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
@@ -45,7 +46,7 @@ import (
 	ninTendar "neat_mobile_app_backend/providers/nin/tendar"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
-	termii "neat_mobile_app_backend/providers/sms"
+	smsProvider "neat_mobile_app_backend/providers/sms"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"net/http"
 	"strings"
@@ -116,8 +117,19 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
 
-	smsSender := termii.NewTermii(smsApiKey, smsSenderID)
+	smsSenderTermii := smsProvider.NewTermii(smsApiKey, smsSenderID)
+	smsSenderSMSLive := smsProvider.NewSMSLive(cfg.SMSLiveAPIKey, cfg.SMSLiveBaseURL, smsSenderID)
 	mailSender := mailprovider.NewZepto(cfg.ZeptoMailAPIKey, cfg.ZeptoMailURL, cfg.ZeptoMailSender)
+
+	// SMS billing wraps both raw providers so any call site with a
+	// mobile_user_id in scope can charge the customer for the SMS it just
+	// sent (see smsbilling.Dispatch) - callers with no user in scope yet
+	// (e.g. pre-account signup OTP) keep sending unbilled via the same
+	// wrapper's plain Send.
+	smsBillingRepo := smsbilling.NewRepository(db)
+	smsBillingService := smsbilling.NewService(smsBillingRepo, smsbilling.DefaultConfig(cfg.SMSUnitPriceKobo))
+	billableSMSSenderTermii := smsbilling.NewBillableSender(smsSenderTermii, smsBillingService)
+	billableSMSSenderSMSLive := smsbilling.NewBillableSender(smsSenderSMSLive, smsBillingService)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
@@ -168,7 +180,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	}
 
-	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, mailSender, cfg.Pepper, cfg.AppName, demoOTP)
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, billableSMSSenderTermii, mailSender, cfg.Pepper, cfg.AppName, demoOTP)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 
@@ -179,7 +191,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 
 	transactionHandler := transaction.NewHandler(transactionService)
@@ -248,6 +260,33 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	})
 
+	// Safety net for SMS charges the immediate post-send attempt and
+	// credit-triggered recovery (wallet.Service.ProcessAccountFunded) missed -
+	// process restarts, crashes, or wallets funded another way.
+	var smsBillingMu sync.Mutex
+	var smsBillingRunning bool
+	c.AddFunc("@every 1m", func() {
+		smsBillingMu.Lock()
+		if smsBillingRunning {
+			smsBillingMu.Unlock()
+			return
+		}
+		smsBillingRunning = true
+		smsBillingMu.Unlock()
+
+		defer func() {
+			smsBillingMu.Lock()
+			smsBillingRunning = false
+			smsBillingMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := smsBillingService.ReconcileOutstanding(ctx); err != nil {
+			log.Printf("sms billing reconciliation sweep: %v", err)
+		}
+	})
+
 	// Notification service is built before the wallet service so wallet events
 	// (e.g. inbound deposits) can push notifications to the customer.
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
@@ -271,10 +310,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	}, deviceService, smsSender, notificationService, cfg.AppName, smsService)
+	}, deviceService, billableSMSSenderSMSLive, notificationService, cfg.AppName, smsService, smsBillingService)
 
 	loanRepo := loanproduct.NewRepository(db, bvnNinCipher)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, billableSMSSenderSMSLive, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
@@ -294,11 +333,53 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
+
+		var cashbackSettlementMu sync.Mutex
+		var cashbackSettlementRunning bool
 		c.AddFunc("@every 1m", func() {
+			cashbackSettlementMu.Lock()
+			if cashbackSettlementRunning {
+				cashbackSettlementMu.Unlock()
+				return
+			}
+			cashbackSettlementRunning = true
+			cashbackSettlementMu.Unlock()
+
+			defer func() {
+				cashbackSettlementMu.Lock()
+				cashbackSettlementRunning = false
+				cashbackSettlementMu.Unlock()
+			}()
+
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			if err := vasService.RetryPendingCashbackSettlements(ctx, 50); err != nil {
 				log.Printf("cashback settlement sweep: %v", err)
+			}
+		})
+
+		var vasReconciliationMu sync.Mutex
+		var vasReconciliationRunning bool
+		vasReconciliationCfg := vas.DefaultReconciliationConfig()
+		c.AddFunc("@every 1m", func() {
+			vasReconciliationMu.Lock()
+			if vasReconciliationRunning {
+				vasReconciliationMu.Unlock()
+				return
+			}
+			vasReconciliationRunning = true
+			vasReconciliationMu.Unlock()
+
+			defer func() {
+				vasReconciliationMu.Lock()
+				vasReconciliationRunning = false
+				vasReconciliationMu.Unlock()
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if err := vasService.ReconcileStuckTransactions(ctx, vasReconciliationCfg); err != nil {
+				log.Printf("vas reconciliation sweep: %v", err)
 			}
 		})
 	}

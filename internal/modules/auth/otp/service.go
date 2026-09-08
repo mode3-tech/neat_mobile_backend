@@ -9,6 +9,7 @@ import (
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/models"
 	mailprovider "neat_mobile_app_backend/providers/email"
@@ -181,7 +182,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 			if skipSend {
 				break
 			}
-			if err := s.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
+			if err := smsbilling.Dispatch(ctx, s.sms, in.UserID, normalizeDestination, smsMsg, string(in.Purpose)); err != nil {
 				log.Printf("[otp.Issue] failed to send SMS: purpose=%s err=%v", in.Purpose, err)
 				return err
 			}

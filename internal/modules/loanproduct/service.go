@@ -8,6 +8,7 @@ import (
 	"math"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
@@ -249,7 +250,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	}
 
 	message := fmt.Sprintf("%s: We've received your loan application. Ref: %s. We'll notify you as soon as it's reviewed.", s.appName, eoi.ApplicationRef)
-	if err := s.smsSender.Send(ctx, normalizedPhone, message); err != nil {
+	if err := smsbilling.Dispatch(ctx, s.smsSender, mobileUserID, normalizedPhone, message, "loan_application"); err != nil {
 		log.Printf("loan service: failed to send sms - %s\n", err)
 	}
 
