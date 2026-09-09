@@ -223,6 +223,18 @@ func (r *Repository) FindTransactionByProviderRef(ctx context.Context, providerR
 	return &tx, nil
 }
 
+// FindTransactionByID is the fallback lookup for a webhook whose provider
+// reference doesn't match any row - the transaction was created but never
+// got a provider_reference stamped on it (see the internal_transaction_id
+// metadata fallback in ProcessCustomerBankTransfer).
+func (r *Repository) FindTransactionByID(ctx context.Context, id string) (*transaction.Transaction, error) {
+	var tx transaction.Transaction
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&tx).Error; err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}
+
 func (r *Repository) ReverseDebitTransaction(ctx context.Context, txID, walletID string) error {
 	return r.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
 		var tx transaction.Transaction

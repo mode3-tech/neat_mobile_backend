@@ -232,6 +232,15 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, appErr.ErrFundsTransfer
 	}
 
+	// Stamped onto the outgoing request so a webhook that arrives after an
+	// ambiguous (e.g. connection dropped) response can still be matched back
+	// to this row - provider_reference isn't known yet at this point, since
+	// it only gets set below once/if Providus's synchronous response lands.
+	if req.Metadata == nil {
+		req.Metadata = map[string]any{}
+	}
+	req.Metadata["internal_transaction_id"] = txID
+
 	resp, err := transferProvider.InitiateTransfer(ctx, TransferSource{
 		WalletCustomerID: wallet.WalletCustomerID,
 		AccountNumber:    wallet.AccountNumber,
