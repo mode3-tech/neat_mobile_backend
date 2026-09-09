@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/phone"
@@ -16,19 +17,51 @@ import (
 	"gorm.io/gorm"
 )
 
+// internalTransactionIDFrom recovers the id InitiateTransfer stamps onto the
+// outgoing transfer's metadata (see wallet/service.go), used to find a
+// transaction whose provider_reference was never stored because the
+// synchronous response never came back (see ProcessCustomerBankTransfer).
+// Checked both at the top level and inside additionalMetadata since it's
+// unconfirmed which one Providus actually echoes custom keys back through -
+// verify against a sandbox webhook payload before relying on this in
+// production.
+func internalTransactionIDFrom(metadata map[string]interface{}) string {
+	if id, ok := metadata["internal_transaction_id"].(string); ok && id != "" {
+		return id
+	}
+	if nested, ok := metadata["additionalMetadata"].(map[string]interface{}); ok {
+		if id, ok := nested["internal_transaction_id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
 func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *CustomerBankTransferData) error {
 	log.Println("baas: processing customer bank transfer")
 	tx, err := s.repo.FindTransactionByProviderRef(ctx, data.TransactionReference)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("baas: failed to look up tx by provider_ref=%s: %v", data.TransactionReference, err)
+			return err
+		}
+		internalTxID := internalTransactionIDFrom(data.Metadata)
+		if internalTxID == "" {
 			log.Printf("baas: no pending tx for provider_ref=%s", data.TransactionReference)
 			return nil
 		}
-		log.Printf("baas: failed to look up tx by provider_ref=%s: %v", data.TransactionReference, err)
-		return err
+		tx, err = s.repo.FindTransactionByID(ctx, internalTxID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				log.Printf("baas: no pending tx for provider_ref=%s internal_id=%s", data.TransactionReference, internalTxID)
+				return nil
+			}
+			log.Printf("baas: failed to look up tx by internal_id=%s: %v", internalTxID, err)
+			return err
+		}
 	}
 
-	if tx.Status != transaction.TransactionStatusPending {
+	if tx.Status != transaction.TransactionStatusPending && tx.Status != transaction.TransactionStatusFailed {
 		log.Printf("baas: tx %s already %s - skipping", tx.ID, tx.Status)
 		return nil
 	}
@@ -36,7 +69,22 @@ func (s *Service) ProcessCustomerBankTransfer(ctx context.Context, data *Custome
 	if data.Status == "success" {
 		log.Printf("baas: confirming transfer tx=%s ref=%s", tx.ID, data.TransactionReference)
 
-		if err := s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful); err != nil {
+		if tx.Status == transaction.TransactionStatusFailed {
+			// Ambiguous case: InitiateTransfer never got Providus's
+			// synchronous response, so CompleteDebitTransaction never ran
+			// and the local wallet balance was never debited. The webhook
+			// is the first confirmation that Providus actually processed
+			// it - apply the debit now, computed the same way
+			// service.go:268-270 does for the normal synchronous path.
+			amountKobo := int64(math.Round(data.Amount * 100))
+			chargesKobo := int64(math.Round(data.Charges * 100))
+			vatKobo := int64(math.Round(data.VAT * 100))
+			totalDebitKobo := amountKobo + chargesKobo + vatKobo
+			if err := s.repo.CompleteDebitTransaction(ctx, tx.ID, data.TransactionReference, transaction.TransactionStatusSuccessful, tx.WalletID, totalDebitKobo, chargesKobo, vatKobo); err != nil {
+				log.Printf("baas: failed to apply late debit for tx=%s: %v", tx.ID, err)
+				return err
+			}
+		} else if err := s.repo.UpdateTransactionStatus(ctx, tx.ID, transaction.TransactionStatusSuccessful); err != nil {
 			log.Printf("baas: failed to mark tx=%s successful: %v", tx.ID, err)
 			return err
 		}
