@@ -51,6 +51,7 @@ func (SMSCharge) TableName() string {
 type customerWallet struct {
 	InternalWalletID string `gorm:"column:internal_wallet_id;primaryKey"`
 	MobileUserID     string `gorm:"column:mobile_user_id"`
+	WalletCustomerID string `gorm:"column:wallet_customer_id"`
 	AvailableBalance int64  `gorm:"column:available_balance"`
 	BookedBalance    int64  `gorm:"column:booked_balance"`
 }

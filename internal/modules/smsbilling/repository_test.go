@@ -2,6 +2,7 @@ package smsbilling
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"testing"
 
@@ -10,7 +11,22 @@ import (
 	"gorm.io/gorm"
 )
 
+// fakeBAAS is a stub BAASDebitor. By default DebitCustomer succeeds; set err
+// to make it behave like a failed real-money settlement.
+type fakeBAAS struct {
+	err error
+}
+
+func (f *fakeBAAS) DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) error {
+	return f.err
+}
+
 func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
+	t.Helper()
+	return newMockRepositoryWithBAAS(t, &fakeBAAS{})
+}
+
+func newMockRepositoryWithBAAS(t *testing.T, baasClient BAASDebitor) (*Repository, sqlmock.Sqlmock, func()) {
 	t.Helper()
 
 	sqlDB, mock, err := sqlmock.New()
@@ -32,7 +48,7 @@ func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
 		_ = sqlDB.Close()
 	}
 
-	return NewRepository(gormDB), mock, cleanup
+	return NewRepository(gormDB, baasClient), mock, cleanup
 }
 
 func insertChargePattern() string {
@@ -65,8 +81,8 @@ func chargeRows(id, mobileUserID, status string, amountKobo int64, attempts int)
 }
 
 func walletRows(internalWalletID, mobileUserID string, availableBalance, bookedBalance int64) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"internal_wallet_id", "mobile_user_id", "available_balance", "booked_balance"}).
-		AddRow(internalWalletID, mobileUserID, availableBalance, bookedBalance)
+	return sqlmock.NewRows([]string{"internal_wallet_id", "mobile_user_id", "wallet_customer_id", "available_balance", "booked_balance"}).
+		AddRow(internalWalletID, mobileUserID, "providus-cust-1", availableBalance, bookedBalance)
 }
 
 func TestCreateCharge_SnapshotsPriceAndComputesAmount(t *testing.T) {
@@ -118,6 +134,32 @@ func TestAttemptCollect_SuccessfulDebit(t *testing.T) {
 	}
 	if result != CollectResultCollected {
 		t.Fatalf("expected collected, got %s", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestAttemptCollect_ProvidusDebitFails_LeavesChargePending(t *testing.T) {
+	repo, mock, cleanup := newMockRepositoryWithBAAS(t, &fakeBAAS{err: errors.New("providus: request failed")})
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(lockChargePattern()).
+		WillReturnRows(chargeRows("charge-1", "user-1", string(SMSChargeStatusPending), 400, 0))
+	mock.ExpectQuery(lockWalletPattern()).
+		WillReturnRows(walletRows("wallet-1", "user-1", 10_000, 10_000))
+	// Real debit fails before the ledger insert/wallet update - only the
+	// charge's attempt counter moves, same as local insufficient funds.
+	mock.ExpectExec(updateChargePattern()).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	result, err := repo.AttemptCollect(context.Background(), "charge-1", 100)
+	if err != nil {
+		t.Fatalf("AttemptCollect: %v", err)
+	}
+	if result != CollectResultInsufficient {
+		t.Fatalf("expected insufficient (providus debit failed), got %s", result)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)

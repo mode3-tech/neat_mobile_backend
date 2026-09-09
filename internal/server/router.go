@@ -121,12 +121,17 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsSenderSMSLive := smsProvider.NewSMSLive(cfg.SMSLiveAPIKey, cfg.SMSLiveBaseURL, smsSenderID)
 	mailSender := mailprovider.NewZepto(cfg.ZeptoMailAPIKey, cfg.ZeptoMailURL, cfg.ZeptoMailSender)
 
+	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+	providusAdapter := providusadapter.New(providusWalletService)
+
 	// SMS billing wraps both raw providers so any call site with a
 	// mobile_user_id in scope can charge the customer for the SMS it just
 	// sent (see smsbilling.Dispatch) - callers with no user in scope yet
 	// (e.g. pre-account signup OTP) keep sending unbilled via the same
-	// wrapper's plain Send.
-	smsBillingRepo := smsbilling.NewRepository(db)
+	// wrapper's plain Send. Collected charges are settled with a real
+	// Providus debit (see Repository.AttemptCollect) so the merchant's
+	// settlement balance actually receives the SMS fee.
+	smsBillingRepo := smsbilling.NewRepository(db, providusAdapter)
 	smsBillingService := smsbilling.NewService(smsBillingRepo, smsbilling.DefaultConfig(cfg.SMSUnitPriceKobo))
 	billableSMSSenderTermii := smsbilling.NewBillableSender(smsSenderTermii, smsBillingService)
 	billableSMSSenderSMSLive := smsbilling.NewBillableSender(smsSenderSMSLive, smsBillingService)
@@ -156,7 +161,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	optimusProductID := cfg.OptimusProductID
-	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
 	var walletRegistrationService auth.WalletService
 	if cfg.WalletProvider == "optimus" {
@@ -303,7 +307,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	// optimusRegistrationClient rather than constructing a second Optimus
 	// client, since it's the same credentials/base URLs.
 	transferProviders := map[string]wallet.TransferProviderService{
-		"providus": providusadapter.New(providusWalletService),
+		"providus": providusAdapter,
 		"optimus":  optimusadapter.New(optimusRegistrationClient),
 	}
 	walletService := wallet.NewService(walletRepo, transferProviders, walletPinVerifier, wallet.SettlementAccount{
