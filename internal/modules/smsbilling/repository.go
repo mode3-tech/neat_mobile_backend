@@ -3,6 +3,7 @@ package smsbilling
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,12 +11,27 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type Repository struct {
-	db *gorm.DB
+// BAASDebitor is the subset of the Providus BaaS client needed to settle a
+// collected SMS charge as a real wallet debit. Providus customer wallets are
+// sub-accounts of the platform's own merchant/aggregator account, so this
+// debit is what actually moves the SMS fee into the merchant's settlement
+// balance - there is no separate "merchant wallet" customer id to credit.
+//
+// Declared with only primitive/stdlib types (not providers/baas's response
+// type) so this package doesn't import providers/baas - that would form the
+// cycle smsbilling -> baas -> auth -> wallet -> smsbilling. See
+// internal/adapters/providus for the concrete adapter wired in by router.go.
+type BAASDebitor interface {
+	DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) error
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+type Repository struct {
+	db   *gorm.DB
+	baas BAASDebitor
+}
+
+func NewRepository(db *gorm.DB, baas BAASDebitor) *Repository {
+	return &Repository{db: db, baas: baas}
 }
 
 func (r *Repository) CreateCharge(ctx context.Context, mobileUserID, phone, purpose string, units int, unitPriceKobo int64) (*SMSCharge, error) {
@@ -46,6 +62,24 @@ const (
 	// by a concurrent attempt) by the time this call got its lock.
 	CollectResultSkipped CollectResult = "skipped"
 )
+
+// markRetryOrAbandon bumps a charge's attempt counter and either leaves it
+// pending for a later retry or, once maxAttempts is reached, marks it
+// abandoned. Shared by the local-insufficient-funds and real-debit-failed
+// branches of AttemptCollect below - both are "try again later" outcomes.
+func markRetryOrAbandon(tx *gorm.DB, charge *SMSCharge, now time.Time, maxAttempts int) (CollectResult, error) {
+	attempts := charge.Attempts + 1
+	updates := map[string]any{
+		"attempts":        attempts,
+		"last_attempt_at": now,
+	}
+	result := CollectResultInsufficient
+	if attempts >= maxAttempts {
+		updates["status"] = SMSChargeStatusAbandoned
+		result = CollectResultAbandoned
+	}
+	return result, tx.Model(&SMSCharge{}).Where("id = ?", charge.ID).Updates(updates).Error
+}
 
 // AttemptCollect makes one atomic attempt to collect a pending charge: it
 // locks the charge row first (serializing concurrent attempts arriving from
@@ -79,18 +113,27 @@ func (r *Repository) AttemptCollect(ctx context.Context, chargeID string, maxAtt
 		}
 
 		if werr != nil || wallet.AvailableBalance < charge.AmountKobo {
-			attempts := charge.Attempts + 1
-			updates := map[string]any{
-				"attempts":        attempts,
-				"last_attempt_at": now,
-			}
-			if attempts >= maxAttempts {
-				updates["status"] = SMSChargeStatusAbandoned
-				result = CollectResultAbandoned
-			} else {
-				result = CollectResultInsufficient
-			}
-			return tx.Model(&SMSCharge{}).Where("id = ?", charge.ID).Updates(updates).Error
+			var rerr error
+			result, rerr = markRetryOrAbandon(tx, &charge, now, maxAttempts)
+			return rerr
+		}
+
+		// Settle with a real Providus debit before touching the local
+		// ledger, so a charge is only ever marked successful once the money
+		// has actually moved out of the customer's real wallet (and into
+		// the merchant's settlement balance). A failed real debit is
+		// retried exactly like local insufficient funds - the existing
+		// sweep and credit-triggered recovery paths pick it back up.
+		amountNaira := charge.AmountKobo / 100
+		metadata := map[string]any{
+			"charge_id": charge.ID,
+			"purpose":   charge.Purpose,
+		}
+		if derr := r.baas.DebitCustomer(ctx, amountNaira, wallet.WalletCustomerID, charge.Reference, metadata); derr != nil {
+			log.Printf("smsbilling: providus debit failed: charge=%s customer=%s err=%v", charge.ID, wallet.WalletCustomerID, derr)
+			var rerr error
+			result, rerr = markRetryOrAbandon(tx, &charge, now, maxAttempts)
+			return rerr
 		}
 
 		txnID := uuid.NewString()

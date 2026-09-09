@@ -60,6 +60,15 @@ func (a *Adapter) GetCustomerDetails(ctx context.Context, customerID string) (*w
 	}, nil
 }
 
+// DebitCustomer satisfies smsbilling.BAASDebitor. Not defined in terms of a
+// smsbilling DTO (smsbilling declares the interface with only primitive/error
+// return types precisely so it doesn't need to import this package or baas -
+// see smsbilling.BAASDebitor's doc comment).
+func (a *Adapter) DebitCustomer(ctx context.Context, amount int64, customerID, referenceID string, metadata interface{}) error {
+	_, err := a.p.DebitCustomer(ctx, amount, customerID, referenceID, metadata)
+	return err
+}
+
 func (a *Adapter) InitiateTransfer(ctx context.Context, source wallet.TransferSource, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
 	var req *baas.TransferRequest
 	if transferInfo != nil {
