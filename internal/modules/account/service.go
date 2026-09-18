@@ -15,6 +15,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,6 +104,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		BVN:                    accountInfo.BVN,
 		DOB:                    accountInfo.DOB,
 		ProfilePicture:         accountInfo.ProfilePicture,
+		ReferralCode:           accountInfo.ReferralCode,
 		Address:                accountInfo.Address,
 		PhoneNumber:            accountInfo.Phone,
 		AccountNumber:          customerDetails.Customer.AccountNumber,
@@ -110,6 +112,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		LoanBalance:            loanBalance,
 		ActiveLoans:            activeLoans,
 		IsNotificationsEnabled: accountInfo.IsNotificationsEnabled,
+		CashbackBalance:        float64(accountInfo.CashbackBalance) / 100,
 	}, nil
 }
 
@@ -147,6 +150,16 @@ func (s *Service) RequestAccountStatement(ctx context.Context, mobileUserID stri
 	}
 
 	filePath := fmt.Sprintf("statements/%s_%s_%s_to_%s.%s", auth.TitleCase(user.FirstName), auth.TitleCase(user.LastName), req.DateFrom.Format("20060102"), req.DateTo.Format("20060102"), req.Format)
+
+	existing, err := s.Repo.FindActiveStatementJob(ctx, mobileUserID, req.DateFrom, req.DateTo, req.Format)
+	if err != nil {
+		log.Printf("failed to check for an existing account statement job: %v", err)
+		return "", appErr.ErrGeneratingAccountStatement
+	}
+	if existing != nil {
+		log.Printf("account statement job already in flight, reusing it: job_id=%s user=%s", existing.ID, mobileUserID)
+		return existing.ID, nil
+	}
 
 	job, err := s.Repo.CreateAccountReportJob(ctx, &AccountReportJob{
 		ID:           uuid.NewString(),
@@ -200,6 +213,7 @@ func (s *Service) ProcessStatementJob(ctx context.Context, job AccountReportJob)
 		job.MobileUserID,
 		"Your statement is ready",
 		"transaction",
+		"",
 		fmt.Sprintf("Your account statement for the period %s to %s is ready for download.",
 			job.DateFrom.Format("2006-01-02"),
 			job.DateTo.Format("2006-01-02")),
@@ -346,10 +360,10 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID string, profil
 // }
 
 func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
-	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, req.DateFrom, req.DateTo)
 	if err != nil {
 		log.Printf("failed to retrieve transactions for XLSX generation: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	account, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
@@ -476,21 +490,46 @@ func (s *Service) generateXLSX(ctx context.Context, key, walletID, mobileUserID 
 	return nil
 }
 
+// formatCommaAmount renders a kobo amount as a comma-grouped naira string
+// (e.g. 1250075 kobo -> "12,500.75"), matching how real bank statements
+// display figures instead of a bare "%.2f".
+func formatCommaAmount(koboAmount int64) string {
+	sign := ""
+	if koboAmount < 0 {
+		sign = "-"
+		koboAmount = -koboAmount
+	}
+	whole := koboAmount / 100
+	cents := koboAmount % 100
+
+	wholeStr := strconv.FormatInt(whole, 10)
+	var grouped strings.Builder
+	n := len(wholeStr)
+	for i, digit := range wholeStr {
+		if i > 0 && (n-i)%3 == 0 {
+			grouped.WriteByte(',')
+		}
+		grouped.WriteRune(digit)
+	}
+
+	return fmt.Sprintf("%s%s.%02d", sign, grouped.String(), cents)
+}
+
 func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID string, req AccountStatementRequest) error {
 	if s.PDFShiftAPIKey == "" {
 		return errors.New("PDF generation is not configured")
 	}
 
-	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, walletID, req.DateFrom, req.DateTo)
+	transactions, err := s.Repo.GetStatementTransactions(ctx, mobileUserID, req.DateFrom, req.DateTo)
 	if err != nil {
 		log.Printf("failed to retrieve transactions for PDF generation: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	account, err := s.Repo.GetAccountSummary(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("failed to retrieve account info for PDF generation: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	// compute summary figures
@@ -503,9 +542,7 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 		}
 	}
 
-	formatAmount := func(kobo int64) string {
-		return fmt.Sprintf("%.2f", float64(kobo)/100)
-	}
+	formatAmount := formatCommaAmount
 
 	var openingBalance, closingBalance int64
 	if len(transactions) > 0 {
@@ -556,13 +593,13 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 	tmpl, err := template.ParseFiles("templates/account_statement.html")
 	if err != nil {
 		log.Printf("failed to parse statement template: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	var htmlBuf bytes.Buffer
 	if err := tmpl.Execute(&htmlBuf, data); err != nil {
 		log.Printf("failed to render statement template: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	// call PDFShift API
@@ -574,13 +611,13 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 	})
 	if err != nil {
 		log.Printf("failed to build PDF request: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.pdfshift.io/v3/convert/pdf", bytes.NewReader(payload))
 	if err != nil {
 		log.Printf("failed to create PDF request: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.SetBasicAuth("api", s.PDFShiftAPIKey)
@@ -588,27 +625,27 @@ func (s *Service) generatePDF(ctx context.Context, key, walletID, mobileUserID s
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		log.Printf("failed to make PDF API request: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("PDF API returned status %d: %s", resp.StatusCode, string(body))
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	pdfBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("failed to read PDF response: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	log.Printf("generatePDF: size=%d bytes for key=%s", len(pdfBytes), key)
 
 	if err := s.B2.UploadDocument(ctx, key, bytes.NewReader(pdfBytes), "application/pdf"); err != nil {
 		log.Printf("failed to upload account statement PDF to storage: %v", err)
-		return appErr.ErrGeneratingAccountStatement
+		return err
 	}
 
 	return nil

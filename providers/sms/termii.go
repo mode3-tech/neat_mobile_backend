@@ -1,4 +1,4 @@
-package termii
+package sms
 
 import (
 	"bytes"
@@ -13,20 +13,20 @@ import (
 	"time"
 )
 
-type SMS struct {
+type Termii struct {
 	apiKey     string
 	senderID   string
 	httpClient *http.Client
 }
 
-func NewSMSService(apiKey, senderID string) *SMS {
-	return &SMS{apiKey: apiKey, senderID: senderID, httpClient: &http.Client{
+func NewTermii(apiKey, senderID string) *Termii {
+	return &Termii{apiKey: apiKey, senderID: senderID, httpClient: &http.Client{
 		Timeout: 10 * time.Second,
 	}}
 }
 
-func (s *SMS) Send(ctx context.Context, destination, message string) error {
-	if strings.TrimSpace(s.apiKey) == "" || strings.TrimSpace(s.senderID) == "" {
+func (t *Termii) Send(ctx context.Context, destination, message string) error {
+	if strings.TrimSpace(t.apiKey) == "" || strings.TrimSpace(t.senderID) == "" {
 		log.Println("sms service not configured")
 		return &appErr.TermiiError{Code: 500, Message: "sms service not configured"}
 	}
@@ -34,8 +34,8 @@ func (s *SMS) Send(ctx context.Context, destination, message string) error {
 	url := "https://v3.api.termii.com/api/sms/send"
 
 	payload := map[string]string{
-		"api_key": strings.TrimSpace(s.apiKey),
-		"from":    s.senderID,
+		"api_key": strings.TrimSpace(t.apiKey),
+		"from":    t.senderID,
 		"to":      destination,
 		"sms":     message,
 		"type":    "plain",
@@ -57,7 +57,7 @@ func (s *SMS) Send(ctx context.Context, destination, message string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := t.httpClient.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			log.Println("SMS provider request timed out")

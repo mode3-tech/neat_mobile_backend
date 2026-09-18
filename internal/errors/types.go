@@ -1,12 +1,12 @@
 package errors
 
-type XpressWalletProviderError struct {
+type XpressPayProviderError struct {
 	Status  int
 	Code    string
 	Message string
 }
 
-func (e XpressWalletProviderError) Error() string {
+func (e XpressPayProviderError) Error() string {
 	return e.Message
 }
 
@@ -31,5 +31,52 @@ type ZeptoError struct {
 }
 
 func (e ZeptoError) Error() string {
+	return e.Message
+}
+
+type XpressWalletProviderError struct {
+	Status  bool
+	Message string
+}
+
+func (e XpressWalletProviderError) Error() string {
+	return e.Message
+}
+
+type PremblyError struct {
+	Status    int    // HTTP status from Prembly (or synthetic for client/network failures)
+	Code      string // Prembly response code or a local classification such as TIMEOUT
+	Message   string // Safe, human-readable error message
+	RequestID string // Prembly request identifier, when supplied
+	Retryable bool   // Whether a later request may succeed without changing input
+}
+
+func (e PremblyError) Error() string {
+	return e.Message
+}
+
+type TendarError struct {
+	Status    int
+	Code      string
+	Message   string
+	Retryable bool
+}
+
+func (e TendarError) Error() string {
+	return e.Message
+}
+
+type SMSLiveErrorResponse struct {
+	Code    int64          `json:"code"`
+	Message string         `json:"message"`
+	Errors  []SMSLiveError `json:"errors"`
+}
+
+type SMSLiveError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+func (e SMSLiveErrorResponse) Error() string {
 	return e.Message
 }

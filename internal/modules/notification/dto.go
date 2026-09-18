@@ -9,16 +9,18 @@ type RegisterTokenRequest struct {
 	ExpoPushToken string `json:"expo_push_token" binding:"required"`
 	DeviceID      string `json:"device_id" binding:"required"`
 	Platform      string `json:"platform" binding:"required,oneof=ios android"`
+	AppEnv        string `json:"app_env,omitempty"`
 }
 
 type SendNotificationRequest struct {
-	UserID    string         `json:"user_id" binding:"required"`
-	Title     string         `json:"title" binding:"required"`
-	Body      string         `json:"body" binding:"required"`
-	Type      string         `json:"type" binding:"required,oneof=loan transaction security promo"`
-	Data      map[string]any `json:"data,omitempty"`
-	Sound     string         `json:"sound,omitempty"`
-	ChannelID string         `json:"channel_id,omitempty"`
+	UserID        string         `json:"user_id" binding:"required"`
+	Title         string         `json:"title" binding:"required"`
+	Body          string         `json:"body" binding:"required"`
+	Type          string         `json:"type" binding:"required,oneof=loan transaction security promo"`
+	TransactionID string         `json:"transaction_id,omitempty"`
+	Data          map[string]any `json:"data,omitempty"`
+	Sound         string         `json:"sound,omitempty"`
+	ChannelID     string         `json:"channel_id,omitempty"`
 }
 
 type ExpoPushMessage struct {

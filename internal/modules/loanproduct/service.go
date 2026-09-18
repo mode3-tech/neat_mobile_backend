@@ -8,6 +8,7 @@ import (
 	"math"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
 	"strconv"
@@ -140,6 +141,7 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("loan product not found: %v", req.LoanProductType)
 			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, appErr.ErrApplyingForLoan
@@ -147,13 +149,14 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 
 	summary, parsedBV, parsedAmount, businessAgeYears, err := s.buildLoanSummary(req, loanProduct, now)
 	if err != nil {
-		return nil, appErr.ErrApplyingForLoan
+		return nil, err
 	}
 
 	loanRule, err := s.repo.GetRuleByProductID(ctx, loanProduct.ID)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("loan rule not found: %v", loanProduct.ID)
 			return nil, appErr.ErrInvalidLoanProduct
 		}
 		return nil, appErr.ErrApplyingForLoan
@@ -246,8 +249,8 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 		return nil, appErr.ErrApplyingForLoan
 	}
 
-	message := fmt.Sprintf("%s:Your loan application has been received. Reference: %s", s.appName, eoi.ApplicationRef)
-	if err := s.smsSender.Send(ctx, normalizedPhone, message); err != nil {
+	message := fmt.Sprintf("%s: We've received your loan application. Ref: %s. We'll notify you as soon as it's reviewed.", s.appName, eoi.ApplicationRef)
+	if err := smsbilling.Dispatch(ctx, s.smsSender, mobileUserID, normalizedPhone, message, "loan_application"); err != nil {
 		log.Printf("loan service: failed to send sms - %s\n", err)
 	}
 
@@ -271,7 +274,7 @@ func (s *Service) buildLoanSummary(req LoanRequest, product *LoanProduct, now ti
 
 	startDate, err := timeutil.ParseDOB(req.BusinessStartDate)
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return nil, 0, 0, 0, appErr.ErrInvalidDOB
 	}
 
 	businessAgeYears := timeutil.AgeFromDOB(startDate, now)
@@ -481,6 +484,14 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, 
 
 	log.Printf("manual repayment CBA call ok user=%s loan_id=%s", mobileUserID, req.LoanID)
 	return nil
+}
+
+func (s *Service) HasActiveLoans(ctx context.Context, coreCustomerID string) (bool, error) {
+	loans, err := s.repo.ListActiveLoansByCustomerID(ctx, coreCustomerID)
+	if err != nil {
+		return false, err
+	}
+	return len(loans) > 0, nil
 }
 
 func newTooManyTransactionPinAttemptsError(lockedUntil, now time.Time) error {

@@ -2,6 +2,7 @@ package loanproduct
 
 import (
 	"context"
+	"neat_mobile_app_backend/internal/crypto"
 	"regexp"
 	"testing"
 	"time"
@@ -9,20 +10,33 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
+func testCipher(t *testing.T) *crypto.FieldCipher {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	c, err := crypto.NewFieldCipher(key)
+	if err != nil {
+		t.Fatalf("NewFieldCipher: %v", err)
+	}
+	return c
+}
+
 func linkWalletUserCoreCustomerIDByBVNQueryPattern() string {
-	return regexp.QuoteMeta(`UPDATE "wallet_users" SET "core_customer_id"=$1 WHERE bvn = $2`)
+	return regexp.QuoteMeta(`UPDATE "wallet_users" SET "core_customer_id"=$1 WHERE bvn_hash = $2`)
 }
 
 func getLoanApplicationBVNRecordForCBAQueryPattern() string {
-	return `(?s)SELECT .*wallet_bvn_records\.bvn.* FROM "wallet_loan_applications" INNER JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id INNER JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE wallet_loan_applications\.mobile_user_id = \$1 ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$2`
+	return `(?s)SELECT .*wallet_bvn_records\.bvn.* FROM "wallet_loan_applications" INNER JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id INNER JOIN wallet_bvn_records ON wallet_bvn_records\.bvn_hash = wallet_users\.bvn_hash WHERE wallet_loan_applications\.mobile_user_id = \$1 ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$2`
 }
 
 func getMostRecentEmbryoLoanApplicationForCBAQueryPattern() string {
-	return `(?s)SELECT .*wallet_loan_applications\.application_ref.*wallet_users\.customer_status AS user_customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE wallet_loan_applications\.mobile_user_id = \$1 AND \(\(?wallet_loan_applications\.loan_status = \$2 OR wallet_users\.customer_status = \$3\)?\) ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$4`
+	return `(?s)SELECT .*wallet_loan_applications\.application_ref.*wallet_users\.customer_status AS user_customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn_hash = wallet_users\.bvn_hash WHERE wallet_loan_applications\.mobile_user_id = \$1 AND \(\(?wallet_loan_applications\.loan_status = \$2 OR wallet_users\.customer_status = \$3\)?\) ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$4`
 }
 
 func listEmbryoLoanApplicationSummariesForCBAQueryPattern() string {
-	return `(?s)SELECT .*wallet_bvn_records\.first_name.*wallet_users\.customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn = wallet_users\.bvn WHERE \(\(?wallet_loan_applications\.loan_status = \$1 OR wallet_users\.customer_status = \$2\)?\) ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$3 OFFSET \$4`
+	return `(?s)SELECT .*wallet_bvn_records\.first_name.*wallet_users\.customer_status.* FROM "wallet_loan_applications" LEFT JOIN wallet_users ON wallet_users\.id = wallet_loan_applications\.mobile_user_id LEFT JOIN wallet_bvn_records ON wallet_bvn_records\.bvn_hash = wallet_users\.bvn_hash WHERE \(\(?wallet_loan_applications\.loan_status = \$1 OR wallet_users\.customer_status = \$2\)?\) ORDER BY wallet_loan_applications\.created_at DESC LIMIT \$3 OFFSET \$4`
 }
 
 func countEmbryoLoanApplicationSummariesForCBAQueryPattern() string {
@@ -69,11 +83,11 @@ func TestInternalRepository_LinkWalletUserCoreCustomerIDByBVN_Success(t *testing
 	repo, mock, cleanup := newMockRepository(t)
 	defer cleanup()
 
-	internalRepo := NewInternalRepository(repo.db)
+	internalRepo := NewInternalRepository(repo.db, testCipher(t))
 
 	mock.ExpectBegin()
 	mock.ExpectExec(linkWalletUserCoreCustomerIDByBVNQueryPattern()).
-		WithArgs("2048", "12345678901").
+		WithArgs("2048", crypto.Hash("12345678901")).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -137,7 +151,7 @@ func TestInternalRepository_GetLoanApplicationBVNRecordForCBA_Success(t *testing
 		WithArgs("user-1", 1).
 		WillReturnRows(rows)
 
-	internalRepo := NewInternalRepository(repo.db)
+	internalRepo := NewInternalRepository(repo.db, testCipher(t))
 
 	record, err := internalRepo.GetLoanApplicationBVNRecordForCBA(context.Background(), "user-1")
 	if err != nil {

@@ -6,35 +6,47 @@ import (
 	"fmt"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
+	optimusadapter "neat_mobile_app_backend/internal/adapters/optimus"
+	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/database/tx"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/modules/account"
+	"neat_mobile_app_backend/internal/modules/accountclosure"
+	appversion "neat_mobile_app_backend/internal/modules/app_version"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
+	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/card"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/loanproduct"
 	"neat_mobile_app_backend/internal/modules/neatsave"
 	"neat_mobile_app_backend/internal/modules/notification"
+	"neat_mobile_app_backend/internal/modules/referrals"
+	registerversion "neat_mobile_app_backend/internal/modules/register_version"
 	"neat_mobile_app_backend/internal/modules/reporting"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
+	phoneutil "neat_mobile_app_backend/internal/phone"
+	"neat_mobile_app_backend/internal/sms"
 	"neat_mobile_app_backend/internal/user"
 	"neat_mobile_app_backend/providers/baas"
-	"neat_mobile_app_backend/providers/bvn/prembly"
+	bvnPrembly "neat_mobile_app_backend/providers/bvn/prembly"
 	"neat_mobile_app_backend/providers/bvn/tendar"
 	cardprovider "neat_mobile_app_backend/providers/card"
 	mailprovider "neat_mobile_app_backend/providers/email"
 	"neat_mobile_app_backend/providers/jwt"
-	"neat_mobile_app_backend/providers/nin"
+	ninPrembly "neat_mobile_app_backend/providers/nin/prembly"
+	ninTendar "neat_mobile_app_backend/providers/nin/tendar"
 	"neat_mobile_app_backend/providers/push"
 	s3bucket "neat_mobile_app_backend/providers/s3_bucket"
-	termii "neat_mobile_app_backend/providers/sms"
+	smsProvider "neat_mobile_app_backend/providers/sms"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"net/http"
 	"strings"
@@ -69,6 +81,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	api := r.Group("/api")
 	apiV1 := api.Group("/v1")
+	apiV2 := api.Group("/v2")
+
 	internalV1 := r.Group("/internal/v1")
 
 	r.HEAD("/health", func(c *gin.Context) {
@@ -81,6 +95,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	if cfg.JWTSecret == "" {
 		return nil, nil, errors.New("jwt secret can't be empty")
+	}
+
+	bvnNinCipher, err := crypto.NewFieldCipherFromBase64(cfg.BVNNINEncryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("bvn/nin encryption key: %w", err)
 	}
 
 	s3bucketConfig := s3bucket.BackblazeConfig{
@@ -98,12 +117,28 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	smsApiKey := cfg.TermiiApiKey
 	smsSenderID := cfg.TermiiSenderID
 
-	smsSender := termii.NewSMSService(smsApiKey, smsSenderID)
+	smsSenderTermii := smsProvider.NewTermii(smsApiKey, smsSenderID)
+	smsSenderSMSLive := smsProvider.NewSMSLive(cfg.SMSLiveAPIKey, cfg.SMSLiveBaseURL, smsSenderID)
 	mailSender := mailprovider.NewZepto(cfg.ZeptoMailAPIKey, cfg.ZeptoMailURL, cfg.ZeptoMailSender)
+
+	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
+	providusAdapter := providusadapter.New(providusWalletService)
+
+	// SMS billing wraps both raw providers so any call site with a
+	// mobile_user_id in scope can charge the customer for the SMS it just
+	// sent (see smsbilling.Dispatch) - callers with no user in scope yet
+	// (e.g. pre-account signup OTP) keep sending unbilled via the same
+	// wrapper's plain Send. Collected charges are settled with a real
+	// Providus debit (see Repository.AttemptCollect) so the merchant's
+	// settlement balance actually receives the SMS fee.
+	smsBillingRepo := smsbilling.NewRepository(db, providusAdapter)
+	smsBillingService := smsbilling.NewService(smsBillingRepo, smsbilling.DefaultConfig(cfg.SMSUnitPriceKobo))
+	billableSMSSenderTermii := smsbilling.NewBillableSender(smsSenderTermii, smsBillingService)
+	billableSMSSenderSMSLive := smsbilling.NewBillableSender(smsSenderSMSLive, smsBillingService)
 
 	tokenSigner := jwt.NewSigner(cfg.JWTSecret)
 	bvnProvider := tendar.NewTendar(cfg.TendarAPIKey)
-	premblyProvider := prembly.NewPrembly(cfg.PremblyAPIKey)
+	premblyProvider := bvnPrembly.NewPrembly(cfg.PremblyAPIKey)
 
 	var cbaClient *cba.ProviderClient
 	if cfg.CBAInternalURL != "" && cfg.CBAInternalKey != "" {
@@ -114,9 +149,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	deviceRepo := device.NewRepository(db)
 	deviceService := device.NewService(*deviceRepo)
 
-	authRepo := auth.NewRespository(db)
-	verificationRepo := verification.NewVerification(db)
-	ninProvider := nin.NewNIN(cfg.PremblyAPIKey)
+	authRepo := auth.NewRespository(db, bvnNinCipher)
+	verificationRepo := verification.NewVerification(db, bvnNinCipher)
+	ninPremblyProvider := ninPrembly.NewPrembly(cfg.PremblyAPIKey)
+	ninTendarProvider := ninTendar.NewTendar(cfg.TendarAPIKey)
 	loginRateLimiter := middleware.NewLoginRateLimiter(middleware.LoginRateLimiterConfig{
 		IPMaxAttempts:    cfg.LoginRateLimitIPMaxAttempts,
 		EmailMaxAttempts: cfg.LoginRateLimitEmailMaxAttempts,
@@ -125,7 +161,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	optimusProductID := cfg.OptimusProductID
-	providusWalletService := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 
 	var walletRegistrationService auth.WalletService
 	if cfg.WalletProvider == "optimus" {
@@ -137,17 +172,43 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	otpRepo := otp.NewRepository(db)
-	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, smsSender, mailSender, cfg.Pepper, cfg.AppName)
+
+	demoOTP := otp.DemoConfig{}
+	if cfg.DemoLoginEnabled {
+		normalizedDemoPhone, err := phoneutil.NormalizeNigerianNumber(cfg.DemoLoginPhone)
+		if err != nil || strings.TrimSpace(cfg.DemoLoginOTP) == "" {
+			log.Printf("demo login: disabled (invalid DEMO_LOGIN_PHONE or empty DEMO_LOGIN_OTP): err=%v", err)
+		} else {
+			demoOTP = otp.DemoConfig{Enabled: true, Destination: normalizedDemoPhone, Code: cfg.DemoLoginOTP}
+			log.Printf("demo login: ENABLED for a single whitelisted account")
+		}
+	}
+
+	otpManager := otp.NewOTPManager(otpRepo, verificationRepo, transactor, billableSMSSenderTermii, mailSender, cfg.Pepper, cfg.AppName, demoOTP)
 	otpHandler := otp.NewOTPHandler(otpManager)
 	otp.RegisterRoutes(apiV1, otpHandler)
 
+	deviceValidator := middleware.DeviceValidator(deviceService)
+
+	transactionRepo := transaction.NewRepository(db)
+	transactionService := transaction.NewServie(transactionRepo)
+
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo)
-	authHandler := auth.NewHandler(authService)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
-	deviceValidator := middleware.DeviceValidator(deviceService)
+
+	transactionHandler := transaction.NewHandler(transactionService)
+	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+
+	authHandler := auth.NewHandler(authService)
+
 	auth.RegisterRoutes(apiV1, authHandler, authGuard, deviceValidator, loginRateLimiter.Middleware())
+
+	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
+	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
+	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID)
+	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)
 
@@ -203,31 +264,70 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	})
 
+	// Safety net for SMS charges the immediate post-send attempt and
+	// credit-triggered recovery (wallet.Service.ProcessAccountFunded) missed -
+	// process restarts, crashes, or wallets funded another way.
+	var smsBillingMu sync.Mutex
+	var smsBillingRunning bool
+	c.AddFunc("@every 1m", func() {
+		smsBillingMu.Lock()
+		if smsBillingRunning {
+			smsBillingMu.Unlock()
+			return
+		}
+		smsBillingRunning = true
+		smsBillingMu.Unlock()
+
+		defer func() {
+			smsBillingMu.Lock()
+			smsBillingRunning = false
+			smsBillingMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := smsBillingService.ReconcileOutstanding(ctx); err != nil {
+			log.Printf("sms billing reconciliation sweep: %v", err)
+		}
+	})
+
 	// Notification service is built before the wallet service so wallet events
 	// (e.g. inbound deposits) can push notifications to the customer.
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
 	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
 
+	smsRepo := sms.NewRepository(db)
+	smsService := sms.NewService(smsRepo)
+
 	walletRepo := wallet.NewRepository(db)
 	walletPinVerifier := authchecker.New(walletRepo)
-	walletService := wallet.NewService(walletRepo, providusWalletService, walletPinVerifier, wallet.SettlementAccount{
+	// Transfers must route to whichever provider actually issued the source
+	// wallet's NUBAN (accounts aren't portable between providers) - reuses
+	// optimusRegistrationClient rather than constructing a second Optimus
+	// client, since it's the same credentials/base URLs.
+	transferProviders := map[string]wallet.TransferProviderService{
+		"providus": providusAdapter,
+		"optimus":  optimusadapter.New(optimusRegistrationClient),
+	}
+	walletService := wallet.NewService(walletRepo, transferProviders, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	}, deviceService, smsSender, notificationService, cfg.AppName)
+	}, deviceService, billableSMSSenderSMSLive, notificationService, cfg.AppName, smsService, smsBillingService)
 
-	loanRepo := loanproduct.NewRepository(db)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, smsSender, cfg.AppName)
+	loanRepo := loanproduct.NewRepository(db, bvnNinCipher)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, billableSMSSenderSMSLive, cfg.AppName)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 
-	transactionRepo := transaction.NewRepository(db)
-	transactionService := transaction.NewServie(transactionRepo)
-	transactionHandler := transaction.NewHandler(transactionService)
-	transaction.RegisterRoutes(apiV1, transactionHandler, authGuard, deviceValidator)
+	accountClosureRepo := accountclosure.NewRepository(db)
+	userService := user.NewService(user.NewRepository(db))
+	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService, bvnNinCipher)
+	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
+	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
 
 	xpressPayments, xpressErr := vasprovider.NewXpressPayments(cfg.XpressPublicKey, cfg.XpressPrivateKey, cfg.XpressBaseURL)
 	if xpressErr != nil {
@@ -237,6 +337,55 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
+
+		var cashbackSettlementMu sync.Mutex
+		var cashbackSettlementRunning bool
+		c.AddFunc("@every 1m", func() {
+			cashbackSettlementMu.Lock()
+			if cashbackSettlementRunning {
+				cashbackSettlementMu.Unlock()
+				return
+			}
+			cashbackSettlementRunning = true
+			cashbackSettlementMu.Unlock()
+
+			defer func() {
+				cashbackSettlementMu.Lock()
+				cashbackSettlementRunning = false
+				cashbackSettlementMu.Unlock()
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if err := vasService.RetryPendingCashbackSettlements(ctx, 50); err != nil {
+				log.Printf("cashback settlement sweep: %v", err)
+			}
+		})
+
+		var vasReconciliationMu sync.Mutex
+		var vasReconciliationRunning bool
+		vasReconciliationCfg := vas.DefaultReconciliationConfig()
+		c.AddFunc("@every 1m", func() {
+			vasReconciliationMu.Lock()
+			if vasReconciliationRunning {
+				vasReconciliationMu.Unlock()
+				return
+			}
+			vasReconciliationRunning = true
+			vasReconciliationMu.Unlock()
+
+			defer func() {
+				vasReconciliationMu.Lock()
+				vasReconciliationRunning = false
+				vasReconciliationMu.Unlock()
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if err := vasService.ReconcileStuckTransactions(ctx, vasReconciliationCfg); err != nil {
+				log.Printf("vas reconciliation sweep: %v", err)
+			}
+		})
 	}
 
 	webhooksGroup := apiV1.Group("/wallet")
@@ -248,7 +397,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
-	accountRepo := account.NewRepository(db)
+	accountRepo := account.NewRepository(db, bvnNinCipher)
 	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
@@ -312,7 +461,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		statementWorkerWG.Wait()
 	}
 
-	internalLoanRepo := loanproduct.NewInternalRepository(db)
+	internalLoanRepo := loanproduct.NewInternalRepository(db, bvnNinCipher)
 	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
 	internalLoanHandler := loanproduct.NewInternalHandler(internalLoanService)
 	internalAuth := middleware.InternalHMACAuth(cfg.CBAWebhookSecret)
@@ -321,7 +470,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
 
-	reportingRepo := reporting.NewRepository(db)
+	reportingRepo := reporting.NewRepository(db, bvnNinCipher)
 	reportingService := reporting.NewService(reportingRepo)
 	reportingHandler := reporting.NewHandler(reportingService)
 	reporting.RegisterInternalRoutes(internalV1, reportingHandler, internalAuth)
@@ -342,6 +491,29 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider)
 	cardHandler := card.NewHandler(cardService)
 	card.RegisterRoutes(apiV1, authGuard, cardHandler)
+
+	referralsRepo := referrals.NewRepository(db)
+	authService.ConfigureReferralsRepo(referralsRepo)
+	referralsService := referrals.NewService(referralsRepo)
+	referralsHandler := referrals.NewHandler(referralsService)
+	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
+	c.AddFunc("@every 5m", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := referralsService.RetryPendingReferralCredits(ctx, 50); err != nil {
+			log.Printf("referral cashback credit sweep: %v", err)
+		}
+	})
+
+	appVersionRepo := appversion.NewRepository(db)
+	appVersionService := appversion.NewService(appVersionRepo)
+	appVersionHandler := appversion.NewHandler(appVersionService)
+	appversion.RegisterRoutes(r, appVersionHandler)
+
+	registerVersionRepo := registerversion.NewRepository(db)
+	registerVersionService := registerversion.NewService(registerVersionRepo)
+	registerVersionHandler := registerversion.NewHandler(registerVersionService)
+	registerversion.RegisterRoutes(r, registerVersionHandler)
 
 	return r, stopCron, nil
 }

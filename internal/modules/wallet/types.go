@@ -34,3 +34,4 @@ const (
 	ExpectedDepositStatusExpired   ExpectedDepositStatus = "expired"
 	ExpectedDepositStatusFulfilled ExpectedDepositStatus = "fulfilled"
 )
+

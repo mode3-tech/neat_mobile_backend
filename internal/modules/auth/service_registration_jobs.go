@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/models"
 	"strings"
@@ -59,7 +60,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 	}
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 		walletRepo := wallet.NewRepository(txDB)
 		deviceRepo := device.NewRepository(txDB)
 
@@ -73,7 +74,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			return txErr
 		}
 
-		walletRecord, txErr := buildWalletRecordFromSnapshot(job.MobileUserID, job.InternalWalletID, walletResp, snapshot)
+		walletRecord, txErr := buildWalletRecordFromSnapshot(job.MobileUserID, job.InternalWalletID, walletResp, snapshot, s.walletProviderName)
 		if txErr != nil {
 			return txErr
 		}
@@ -97,6 +98,15 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			return txErr
 		}
 
+		if snapshot.ReferralCode != "" {
+			referralsRepo := referrals.NewRepository(txDB)
+			if txErr = referrals.NewService(referralsRepo).RedeemReferralCode(ctx, job.MobileUserID, snapshot.ReferralCode); txErr != nil {
+				return txErr
+			}
+		} else if snapshot.ReferrerUserID != "" {
+			return errors.New("registration referral snapshot has referrer without referral code")
+		}
+
 		return authRepo.MarkRegistrationJobCompleted(ctx, job.ID)
 	})
 	if err != nil {
@@ -113,6 +123,7 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 		walletResp.Wallet.BankCode,
 		walletResp.Wallet.BankName,
 	)
+
 }
 
 func (s *Service) resolveWalletResponseForJob(ctx context.Context, job *RegistrationJob, snapshot *registrationJobSnapshot) (*WalletResponse, error) {
@@ -342,7 +353,7 @@ func buildUserFromRegistrationSnapshot(mobileUserID, internalWalletID string, sn
 	}
 }
 
-func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, walletResp *WalletResponse, snapshot *registrationJobSnapshot) (*wallet.CustomerWallet, error) {
+func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, walletResp *WalletResponse, snapshot *registrationJobSnapshot, provider string) (*wallet.CustomerWallet, error) {
 	if err := normalizeWalletResponse(walletResp, snapshot); err != nil {
 		return nil, err
 	}
@@ -367,6 +378,7 @@ func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, wallet
 		Mode:             walletResp.Customer.Mode,
 		BankName:         walletResp.Wallet.BankName,
 		BankCode:         walletResp.Wallet.BankCode,
+		Provider:         provider,
 		AccountNumber:    walletResp.Wallet.AccountNumber,
 		AccountName:      walletResp.Wallet.AccountName,
 		AccountRef:       walletResp.Wallet.AccountReference,

@@ -8,6 +8,7 @@ import (
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/device"
+	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/notify"
 	"time"
 
@@ -56,8 +57,10 @@ type Service struct {
 	jwtSigner            JWTSigner
 	tender               TendarValidation
 	prembly              PremblyValidation
-	nin                  NINValidation
-	providerSource       BVNProviderSource
+	ninPrembly           NINValidation
+	ninTendar            NINValidation
+	ninFace              NINFaceValidation
+	providerSource       ValidationProviderSource
 	otpManager           authotp.OTPManager
 	walletService        WalletService
 	walletPayloadSeedKey string
@@ -67,6 +70,13 @@ type Service struct {
 	productID            string
 	optimusKYC           OptimusKYCValidation
 	activationCapKobo    int64
+	referralsRepo        *referrals.Repository
+	// walletProviderName is which BaaS provider ("optimus" or "providus")
+	// walletService is actually wired to for this legacy async registration
+	// flow - unlike registerv2, there's no per-request fallback here, so
+	// whichever provider was configured at startup is the one every wallet
+	// this flow creates gets stamped with.
+	walletProviderName string
 }
 
 func NewService(
@@ -81,8 +91,10 @@ func NewService(
 	jwtSigner JWTSigner,
 	tender TendarValidation,
 	prembly PremblyValidation,
-	nin NINValidation,
-	providerSource BVNProviderSource,
+	ninPrembly NINValidation,
+	ninTendar NINValidation,
+	ninFace NINFaceValidation,
+	providerSource ValidationProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
 	walletPayloadSeedKey string,
@@ -90,6 +102,7 @@ func NewService(
 	cbaSyncSem, cbaWalletUpdateSem chan struct{},
 	productID string,
 	activationCapKobo int64,
+	walletProviderName string,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -103,7 +116,9 @@ func NewService(
 		jwtSigner:            jwtSigner,
 		tender:               tender,
 		prembly:              prembly,
-		nin:                  nin,
+		ninPrembly:           ninPrembly,
+		ninTendar:            ninTendar,
+		ninFace:              ninFace,
 		providerSource:       providerSource,
 		otpManager:           otpManager,
 		walletService:        walletService,
@@ -113,6 +128,7 @@ func NewService(
 		cbaWalletUpdateSem:   cbaWalletUpdateSem,
 		productID:            productID,
 		activationCapKobo:    activationCapKobo,
+		walletProviderName:   walletProviderName,
 	}
 }
 
@@ -122,6 +138,10 @@ func (s *Service) ConfigureOTPManager(manager authotp.OTPManager) {
 
 func (s *Service) ConfigureOptimusKYC(kyc OptimusKYCValidation) {
 	s.optimusKYC = kyc
+}
+
+func (s *Service) ConfigureReferralsRepo(repo *referrals.Repository) {
+	s.referralsRepo = repo
 }
 
 func (s *Service) VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error {

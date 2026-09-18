@@ -11,6 +11,7 @@ type Config struct {
 	DBUrl                      string
 	JWTSecret                  string
 	Pepper                     string
+	BVNNINEncryptionKey        string
 	TermiiApiKey               string
 	TermiiSenderID             string
 	SMTPHost                   string
@@ -55,7 +56,11 @@ type Config struct {
 	PDFShiftAPIKey             string
 	AppName                    string
 	TransferLimitAmount        string
+	SMSLiveBaseURL             string
+	SMSLiveAPIKey              string
+	SMSLiveSenderID            string
 	ActivationCapKobo          int64
+	SMSUnitPriceKobo           int64
 
 	LoginRateLimitIPMaxAttempts    int
 	LoginRateLimitEmailMaxAttempts int
@@ -68,6 +73,12 @@ type Config struct {
 	XpressPrivateKey string
 	XpressBaseURL    string
 
+	// Demo/review login account (e.g. Google Play review). Disabled unless
+	// DemoLoginEnabled is true. DemoLoginPhone gets a fixed OTP and no SMS.
+	DemoLoginEnabled bool
+	DemoLoginPhone   string
+	DemoLoginOTP     string
+
 	RunMigrations bool
 }
 
@@ -78,6 +89,7 @@ func Load() Config {
 		DBUrl:                      getEnv("DB_URL", ""),
 		JWTSecret:                  getEnv("JWT_SECRET", ""),
 		Pepper:                     getEnv("PEPPER", ""),
+		BVNNINEncryptionKey:        getEnv("BVN_NIN_ENCRYPTION_KEY", ""),
 		TermiiApiKey:               getEnv("TERMII_APIKEY", ""),
 		TermiiSenderID:             getEnv("TERMII_SENDERID", ""),
 		SMTPHost:                   getEnv("SMTP_HOST", ""),
@@ -122,7 +134,11 @@ func Load() Config {
 		PDFShiftAPIKey:             getEnv("PDFSHIFT_API_KEY", ""),
 		AppName:                    getEnv("APPNAME", "NeatPay"),
 		TransferLimitAmount:        getEnv("TRF_LIMIT_AMOUNT", ""),
+		SMSLiveBaseURL:             getEnv("SMS_LIVE_BASE_URL", ""),
+		SMSLiveAPIKey:              getEnv("SMS_LIVE_API_KEY", ""),
+		SMSLiveSenderID:            getEnv("SMS_LIVE_SENDER_ID", ""),
 		ActivationCapKobo:          int64(getEnvInt("ACTIVATION_CAP_KOBO", 2_000_000)),
+		SMSUnitPriceKobo:           int64(getEnvInt("SMS_UNIT_PRICE_KOBO", 600)),
 
 		LoginRateLimitIPMaxAttempts:    getEnvInt("LOGIN_RATE_LIMIT_IP_MAX_ATTEMPTS", 20),
 		LoginRateLimitEmailMaxAttempts: getEnvInt("LOGIN_RATE_LIMIT_EMAIL_MAX_ATTEMPTS", 5),
@@ -134,6 +150,10 @@ func Load() Config {
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
 		XpressBaseURL:    getEnv("XPRESS_BASE_URL", ""),
+
+		DemoLoginEnabled: getEnv("DEMO_LOGIN_ENABLED", "false") == "true",
+		DemoLoginPhone:   getEnv("DEMO_LOGIN_PHONE", ""),
+		DemoLoginOTP:     getEnv("DEMO_LOGIN_OTP", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
 	}

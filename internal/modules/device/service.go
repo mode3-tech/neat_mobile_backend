@@ -113,3 +113,7 @@ func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 	}
 	return userDevice, nil
 }
+
+func (s *Service) DeactivateDevice(ctx context.Context, mobileUserID, deviceID string) error {
+	return s.repo.DeactivateDevice(ctx, mobileUserID, deviceID)
+}

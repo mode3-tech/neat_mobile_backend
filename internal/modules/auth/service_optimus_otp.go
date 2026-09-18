@@ -37,7 +37,7 @@ func (s *Service) VerifyOptimusPhoneOTP(ctx context.Context, phone, otpToken, em
 	subjectHashBytes := sha256.Sum256([]byte(normalizedPhone))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedPhone, _ := phoneUtil.MaskPhone(normalizedPhone)
 
 	record := &models.VerificationRecord{

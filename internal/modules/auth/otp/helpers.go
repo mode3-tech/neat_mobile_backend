@@ -11,6 +11,7 @@ import (
 	"neat_mobile_app_backend/internal/phone"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var nonDigit = regexp.MustCompile(`\D`)
@@ -99,4 +100,19 @@ func detectChannel(destination string) (Channel, error) {
 		return ChannelNone, err
 	}
 	return ChannelSMS, nil
+}
+
+func formatTTL(d time.Duration) string {
+	d = d.Round(time.Second)
+	mins := int(d / time.Minute)
+	secs := int((d % time.Minute) / time.Second)
+
+	switch {
+	case mins == 0:
+		return fmt.Sprintf("%d sec", secs)
+	case secs == 0:
+		return fmt.Sprintf("%d min", mins)
+	default:
+		return fmt.Sprintf("%d min %d sec", mins, secs)
+	}
 }

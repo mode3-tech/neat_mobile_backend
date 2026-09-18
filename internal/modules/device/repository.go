@@ -30,6 +30,15 @@ func (r *Repository) FindDevice(ctx context.Context, userID, deviceID string) (*
 	return &device, nil
 }
 
+// FindDeviceByID finds a globally unique registered device for biometric authentication.
+func (r *Repository) FindDeviceByID(ctx context.Context, deviceID string) (*UserDevice, error) {
+	var device UserDevice
+	if err := r.db.WithContext(ctx).Model(&UserDevice{}).Select("*").Where("device_id = ?", deviceID).First(&device).Error; err != nil {
+		return nil, err
+	}
+	return &device, nil
+}
+
 func (r *Repository) CreateChallenge(ctx context.Context, ch *DeviceChallenge) error {
 	now := time.Now().UTC()
 
@@ -180,11 +189,28 @@ func (r *Repository) ActivateAndTrustDevice(ctx context.Context, userID, deviceI
 	return nil
 }
 
+func (r *Repository) DeactivateAllDevices(ctx context.Context, userID string) error {
+	result := r.db.WithContext(ctx).
+		Model(&UserDevice{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]any{
+			"is_active":  false,
+			"is_trusted": false,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func (r *Repository) DeactivateDevice(ctx context.Context, userID, deviceID string) error {
 	result := r.db.WithContext(ctx).
 		Model(&UserDevice{}).
 		Where("user_id = ? AND device_id = ?", userID, deviceID).
-		Update("is_active", false)
+		Updates(map[string]any{
+			"is_active":  false,
+			"is_trusted": false,
+		})
 	if result.Error != nil {
 		return result.Error
 	}

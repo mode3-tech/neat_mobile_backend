@@ -2,6 +2,8 @@ package account
 
 import (
 	"context"
+	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/models"
@@ -12,11 +14,12 @@ import (
 )
 
 type Repository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *gorm.DB, cipher *crypto.FieldCipher) *Repository {
+	return &Repository{db: db, cipher: cipher}
 }
 
 func (r *Repository) GetDevice(ctx context.Context, mobileUserID, deviceID string) (*device.UserDevice, error) {
@@ -49,16 +52,29 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_users.dob,
 			wallet_users.phone,
 			wallet_users.core_customer_id,
+			wallet_referral_codes.code,
 			wallet_bvn_records.bvn,
 			wallet_bvn_records.full_home_address AS address,
 			wallet_customer_wallets.account_number,
 			wallet_customer_wallets.available_balance,
 			wallet_customer_wallets.booked_balance,
-			wallet_customer_wallets.bank_name`).
+			wallet_customer_wallets.bank_name,
+			COALESCE((SELECT cb.cashback_after FROM wallet_cashbacks cb WHERE cb.mobile_user_id = wallet_users.id ORDER BY cb.created_at DESC LIMIT 1), 0) AS cashback_balance`).
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").
+		Joins("LEFT JOIN wallet_referral_codes ON wallet_referral_codes.mobile_user_id = wallet_users.id").
 		Where("wallet_users.id = ?", mobileUserID).Scan(&row).Error
-	return &row, err
+	if err != nil {
+		return &row, err
+	}
+	if row.BVN != "" {
+		plain, decErr := r.cipher.Decrypt(row.BVN)
+		if decErr != nil {
+			return nil, decErr
+		}
+		row.BVN = plain
+	}
+	return &row, nil
 }
 
 const dashboardLoansQuery = `
@@ -120,11 +136,11 @@ func (r *Repository) UpdateProfile(ctx context.Context, mobileUserID string, dat
 		Updates(updates).Error
 }
 
-func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID string, walletID string, from, to time.Time) ([]transaction.Transaction, error) {
+func (r *Repository) GetStatementTransactions(ctx context.Context, mobileUserID string, from, to time.Time) ([]transaction.Transaction, error) {
 	var transactions []transaction.Transaction
 
 	err := r.db.WithContext(ctx).
-		Where("mobile_user_id = ? AND wallet_id = ? AND created_at >= ? AND created_at <= ? AND status = ?", mobileUserID, walletID, from, to, transaction.TransactionStatusSuccessful).
+		Where("mobile_user_id = ? AND created_at >= ? AND created_at <= ? AND status != ?", mobileUserID, from, to, transaction.TransactionStatusPending).
 		Order("created_at DESC").
 		Find(&transactions).Error
 	return transactions, err
@@ -136,6 +152,26 @@ func (r *Repository) CreateAccountReportJob(ctx context.Context, job *AccountRep
 		return nil, err
 	}
 	return job, nil
+}
+
+// FindActiveStatementJob looks for an existing pending/processing job for the
+// same user, date range, and format - used to make RequestAccountStatement
+// idempotent against duplicate requests (e.g. a client retry or double-tap)
+// instead of creating a new job (and firing a new notification) each time.
+func (r *Repository) FindActiveStatementJob(ctx context.Context, mobileUserID string, dateFrom, dateTo time.Time, format ReportFormat) (*AccountReportJob, error) {
+	var job AccountReportJob
+	err := r.db.WithContext(ctx).
+		Where("mobile_user_id = ? AND date_from = ? AND date_to = ? AND format = ? AND status IN ?",
+			mobileUserID, dateFrom, dateTo, format, []ReportStatus{ReportStatusPending, ReportStatusProcessing}).
+		Order("created_at DESC").
+		First(&job).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &job, nil
 }
 
 func (r *Repository) GetAccountReportJob(ctx context.Context, jobID string) (*AccountReportJob, error) {

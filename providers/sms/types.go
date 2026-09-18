@@ -1,4 +1,4 @@
-package termii
+package sms
 
 type TermiiSuccessResponse struct {
 	Code         string `json:"code"`
@@ -13,4 +13,15 @@ type TermiiErrorResponse struct {
 	Message string `json:"message"`
 	Status  string `json:"status"`
 	Link    string `json:"link"`
+}
+
+type smsLiveErrorResponse struct {
+	Code    int64          `json:"code"`
+	Message string         `json:"message"`
+	Errors  []smsLiveError `json:"errors"`
+}
+
+type smsLiveError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
 }

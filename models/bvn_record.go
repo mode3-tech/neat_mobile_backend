@@ -31,7 +31,13 @@ type BVNRecord struct {
 	IDNumber                 *string    `gorm:"column:id_number;type:text"`
 	BankName                 string     `gorm:"column:bank_name;type:text;not null"`
 	AccountNumber            *string    `gorm:"column:account_number;type:text;index"`
-	BVN                      string     `gorm:"column:bvn;type:text;uniqueIndex;not null"`
+	BVN                      string     `gorm:"column:bvn;type:text;not null"`
+	// BVNHash is a deterministic SHA-256 digest of BVN, used for lookups/dedup
+	// now that BVN is stored encrypted - see the matching comment on
+	// models.User. This column (not the uniqueIndex that used to be on BVN
+	// above) is what enforces real uniqueness; see Migrate() in
+	// internal/database/database.go.
+	BVNHash string `gorm:"column:bvn_hash;type:text"`
 	NextOfKinFirstName       *string    `gorm:"column:next_of_kin_first_name;type:text"`
 	NextOfKinMiddleName      *string    `gorm:"column:next_of_kin_middle_name;type:text"`
 	NextOfKinLastName        *string    `gorm:"column:next_of_kin_last_name;type:text"`

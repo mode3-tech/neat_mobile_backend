@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/models"
 	"strings"
@@ -13,13 +14,16 @@ import (
 )
 
 type Repository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-// NewRepository creates a new Repository using the provided gorm DB.
-// It returns a pointer to Repository.
-func NewRespository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+// NewRepository creates a new Repository using the provided gorm DB and the
+// field cipher used to encrypt/decrypt BVN/NIN at the repository boundary -
+// see internal/crypto/field.go for why encryption lives here rather than in
+// GORM hooks or in service-layer code.
+func NewRespository(db *gorm.DB, cipher *crypto.FieldCipher) *Repository {
+	return &Repository{db: db, cipher: cipher}
 }
 
 // GetUserByEmail retrieves a user by their email address.
@@ -27,7 +31,7 @@ func NewRespository(db *gorm.DB) *Repository {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var u models.User
 
-	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password_hash,created_at").Where("email = ?", email).First(&u).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("wallet_users").Select("id,email,password_hash,closed_at,created_at").Where("email = ?", email).First(&u).Error; err != nil {
 		return nil, err
 	}
 
@@ -36,7 +40,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.
 
 func (r *Repository) GetUserByPhone(ctx context.Context, phone string) (*models.User, error) {
 	var u models.User
-	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password_hash,created_at").Where("phone = ?", phone).First(&u).Error
+	err := r.db.WithContext(ctx).Table("wallet_users").Select("id,phone,password_hash,closed_at,created_at").Where("phone = ?", phone).First(&u).Error
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +58,28 @@ func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.Us
 		return nil, err
 	}
 
+	if err := r.decryptUser(&u); err != nil {
+		return nil, err
+	}
+
 	return &u, nil
+}
+
+// decryptUser reverses the encryption CreateUser applies to BVN/NIN before
+// insert. Safe to call on rows that predate encryption - FieldCipher.Decrypt
+// passes legacy plaintext through unchanged.
+func (r *Repository) decryptUser(u *models.User) error {
+	bvn, err := r.cipher.Decrypt(u.BVN)
+	if err != nil {
+		return err
+	}
+	nin, err := r.cipher.Decrypt(u.NIN)
+	if err != nil {
+		return err
+	}
+	u.BVN = bvn
+	u.NIN = nin
+	return nil
 }
 
 // AddRefreshToken adds a refresh token to the database.
@@ -148,6 +173,14 @@ func (r *Repository) GetValidationRow(ctx context.Context, verificationID string
 	if err != nil {
 		return nil, err
 	}
+
+	if record.VerifiedID != nil {
+		plain, err := r.cipher.Decrypt(*record.VerifiedID)
+		if err != nil {
+			return nil, err
+		}
+		record.VerifiedID = &plain
+	}
 	return &record, nil
 }
 
@@ -169,9 +202,23 @@ func (r *Repository) CreateBVNRecord(ctx context.Context, record *models.BVNReco
 		return errors.New("bvn record is required")
 	}
 
+	// Encrypt into a copy so the caller's struct keeps holding the plaintext
+	// BVN it already has - CreateUser does the same, and for the same reason:
+	// callers like registerv2's Register() reuse the plaintext value
+	// afterward (e.g. LinkBVNRecordToUser), and hashing/looking up ciphertext
+	// by mistake would silently never match.
+	toInsert := *record
+	plainBVN := strings.TrimSpace(record.BVN)
+	encBVN, err := r.cipher.Encrypt(plainBVN)
+	if err != nil {
+		return err
+	}
+	toInsert.BVN = encBVN
+	toInsert.BVNHash = crypto.Hash(plainBVN)
+
 	return r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "bvn"}},
+			Columns: []clause.Column{{Name: "bvn_hash"}},
 			DoUpdates: clause.AssignmentColumns([]string{
 				"first_name",
 				"middle_name",
@@ -212,7 +259,7 @@ func (r *Repository) CreateBVNRecord(ctx context.Context, record *models.BVNReco
 				"customer_signature",
 			}),
 		}).
-		Create(record).Error
+		Create(&toInsert).Error
 }
 
 func (r *Repository) LinkBVNRecordToUser(ctx context.Context, bvn, userID string) error {
@@ -231,7 +278,7 @@ func (r *Repository) LinkBVNRecordToUser(ctx context.Context, bvn, userID string
 		Table("wallet_bvn_records").
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Select("id, user_id").
-		Where("bvn = ?", bvn).
+		Where("bvn_hash = ?", crypto.Hash(bvn)).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
@@ -252,9 +299,29 @@ func (r *Repository) LinkBVNRecordToUser(ctx context.Context, bvn, userID string
 }
 
 func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {
-	if err := r.db.WithContext(ctx).Create(user).Error; err != nil {
+	// Encrypt into a copy - see the matching comment in CreateBVNRecord for
+	// why the caller's struct keeps its plaintext BVN/NIN after this returns.
+	toInsert := *user
+	plainBVN := strings.TrimSpace(user.BVN)
+	plainNIN := strings.TrimSpace(user.NIN)
+	encBVN, err := r.cipher.Encrypt(plainBVN)
+	if err != nil {
 		return nil, err
 	}
+	encNIN, err := r.cipher.Encrypt(plainNIN)
+	if err != nil {
+		return nil, err
+	}
+	toInsert.BVN = encBVN
+	toInsert.NIN = encNIN
+	toInsert.BVNHash = crypto.Hash(plainBVN)
+	toInsert.NINHash = crypto.Hash(plainNIN)
+
+	if err := r.db.WithContext(ctx).Create(&toInsert).Error; err != nil {
+		return nil, err
+	}
+	user.CreatedAt = toInsert.CreatedAt
+	user.UpdatedAt = toInsert.UpdatedAt
 	return user, nil
 }
 
@@ -280,7 +347,18 @@ func (r *Repository) GetUsersWithoutCoreCustomerID(ctx context.Context, limit in
 		Where("wu.core_customer_id IS NULL").
 		Limit(limit).
 		Scan(&rows).Error
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	// Feeds service_cba_sync.go's CBA matching call, which needs the real BVN.
+	for i := range rows {
+		bvn, decErr := r.cipher.Decrypt(rows[i].BVN)
+		if decErr != nil {
+			return nil, decErr
+		}
+		rows[i].BVN = bvn
+	}
+	return rows, nil
 }
 
 func (r *Repository) ToggleBiometrics(ctx context.Context, mobileUserID string) (bool, error) {
@@ -359,13 +437,9 @@ func (r *Repository) ResetPinAttempts(ctx context.Context, userID string) error 
 		}).Error
 }
 
-func (r *Repository) GetUserByBVN(ctx context.Context, bvn string) (*models.User, error) {
-	var user models.User
-	err := r.db.WithContext(ctx).
-		Where("bvn = ?", bvn).
-		First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+func (r *Repository) RevokeAllSessions(ctx context.Context, mobileUserID string, revokedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Table("wallet_auth_sessions").
+		Where("user_id = ?", mobileUserID).
+		Update("revoked_at", revokedAt).Error
 }

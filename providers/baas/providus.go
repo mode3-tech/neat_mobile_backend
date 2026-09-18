@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
-	"neat_mobile_app_backend/internal/modules/wallet"
+
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,13 +24,21 @@ type Providus struct {
 	APIKey  string
 	BaseURL string
 	Client  *http.Client
+	// walletGenerationClient is used only by GenerateWallet, which needs more
+	// patience than debit/credit/lookup calls on Client - wallet creation is a
+	// one-time step where waiting longer reduces how often a slow response
+	// gets treated as a failure even though the provider is still processing
+	// it, whereas money-movement operations should stay fail-fast on the
+	// shorter timeout.
+	walletGenerationClient *http.Client
 }
 
 func NewProvidus(apiKey, baseURL string) *Providus {
 	return &Providus{
-		APIKey:  apiKey,
-		BaseURL: baseURL,
-		Client:  &http.Client{Timeout: 15 * time.Second},
+		APIKey:                 apiKey,
+		BaseURL:                baseURL,
+		Client:                 &http.Client{Timeout: 30 * time.Second},
+		walletGenerationClient: &http.Client{Timeout: 90 * time.Second},
 	}
 }
 
@@ -205,6 +214,23 @@ func decorateStringWithSeed(value, seed string, usePrefix bool) string {
 	return value + "-" + seed
 }
 
+// providusWalletGenerationRequest is Providus's documented wallet-generation
+// request shape - deliberately narrower than the shared auth.WalletPayload,
+// which also carries fields only Optimus needs (RequestID, ProductId,
+// Gender, MaritalStatus, MothersMaidenName, HouseNo). Those have no json tag
+// on WalletPayload, so marshaling it directly (as this used to do) sent them
+// to Providus in PascalCase as extraneous, undocumented fields.
+type providusWalletGenerationRequest struct {
+	BVN         string                 `json:"bvn"`
+	FirstName   string                 `json:"firstName"`
+	LastName    string                 `json:"lastName"`
+	DateOfBirth string                 `json:"dateOfBirth"`
+	PhoneNumber string                 `json:"phoneNumber"`
+	Email       string                 `json:"email"`
+	Address     string                 `json:"address"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
@@ -212,42 +238,70 @@ func (p *Providus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPa
 
 	url := p.BaseURL + "/wallet"
 
-	body, err := json.Marshal(walletInfo)
+	payload := providusWalletGenerationRequest{
+		BVN:         walletInfo.BVN,
+		FirstName:   walletInfo.FirstName,
+		LastName:    walletInfo.LastName,
+		DateOfBirth: walletInfo.DateOfBirth,
+		PhoneNumber: walletInfo.PhoneNumber,
+		Email:       walletInfo.Email,
+		Address:     walletInfo.Address,
+		Metadata:    walletInfo.Metadata,
+	}
+
+	body, err := json.Marshal(payload)
 	log.Printf("Providus wallet generation request payload: %s", string(body))
 	if err != nil {
-		return nil, err
+		return nil, &appErr.XpressWalletProviderError{Message: "failed to marshal wallet generation request"}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, &appErr.XpressWalletProviderError{Message: "failed to create wallet generation request"}
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.APIKey)
 
-	resp, err := p.Client.Do(req)
+	resp, err := p.walletGenerationClient.Do(req)
 	if err != nil {
 		log.Printf("providus wallet generation request failed: %v", err)
-		return nil, fmt.Errorf("providus wallet request failed: %w", err)
+		return nil, &appErr.XpressWalletProviderError{Message: "providus wallet generation request failed"}
 	}
 	defer resp.Body.Close()
 
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if readErr != nil {
+		return nil, &appErr.XpressWalletProviderError{Message: "failed to read providus wallet generation response"}
+	}
+
+	var providerResponse XpressWalletErrorResponse
+	if json.Unmarshal(respBody, &providerResponse) == nil &&
+		!providerResponse.Status &&
+		strings.TrimSpace(providerResponse.Message) != "" {
+		log.Printf("providus wallet generation failed: %s", providerResponse.Message)
+		return nil, &appErr.XpressWalletProviderError{
+			Status:  providerResponse.Status,
+			Message: providerResponse.Message,
+		}
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		message := strings.TrimSpace(string(respBody))
 		if len(respBody) == 0 {
 			log.Printf("providus wallet generation failed with status: %d", resp.StatusCode)
-			return nil, fmt.Errorf("providus wallet generation failed with status: %d", resp.StatusCode)
+			message = fmt.Sprintf("providus wallet generation failed with status: %d", resp.StatusCode)
+		} else {
+			message = extractErrorMessage(respBody)
 		}
-		log.Printf("providus wallet generation failed: %s", extractErrorMessage(respBody))
-		return nil, fmt.Errorf("providus wallet generation failed: %s", extractErrorMessage(respBody))
+		log.Printf("providus wallet generation failed: %s", message)
+		return nil, &appErr.XpressWalletProviderError{Message: message}
 	}
 
 	var result auth.WalletResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-
-		return nil, fmt.Errorf("failed to decode providus wallet generation response: %w", err)
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, &appErr.XpressWalletProviderError{Message: "failed to decode providus wallet generation response"}
 	}
 
 	return &result, nil
@@ -366,7 +420,7 @@ func (p *Providus) LookupWalletByCustomerID(ctx context.Context, walletCustomerI
 	return mapped, true, nil
 }
 
-func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
+func (p *Providus) FetchBanks(ctx context.Context) ([]Bank, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 
 		return nil, errors.New("providus service not configured")
@@ -398,7 +452,7 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 		return nil, fmt.Errorf("providus banks fetch failed: %s", extractErrorMessage(respBody))
 	}
 
-	var result wallet.BankResponse
+	var result BankResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus banks response: %w", err)
 	}
@@ -406,7 +460,7 @@ func (p *Providus) FetchBanks(ctx context.Context) ([]wallet.Bank, error) {
 	return result.Banks, nil
 }
 
-func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*wallet.BankDetails, error) {
+func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -436,7 +490,7 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	}
 	defer resp.Body.Close()
 
-	var result wallet.BankDetailsResponse
+	var result BankDetailsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bank details response: %w", err)
 	}
@@ -444,13 +498,13 @@ func (p *Providus) FetchBankDetails(ctx context.Context, accountNumber, bankCode
 	return &result.Account, nil
 }
 
-func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *wallet.TransferRequest) (*wallet.TransferResponse, error) {
+func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID string, transferInfo *TransferRequest) (*TransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
-		return nil, errors.New("providus service not configured")
+		log.Printf("providus service not configured")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	url := p.BaseURL + "/transfer/bank/customer"
-
 	payload := map[string]any{
 		"amount":        float64(transferInfo.Amount) / 100,
 		"sortCode":      transferInfo.SortCode,
@@ -463,12 +517,14 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		log.Printf("failed to marshal transfer request: %v", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		log.Printf("failed to create transfer request: %v", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -477,29 +533,43 @@ func (p *Providus) InitiateTransfer(ctx context.Context, providusCustomerID stri
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("providus transfer request failed: %w", err)
+		log.Printf("providus transfer request failed: %v", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		if len(respBody) == 0 {
-			log.Printf("providus transfer failed with status: %d", resp.StatusCode)
-			return nil, fmt.Errorf("providus transfer failed with status: %d", resp.StatusCode)
+		log.Printf("providus transfer failed: %s", strings.TrimSpace(string(respBody)))
+		bodyStr := strings.TrimSpace(string(respBody))
+
+		log.Printf("providus transfer failed: %s", bodyStr)
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		status := false
+
+		if err := json.Unmarshal([]byte(bodyStr), &providusErrResp); err == nil && !providusErrResp.Status {
+			msg = providusErrResp.Message
+			status = providusErrResp.Status
 		}
-		log.Printf("providus transfer failed: %s", extractErrorMessage(respBody))
-		return nil, fmt.Errorf("providus transfer failed: %s", extractErrorMessage(respBody))
+
+		log.Printf("providus transfer failed: %s", msg)
+		return nil, &appErr.XpressWalletProviderError{
+			Status:  status,
+			Message: msg,
+		}
 	}
 
-	var result wallet.TransferResponse
+	var result TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode providus transfer response: %w", err)
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	return &result, nil
 }
 
-func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []wallet.BulkTransferRecipientInfo) (*wallet.ProvidusBatchTransferResponse, error) {
+func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []BulkTransferRecipientInfo) (*ProvidusBatchTransferResponse, error) {
 	if strings.TrimSpace(p.APIKey) == "" || strings.TrimSpace(p.BaseURL) == "" {
 		return nil, errors.New("providus service not configured")
 	}
@@ -555,7 +625,7 @@ func (p *Providus) InitiateBulkTransfer(ctx context.Context, info []wallet.BulkT
 		return nil, fmt.Errorf("providus bulk transfer failed: %s", extractErrorMessage(respBody))
 	}
 
-	var result wallet.ProvidusBatchTransferResponse
+	var result ProvidusBatchTransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode providus bulk transfer response: %w", err)
 	}
@@ -684,8 +754,16 @@ func (p *Providus) GetCustomerDetails(ctx context.Context, customerID string) (*
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		log.Printf("providus: GetCustomerDetails failed status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-		return nil, fmt.Errorf("providus: GetCustomerDetails returned status %d", resp.StatusCode)
+		bodyStr := strings.TrimSpace(string(body))
+		log.Printf("providus: GetCustomerDetails failed status=%d body=%s", resp.StatusCode, bodyStr)
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		if err := json.Unmarshal(body, &providusErrResp); err == nil && providusErrResp.Message != "" {
+			msg = providusErrResp.Message
+		}
+
+		return nil, &appErr.XpressWalletProviderError{Message: msg}
 	}
 
 	var result ProvidusCustomerDetailsResponse
@@ -732,4 +810,58 @@ func (p *Providus) GetCustomerWallet(ctx context.Context, customerID string) (*P
 	}
 
 	return &result, nil
+}
+
+func (p *Providus) CloseWallet(ctx context.Context, customerID string) error {
+	url := p.BaseURL + "/wallet/close"
+
+	payload := map[string]string{"customerId": customerID}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("providus: failed to marshal payload - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("providus: failed to create new request with ctx - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		log.Printf("providus: failed to send req - %s\n", err)
+		return appErr.ErrProviderServiceUnavailable
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf("providus close wallet failed: %s", strings.TrimSpace(string(respBody)))
+		bodyStr := strings.TrimSpace(string(respBody))
+
+		log.Printf("providus close wallet failed: %s", bodyStr)
+
+		var providusErrResp XpressWalletErrorResponse
+		msg := bodyStr
+		status := false
+
+		if err := json.Unmarshal([]byte(bodyStr), &providusErrResp); err == nil && !providusErrResp.Status {
+			msg = providusErrResp.Message
+			status = providusErrResp.Status
+		}
+
+		log.Printf("providus close wallet failed: %s", msg)
+		return &appErr.XpressWalletProviderError{
+			Status:  status,
+			Message: msg,
+		}
+	}
+
+	return nil
 }

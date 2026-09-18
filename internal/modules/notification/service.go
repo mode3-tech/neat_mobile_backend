@@ -72,6 +72,7 @@ func (s *Service) RegisterToken(ctx context.Context, mobileUserID string, req Re
 		DeviceID:      deviceID,
 		ExpoPushToken: expoPushToken,
 		Platform:      platform,
+		AppEnv:        strings.TrimSpace(req.AppEnv),
 	}
 
 	return s.repo.UpsertToken(ctx, row)
@@ -165,13 +166,14 @@ func isDeviceNotRegisteredReceipt(r ExpoPushReceipt) bool {
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(val)), "DeviceNotRegistered")
 }
 
-func (s *Service) SendToUser(ctx context.Context, userID, title, typ, body string, data map[string]any) error {
+func (s *Service) SendToUser(ctx context.Context, userID, title, typ, transactionID, body string, data map[string]any) error {
 	return s.SendToUserWithOptions(ctx, SendNotificationRequest{
-		UserID: userID,
-		Title:  title,
-		Type:   typ,
-		Body:   body,
-		Data:   data,
+		UserID:        userID,
+		Title:         title,
+		Type:          typ,
+		TransactionID: transactionID,
+		Body:          body,
+		Data:          data,
 	})
 }
 
@@ -218,12 +220,13 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 	}
 
 	notification := &models.Notification{
-		ID:     uuid.NewString(),
-		UserID: userID,
-		Title:  title,
-		Body:   body,
-		Type:   req.Type,
-		Data:   req.Data,
+		ID:            uuid.NewString(),
+		UserID:        userID,
+		Title:         title,
+		Body:          body,
+		TransactionID: strings.TrimSpace(req.TransactionID),
+		Type:          req.Type,
+		Data:          req.Data,
 	}
 
 	if err := s.repo.CreateNotification(ctx, *notification); err != nil {
@@ -247,13 +250,29 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 			return nil
 		}
 
+		tokens = dedupTokensByAppEnv(tokens)
+
+		pushData := req.Data
+		if txID := strings.TrimSpace(req.TransactionID); txID != "" {
+			if pushData == nil {
+				pushData = map[string]any{}
+			} else {
+				merged := make(map[string]any, len(pushData)+1)
+				for k, v := range pushData {
+					merged[k] = v
+				}
+				pushData = merged
+			}
+			pushData["transaction_id"] = txID
+		}
+
 		messages := make([]ExpoPushMessage, 0, len(tokens))
 		for _, token := range tokens {
 			messages = append(messages, ExpoPushMessage{
 				To:        token.ExpoPushToken,
 				Title:     title,
 				Body:      body,
-				Data:      req.Data,
+				Data:      pushData,
 				Sound:     sound,
 				ChannelID: channelID,
 			})
@@ -295,6 +314,32 @@ func (s *Service) SendToUserWithOptions(ctx context.Context, req SendNotificatio
 	}
 
 	return nil
+}
+
+// dedupTokensByAppEnv keeps at most one token per (app_env) value, preferring
+// the most recently updated one, since multiple builds of the same app on a
+// single physical device each register their own device_id/token but report
+// the same app_env. Tokens with no app_env (legacy rows, or clients that
+// don't send it yet) are left untouched. Callers must pass tokens already
+// ordered by updated_at DESC.
+func dedupTokensByAppEnv(tokens []models.PushToken) []models.PushToken {
+	seenAppEnv := make(map[string]bool, len(tokens))
+	deduped := make([]models.PushToken, 0, len(tokens))
+
+	for _, token := range tokens {
+		appEnv := strings.TrimSpace(token.AppEnv)
+		if appEnv == "" {
+			deduped = append(deduped, token)
+			continue
+		}
+		if seenAppEnv[appEnv] {
+			continue
+		}
+		seenAppEnv[appEnv] = true
+		deduped = append(deduped, token)
+	}
+
+	return deduped
 }
 
 func looksLikeExpoPushToken(token string) bool {

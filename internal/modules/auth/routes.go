@@ -13,7 +13,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 
 		loginHandlers := append(loginMiddlewares, handler.Login)
 		auth.POST("/login", loginHandlers...)
-
+		auth.POST("/challenge/request", handler.ChallengeRequest)
 		auth.POST("/device/challenge/verify", handler.VerifyDevice)
 		auth.POST("/device/otp/verify", handler.VerifyNewDevice)
 		auth.POST("/device/otp/resend", handler.ResendNewDeviceOTP)
@@ -44,6 +44,5 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceVali
 		auth.POST("/password/change/verify", authGuard, deviceValidator, handler.VerifyPasswordChangeOTP)
 		auth.PATCH("/password/change", authGuard, deviceValidator, handler.ChangePassword)
 		auth.PATCH("/biometrics/toggle", authGuard, deviceValidator, handler.ToggleBiometrics)
-		auth.POST("/challenge/request", handler.ChallengeRequest)
 	}
 }

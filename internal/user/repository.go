@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"neat_mobile_app_backend/models"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -29,4 +31,27 @@ func (r *Repository) GetUserByUserID(ctx context.Context, mobileUserID string) (
 		return nil, err
 	}
 	return &result, nil
+}
+
+func (r *Repository) SetUserAsClosed(ctx context.Context, mobileUserID string, closedAt time.Time) error {
+	err := r.DB.WithContext(ctx).
+		Table("wallet_users").
+		Where("id = ?", mobileUserID).
+		Update("closed_at", closedAt).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Repository) GetUserDetails(ctx context.Context, mobileUserID string) (*models.User, error) {
+	var user models.User
+	err := r.DB.WithContext(ctx).
+		Table("wallet_users").
+		Where("id = ?", mobileUserID).
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
