@@ -1,5 +1,7 @@
 package otp
 
+import "time"
+
 type Purpose string
 type Channel string
 type Provider string
@@ -27,3 +29,6 @@ const (
 const (
 	ProviderTermii Provider = "termii"
 )
+
+const DefaultOTPSMSTTL = 90 * time.Second
+const DefaultOTPEmailTTL = 5 * time.Minute

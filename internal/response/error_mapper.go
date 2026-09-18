@@ -4,6 +4,7 @@ import (
 	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
+	"strings"
 )
 
 type ErrorMapping struct {
@@ -18,7 +19,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusUnauthorized,
 			Error: APIError{
 				Code:    "AUTH_INVALID_CREDENTIALS",
-				Message: "invalid credentials",
+				Message: "Incorrect credentials. Try again or signup if you don't have an account.",
 			},
 		}
 
@@ -46,6 +47,42 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "BAD_REQUEST",
 				Message: "bad request",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrInvalidReferralCode):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "INVALID_REFERRAL_CODE",
+				Message: "invalid referral code",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountHasBalance):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "ACCOUNT_HAS_BALANCE",
+				Message: appErr.ErrAccountHasBalance.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountHasActiveLoans):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "ACCOUNT_HAS_ACTIVE_LOANS",
+				Message: appErr.ErrAccountHasActiveLoans.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrAccountClosureAlreadyInProgress):
+		return ErrorMapping{
+			Status: http.StatusConflict,
+			Error: APIError{
+				Code:    "ACCOUNT_CLOSURE_IN_PROGRESS",
+				Message: appErr.ErrAccountClosureAlreadyInProgress.Error(),
 			},
 		}
 
@@ -108,7 +145,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_CHANNEL",
-				Message: "invalid channel",
+				Message: appErr.ErrInvalidChannel.Error(),
 			},
 		}
 
@@ -364,15 +401,6 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case errors.Is(err, appErr.ErrInvalidChannel):
-		return ErrorMapping{
-			Status: http.StatusInternalServerError,
-			Error: APIError{
-				Code:    "INVALID_CHANNEL",
-				Message: "invalid channel",
-			},
-		}
-
 	case errors.Is(err, appErr.ErrTooManyRequests):
 		return ErrorMapping{
 			Status: http.StatusTooManyRequests,
@@ -513,7 +541,7 @@ func MapError(err error) ErrorMapping {
 			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_CURSOR",
-				Message: "Invalid request body",
+				Message: appErr.ErrInvalidCursor.Error(),
 			},
 		}
 
@@ -537,7 +565,7 @@ func MapError(err error) ErrorMapping {
 
 	case errors.Is(err, appErr.ErrNoLoansFound):
 		return ErrorMapping{
-			Status: http.StatusNotFound,
+			Status: http.StatusOK,
 			Error: APIError{
 				Code:    "NO_LOANS_FOUND",
 				Message: "No loans found for user",
@@ -616,6 +644,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrAccessTokenIssue):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "ACCESS_TOKEN_ISSUE",
+				Message: "We couldn't refresh your session. Please log in again.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrRefreshTokenIssue):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "REFRESH_TOKEN_ISSUE",
+				Message: "We couldn't refresh your session. Please log in again.",
+			},
+		}
+
 	case errors.Is(err, appErr.ErrInvalidVerificationType):
 		return ErrorMapping{
 			Status: http.StatusBadRequest,
@@ -681,10 +727,10 @@ func MapError(err error) ErrorMapping {
 
 	case errors.Is(err, appErr.ErrInvalidExpoToken):
 		return ErrorMapping{
-			Status: http.StatusInternalServerError,
+			Status: http.StatusBadRequest,
 			Error: APIError{
 				Code:    "INVALID_EXPO_TOKEN",
-				Message: "An unexpected error occured, please try again later",
+				Message: "Unable to register this device for notifications. Please update the app and try again.",
 			},
 		}
 
@@ -886,6 +932,33 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrInsufficientCashback):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "INSUFFICIENT_CASHBACK",
+				Message: appErr.ErrInsufficientCashback.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrSelfReferral):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "SELF_REFERRAL",
+				Message: appErr.ErrSelfReferral.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrReferralAlreadyRedeemed):
+		return ErrorMapping{
+			Status: http.StatusConflict,
+			Error: APIError{
+				Code:    "REFERRAL_ALREADY_REDEEMED",
+				Message: appErr.ErrReferralAlreadyRedeemed.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrNewUserTransferRestriction):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
@@ -1057,14 +1130,32 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrAppOSNotFound):
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "APP_OS_NOT_FOUND",
+				Message: appErr.ErrAppOSNotFound.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUserNotFound):
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: appErr.ErrUserNotFound.Error(),
+			},
+		}
+
 	default:
-		var providerErr *appErr.XpressWalletProviderError
-		if errors.As(err, &providerErr) {
+		var xpressWalletErr *appErr.XpressWalletProviderError
+		if errors.As(err, &xpressWalletErr) {
 			return ErrorMapping{
 				Status: http.StatusUnprocessableEntity,
 				Error: APIError{
 					Code:    "XPRESS_WALLET_PROVIDER_ERROR",
-					Message: providerErr.Message,
+					Message: xpressWalletErr.Message,
 				},
 			}
 		}
@@ -1080,6 +1171,17 @@ func MapError(err error) ErrorMapping {
 				Error: APIError{
 					Code:    "SMS_PROVIDER_ERROR",
 					Message: termiiErr.Message, // forward the actual Termii message
+				},
+			}
+		}
+
+		var smsLiveErr *appErr.SMSLiveError
+		if errors.As(err, &smsLiveErr) {
+			return ErrorMapping{
+				Status: http.StatusBadGateway,
+				Error: APIError{
+					Code:    "SMS_PROVIDER_ERROR",
+					Message: smsLiveErr.Message,
 				},
 			}
 		}
@@ -1113,6 +1215,19 @@ func MapError(err error) ErrorMapping {
 			}
 		}
 
+		// Safety net for identity-provider failures the service layer did not
+		// translate into a domain error (see auth.translateProviderError). Without
+		// these arms an upstream 401/429/timeout would surface as a bare 500.
+		var premblyErr *appErr.PremblyError
+		if errors.As(err, &premblyErr) {
+			return mapIdentityProviderError(premblyErr.Status, premblyErr.Code, premblyErr.Message, premblyErr.Retryable)
+		}
+
+		var tendarErr *appErr.TendarError
+		if errors.As(err, &tendarErr) {
+			return mapIdentityProviderError(tendarErr.Status, tendarErr.Code, tendarErr.Message, tendarErr.Retryable)
+		}
+
 		return ErrorMapping{
 			Status: http.StatusInternalServerError,
 			Error: APIError{
@@ -1120,6 +1235,43 @@ func MapError(err error) ErrorMapping {
 				Message: "An unexpected error occurred, please try again later",
 			},
 		}
+	}
+}
+
+// identityProviderInfraCodes are locally-synthesized classifications describing a
+// failure of the integration rather than of the identity being checked. They are
+// not user-actionable and would leak our setup, so they get a generic 503.
+var identityProviderInfraCodes = map[string]struct{}{
+	"CLIENT_ERROR":     {},
+	"TIMEOUT":          {},
+	"NETWORK_ERROR":    {},
+	"INVALID_RESPONSE": {},
+}
+
+// mapIdentityProviderError renders a Prembly/Tendar failure without forwarding the
+// upstream HTTP status or request ID to the client — those are logged at the call
+// site instead.
+func mapIdentityProviderError(status int, code, message string, retryable bool) ErrorMapping {
+	_, infra := identityProviderInfraCodes[code]
+	if infra || retryable || status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "SERVICE_UNAVAILABLE",
+				Message: appErr.ErrProviderServiceUnavailable.Error(),
+			},
+		}
+	}
+
+	if strings.TrimSpace(message) == "" {
+		message = "Identity verification could not be completed, please try again"
+	}
+	return ErrorMapping{
+		Status: http.StatusUnprocessableEntity,
+		Error: APIError{
+			Code:    "IDENTITY_PROVIDER_ERROR",
+			Message: message,
+		},
 	}
 }
 

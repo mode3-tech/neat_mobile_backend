@@ -549,19 +549,19 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized",
-			},
-		})
-		return
-	}
+	// deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
+	// if deviceID == "" {
+	// 	c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+	// 		Status: "error",
+	// 		Error: &response.APIError{
+	// 			Code:    string(ErrCodeInvalidDeviceID),
+	// 			Message: "Unauthorized",
+	// 		},
+	// 	})
+	// 	return
+	// }
 
-	resp, err := h.service.ForgotPassword(c.Request.Context(), req, deviceID)
+	resp, err := h.service.ForgotPassword(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -604,7 +604,7 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req, deviceID)
+	resp, err := h.service.ResendForgotPasswordOTP(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -622,18 +622,6 @@ func (h *Handler) ResendForgotPasswordOTP(c *gin.Context) {
 }
 
 func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
-	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
-	if deviceID == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidDeviceID),
-				Message: "Unauthorized.",
-			},
-		})
-		return
-	}
-
 	var req VerifyForgotPasswordOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
@@ -646,7 +634,7 @@ func (h *Handler) VerifyForgotPasswordOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.VerifyForgotPasswordOTP(c.Request.Context(), deviceID, req)
+	resp, err := h.service.VerifyForgotPasswordOTP(c.Request.Context(), req)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -1218,18 +1206,6 @@ func (h *Handler) VerifyBVNWithFace(c *gin.Context) {
 }
 
 func (h *Handler) ChallengeRequest(c *gin.Context) {
-	var req ChallengeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
-			Status: "error",
-			Error: &response.APIError{
-				Code:    string(ErrCodeInvalidRequestBody),
-				Message: "Invalid request body.",
-			},
-		})
-		return
-	}
-
 	deviceID := strings.TrimSpace(c.Request.Header.Get("X-Device-ID"))
 	if deviceID == "" {
 		mapped := response.MapError(appErr.ErrMissingDeviceID)
@@ -1240,7 +1216,7 @@ func (h *Handler) ChallengeRequest(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.CreateChallenge(c.Request.Context(), strings.TrimSpace(req.RefreshToken), deviceID)
+	resp, err := h.service.CreateChallenge(c.Request.Context(), deviceID)
 	if err != nil {
 		mapped := response.MapError(err)
 		log.Printf("from the handler: %s", err)
@@ -1253,7 +1229,7 @@ func (h *Handler) ChallengeRequest(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response.APIResponse[ChallengeRequestResponse]{
 		Status:  "success",
-		Message: "Challenge signature sent.",
+		Message: "Challenge created.",
 		Data:    resp,
 	})
 }

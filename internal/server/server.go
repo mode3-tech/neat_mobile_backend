@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// type Server struct {
-// 	httpServer *http.Server
-// }
-
 func New(cfg config.Config) (*http.Server, func(), error) {
 
 	router, stopCron, err := NewRouter(cfg)

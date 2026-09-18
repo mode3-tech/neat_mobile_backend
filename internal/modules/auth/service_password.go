@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
@@ -42,7 +43,7 @@ func (s *Service) RequestPasswordChange(ctx context.Context, mobileUserID string
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      mobileUserID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -128,8 +129,8 @@ func (s *Service) ChangePassword(ctx context.Context, mobileUserID string, req C
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 
 		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(user.Phone)
 		if err != nil {
@@ -197,7 +198,7 @@ func (s *Service) ResendPasswordChangeOTP(ctx context.Context, mobileUserID stri
 		Purpose:     authotp.PurposePasswordChange,
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
@@ -224,28 +225,26 @@ func (s *Service) resolvePasswordResetTarget(ctx context.Context, phone string) 
 	user, err := s.repo.GetUserByPhone(ctx, normalizedPhone)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", appErr.ErrUnauthorized
+			return nil, "", appErr.ErrUserNotFound
 		}
 		return nil, "", err
 	}
 	if user == nil {
-		return nil, "", appErr.ErrUnauthorized
+		return nil, "", appErr.ErrUserNotFound
 	}
 
 	return user, normalizedPhone, nil
 }
 
-func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
 	if s.otpManager == nil {
+		log.Printf("forgot password: %v", errors.New("otp manager not configured"))
 		return nil, errors.New("otp manager not configured")
 	}
 
 	user, phone, err := s.resolvePasswordResetTarget(ctx, req.Phone)
 	if err != nil {
+		log.Printf("forgot password: %v", err)
 		return nil, err
 	}
 
@@ -254,11 +253,12 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 		Channel:     authotp.ChannelSMS,
 		Destination: phone,
 		UserID:      user.ID,
-		TTL:         10 * time.Minute,
+		TTL:         authotp.DefaultOTPSMSTTL,
 		MaxAttempts: 5,
 		MaxResends:  3,
 	})
 	if err != nil {
+		log.Printf("forgot password: %v", err)
 		return nil, err
 	}
 
@@ -267,15 +267,11 @@ func (s *Service) issueForgotPasswordOTP(ctx context.Context, req ForgotPassword
 	}, nil
 }
 
-func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	return s.issueForgotPasswordOTP(ctx, req, deviceID)
+func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
+	return s.issueForgotPasswordOTP(ctx, req)
 }
 
-func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, req VerifyForgotPasswordOTPRequest) (*VerifyForgotPasswordOTPResponse, error) {
-	if strings.TrimSpace(deviceID) == "" {
-		return nil, errors.New("device id is required")
-	}
-
+func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, req VerifyForgotPasswordOTPRequest) (*VerifyForgotPasswordOTPResponse, error) {
 	if strings.TrimSpace(req.OTPID) == "" {
 		return nil, errors.New("otp id is required")
 	}
@@ -294,9 +290,11 @@ func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, deviceID string, 
 		Code:    strings.TrimSpace(req.OTPCode),
 	})
 	if err != nil {
+		log.Printf("verify forgot password: %v", err)
 		return nil, err
 	}
 	if result == nil {
+		log.Printf("verify forgot password: %v", appErr.ErrInvalidOTP)
 		return nil, appErr.ErrInvalidOTP
 	}
 
@@ -342,31 +340,31 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		verRepo := verification.NewVerification(txDB)
-		serviceRepo := NewRespository(txDB)
+		verRepo := verification.NewVerification(txDB, s.verification.Cipher())
+		serviceRepo := NewRespository(txDB, s.repo.cipher)
 		rec, err := verRepo.GetVerificationByID(ctx, strings.TrimSpace(req.VerificationID))
 		if err != nil {
 			return err
 		}
 		if rec == nil {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.Status != models.VerificationStatusVerified {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if rec.VerifiedPhone == nil || *rec.VerifiedPhone != normalizedPhone {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		now := time.Now().UTC()
 		if rec.ExpiresAt == nil || now.After(*rec.ExpiresAt) {
-			return appErr.ErrUnauthorized
+			return appErr.ErrInvalidVerificationID
 		}
 
 		if err := verRepo.MarkVerificationUsed(ctx, rec.ID, now); err != nil {
-			return appErr.ErrUnauthorized
+			return err
 		}
 
 		if err := serviceRepo.UpdateUserPassword(ctx, user.ID, hashedPassword); err != nil {
@@ -377,8 +375,8 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, d
 	})
 }
 
-func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest, deviceID string) (*ForgotPasswordResponse, error) {
-	resp, err := s.issueForgotPasswordOTP(ctx, req, deviceID)
+func (s *Service) ResendForgotPasswordOTP(ctx context.Context, req ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
+	resp, err := s.issueForgotPasswordOTP(ctx, req)
 	if err != nil {
 		return nil, err
 	}

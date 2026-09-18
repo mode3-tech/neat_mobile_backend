@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"io"
 	appErr "neat_mobile_app_backend/internal/errors"
@@ -71,6 +72,7 @@ type LoginRateLimiter struct {
 
 type LoginRateLimiterResponse struct {
 	RetryAfterSeconds int `json:"retry_after_seconds"`
+	RetryAfterMinutes int `json:"retry_after_minutes"`
 }
 
 func NewLoginRateLimiter(cfg LoginRateLimiterConfig) *LoginRateLimiter {
@@ -136,14 +138,17 @@ func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
 
 		if blockedUntil, blocked := l.nextBlockedUntil(ip, email, now); blocked {
 			retryAfter := max(int(blockedUntil.Sub(now).Seconds()), 1)
+			retryAfterMinutes := (retryAfter + 59) / 60 // ceil, derived from blockedUntil rather than the configured block duration directly
 
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 			mapped := response.MapError(appErr.ErrTooManyRequests)
+			mapped.Error.Message = fmt.Sprintf("too many requests, please try again in %d minute(s)", retryAfterMinutes)
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, response.APIResponse[LoginRateLimiterResponse]{
 				Status: "error",
 				Error:  &mapped.Error,
 				Data: &LoginRateLimiterResponse{
 					RetryAfterSeconds: retryAfter,
+					RetryAfterMinutes: retryAfterMinutes,
 				},
 			})
 			return

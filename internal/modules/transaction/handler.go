@@ -18,6 +18,34 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+func (h *Handler) FetchTransactionByID(c *gin.Context) {
+	txID := strings.TrimSpace(c.Param("txID"))
+	if txID == "" {
+		mapped := response.MapError(appErr.ErrInvalidQueryParameter)
+		c.AbortWithStatusJSON(http.StatusBadRequest, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	tx, err := h.service.FetchTransactionByID(c.Request.Context(), txID)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[*TransactionResponse]{
+		Status:  "success",
+		Message: "Transaction fetched successfully",
+		Data:    &tx,
+	})
+}
+
 func (h *Handler) FetchRecentTransactions(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {

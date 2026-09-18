@@ -20,7 +20,7 @@ type ManualRepayer interface {
 }
 
 type RepaymentFundTransferrer interface {
-	TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira int64) error
+	TransferForLoanRepayment(ctx context.Context, mobileUserID string, amountNaira float64) error
 }
 
 type DeviceVerifier interface {

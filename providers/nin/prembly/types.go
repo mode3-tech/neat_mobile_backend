@@ -1,0 +1,11 @@
+package prembly
+
+import nin "neat_mobile_app_backend/providers/nin"
+
+type PremblyNINValidationSuccessResponse = nin.PremblyNINValidationSuccessResponse
+type PremblyNINValidationData = nin.PremblyNINValidationData
+type PremblyNINValidationBillingInfo = nin.PremblyNINValidationBillingInfo
+type PremblyNINValidationVerification = nin.PremblyNINValidationVerification
+type PremblyNINWithFaceValidationSuccessResponse = nin.PremblyNINWithFaceValidationSuccessResponse
+type PremblyNINWithFaceNINData = nin.PremblyNINWithFaceNINData
+type PremblyNINFaceData = nin.PremblyNINFaceData

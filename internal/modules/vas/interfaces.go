@@ -28,6 +28,7 @@ type WalletService interface {
 type TransactionService interface {
 	AddTransaction(ctx context.Context, transaction *Transaction) error
 	UpdateTransactionStatus(ctx context.Context, txID string, balanceAfter int64, status TransactionStatus) error
+	UpdateTransactionProviderReference(ctx context.Context, txID, providerRef string) error
 }
 
 type BAAS interface {

@@ -38,12 +38,20 @@ type PremblyValidation interface {
 	ValidateBVNWithFace(ctx context.Context, number, image string) (*bvn.PremblyBVNWithFaceResponse, error)
 }
 
-type BVNProviderSource interface {
+// ValidationProviderSource resolves which identity provider serves BVN *and* NIN
+// lookups. A single preference governs both.
+type ValidationProviderSource interface {
 	GetCurrentProvider(ctx context.Context) (Provider, error)
 }
 
+// NINValidation is the provider-neutral NIN lookup, implemented by both
+// providers/nin/prembly and providers/nin/tendar.
 type NINValidation interface {
-	ValidateNIN(ctx context.Context, nin string) (*nin.PremblyNINValidationSuccessResponse, error)
+	ValidateNIN(ctx context.Context, number string) (*nin.ValidationResponse, error)
+}
+
+// NINFaceValidation is Prembly-only; Tendar exposes no NIN-with-face endpoint.
+type NINFaceValidation interface {
 	ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*nin.PremblyNINWithFaceValidationSuccessResponse, error)
 }
 

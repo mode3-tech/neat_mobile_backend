@@ -1,0 +1,1643 @@
+{
+  "info": {
+    "_postman_id": "4a22d10b-298a-4f6c-9569-df39f9d015a0",
+    "name": "Optimus Financial Services for NEAT",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "14069416",
+    "_collection_link": "https://go.postman.co/collection/14069416-4a22d10b-298a-4f6c-9569-df39f9d015a0?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "AuthToken",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Parse the JSON response body\r",
+                  "const json = pm.response.json();\r",
+                  " \r",
+                  "// Extract the value you want to set as a global variable\r",
+                  "const token = json.accessToken; // Replace 'key' with the actual key in the JSON response\r",
+                  " \r",
+                  "// Set the global variable\r",
+                  "pm.globals.set('token', token);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"username\": \"\",\r\n    \"password\":  \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseurl}}/tokens/generate",
+              "host": [
+                "{{baseurl}}"
+              ],
+              "path": [
+                "tokens",
+                "generate"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "AuthToken Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"username\" : \"ccb4c83c-c31c-460d-9acd-f5f87f130edb\", \r\n    \"password\" : \"p15ec1rq5iil8zJ13WJoTjfyY17pQ6u3DU34r7wpUtQX6UZOw9\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway}}/tokens/generate",
+                  "host": [
+                    "{{gateway}}"
+                  ],
+                  "path": [
+                    "tokens",
+                    "generate"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "721"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Server",
+                  "value": "Microsoft-IIS/10.0"
+                },
+                {
+                  "key": "X-Powered-By",
+                  "value": "ASP.NET"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 12 Jan 2024 16:46:48 GMT"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"accessToken\": \"eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiY2NiNGM4M2MtYzMxYy00NjBkLTlhY2QtZjVmODdmMTMwZWRiIiwiY29ubmVjdGVkRnJvbSI6IjE5Ny4yNTMuMzYuMTQyIiwidG9rZW5EYXRlIjoiMjAyNC0wMS0xMiAxNzo0Njo0OS45NzMiLCJjaGFubmVsIjoiVnJudHVyZXMgR2FyZGVuIEdyb3VwIiwianRpIjoiNDBiZGEwZTAtYTM0Ny00N2Y4LTg4NzAtOGUwNjg1OGM5OTRhIiwiZXhwIjoxNzA1MDc4NjA5LCJpc3MiOiJodHRwOi8vMTkyLjE2OC4xMDIuODMvYXBpaWRtLyIsImF1ZCI6Imh0dHA6Ly8xOTIuMTY4LjEwMi44My9hcGlpZG0vIn0.ka9WIGOPAM5FnNUXkTj_NXPL0FU_Dl2QGIHW7JFUtug\",\n    \"refreshToken\": {\n        \"userName\": \"cb52d4ab62704f03aafdb11e0f55f479\",\n        \"tokenString\": \"LieePuugD01rZFAc6HsLA2l/ec1ekWNqnjzXXFIBEjw=\",\n        \"expireAt\": \"2024-01-12T18:46:49.9732753+01:00\"\n    }\n}"
+            },
+            {
+              "name": "AuthToken",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"username\": \"9b72f3f7-37c3-406e-9270-f30cccbd1766\",\r\n    \"password\": \"338c4ff0-0a9f-4679-8917-736d-a439-bb9d1d756256\"\r\n}\r\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/tokens/generate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "tokens",
+                    "generate"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "736"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Server",
+                  "value": "Microsoft-IIS/10.0"
+                },
+                {
+                  "key": "X-Powered-By",
+                  "value": "ASP.NET"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 03 Jan 2025 13:28:40 GMT"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"accessToken\": \"eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiOWI3MmYzZjctMzdjMy00MDZlLTkyNzAtZjMwY2NjYmQxNzY2IiwiY29ubmVjdGVkRnJvbSI6IjE3Mi4xNi4yMDIuMTM0IiwidG9rZW5EYXRlIjoiMjAyNS0wMS0wMyAxNDoyODo0MC40NzgiLCJjaGFubmVsIjoiU1dJRlQgUEFZIEdBVEUgU09MVVRJT05TIExJTUlURUQiLCJqdGkiOiI5MTE0YmFiMC02ZDE1LTQ5ODQtOThhNC0xN2E5OTBlMmQ5NTciLCJleHAiOjE3MzU5MTQ1MjAsImlzcyI6Imh0dHA6Ly8xOTIuMTY4LjEwMi44My9hcGlpZG0vIiwiYXVkIjoiaHR0cDovLzE5Mi4xNjguMTAyLjgzL2FwaWlkbS8ifQ.Pel5cM2HtrZhPamW9LnUU7qHvYLsnKC_HXFyfvqy30A\",\n    \"refreshToken\": {\n        \"userName\": \"9b72f3f7-37c3-406e-9270-f30cccbd1766\",\n        \"tokenString\": \"8o3CUmajeMbn600t+3zO2dKEX0te8xM0VA84Jemc5aU=\",\n        \"expireAt\": \"2025-01-03T15:28:40.4787938+01:00\"\n    }\n}"
+            }
+          ]
+        }
+      ],
+      "description": "The auth request would generate an authorization token that would be used to make calls to the API's",
+      "auth": {
+        "type": "noauth"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Api",
+      "item": [
+        {
+          "name": "Account",
+          "item": [
+            {
+              "name": "Balance",
+              "item": [
+                {
+                  "name": "Handles the logic to account balance",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\r\n  \"encryptedString\": \"base_64_encrypted_string\"\r\n}\r\n\r\n\r\n//sample payload\r\n// {\r\n//   \"accountNumber\": \"account_no\"\r\n// }",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/account/balance",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "account",
+                        "balance"
+                      ]
+                    },
+                    "description": "Send request data to create a new client\r\n            \r\n| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| customerId              | string              | customer id                                                      | Required  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/balance?accountNumber=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "balance"
+                          ],
+                          "query": [
+                            {
+                              "key": "accountNumber",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"customerId\": \"string\",\n    \"accountNumber\": \"string\",\n    \"accountName\": \"string\",\n    \"accountType\": \"string\",\n    \"currencyCode\": \"string\",\n    \"balance\": 4697.96461676835,\n    \"formatedBalance\": \"string\",\n    \"schemeType\": \"string\",\n    \"schemeCode\": \"string\",\n    \"bookBalance\": 5003.573901161011,\n    \"kycLevel\": \"string\"\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/balance?accountNumber=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "balance"
+                          ],
+                          "query": [
+                            {
+                              "key": "accountNumber",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/balance?accountNumber=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "balance"
+                          ],
+                          "query": [
+                            {
+                              "key": "accountNumber",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Transactions",
+              "item": [
+                {
+                  "name": "Handles the logic to get last paged transactions",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\r\n    \"encryptedString\" : \"base_64_encrypted_string\"\r\n}\r\n\r\n//sample payload\r\n// {\r\n//     \"accountNumber\" : \"account_no\", \r\n//     \"pageSize\" : 30\r\n// }",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/account/transactions",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "account",
+                        "transactions"
+                      ]
+                    },
+                    "description": "Send request data to create a new client\r\n            \r\n| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| AccountNumber           | string              | Account Number                                                   | Required  |\r\n| PageSize                | int                 | Page size to be returned for request                             | Required  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/transactions?AccountNumber=string&PageSize=4677",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "transactions"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "PageSize",
+                              "value": "4677"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"balance\": {\n      \"responseCode\": \"\",\n      \"responseMessage\": \"\",\n      \"accountNumber\": \"string\",\n      \"currencyCode\": \"string\",\n      \"bookBalance\": 2602.2484672775026,\n      \"availableBalance\": 8570.694611611125,\n      \"lienAmount\": \"\",\n      \"unclearedBalance\": \"\",\n      \"effectiveavail\": \"\"\n    },\n    \"transactions\": [\n      {\n        \"tranId\": \"string\",\n        \"transactionId\": \"string\",\n        \"amount\": 6508.161822482871,\n        \"transactionType\": \"string\",\n        \"remarks\": \"string\",\n        \"transactionDate\": \"1995-12-31T00:14:18.092Z\",\n        \"postingDate\": \"1954-05-07T20:33:27.911Z\",\n        \"transactionSerialNo\": 8247,\n        \"transactionCat\": \"string\",\n        \"transactionBalance\": 1297.6822035936132,\n        \"transRef\": \"string\",\n        \"hasReceipt\": false\n      },\n      {\n        \"tranId\": \"string\",\n        \"transactionId\": \"string\",\n        \"amount\": 4871.202369960027,\n        \"transactionType\": \"string\",\n        \"remarks\": \"string\",\n        \"transactionDate\": \"2002-11-29T20:46:35.107Z\",\n        \"postingDate\": \"1989-06-28T02:09:45.472Z\",\n        \"transactionSerialNo\": 2189,\n        \"transactionCat\": \"string\",\n        \"transactionBalance\": 2381.2759779008297,\n        \"transRef\": \"string\",\n        \"hasReceipt\": true\n      }\n    ]\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/transactions?AccountNumber=string&PageSize=4677",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "transactions"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "PageSize",
+                              "value": "4677"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/transactions?AccountNumber=string&PageSize=4677",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "transactions"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "PageSize",
+                              "value": "4677"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Statement",
+              "item": [
+                {
+                  "name": "Handles the logic to get account statement",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\r\n    \"encryptedString\" : \"base_64_encrypted_string\"\r\n}\r\n\r\n\r\n// //sample payload\r\n// {\r\n//   \"accountNumber\": \"account_no\",\r\n//   \"startDate\": \"2026-04-01\",\r\n//   \"endDate\": \"2026-04-30\",\r\n//   \"isAccountMasked\": true\r\n// }\r\n",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/account/statement",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "account",
+                        "statement"
+                      ]
+                    },
+                    "description": "Send request data to create a new client\r\n            \r\n| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| AccountNumber           | string              | Account number                                                   | Required  |\r\n| StartDate               | string              | Start date of transactions (yyyy-mm-dd)                          | Required  |\r\n| EndDate                 | string              | End date of transactions (yyyy-mm-dd)                            | Required  |\r\n| IsAccountMasked         | bool                | Mask account number                                              | Required  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/statement?AccountNumber=string&StartDate=string&EndDate=string&IsAccountMasked=false",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "statement"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "StartDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "EndDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "IsAccountMasked",
+                              "value": "false"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"summary\": {\n      \"printDate\": \"string\",\n      \"branchName\": \"string\",\n      \"customerId\": \"string\",\n      \"accountNumber\": \"string\",\n      \"accountName\": \"string\",\n      \"accountType\": \"string\",\n      \"currency\": \"string\",\n      \"totalDebit\": \"string\",\n      \"totalCredit\": \"string\",\n      \"openingBalance\": \"string\",\n      \"closingBalance\": \"string\",\n      \"usableBalance\": \"string\",\n      \"customerAddress\": \"string\"\n    },\n    \"tranEntries\": [\n      {\n        \"transDate\": \"string\",\n        \"valueDate\": \"string\",\n        \"reference\": \"string\",\n        \"moneyIn\": \"string\",\n        \"moneyOut\": \"string\",\n        \"moneyRemaining\": \"string\"\n      },\n      {\n        \"transDate\": \"string\",\n        \"valueDate\": \"string\",\n        \"reference\": \"string\",\n        \"moneyIn\": \"string\",\n        \"moneyOut\": \"string\",\n        \"moneyRemaining\": \"string\"\n      }\n    ]\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/statement?AccountNumber=string&StartDate=string&EndDate=string&IsAccountMasked=false",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "statement"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "StartDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "EndDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "IsAccountMasked",
+                              "value": "false"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/statement?AccountNumber=string&StartDate=string&EndDate=string&IsAccountMasked=false",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "statement"
+                          ],
+                          "query": [
+                            {
+                              "key": "AccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "StartDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "EndDate",
+                              "value": "string"
+                            },
+                            {
+                              "key": "IsAccountMasked",
+                              "value": "false"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Name Enquiry",
+              "item": [
+                {
+                  "name": "Handles the logic to perform name enquiry on an account",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/account/name-enquiry?BeneficiaryBankCode=999366&BeneficiaryAccountNumber=2000083526",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "account",
+                        "name-enquiry"
+                      ],
+                      "query": [
+                        {
+                          "key": "BeneficiaryBankCode",
+                          "value": "999366"
+                        },
+                        {
+                          "key": "BeneficiaryAccountNumber",
+                          "value": "2000083526"
+                        }
+                      ]
+                    },
+                    "description": "| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| AccountNumber           | string              | Account number                                                   | Required  |\r\n| BankCode                | string              | bank code                                                        | Required  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/name-enquiry?BeneficiaryName=string&BeneficiaryBankName=string&BeneficiaryBankCode=string&BeneficiaryAccountNumber=string&Narration=string&Amount=5307.768770165739",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "name-enquiry"
+                          ],
+                          "query": [
+                            {
+                              "key": "BeneficiaryName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankCode",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryAccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Narration",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Amount",
+                              "value": "5307.768770165739"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"bankCode\": \"string\",\n    \"sessionId\": \"string\",\n    \"accountNumber\": \"string\",\n    \"accountName\": \"string\",\n    \"bvn\": \"string\",\n    \"kycLevel\": \"string\"\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/name-enquiry?BeneficiaryName=string&BeneficiaryBankName=string&BeneficiaryBankCode=string&BeneficiaryAccountNumber=string&Narration=string&Amount=5307.768770165739",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "name-enquiry"
+                          ],
+                          "query": [
+                            {
+                              "key": "BeneficiaryName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankCode",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryAccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Narration",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Amount",
+                              "value": "5307.768770165739"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/name-enquiry?BeneficiaryName=string&BeneficiaryBankName=string&BeneficiaryBankCode=string&BeneficiaryAccountNumber=string&Narration=string&Amount=5307.768770165739",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "name-enquiry"
+                          ],
+                          "query": [
+                            {
+                              "key": "BeneficiaryName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankName",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryBankCode",
+                              "value": "string"
+                            },
+                            {
+                              "key": "BeneficiaryAccountNumber",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Narration",
+                              "value": "string"
+                            },
+                            {
+                              "key": "Amount",
+                              "value": "5307.768770165739"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Status",
+              "item": [
+                {
+                  "name": "Handles the logic to check the existence of a customer by BVN",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/account/status?bvn=10567896549",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "account",
+                        "status"
+                      ],
+                      "query": [
+                        {
+                          "key": "bvn",
+                          "value": "10567896549"
+                        }
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/status?bvn=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "bvn",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"bankCode\": \"string\",\n    \"sessionId\": \"string\",\n    \"accountNumber\": \"string\",\n    \"accountName\": \"string\",\n    \"bvn\": \"string\",\n    \"kycLevel\": \"string\"\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/status?bvn=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "bvn",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Account/status?bvn=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Account",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "bvn",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Transaction",
+          "item": [
+            {
+              "name": "status",
+              "item": [
+                {
+                  "name": "Handles the logic to retrieve the status of a transaction",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/Transaction/status?transactionId=string",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "Transaction",
+                        "status"
+                      ],
+                      "query": [
+                        {
+                          "key": "transactionId",
+                          "value": "string"
+                        }
+                      ]
+                    },
+                    "description": "| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| transactionId           | string              | transaction id or reference number                               | Required  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/status?transactionId=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "transactionId",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": {\n    \"bankCode\": \"string\",\n    \"sessionId\": \"string\",\n    \"accountNumber\": \"string\",\n    \"accountName\": \"string\",\n    \"bvn\": \"string\",\n    \"kycLevel\": \"string\"\n  }\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/status?transactionId=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "transactionId",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/status?transactionId=string",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "status"
+                          ],
+                          "query": [
+                            {
+                              "key": "transactionId",
+                              "value": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "transfer",
+              "item": [
+                {
+                  "name": "Handles the logic for interbank or intrabank transactions",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"encryptedString\": \"string\"\n}\n\n\n//NB: Session id is not required for intrabank transfer\n//For interbank transfer session id is required which is gotten \n//from the name enquiry endpoint on the account module\n\n\n\n//sample date\n{\n  \"requestId\": \"cc43c2ad-b801-485c-93fe-d7831a94df52\",\n  \"transactionReference\": \"f80308b4-5cd9-4352-a985-5dd0cfeed6ca\",\n  \"amount\": 10,\n  \"narration\": \"Test transfer\",\n  \"sourceAccount\": \"2000083526\",\n  \"beneficiaryAccount\": \"2000077039\",\n  \"beneficiaryBankCode\": \"999366\",\n  \"sessionId\": \"\"\n}",
+                      "options": {
+                        "raw": {
+                          "headerFamily": "json",
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseurl}}/opti-finserve-api/v1/Transaction/transfer",
+                      "host": [
+                        "{{baseurl}}"
+                      ],
+                      "path": [
+                        "opti-finserve-api",
+                        "v1",
+                        "Transaction",
+                        "transfer"
+                      ]
+                    },
+                    "description": "| Field                   | Type                | Description                                                      | Required  |\r\n|-------------------------|---------------------|------------------------------------------------------------------|-----------|\r\n| RequestId               | string              | Unique Request Id                                                | Required  |\r\n| TransactionReference    | string              | Unique Transaction reference                                     | Required  |\r\n| TransactionDate         | Datetime            | Transaction date                                                 | Required  |\r\n| Amount                  | decimal              | Amount                                                           | Required  |\r\n| Narration               | string              | Transaction narration                                            | Required  |\r\n| SourceAccount           | string              | Source Account number                                            | Required  |\r\n| BeneficiaryAccount      | string              | Beneficiary Account number                                       | Required  |\r\n| BeneficiaryBankCode     | string              | Beneficiary bank code                                            | Required  |\r\n| SessionId               | string              | Name enquiry session id (Passed for interbank transfer)          | Optional  |"
+                  },
+                  "response": [
+                    {
+                      "name": "The request was successfully processed.",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"encryptedString\": \"string\"\n}",
+                          "options": {
+                            "raw": {
+                              "headerFamily": "json",
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/transfer",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "transfer"
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\",\n  \"data\": [\n    {\n      \"responseCode\": \"string\",\n      \"responseMessage\": \"string\",\n      \"transactionAmount\": 671.7743927842779,\n      \"transactionAmountInWords\": \"string\",\n      \"transactionDate\": \"string\",\n      \"transactionReference\": \"string\",\n      \"accountDebited\": \"string\",\n      \"accountCredited\": \"string\",\n      \"senderName\": \"string\",\n      \"beneficiaryName\": \"string\",\n      \"beneficiaryBankName\": \"string\",\n      \"transactionId\": \"string\",\n      \"paymentReference\": \"string\",\n      \"sessionID\": \"string\"\n    },\n    {\n      \"responseCode\": \"string\",\n      \"responseMessage\": \"string\",\n      \"transactionAmount\": 1333.9933869427357,\n      \"transactionAmountInWords\": \"string\",\n      \"transactionDate\": \"string\",\n      \"transactionReference\": \"string\",\n      \"accountDebited\": \"string\",\n      \"accountCredited\": \"string\",\n      \"senderName\": \"string\",\n      \"beneficiaryName\": \"string\",\n      \"beneficiaryBankName\": \"string\",\n      \"transactionId\": \"string\",\n      \"paymentReference\": \"string\",\n      \"sessionID\": \"string\"\n    }\n  ]\n}"
+                    },
+                    {
+                      "name": "The provided request data is invalid.",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"encryptedString\": \"string\"\n}",
+                          "options": {
+                            "raw": {
+                              "headerFamily": "json",
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/transfer",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "transfer"
+                          ]
+                        }
+                      },
+                      "status": "Bad Request",
+                      "code": 400,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n  \"responseMessage\": \"string\",\n  \"responseCode\": \"string\",\n  \"error\": \"\"\n}"
+                    },
+                    {
+                      "name": "An unexpected server error occurred while processing the request.",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "text/plain"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"encryptedString\": \"string\"\n}",
+                          "options": {
+                            "raw": {
+                              "headerFamily": "json",
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{baseUrl}}/api/v1/Transaction/transfer",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "Transaction",
+                            "transfer"
+                          ]
+                        }
+                      },
+                      "status": "Internal Server Error",
+                      "code": 500,
+                      "_postman_previewlanguage": "json",
+                      "header": [
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Get banks",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "text/plain"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/Bank",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "Bank"
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "The request was successfully processed.",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v1/Bank",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "Bank"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"responseMessage\": \"fugiat dolore\",\n  \"responseCode\": \"laborum amet\",\n  \"data\": [\n    {\n      \"bankCode\": \"eiusmod ut nostrud proident\",\n      \"bankName\": \"nisi consequat sed\"\n    },\n    {\n      \"bankCode\": \"dolor officia id eiusmod\",\n      \"bankName\": \"dolore minim\"\n    }\n  ]\n}"
+                },
+                {
+                  "name": "The provided request data is invalid.",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v1/Bank",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "Bank"
+                      ]
+                    }
+                  },
+                  "status": "Bad Request",
+                  "code": 400,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"responseMessage\": \"id est\",\n  \"responseCode\": \"aute\"\n}"
+                },
+                {
+                  "name": "An unexpected server error occurred while processing the request.",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "text/plain"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v1/Bank",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "Bank"
+                      ]
+                    }
+                  },
+                  "status": "Internal Server Error",
+                  "code": 500,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "dolor voluptate et in"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseurl",
+      "value": "https://optiweb.optimusbank.com:8025/api-gateway"
+    }
+  ]
+}

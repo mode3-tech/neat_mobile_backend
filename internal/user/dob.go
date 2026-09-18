@@ -14,11 +14,12 @@ func NormalizeDOB(input string) (string, error) {
 		"02/01/2006",
 		"2006-01-02",
 		"02012006",
+		"02-Jan-2006",
 	}
 
 	for _, layout := range layouts {
 		t, err := time.Parse(layout, input)
-		if err != nil {
+		if err == nil {
 			return t.Format("2006-01-02"), nil
 		}
 	}

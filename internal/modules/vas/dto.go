@@ -5,6 +5,7 @@ type AirtimePayload struct {
 	PhoneNumber string `json:"phone_number" binding:"required"`
 	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
+	UseCashback bool   `json:"use_cashback"`
 }
 
 type DataPayload struct {
@@ -12,6 +13,7 @@ type DataPayload struct {
 	PhoneNumber string `json:"phone_number" binding:"required"`
 	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
+	UseCashback bool   `json:"use_cashback"`
 }
 
 type ElectricityValidationPayload struct {
@@ -26,6 +28,7 @@ type PayElectricityPayload struct {
 	AccountType   AccountType `json:"account_type" binding:"required"`
 	Amount        int64       `json:"amount" binding:"required,gt=0"`
 	Pin           string      `json:"pin" binding:"required"`
+	UseCashback   bool        `json:"use_cashback"`
 }
 
 type ValidateCablePayload struct {
@@ -41,6 +44,7 @@ type PayCablePayload struct {
 	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
 	Amount        int64  `json:"amount" binding:"required,gt=0"`
 	Pin           string `json:"pin" binding:"required"`
+	UseCashback   bool   `json:"use_cashback"`
 }
 
 type BillingsByCategoryIDPayload struct {

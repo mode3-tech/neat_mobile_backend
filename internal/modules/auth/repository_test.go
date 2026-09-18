@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"regexp"
 	"testing"
 	"time"
@@ -11,6 +12,19 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+func testCipher(t *testing.T) *crypto.FieldCipher {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	c, err := crypto.NewFieldCipher(key)
+	if err != nil {
+		t.Fatalf("NewFieldCipher: %v", err)
+	}
+	return c
+}
 
 func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
 	t.Helper()
@@ -34,7 +48,7 @@ func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
 		_ = sqlDB.Close()
 	}
 
-	return NewRespository(gormDB), mock, cleanup
+	return NewRespository(gormDB, testCipher(t)), mock, cleanup
 }
 
 func getUserByEmailQueryPattern() string {
@@ -42,7 +56,7 @@ func getUserByEmailQueryPattern() string {
 }
 
 func getBVNRecordByBVNQueryPattern() string {
-	return regexp.QuoteMeta(`SELECT id, user_id FROM "wallet_bvn_records" WHERE bvn = $1 LIMIT $2 FOR UPDATE`)
+	return regexp.QuoteMeta(`SELECT id, user_id FROM "wallet_bvn_records" WHERE bvn_hash = $1 LIMIT $2 FOR UPDATE`)
 }
 
 func updateBVNRecordUserIDQueryPattern() string {
@@ -115,7 +129,7 @@ func TestRepository_LinkBVNRecordToUser_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id"}).AddRow("bvn-row-1", "")
 
 	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
-		WithArgs("12345678901", 1).
+		WithArgs(crypto.Hash("12345678901"), 1).
 		WillReturnRows(rows)
 	mock.ExpectBegin()
 	mock.ExpectExec(updateBVNRecordUserIDQueryPattern()).
@@ -137,7 +151,7 @@ func TestRepository_LinkBVNRecordToUser_MissingRecordIsIgnored(t *testing.T) {
 	defer cleanup()
 
 	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
-		WithArgs("12345678901", 1).
+		WithArgs(crypto.Hash("12345678901"), 1).
 		WillReturnError(gorm.ErrRecordNotFound)
 
 	if err := repo.LinkBVNRecordToUser(context.Background(), "12345678901", "user-1"); err != nil {
@@ -156,7 +170,7 @@ func TestRepository_LinkBVNRecordToUser_RejectsDifferentUser(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id"}).AddRow("bvn-row-1", "other-user")
 
 	mock.ExpectQuery(getBVNRecordByBVNQueryPattern()).
-		WithArgs("12345678901", 1).
+		WithArgs(crypto.Hash("12345678901"), 1).
 		WillReturnRows(rows)
 
 	err := repo.LinkBVNRecordToUser(context.Background(), "12345678901", "user-1")

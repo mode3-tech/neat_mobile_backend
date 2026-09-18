@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/models"
 	"time"
 
@@ -12,15 +13,36 @@ import (
 )
 
 type VerificationRepo struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-func NewVerification(db *gorm.DB) *VerificationRepo {
-	return &VerificationRepo{db: db}
+func NewVerification(db *gorm.DB, cipher *crypto.FieldCipher) *VerificationRepo {
+	return &VerificationRepo{db: db, cipher: cipher}
 }
 
+// Cipher exposes the field cipher this repo was constructed with, so callers
+// that need a fresh tx-scoped VerificationRepo (e.g. otp.Service inside a
+// WithTx block) can reuse the same cipher instance without redeclaring it.
+func (r *VerificationRepo) Cipher() *crypto.FieldCipher {
+	return r.cipher
+}
+
+// AddVerification persists a verification record, encrypting VerifiedID
+// (holds a raw BVN/NIN for BVN/NIN checks) if present. See the matching
+// comment in registerv2/repository.go's AddVerification for why encryption
+// happens into a copy rather than mutating the caller's struct.
 func (r *VerificationRepo) AddVerification(ctx context.Context, verification *models.VerificationRecord) error {
-	return r.db.WithContext(ctx).Create(verification).Error
+	if verification.VerifiedID == nil {
+		return r.db.WithContext(ctx).Create(verification).Error
+	}
+	toInsert := *verification
+	encrypted, err := r.cipher.Encrypt(*verification.VerifiedID)
+	if err != nil {
+		return err
+	}
+	toInsert.VerifiedID = &encrypted
+	return r.db.WithContext(ctx).Create(&toInsert).Error
 }
 
 func (r *VerificationRepo) GetVerificationByID(ctx context.Context, id string) (*models.VerificationRecord, error) {
@@ -35,6 +57,13 @@ func (r *VerificationRepo) GetVerificationByID(ctx context.Context, id string) (
 	}
 	if result.RowsAffected == 0 {
 		return nil, nil
+	}
+	if rec.VerifiedID != nil {
+		plain, err := r.cipher.Decrypt(*rec.VerifiedID)
+		if err != nil {
+			return nil, err
+		}
+		rec.VerifiedID = &plain
 	}
 	return &rec, nil
 }

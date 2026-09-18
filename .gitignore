@@ -2,3 +2,10 @@
 /.gocache
 .env
 /cmd/seed-dev-user
+*.md
+*.exe
+*.txt
+*.asc
+/tmp/*
+/tmp/*
+*.postman_collection_new

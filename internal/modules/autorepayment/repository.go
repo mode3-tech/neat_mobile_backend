@@ -65,3 +65,10 @@ func (r *Repository) UpdateAttemptStatus(ctx context.Context, id string, status 
 			"provider_ref":   providerRef,
 		}).Error
 }
+
+func (r *Repository) StopAllAutoRepayments(ctx context.Context, mobileUserID string) error {
+	return r.db.WithContext(ctx).
+		Model(&AutoRepaymentAttempt{}).
+		Where("mobile_user_id = ?", mobileUserID).
+		Update("status", AutoRepaymentAttemptStatusStopped).Error
+}

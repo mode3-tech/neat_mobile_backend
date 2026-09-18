@@ -3,6 +3,7 @@ package loanproduct
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/crypto"
 	"regexp"
 	"testing"
 	"time"
@@ -34,7 +35,17 @@ func newMockRepository(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
 		_ = sqlDB.Close()
 	}
 
-	return NewRepository(gormDB), mock, cleanup
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	cipher, err := crypto.NewFieldCipher(key)
+	if err != nil {
+		_ = sqlDB.Close()
+		t.Fatalf("create field cipher: %v", err)
+	}
+
+	return NewRepository(gormDB, cipher), mock, cleanup
 }
 
 func getUserQueryPattern() string {

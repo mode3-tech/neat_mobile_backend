@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/models"
 	"strings"
@@ -63,24 +64,21 @@ func (s *Service) Logout(ctx context.Context, refreshToken, accessToken string) 
 
 func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken string) (*AuthObject, error) {
 	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return nil, errors.New("device id is required")
-	}
-
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
+		log.Println("refresh token is required")
 		return nil, appErr.ErrUnauthorized
 	}
 
 	sub, sid, oldJTI, err := s.jwtSigner.ExtractRefreshTokenIdentifiers(refreshToken)
-
 	if err != nil {
+		log.Println("extract refresh token identifiers failed:", err)
 		return nil, appErr.ErrUnauthorized
 	}
 
 	refreshTokenObj, err := s.repo.GetRefreshTokenWithJTI(ctx, oldJTI)
-
 	if err != nil {
+		log.Println("get refresh token with jti failed:", err)
 		return nil, appErr.ErrUnauthorized
 	}
 
@@ -92,6 +90,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 	}
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, refreshTokenObj.UserID, deviceID); err != nil {
+		log.Println("verify user device failed:", err)
 		return nil, err
 	}
 
@@ -104,23 +103,28 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 	accessSession, err := s.repo.GetAccessTokenWithSID(ctx, sid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Println("get access token with sid failed:", err)
 			return nil, appErr.ErrInvalidSession
 		}
+		log.Println("get access token with sid failed:", err)
 		return nil, err
 	}
 
 	if accessSession.RevokedAt != nil || accessSession.UserID != sub || accessSession.DeviceID == nil || strings.TrimSpace(*accessSession.DeviceID) != deviceID {
-		return nil, errors.New("device not allowed")
+		log.Printf("device not allowed: userID=%s sub=%s deviceID=%s accessSessionDeviceID=%s", accessSession.UserID, sub, deviceID, *accessSession.DeviceID)
+		return nil, appErr.ErrDeviceNotAllowed
 	}
 
 	accessToken, err := s.jwtSigner.IssueAccessToken(sub, sid)
 	if err != nil {
-		return nil, err
+		log.Println("access token issue failed:", err)
+		return nil, appErr.ErrAccessTokenIssue
 	}
 
 	newRefreshToken, newJTI, newExpiresAt, err := s.jwtSigner.IssueRefreshToken(sub, sid)
 	if err != nil || newRefreshToken == "" || newJTI == "" {
-		return nil, errors.New("failed to issue refresh token")
+		log.Println("refresh token issue failed:", err)
+		return nil, appErr.ErrRefreshTokenIssue
 	}
 
 	hashedRefreshToken := sha256.Sum256([]byte(newRefreshToken))
@@ -138,6 +142,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 	}
 
 	if err := s.repo.RotateRefreshToken(ctx, oldJTI, newRefreshTokenRow); err != nil {
+		log.Println("refresh token rotation failed:", err)
 		return nil, err
 	}
 
@@ -147,4 +152,8 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 
 func (s *Service) IsSessionActive(ctx context.Context, sid, mobileUserID, deviceID string) (bool, error) {
 	return s.repo.CheckSession(ctx, sid, mobileUserID, deviceID)
+}
+
+func (s *Service) RevokeAllSessions(ctx context.Context, mobileUserID string, revokedAt time.Time) error {
+	return s.repo.RevokeAllSessions(ctx, mobileUserID, revokedAt)
 }

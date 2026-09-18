@@ -73,7 +73,7 @@ func (s *Service) ClaimRegistrationSession(ctx context.Context, jobID, claimToke
 	var resp *VerifiedDeviceResponse
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 		deviceRepo := device.NewRepository(txDB)
 
 		job, err := authRepo.GetRegistrationJobByIDForUpdate(ctx, jobID)

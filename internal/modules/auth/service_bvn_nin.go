@@ -21,9 +21,30 @@ import (
 	"gorm.io/gorm"
 )
 
+// ValidateNIN resolves the configured identity provider and performs the NIN lookup.
+// The same system_preferences row drives BVN and NIN, so flipping it moves both.
 func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
-	if nin == "" || len(nin) < 11 || len(nin) > 11 {
-		return nil, errors.New("invalid nin")
+	provider, client := s.ninProviderFor(ctx)
+	if client == nil {
+		log.Printf("ValidateNIN: %s nin provider is not configured", provider)
+		return nil, appErr.ErrProviderServiceUnavailable
+	}
+
+	return s.validateNINWith(ctx, provider, client, bvnVerificationID, nin)
+}
+
+// ninProviderFor resolves the configured provider and the client that serves it.
+// Anything other than an explicit prembly preference lands on Tendar.
+func (s *Service) ninProviderFor(ctx context.Context) (Provider, NINValidation) {
+	if s.resolveProvider(ctx) == ProviderPrembly {
+		return ProviderPrembly, s.ninPrembly
+	}
+	return ProviderTendar, s.ninTendar
+}
+
+func (s *Service) validateNINWith(ctx context.Context, provider Provider, client NINValidation, bvnVerificationID, nin string) (*ninInfo, error) {
+	if len(nin) != 11 {
+		return nil, appErr.ErrInvalidNIN
 	}
 
 	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
@@ -34,10 +55,10 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		return nil, err
 	}
 
-	resp, err := s.nin.ValidateNIN(ctx, nin)
+	resp, err := client.ValidateNIN(ctx, nin)
 	if err != nil {
-		log.Printf("ValidateNIN: provider call failed: %v", err)
-		return nil, err
+		log.Printf("ValidateNIN: %s provider call failed: %v", provider, err)
+		return nil, translateProviderError(err, appErr.ErrNINNotFound)
 	}
 
 	firstName := TitleCase(resp.Data.FirstName)
@@ -45,7 +66,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	lastName := TitleCase(resp.Data.Surname)
 	fullName := fmt.Sprintf("%s %s %s", firstName, middleName, lastName)
 
-	_, err = compareBVNAndNinDetails(*row.VerifiedName, SerializeDOB(strings.TrimSpace(*row.VerifiedDOB)), fullName, SerializeDOB(strings.TrimSpace(resp.Data.BirthDate)))
+	_, err = compareBVNAndNinDetails(*row.VerifiedName, strings.TrimSpace(*row.VerifiedDOB), fullName, strings.TrimSpace(resp.Data.BirthDate))
 
 	if err != nil {
 		log.Printf("ValidateNIN: BVN/NIN detail mismatch: %v", err)
@@ -56,7 +77,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(nin)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedNIN := MaskSub(nin)
 	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(resp.Data.TelephoneNo)
 	if err != nil {
@@ -68,7 +89,7 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 		ID:            verificationID,
 		Type:          models.VerificationTypeNIN,
 		Status:        models.VerificationStatusVerified,
-		Provider:      string(ProviderPrembly),
+		Provider:      string(provider),
 		SubjectHash:   subjectHash,
 		SubjectMasked: &maskedNIN,
 		ExpiresAt:     &expiresAt,
@@ -110,18 +131,24 @@ func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string
 	}, nil
 }
 
-func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+// resolveProvider reads the single system_preferences row that governs both BVN and
+// NIN validation. Any failure — no source wired, missing row, DB error — falls back
+// to Tendar.
+func (s *Service) resolveProvider(ctx context.Context) Provider {
 	if s.providerSource == nil {
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		return ProviderTendar
 	}
 
 	provider, err := s.providerSource.GetCurrentProvider(ctx)
 	if err != nil {
-		log.Printf("failed to resolve bvn provider from source; forcing tendar: %v", err)
-		return s.ValidateBVNWithTendar(ctx, bvn)
+		log.Printf("failed to resolve validation provider from source; forcing tendar: %v", err)
+		return ProviderTendar
 	}
+	return provider
+}
 
-	switch provider {
+func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
+	switch s.resolveProvider(ctx) {
 	case ProviderPrembly:
 		return s.ValidateBVNWithPrembly(ctx, bvn)
 	default:
@@ -132,7 +159,7 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
 		log.Printf("tendar validator is not configured")
-		return nil, errors.New("tendar validator is not configured")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
@@ -148,7 +175,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithTendar: provider call failed: %v", err)
-		return nil, err
+		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("invalid bvn number")
@@ -167,7 +194,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{
@@ -283,9 +310,6 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	}
 
 	maskedEmail := email.MaskEmail(bvnDetails.Data.Details.Email)
-	if maskedEmail == "" {
-		return nil, appErr.ErrMissingEmail
-	}
 
 	return &bvnInfo{
 		name:           fullName,
@@ -299,7 +323,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
 		log.Printf("ValidateBVNWithPrembly: prembly provider not configured")
-		return nil, errors.New("couldn't resolve prembly provider")
+		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
@@ -313,7 +337,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithPrembly: provider call failed: %v", err)
-		return nil, err
+		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("ValidateBVNWithPrembly: provider returned nil response")
@@ -341,7 +365,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(30 * time.Minute)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{
@@ -479,8 +503,8 @@ func (s *Service) saveVerifiedBVN(ctx context.Context, verificationRecord *model
 	}
 
 	return s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
-		verificationRepo := verification.NewVerification(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
+		verificationRepo := verification.NewVerification(txDB, s.verification.Cipher())
 
 		if err := verificationRepo.AddVerification(ctx, verificationRecord); err != nil {
 			log.Printf("saveVerifiedBVN: tx AddVerification failed: %v", err)

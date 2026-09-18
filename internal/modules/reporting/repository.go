@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"neat_mobile_app_backend/internal/crypto"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,11 +13,12 @@ import (
 const slowQueryThreshold = 2 * time.Second
 
 type Repository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher *crypto.FieldCipher
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *gorm.DB, cipher *crypto.FieldCipher) *Repository {
+	return &Repository{db: db, cipher: cipher}
 }
 
 func (r *Repository) logQuery(name string, startedAt time.Time, detail string, err error) {
@@ -53,7 +55,7 @@ func (r *Repository) ListSignedUsers(ctx context.Context, limit, offset int) ([]
 
 	base := r.db.WithContext(ctx).
 		Table("wallet_users wu").
-		Joins("LEFT JOIN wallet_bvn_records wbr ON wbr.bvn = wu.bvn").
+		Joins("LEFT JOIN wallet_bvn_records wbr ON wbr.bvn_hash = wu.bvn_hash").
 		Joins(`LEFT JOIN LATERAL (
 			SELECT loan_status, created_at
 			FROM wallet_loan_applications
@@ -102,6 +104,17 @@ func (r *Repository) ListSignedUsers(ctx context.Context, limit, offset int) ([]
 	r.logQuery("ListSignedUsers.list", listStart, fmt.Sprintf("limit=%d offset=%d rows=%d", limit, offset, len(rows)), err)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	for i := range rows {
+		if rows[i].BVN == "" {
+			continue
+		}
+		plain, decErr := r.cipher.Decrypt(rows[i].BVN)
+		if decErr != nil {
+			return nil, 0, decErr
+		}
+		rows[i].BVN = plain
 	}
 
 	return rows, total, nil

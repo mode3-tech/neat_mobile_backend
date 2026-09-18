@@ -92,7 +92,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	var claimToken string
 
 	err = s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
-		authRepo := NewRespository(txDB)
+		authRepo := NewRespository(txDB, s.repo.cipher)
 
 		existingJob, err := authRepo.GetRegistrationJobByIdempotencyKey(ctx, idempotencyKey)
 		switch {
@@ -260,9 +260,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 		return nil, appErr.ErrNINWithFaceVerificationNotFound
 	}
 
-	bvnName := strings.ToLower(strings.Join(strings.Fields(*bvnRecord.VerifiedName), " "))
-	ninName := strings.ToLower(strings.Join(strings.Fields(*ninRecord.VerifiedName), " "))
-	if bvnName != ninName || SerializeDOB(*bvnRecord.VerifiedDOB) != SerializeDOB(*ninRecord.VerifiedDOB) {
+	if !namesMatch(*bvnRecord.VerifiedName, *ninRecord.VerifiedName) || !dobsMatch(*bvnRecord.VerifiedDOB, *ninRecord.VerifiedDOB) {
 		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
@@ -276,6 +274,22 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	if req.TransactionPin != req.ConfirmTransactionPin {
 		return nil, appErr.ErrTransactionPinMismatch
+	}
+
+	referrerUserID := ""
+	referralCode := ""
+	if code := strings.TrimSpace(req.ReferralCode); code != "" {
+		referral, err := s.referralsRepo.FindReferralByCode(ctx, code)
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("registration: invalid referral code %q provided, continuing without referrer", code)
+		case err != nil || referral == nil:
+			log.Printf("registration: referral code lookup failed for %q: %v", code, err)
+			return nil, appErr.ErrInvalidReferralCode
+		default:
+			referrerUserID = referral.MobileUserID
+			referralCode = code
+		}
 	}
 
 	passwordHash, err := HashPassword(req.Password)
@@ -376,13 +390,15 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			OSVersion:   strings.TrimSpace(req.Device.OSVersion),
 			AppVersion:  strings.TrimSpace(req.Device.AppVersion),
 		},
-		IP:            strings.TrimSpace(ip),
-		WalletEmail:   walletRegistrationEmail(accountEmail, mobileUserID),
-		WalletAddress: address,
-		HouseNo:       houseNo,
-		Gender:        gender,
-		MaritalStatus: maritalStatus,
-		ProductID:     s.productID,
+		IP:             strings.TrimSpace(ip),
+		WalletEmail:    walletRegistrationEmail(accountEmail, mobileUserID),
+		WalletAddress:  address,
+		HouseNo:        houseNo,
+		Gender:         gender,
+		MaritalStatus:  maritalStatus,
+		ProductID:      s.productID,
+		ReferrerUserID: referrerUserID,
+		ReferralCode:   referralCode,
 	}, nil
 }
 

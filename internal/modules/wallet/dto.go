@@ -8,7 +8,7 @@ type BankDetailsQuery struct {
 }
 
 type TransferRequest struct {
-	Amount         int64          `json:"amount" binding:"required,gt=0"`
+	Amount         float64        `json:"amount" binding:"required,gt=0"`
 	SortCode       string         `json:"sort_code" binding:"required"`
 	Narration      *string        `json:"narration" binding:"omitempty,max=255"`
 	AccountNumber  string         `json:"account_number" binding:"required"`
@@ -176,4 +176,30 @@ type BulkTransferResult struct {
 	Fee           int64  `json:"fee"`
 	AccountNumber string `json:"accoun_number"`
 	Total         int64  `json:"total"`
+}
+
+type ProvidusCustomerDetailsResponse struct {
+	Status   bool             `json:"status"`
+	Customer ProvidusCustomer `json:"customer"`
+}
+
+type ProvidusCustomer struct {
+	ID               string            `json:"id"`
+	BVN              string            `json:"bvn"`
+	FirstName        string            `json:"firstName"`
+	LastName         string            `json:"lastName"`
+	BVNLastName      string            `json:"bvnLastName"`
+	BVNFirstName     string            `json:"bvnFirstName"`
+	NameMatch        bool              `json:"nameMatch"`
+	Email            string            `json:"email"`
+	DateOfBirth      string            `json:"dateOfBirth"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	WalletID         string            `json:"walletId"`
+	Metadata         map[string]string `json:"metadata"`
+	Tier             string            `json:"tier"`
+	DeletedAt        *time.Time        `json:"deletedAt"`
+	AccountNumber    string            `json:"accountNumber"`
+	BookedBalance    float64           `json:"bookedBalance"`
+	AvailableBalance float64           `json:"availableBalance"`
 }

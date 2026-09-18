@@ -9,6 +9,7 @@ import (
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
+	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/notify"
 	"neat_mobile_app_backend/models"
 	mailprovider "neat_mobile_app_backend/providers/email"
@@ -19,6 +20,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// DemoConfig configures a single whitelisted account (e.g. the Google Play
+// review account) whose OTP is a fixed, known code and whose delivery is
+// skipped. Disabled unless Enabled is true and Destination/Code are set.
+type DemoConfig struct {
+	Enabled     bool
+	Destination string // normalized demo phone/email (must match NormalizeDestination output)
+	Code        string // fixed OTP code accepted for this destination
+}
+
 type Service struct {
 	repo         *Repository
 	verification *verification.VerificationRepo
@@ -27,14 +37,15 @@ type Service struct {
 	email        notify.EmailSender
 	pepper       string
 	appName      string
+	demo         DemoConfig
 }
 
-func NewOTPService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string) *Service {
-	return &Service{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper, appName: appName}
+func NewOTPService(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string, demo DemoConfig) *Service {
+	return &Service{repo: repo, verification: verification, tx: tx, sms: sms, email: email, pepper: pepper, appName: appName, demo: demo}
 }
 
-func NewOTPManager(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string) OTPManager {
-	return NewOTPService(repo, verification, tx, sms, email, pepper, appName)
+func NewOTPManager(repo *Repository, verification *verification.VerificationRepo, tx *tx.Transactor, sms notify.SMSSender, email notify.EmailSender, pepper, appName string, demo DemoConfig) OTPManager {
+	return NewOTPService(repo, verification, tx, sms, email, pepper, appName, demo)
 }
 
 func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult, error) {
@@ -96,7 +107,10 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 
 	ttl := in.TTL
 	if ttl <= 0 {
-		ttl = 10 * time.Minute
+		ttl = DefaultOTPSMSTTL
+		if in.Channel == ChannelEmail {
+			ttl = DefaultOTPEmailTTL
+		}
 	}
 
 	maxAttempts := in.MaxAttempts
@@ -115,6 +129,16 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 	if err != nil {
 		log.Printf("[otp.Issue] failed to generate OTP: err=%v", err)
 		return nil, appErr.ErrUnableToGenerateOTP
+	}
+
+	// Demo/review account: use the fixed code and skip real delivery. Scoped to
+	// the one configured destination; the hash below still binds it normally so
+	// verification runs unchanged. Never log the code.
+	skipSend := false
+	if s.demo.Enabled && s.demo.Code != "" && s.demo.Destination != "" && normalizeDestination == s.demo.Destination {
+		code = s.demo.Code
+		skipSend = true
+		log.Printf("[otp.Issue] demo account: using fixed code, skipping delivery: purpose=%s", in.Purpose)
 	}
 
 	hashedOTP, err := HashOTP(s.pepper, in.Purpose, normalizeDestination, code)
@@ -146,29 +170,36 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 		var smsMsg string
 		switch in.Purpose {
 		case PurposePasswordReset:
-			smsMsg = fmt.Sprintf("%s: Your password reset code is %s. Expires in %d minutes. If you didn`t request a password reset, contact support immediately.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your password reset code. Valid for %s. Didn't request it? Ignore this SMS. %s will never ask for your code.", s.appName, code, formatTTL(ttl), s.appName)
 		case PurposeLogin:
-			smsMsg = fmt.Sprintf("%s: Login verification code: %s. Expires in %d min. If this wasn`t you, secure your account immediately.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your login code. Valid for %s. Never share it - %s will never ask for it. Not you? Secure your account now.", s.appName, code, formatTTL(ttl), s.appName)
 		default:
-			smsMsg = fmt.Sprintf("%s: Your verification code is %s. It expires in %d minutes. Do not share this code.", s.appName, code, int(ttl.Minutes()))
+			smsMsg = fmt.Sprintf("%s: %s is your verification code. Valid for %s. Never share this code - %s will never ask you for it.", s.appName, code, formatTTL(ttl), s.appName)
 		}
 
 		switch in.Channel {
 		case ChannelSMS:
-			if err := s.sms.Send(ctx, normalizeDestination, smsMsg); err != nil {
+			if skipSend {
+				break
+			}
+			if err := smsbilling.Dispatch(ctx, s.sms, in.UserID, normalizeDestination, smsMsg, string(in.Purpose)); err != nil {
 				log.Printf("[otp.Issue] failed to send SMS: purpose=%s err=%v", in.Purpose, err)
 				return err
 			}
 			log.Printf("[otp.Issue] SMS sent: purpose=%s", in.Purpose)
 		case ChannelEmail:
+			if skipSend {
+				break
+			}
 			subject := "Your One Time Password (OTP)"
 			if in.Purpose == PurposePasswordReset {
 				subject = "Your Password Reset OTP"
 			}
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject: subject,
-				OTP:     code,
-				Year:    now.Year(),
+				Subject:   subject,
+				OTP:       code,
+				Year:      now.Year(),
+				ExpiresIn: formatTTL(ttl),
 			})
 			if err != nil {
 				log.Printf("[otp.Issue] failed to render email template: purpose=%s err=%v", in.Purpose, err)
@@ -247,7 +278,7 @@ func (s *Service) Verify(ctx context.Context, in VerifyOTPInput) (*VerifyOTPResu
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		r := NewRepository(txDB)
-		verificationRepo := verification.NewVerification(txDB)
+		verificationRepo := verification.NewVerification(txDB, s.verification.Cipher())
 
 		var active *OTPModel
 		var err error
@@ -428,7 +459,7 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 
 		switch channel {
 		case ChannelSMS:
-			if err := s.sms.Send(ctx, normalizedDestination, fmt.Sprintf("Your verification code is %s. It expires in 5 minutes. Do not share this code with anyone.", generatedOTP)); err != nil {
+			if err := s.sms.Send(ctx, normalizedDestination, fmt.Sprintf("Your verification code is %s. It expires in %s. Do not share this code with anyone.", generatedOTP, formatTTL(ttl))); err != nil {
 				log.Printf("[otp.SendOTP] failed to send SMS: purpose=%s err=%v", purpose, err)
 				return err
 			}
@@ -436,9 +467,10 @@ func (s *Service) SendOTP(ctx context.Context, purpose Purpose, destination stri
 		case ChannelEmail:
 			subject := "Your One Time Password (OTP)"
 			htmlBody, err := mailprovider.RenderOTPEmail(mailprovider.OTPEmailData{
-				Subject: subject,
-				OTP:     generatedOTP,
-				Year:    now.Year(),
+				Subject:   subject,
+				OTP:       generatedOTP,
+				Year:      now.Year(),
+				ExpiresIn: formatTTL(ttl),
 			})
 			if err != nil {
 				log.Printf("[otp.SendOTP] failed to render email template: purpose=%s err=%v", purpose, err)
@@ -505,7 +537,7 @@ func (s *Service) VerifyOTP(ctx context.Context, otpCode string, destination str
 
 	err = s.tx.WithTx(ctx, func(tx *gorm.DB) error {
 		r := NewRepository(tx)
-		verificationRepo := verification.NewVerification(tx)
+		verificationRepo := verification.NewVerification(tx, s.verification.Cipher())
 
 		active, err := r.GetActiveOTP(ctx, normalizedDestination, purpose)
 		if err != nil {

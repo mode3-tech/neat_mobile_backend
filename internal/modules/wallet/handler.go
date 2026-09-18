@@ -75,7 +75,7 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 func (h *Handler) InitiateTransfer(c *gin.Context) {
 	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
 	if mobileUserID == "" {
-		mapped := response.MapError(appErr.ErrMissingUserID)
+		mapped := response.MapError(appErr.ErrUnauthorized)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 			Status: "error",
 			Error:  &mapped.Error,

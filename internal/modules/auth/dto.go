@@ -28,6 +28,8 @@ type registrationJobSnapshot struct {
 	IP                  string              `json:"ip"`
 	WalletEmail         string              `json:"wallet_email"`
 	WalletAddress       string              `json:"wallet_address"`
+	ReferrerUserID      string              `json:"referrer_user_id"`
+	ReferralCode        string              `json:"referral_code,omitempty"`
 }
 
 type registrationIdempotencyPayload struct {
@@ -67,6 +69,7 @@ type RegisterationRequest struct {
 	SubmittedPhoneVerificationID string              `json:"submitted_phone_verification_id" binding:"omitempty"`
 	EmailVerificationID          string              `json:"email_verification_id" binding:"omitempty"`
 	IsBiometricsEnabled          *bool               `json:"is_biometrics_enabled" binding:"required"`
+	ReferralCode                 string              `json:"referral_code" binding:"omitempty"`
 	Device                       DeviceRegisteration `json:"device" binding:"required"`
 }
 
@@ -189,10 +192,6 @@ type LogoutRequest struct {
 
 type RefreshTokenRequest struct {
 	DeviceID     string `json:"device_id" binding:"required"`
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
-type ChallengeRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 

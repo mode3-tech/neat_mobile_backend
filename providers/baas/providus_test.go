@@ -11,6 +11,63 @@ import (
 	"neat_mobile_app_backend/internal/modules/auth"
 )
 
+func TestGenerateWallet_RequestBodyMatchesProvidusSchema(t *testing.T) {
+	t.Helper()
+
+	var capturedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST method, got %s", r.Method)
+		}
+		if r.URL.Path != "/wallet" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Fatalf("failed to decode captured request body: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": true})
+	}))
+	defer server.Close()
+
+	client := NewProvidus("secret-key", server.URL)
+	_, err := client.GenerateWallet(context.Background(), &auth.WalletPayload{
+		// Fields Providus's documented schema expects.
+		BVN:         "12345678901",
+		FirstName:   "First",
+		LastName:    "User",
+		DateOfBirth: "1992-05-16",
+		PhoneNumber: "2348020245349",
+		Email:       "access2emma@gmail.com",
+		Address:     "No 10, Adewale Ajasin University",
+		Metadata:    map[string]interface{}{"even-more": "Other data"},
+		// Optimus-only fields that must NOT be sent to Providus.
+		RequestID:         "should-not-be-sent",
+		MothersMaidenName: "should-not-be-sent",
+		HouseNo:           "should-not-be-sent",
+		ProductId:         "should-not-be-sent",
+		Gender:            "should-not-be-sent",
+		MaritalStatus:     "should-not-be-sent",
+	})
+	if err != nil {
+		t.Fatalf("GenerateWallet returned error: %v", err)
+	}
+
+	wantKeys := map[string]bool{
+		"bvn": true, "firstName": true, "lastName": true, "dateOfBirth": true,
+		"phoneNumber": true, "email": true, "address": true, "metadata": true,
+	}
+	for key := range capturedBody {
+		if !wantKeys[key] {
+			t.Fatalf("unexpected key %q sent to Providus - request body: %+v", key, capturedBody)
+		}
+	}
+	for key := range wantKeys {
+		if _, ok := capturedBody[key]; !ok {
+			t.Fatalf("expected key %q missing from request body: %+v", key, capturedBody)
+		}
+	}
+}
+
 func TestLookupWalletByCustomerID_Success(t *testing.T) {
 	t.Helper()
 

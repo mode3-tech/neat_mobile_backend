@@ -25,17 +25,28 @@
         font-family: Inter, sans-serif;
         font-size: 12px;
         color: #0e0c22;
+        background: #f5f6fa;
+        padding: 10mm;
+      }
+
+      .statement {
+        max-width: 190mm;
+        margin: 0 auto;
+        padding: 20px;
+        background: #472ff8;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(14, 12, 34, 0.18);
       }
 
       /* HEADER */
       .header {
         text-align: center;
         margin-bottom: 20px;
-        color: #999999;
+        color: rgba(255, 255, 255, 0.78);
       }
 
       .header h1 {
-        color: #0e0c22;
+        color: #ffffff;
         font-size: 1.680625rem;
         font-weight: 600;
         margin: 20px 0 2px 0;
@@ -43,7 +54,7 @@
 
       .statement-duration-banner {
         text-align: center;
-        background: #f6f6f6;
+        background: #ffffff;
         padding: 16px;
         margin-bottom: 13px;
         font-size: 0.875rem;
@@ -63,11 +74,15 @@
       .logo {
         height: 100px;
         width: 100px;
+        padding: 8px;
+        background: #ffffff;
+        border-radius: 50%;
       }
 
       /* TABLE */
       table {
         width: 100%;
+        background: #ffffff;
         border-radius: 8px;
         border-collapse: separate;
         border-spacing: 0;
@@ -99,7 +114,7 @@
         margin: 45px 0 16px 0;
         font-size: 1.6rem;
         font-weight: 600;
-        color: #101010;
+        color: #ffffff;
       }
 
       /* PAGE BREAK */
@@ -112,6 +127,7 @@
         color: green;
         font-weight: bold;
       }
+
       .debit {
         color: red;
         font-weight: bold;
@@ -120,16 +136,39 @@
       /* FOOTER */
       .footer {
         margin-block: 42px;
+        padding: 16px;
         text-align: center;
         font-weight: 500;
         font-size: 0.7rem;
         color: #676767;
+        background: #ffffff;
+        border-radius: 8px;
+      }
+
+      .footer a {
+        color: #472ff8;
+        font-weight: 700;
+      }
+
+      @media print {
+        body {
+          padding: 0;
+          background: #ffffff;
+        }
+
+        .statement {
+          max-width: none;
+          padding: 0;
+          box-shadow: none;
+          border-radius: 0;
+        }
       }
     </style>
   </head>
 
   <body>
-    <div class="header">
+    <main class="statement">
+      <div class="header">
       <img
         class="logo"
         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANoAAADRCAYAAACq2qwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAITgAACE4AUWWMWAAABmXSURBVHhe7d3fUtTYvgfw728FEGbGTTu7dgHe
@@ -281,15 +320,16 @@ CTQhYnmLlc3StCTQhLD4voazcbGyEKLQ/h/7Ll2CpNflMwAAAABJRU5ErkJggg=="
       Thank you for choosing Neatpay. If you experience any issues with your
       transaction, please contact our support team via
       <a
-        href="mailto:support@neatpay.com"
+        href="mailto:support@neatmicrocredit.com.ng"
         rel="noopener noreferrer"
         target="_blank"
-        >support@neatpay.com</a
+        >support@neatmicrocredit.com.ng</a
       >
       or call
-      <a href="tel:+234 800 000 0000" target="_blank" rel="noopener noreferrer"
-        >+234 800 000 0000</a
+      <a href="tel:08030811412" target="_blank" rel="noopener noreferrer"
+        >08030811412</a
       >.
     </div>
+    </main>
   </body>
 </html>

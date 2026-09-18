@@ -19,6 +19,8 @@ type AccountReportJob struct {
 	UpdatedAt    *time.Time   `gorm:"column:updated_at;type:timestamptz;not null;autoUpdateTime"`
 }
 
+// type 
+
 func (AccountReportJob) TableName() string {
 	return "wallet_account_report_jobs"
 }

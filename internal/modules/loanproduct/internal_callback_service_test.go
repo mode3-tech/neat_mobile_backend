@@ -15,7 +15,7 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_InvalidMobileUserID(t
 	repo, _, cleanup := newMockRepository(t)
 	defer cleanup()
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	_, err := service.GetLoanApplicationBVNRecordForCBA(context.Background(), "   ")
 	if !errors.Is(err, ErrInvalidMobileUserID) {
@@ -31,7 +31,7 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_NotFound(t *testing.T
 		WithArgs("missing-user", 1).
 		WillReturnError(gorm.ErrRecordNotFound)
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	_, err := service.GetLoanApplicationBVNRecordForCBA(context.Background(), "missing-user")
 	if !errors.Is(err, ErrCustomerRecordNotFound) {
@@ -51,7 +51,7 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsEmptyWhenNoEmbryoAppli
 		WithArgs("user-1", LoanStatusEmbryo, models.CustomerStatusEmbryo, 1).
 		WillReturnError(gorm.ErrRecordNotFound)
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	resp, err := service.GetLoanApplicationsForCBA(context.Background(), "user-1")
 	if err != nil {
@@ -114,7 +114,7 @@ func TestInternalService_GetLoanApplicationsForCBA_ReturnsLatestEligibleApplicat
 		WithArgs("user-1", LoanStatusEmbryo, models.CustomerStatusEmbryo, 1).
 		WillReturnRows(rows)
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	resp, err := service.GetLoanApplicationsForCBA(context.Background(), "user-1")
 	if err != nil {
@@ -169,7 +169,7 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_Success(t *testing.T) {
 		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo, 2, 2).
 		WillReturnRows(rows)
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	resp, err := service.GetEmbryoLoanApplicationsForCBA(context.Background(), 2, 2)
 	if err != nil {
@@ -225,7 +225,7 @@ func TestInternalService_GetEmbryoLoanApplicationsForCBA_DefaultPagination(t *te
 		WithArgs(LoanStatusEmbryo, models.CustomerStatusEmbryo).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	resp, err := service.GetEmbryoLoanApplicationsForCBA(context.Background(), 0, 0)
 	if err != nil {
@@ -302,7 +302,7 @@ func TestInternalService_GetLoanApplicationBVNRecordForCBA_Success(t *testing.T)
 		WithArgs("user-1", 1).
 		WillReturnRows(rows)
 
-	service := NewInternalService(NewInternalRepository(repo.db))
+	service := NewInternalService(NewInternalRepository(repo.db, testCipher(t)))
 
 	resp, err := service.GetLoanApplicationBVNRecordForCBA(context.Background(), "user-1")
 	if err != nil {

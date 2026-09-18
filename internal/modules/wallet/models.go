@@ -13,6 +13,7 @@ type CustomerWallet struct {
 	WalletCustomerID string        `gorm:"column:wallet_customer_id;type:text;not null"`
 	Metadata         types.JSONMap `gorm:"column:metadata;type:jsonb;not null"`
 	BVN              string        `gorm:"column:bvn;type:text;not null"`
+	CoreCustomerID   *string       `gorm:"column:core_customer_id;type:text"`
 	Currency         string        `gorm:"column:currency;type:text;not null"`
 	DateOfBirth      string        `gorm:"column:date_of_birth;type:text;not null"`
 	FirstName        string        `gorm:"column:first_name;type:text;not null"`
@@ -25,6 +26,14 @@ type CustomerWallet struct {
 	Mode             string        `gorm:"column:mode;type:text;not null"`
 	BankName         string        `gorm:"column:bank_name;type:text;not null"`
 	BankCode         string        `gorm:"column:bank_code;type:text;not null"`
+	// Provider is which BaaS provider ("optimus" or "providus") actually
+	// issued this account - NUBANs aren't portable between providers, so
+	// transfers must be routed to whichever provider created the wallet, not
+	// picked by a global preference. Left nullable rather than not-null: rows
+	// predating this column are backfilled by internal/database.Migrate()
+	// (matching BankCode against each provider's known value), not by a
+	// struct-tag default.
+	Provider string `gorm:"column:provider;type:text"`
 	AccountNumber    string        `gorm:"column:account_number;type:text;not null"`
 	AccountName      string        `gorm:"column:account_name;type:text;not null"`
 	AccountRef       string        `gorm:"column:account_ref;type:text;not null"`

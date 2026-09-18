@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"neat_mobile_app_backend/internal/adapters/cba"
+	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/middleware"
@@ -66,7 +67,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	autoRepaymentService := autorepayment.NewService(
 		autorepaymentRepo,
 		walletRepo,
-		providusClient,
+		providusadapter.NewAutoRepayment(providusClient),
 		cbaClient,
 		notificationService,
 		settlementAccount,
