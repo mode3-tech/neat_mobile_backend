@@ -27,6 +27,16 @@ type bvnWithFaceInfo struct {
 	faceCheckID string
 }
 
+type bvnFaceValidationResult struct {
+	Matched           bool
+	Confidence        float64
+	Message           string
+	ResponseCode      string
+	FaceImageProvided string
+	ReferenceID       string
+	TransactionID     string
+}
+
 type ninWithFaceInfo struct {
 	faceCheckID string
 }
@@ -60,6 +70,8 @@ type Service struct {
 	ninPrembly           NINValidation
 	ninTendar            NINValidation
 	ninFace              NINFaceValidation
+	ninFaceTendar        NINFaceValidationTendar
+	bvnFaceTendar        BVNFaceValidationTendar
 	providerSource       ValidationProviderSource
 	otpManager           authotp.OTPManager
 	walletService        WalletService
@@ -94,6 +106,8 @@ func NewService(
 	ninPrembly NINValidation,
 	ninTendar NINValidation,
 	ninFace NINFaceValidation,
+	ninFaceTendar NINFaceValidationTendar,
+	bvnFaceTendar BVNFaceValidationTendar,
 	providerSource ValidationProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
@@ -119,6 +133,8 @@ func NewService(
 		ninPrembly:           ninPrembly,
 		ninTendar:            ninTendar,
 		ninFace:              ninFace,
+		ninFaceTendar:        ninFaceTendar,
+		bvnFaceTendar:        bvnFaceTendar,
 		providerSource:       providerSource,
 		otpManager:           otpManager,
 		walletService:        walletService,
