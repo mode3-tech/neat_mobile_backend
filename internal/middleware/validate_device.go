@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
@@ -36,6 +37,9 @@ func DeviceValidator(validator DeviceBindingChecker) gin.HandlerFunc {
 		_, err := validator.VerifyUserDevice(c.Request.Context(), mobileUserID, deviceID)
 		if err != nil {
 			log.Println("device middleware: verify user device failed")
+			if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+				err = appErr.ErrUnrecognizedDeviceAuthGate
+			}
 			mapped := response.MapError(err)
 			c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 				Status: "error",

@@ -154,4 +154,5 @@ type ValidationData struct {
 	BirthDate   string
 	TelephoneNo string
 	Email       string
+	Photo       string
 }

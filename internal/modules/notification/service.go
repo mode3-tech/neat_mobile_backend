@@ -50,6 +50,9 @@ func (s *Service) RegisterToken(ctx context.Context, mobileUserID string, req Re
 	deviceID := strings.TrimSpace(req.DeviceID)
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return appErr.ErrUnrecognizedDevicePushToken
+		}
 		return err
 	}
 

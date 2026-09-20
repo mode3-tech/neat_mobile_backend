@@ -117,3 +117,14 @@ func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 func (s *Service) DeactivateDevice(ctx context.Context, mobileUserID, deviceID string) error {
 	return s.repo.DeactivateDevice(ctx, mobileUserID, deviceID)
 }
+
+func (s *Service) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*UserDevice, error) {
+	device, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrUnrecognizedDevice
+		}
+		return nil, err
+	}
+	return device, nil
+}

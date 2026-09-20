@@ -370,6 +370,9 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 
 	deviceRecord, err := s.deviceVerifier.VerifyUserDevice(ctx, storedChallenge.UserID, storedChallenge.DeviceID)
 	if err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return nil, appErr.ErrUnrecognizedDeviceBiometricLogin
+		}
 		return nil, err
 	}
 

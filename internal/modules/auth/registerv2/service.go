@@ -298,7 +298,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		IsEmailVerified:        true,
 		IsPhoneVerified:        true,
 		IsBvnVerified:          true,
-		IsNinVerified:          true,
+		IsNinVerified:          false,
 		IsBiometricsEnabled:    *req.IsBiomtricsEnabled,
 		IsNotificationsEnabled: true,
 		ActivationCapAmount:    s.activationCapKobo,
@@ -588,7 +588,7 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 	return verificationID, providerReferenceID, true, nil
 }
 
-func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
+func (s *Service) ValidateNINWithOptimus(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
 	if s.optimus == nil {
 		return "", "", fmt.Errorf("optimus validation service is not configured")
 	}

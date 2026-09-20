@@ -136,6 +136,9 @@ func (s *Service) DepositFromWallet(ctx context.Context, mobileUserID, deviceID 
 	}
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return nil, appErr.ErrUnrecognizedDeviceNeatsave
+		}
 		return nil, err
 	}
 
