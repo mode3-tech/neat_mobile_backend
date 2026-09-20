@@ -145,8 +145,32 @@ func (r *Repository) UpsertDevicePublicKey(ctx context.Context, device *UserDevi
 	safeInsert.IsTrusted = false
 	safeInsert.IsActive = true
 
-	return r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// device_id is globally unique (uq_wallet_user_devices_device_id), not
+		// just per-user - a physical device legitimately changes hands between
+		// accounts (resale, re-registration, etc.). The ON CONFLICT below only
+		// covers the (user_id, device_id) pair, so if this device_id is
+		// currently owned by a *different* user, free it up first rather than
+		// letting the insert fail on the device-alone constraint.
+		//
+		// Only an inactive row is treated as orphaned and cleared automatically
+		// - the previous owner already released it (see DeactivateDevice /
+		// DeactivateAllDevices, e.g. on logout). A row that's still active
+		// under a different user is left untouched and the insert below will
+		// fail on the device-alone constraint as before: device_id is
+		// client-supplied, so silently reassigning a device that's still live
+		// for someone else would let one account tear down another's active
+		// device trust just by claiming its device_id.
+		//
+		// Deleting (rather than reassigning in place) means the device always
+		// starts this account relationship as a fresh, untrusted row via the
+		// insert below - never inheriting the previous owner's trust state.
+		if err := tx.Where("device_id = ? AND user_id <> ? AND is_active = ?", device.DeviceID, device.UserID, false).
+			Delete(&UserDevice{}).Error; err != nil {
+			return err
+		}
+
+		return tx.Clauses(clause.OnConflict{
 			Columns: []clause.Column{
 				{Name: "user_id"},
 				{Name: "device_id"},
@@ -161,7 +185,8 @@ func (r *Repository) UpsertDevicePublicKey(ctx context.Context, device *UserDevi
 				"last_used_at": device.LastUsedAt,
 			}),
 		}).
-		Create(&safeInsert).Error
+			Create(&safeInsert).Error
+	})
 }
 
 func (r *Repository) ActivateAndTrustDevice(ctx context.Context, userID, deviceID string, now time.Time, ip string) error {

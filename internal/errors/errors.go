@@ -67,6 +67,18 @@ var (
 	ErrInvalidDOB                      = errors.New("Invalid date of birth")
 	ErrApplyingForLoan                 = errors.New("Failed to apply for loan")
 	ErrUnrecognizedDevice              = errors.New("Unrecognized device")
+	// Flow-specific variants of ErrUnrecognizedDevice, wrapped in at each call
+	// site (see internal/response/error_mapper.go) so the user-facing message
+	// can say what actually failed and what to do next, instead of one
+	// generic message for every flow that verifies a device.
+	ErrUnrecognizedDeviceAuthGate       = errors.New("Unrecognized device: auth gate")
+	ErrUnrecognizedDeviceCardRequest    = errors.New("Unrecognized device: card request")
+	ErrUnrecognizedDevicePushToken      = errors.New("Unrecognized device: push token registration")
+	ErrUnrecognizedDeviceNeatsave       = errors.New("Unrecognized device: neatsave")
+	ErrUnrecognizedDeviceLogout         = errors.New("Unrecognized device: logout")
+	ErrUnrecognizedDeviceBiometricLogin = errors.New("Unrecognized device: biometric login")
+	ErrNINDOBMismatch                   = errors.New("nin date of birth does not match account details")
+	ErrNINNameMismatch                  = errors.New("nin name does not match account details")
 	ErrNoLoansFound                    = errors.New("No loans found for user")
 	ErrFetchingActiveLoans             = errors.New("Failed to fetch active loans")
 	ErrFetchingLoanHistory             = errors.New("Failed to fetch loan history")

@@ -59,6 +59,7 @@ func (r *Repository) GetAccountSummary(ctx context.Context, mobileUserID string)
 			wallet_customer_wallets.available_balance,
 			wallet_customer_wallets.booked_balance,
 			wallet_customer_wallets.bank_name,
+			wallet_customer_wallets.tier,
 			COALESCE((SELECT cb.cashback_after FROM wallet_cashbacks cb WHERE cb.mobile_user_id = wallet_users.id ORDER BY cb.created_at DESC LIMIT 1), 0) AS cashback_balance`).
 		Joins("LEFT JOIN wallet_bvn_records ON wallet_bvn_records.user_id = wallet_users.id").
 		Joins("LEFT JOIN wallet_customer_wallets ON wallet_customer_wallets.mobile_user_id = wallet_users.id").

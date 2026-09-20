@@ -2,6 +2,7 @@ package card
 
 import (
 	"context"
+	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/providers/card"
 
@@ -20,6 +21,9 @@ func NewService(repo *Repository, deviceVerifier DeviceVerifier, cardService Car
 
 func (s *Service) RequestForCard(ctx context.Context, mobileUserID, deviceID string, payload RequestForCardRequest) error {
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return appErr.ErrUnrecognizedDeviceCardRequest
+		}
 		return err
 	}
 

@@ -55,3 +55,15 @@ func (r *Repository) GetUserDetails(ctx context.Context, mobileUserID string) (*
 	}
 	return &user, nil
 }
+
+func (r *Repository) UpdateUserNIN(ctx context.Context, mobileUserID string, isNINVerified bool, ninHash string) error {
+	err := r.DB.WithContext(ctx).
+		Table("wallet_users").
+		Where("id = ?", mobileUserID).
+		Update("is_nin_verified", isNINVerified).
+		Update("nin_hash", ninHash).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}

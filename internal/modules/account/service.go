@@ -34,7 +34,14 @@ type Service struct {
 	WalletFinder          WalletFinder
 }
 
-func NewService(repo *Repository, b2 UploadService, notifier *notification.Service, pdfShiftAPIKey string, deviceVerifier DeviceVerifier, trfLimitAmount string, customerAccountFinder CustomerAccountFinder, walletFinder WalletFinder) *Service {
+func NewService(repo *Repository,
+	b2 UploadService,
+	notifier *notification.Service,
+	pdfShiftAPIKey string,
+	deviceVerifier DeviceVerifier,
+	trfLimitAmount string,
+	customerAccountFinder CustomerAccountFinder,
+	walletFinder WalletFinder) *Service {
 	return &Service{
 		Repo:                  repo,
 		B2:                    b2,

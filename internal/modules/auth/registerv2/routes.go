@@ -14,8 +14,8 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 		optimus.POST("/validate/bvn", handler.ValidateBVN)
 		// /validate/nin intentionally not routed: NIN is now collected and
 		// stored via /register without a separate pre-flight validation step.
-		// handler.ValidateNIN / Service.ValidateNIN are kept for potential
-		// reuse but are unreachable from the client flow.
+		// handler.ValidateNINWithOptimus / Service.ValidateNINWithOptimus are
+		// kept for potential reuse but are unreachable from the client flow.
 		optimus.POST("/otp/verify", handler.VerifyOTP)
 		optimus.POST("/otp/resend", handler.ResendOTP)
 		optimus.POST("/register", handler.Register)

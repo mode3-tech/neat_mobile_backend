@@ -668,8 +668,8 @@ func (p *Providus) DebitCustomer(ctx context.Context, amount int64, customerID, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("providus: request failed with status code: %s", resp.StatusCode)
-		return nil, fmt.Errorf("providus: request failed with status code: %s", resp.StatusCode)
+		log.Printf("providus: request failed with status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("providus: request failed with status code: %d", resp.StatusCode)
 	}
 
 	var result ProvidusWalletDebitResponse
@@ -717,8 +717,8 @@ func (p *Providus) CreditCustomer(ctx context.Context, amount int64, referenceID
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		log.Printf("providus: request failed with status code: %s body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-		return nil, fmt.Errorf("providus: request failed with status code: %s", resp.StatusCode)
+		log.Printf("providus: request failed with status code: %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("providus: request failed with status code: %d", resp.StatusCode)
 	}
 
 	var result ProvidusWalletCreditResponse

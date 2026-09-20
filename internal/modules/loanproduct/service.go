@@ -467,18 +467,18 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, 
 	}
 
 	if err := s.repaymentTransferrer.TransferForLoanRepayment(ctx, mobileUserID, req.Amount); err != nil {
-		log.Printf("manual repayment wallet transfer failed user=%s amount=%d err=%v", mobileUserID, req.Amount, err)
+		log.Printf("manual repayment wallet transfer failed user=%s amount=%.2f err=%v", mobileUserID, req.Amount, err)
 		return appErr.ErrMakingRepayment
 	}
 
-	log.Printf("manual repayment wallet transfer ok user=%s amount=%d — calling CBA", mobileUserID, req.Amount)
+	log.Printf("manual repayment wallet transfer ok user=%s amount=%.2f — calling CBA", mobileUserID, req.Amount)
 
 	err := s.manualRepayer.MakeManualRepayment(ctx, RepaymentRequest{
 		Amount:      req.Amount,
 		RepaymentID: req.LoanID,
 	})
 	if err != nil {
-		log.Printf("manual repayment CBA call failed user=%s loan_id=%s amount=%d err=%v", mobileUserID, req.LoanID, req.Amount, err)
+		log.Printf("manual repayment CBA call failed user=%s loan_id=%s amount=%.2f err=%v", mobileUserID, req.LoanID, req.Amount, err)
 		return appErr.ErrMakingRepayment
 	}
 
