@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 )
 
@@ -46,7 +47,9 @@ func run(ctx context.Context) error {
 	defer cancel()
 
 	stopCron()
-	return srv.Shutdown(shutdownCtx)
+	err = srv.Shutdown(shutdownCtx)
+	defer sentry.Flush(2 * time.Second)
+	return err
 }
 
 func main() {

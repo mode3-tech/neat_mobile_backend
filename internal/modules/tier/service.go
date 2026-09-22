@@ -8,6 +8,7 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/helpers"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -19,11 +20,12 @@ type Service struct {
 	cipher      *crypto.FieldCipher
 }
 
-func NewService(repo *Repository, ninService NINService, userService UserService, cipher *crypto.FieldCipher) *Service {
+func NewService(repo *Repository, ninService NINService, userService UserService, faceService FaceService, cipher *crypto.FieldCipher) *Service {
 	return &Service{
 		repo:        repo,
 		ninService:  ninService,
 		userService: userService,
+		faceService: faceService,
 		cipher:      cipher,
 	}
 }
@@ -112,4 +114,56 @@ func (s *Service) ValidateNIN(ctx context.Context, mobileUserID string) error {
 		return err
 	}
 	return nil
+}
+
+// ValidateNINWithFace runs a live NIN-with-face match for the user's stored
+// NIN/DOB against image, and records the outcome as a passport_photograph
+// tier submission - the submitted image doubles as the passport photograph,
+// and a match also satisfies the NIN requirement (Prembly/Tendar cross-check
+// NIN against BVN on their end, so this covers both).
+func (s *Service) ValidateNINWithFace(ctx context.Context, mobileUserID, image string) error {
+	user, err := s.userService.GetUserDetails(ctx, mobileUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return appErr.ErrUserNotFound
+		}
+		return err
+	}
+
+	plainNIN, err := s.cipher.Decrypt(user.NIN)
+	if err != nil {
+		return err
+	}
+
+	result, err := s.faceService.ValidateNINWithFace(ctx, plainNIN, user.DOB.Format("2006-01-02"), image)
+	if err != nil {
+		return err
+	}
+
+	status := TierSubmissionStatusRejected
+	if result.Matched {
+		status = TierSubmissionStatusApproved
+	}
+
+	submission := &TierSubmission{
+		ID:          uuid.NewString(),
+		UserID:      mobileUserID,
+		Requirement: TierRequirementPassportPhotograph,
+		DocumentURL: image,
+		Status:      status,
+	}
+	if !result.Matched {
+		reason := result.Message
+		submission.RejectionReason = &reason
+	}
+	if err := s.repo.CreateSubmission(ctx, submission); err != nil {
+		return err
+	}
+
+	if !result.Matched {
+		return appErr.ErrValidatingNINWithFace
+	}
+
+	ninHash := crypto.Hash(plainNIN)
+	return s.userService.UpdateUserNIN(ctx, mobileUserID, true, ninHash)
 }

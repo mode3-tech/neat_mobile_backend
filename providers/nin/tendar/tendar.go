@@ -138,7 +138,6 @@ func (t *Tendar) ValidateNIN(ctx context.Context, number string) (*nin.Validatio
 			BirthDate:   result.Data.Details.DateOfBirth,
 			TelephoneNo: result.Data.Details.PhoneNumber,
 			Email:       result.Data.Details.Email,
-			Photo:       result.Data.Details.,
 		}}, nil
 	}
 
