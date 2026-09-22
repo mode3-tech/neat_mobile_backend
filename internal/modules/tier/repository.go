@@ -45,3 +45,7 @@ func (r *Repository) GetLatestSubmissions(ctx context.Context, mobileUserID stri
 	}
 	return out, nil
 }
+
+func (r *Repository) CreateSubmission(ctx context.Context, submission *TierSubmission) error {
+	return r.db.WithContext(ctx).Create(submission).Error
+}

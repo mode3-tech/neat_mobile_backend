@@ -6,6 +6,7 @@ import (
 )
 
 type Config struct {
+	SentryDSN                  string
 	Port                       string
 	NotificationPort           string
 	DBUrl                      string
@@ -84,6 +85,7 @@ type Config struct {
 
 func Load() Config {
 	return Config{
+		SentryDSN:                  getEnv("SENTRY_DSN", ""),
 		Port:                       getEnv("PORT", "8080"),
 		NotificationPort:           getEnv("NOTIFICATION_PORT", "8081"),
 		DBUrl:                      getEnv("DB_URL", ""),

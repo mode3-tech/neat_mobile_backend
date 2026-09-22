@@ -30,9 +30,12 @@ import (
 	registerversion "neat_mobile_app_backend/internal/modules/register_version"
 	"neat_mobile_app_backend/internal/modules/reporting"
 	"neat_mobile_app_backend/internal/modules/smsbilling"
+	"neat_mobile_app_backend/internal/modules/tier"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/internal/modules/vas"
 	"neat_mobile_app_backend/internal/modules/wallet"
+	"neat_mobile_app_backend/internal/ninfacevalidator"
+	"neat_mobile_app_backend/internal/ninvalidator"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/sms"
 	"neat_mobile_app_backend/internal/user"
@@ -53,6 +56,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	swaggerFiles "github.com/swaggo/files"
@@ -72,7 +77,27 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 	}
 
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:              cfg.SentryDSN,
+		EnableTracing:    true,
+		TracesSampleRate: 0.1,
+	}); err != nil {
+		fmt.Printf("Sentry initialization failed: %v\n", err)
+		return nil, nil, err
+	}
+
 	r := gin.New()
+	r.Use(sentrygin.New(sentrygin.Options{
+		Repanic: true,
+	}))
+
+	r.Use(func(ctx *gin.Context) {
+		if hub := sentrygin.GetHubFromContext(ctx); hub != nil {
+			hub.Scope().SetTag("Service", "NEATPay")
+		}
+		ctx.Next()
+	})
+
 	r.Use(middleware.RequestContextLogger())
 	r.Use(gin.Recovery())
 	r.StaticFile("/openapi/doc.json", "./docs/swagger.json")
@@ -195,8 +220,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
-	// authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, smsSender, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, ninTendarProvider, bvnProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, ninTendarProvider, bvnProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 
 	transactionHandler := transaction.NewHandler(transactionService)
@@ -515,6 +539,14 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	registerVersionService := registerversion.NewService(registerVersionRepo)
 	registerVersionHandler := registerversion.NewHandler(registerVersionService)
 	registerversion.RegisterRoutes(r, registerVersionHandler)
+
+	ninValidator := ninvalidator.New(db, ninPremblyProvider, ninTendarProvider)
+	faceNinService := ninfacevalidator.New(db, ninPremblyProvider, ninTendarProvider)
+
+	tierRepo := tier.NewRepository(db)
+	tierService := tier.NewService(tierRepo, ninValidator, userService, faceNinService, bvnNinCipher)
+	tierHandler := tier.NewHandler(tierService)
+	tier.RegisterRoutes(apiV1, authGuard, deviceValidator, tierHandler)
 
 	return r, stopCron, nil
 }
