@@ -5,6 +5,8 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
 	"strings"
+
+	"github.com/getsentry/sentry-go"
 )
 
 type ErrorMapping struct {
@@ -15,6 +17,7 @@ type ErrorMapping struct {
 func MapError(err error) ErrorMapping {
 	switch {
 	case errors.Is(err, appErr.ErrInvalidCredentials):
+		sentry.CaptureException(err)
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{

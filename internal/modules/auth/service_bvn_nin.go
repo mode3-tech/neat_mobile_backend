@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	auditlog "neat_mobile_app_backend/internal/audit_log"
 	"neat_mobile_app_backend/internal/email"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
@@ -52,6 +53,7 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErr.ErrBVNNotFound
 		}
+		auditlog.
 		return nil, err
 	}
 

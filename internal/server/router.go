@@ -86,6 +86,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, err
 	}
 
+	ctx := context.Background()
+	logger := sentry.NewLogger(ctx)
+	logger.Info().Emitf("Something happened: %s", detail)
+
 	r := gin.New()
 	r.Use(sentrygin.New(sentrygin.Options{
 		Repanic: true,
@@ -97,6 +101,25 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		}
 		ctx.Next()
 	})
+
+	// 1. Errors that need attention -> Issues (alerting)
+	//    - panics already handled automatically via sentrygin.New(..., Repanic: true)
+	//    - call sentry.CaptureException(err) at specific failure points that matter
+
+	// 2. Everything else -> Logs (searchable, not alerting)
+	type sentryLogWriter struct {
+		logger *sentry.Logger
+	}
+
+	func (w sentryLogWriter) Write(p []byte) (int, error) {
+		w.logger.Info().Emit(strings.TrimSpace(string(p)))
+		return len(p), nil
+	}
+
+	ctx := context.Background()
+	sentryLogger := sentry.NewLogger(ctx)
+	log.SetOutput(io.MultiWriter(os.Stderr, sentryLogWriter{logger: sentryLogger}))
+
 
 	r.Use(middleware.RequestContextLogger())
 	r.Use(gin.Recovery())
