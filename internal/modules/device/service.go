@@ -10,6 +10,7 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/helpers"
 	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,7 +62,7 @@ func (s *Service) logDeviceAudit(ctx context.Context, action, mobileUserID, devi
 
 func (s *Service) BindDevice(ctx context.Context, userID string, req *DeviceBindingRequest) error {
 	device := &UserDevice{
-		ID:          req.DeviceID,
+		ID:          helpers.PrefixID(strings.TrimSpace(req.DeviceID)),
 		UserID:      userID,
 		DeviceID:    req.DeviceID,
 		PublicKey:   req.PublicKey,
@@ -76,7 +77,7 @@ func (s *Service) BindDevice(ctx context.Context, userID string, req *DeviceBind
 	}
 	if err := s.repo.Save(ctx, device); err != nil {
 		s.logDeviceAudit(ctx, "DEVICE_BIND", userID, req.DeviceID, auditlog.StatusFailure, map[string]interface{}{
-			"reason_for_failure": "failed to persist device binding",
+			"reason_for_failure": "failed to persist device binding: " + err.Error(),
 		})
 		return err
 	}
@@ -130,6 +131,9 @@ func (s *Service) CreateChallenge(ctx context.Context, userID, deviceID string, 
 	}
 
 	if err := s.repo.CreateChallenge(ctx, row); err != nil {
+		s.logDeviceAudit(ctx, "DEVICE_CHALLENGE_CREATE", userID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to create device challenge: " + err.Error(),
+		})
 		return "", err
 	}
 
@@ -148,8 +152,16 @@ func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 	userDevice, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logDeviceAudit(ctx, "DEVICE_VERIFY", mobileUserID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+				"reason_for_failure": "device not found",
+			})
 			return nil, appErr.ErrUnrecognizedDevice
 		}
+
+		s.logDeviceAudit(ctx, "DEVICE_VERIFY", mobileUserID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to find device",
+		})
+
 		return nil, err
 	}
 
@@ -174,10 +186,17 @@ func (s *Service) DeactivateDevice(ctx context.Context, mobileUserID, deviceID s
 func (s *Service) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*UserDevice, error) {
 	device, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
 	if err != nil {
+		s.logDeviceAudit(ctx, "DEVICE_FIND", mobileUserID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to find device" + " " + err.Error(),
+		})
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logDeviceAudit(ctx, "DEVICE_FIND", mobileUserID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+				"reason_for_failure": "device not found",
+			})
 			return nil, appErr.ErrUnrecognizedDevice
 		}
 		return nil, err
 	}
+	s.logDeviceAudit(ctx, "DEVICE_FIND", mobileUserID, deviceID, auditlog.StatusSuccess, nil)
 	return device, nil
 }

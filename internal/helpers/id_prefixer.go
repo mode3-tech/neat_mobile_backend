@@ -7,16 +7,19 @@ import (
 )
 
 var resourceInitials = map[string]string{
-	"wallet":           "wlt",
-	"bvn":              "bvn",
-	"nin":              "nin",
-	"tier_upgrade":     "tr_upgrd",
-	"transaction":      "txn",
-	"loan":             "ln",
-	"loan_application": "ln_app",
-	"device":           "dev",
-	"session":          "sesh",
-	"audit_log":        "adt_log",
+	"wallet":             "wlt",
+	"bvn":                "bvn",
+	"nin":                "nin",
+	"tier_upgrade":       "tr_upgrd",
+	"transaction":        "txn",
+	"loan":               "ln",
+	"loan_application":   "ln_app",
+	"device":             "dev",
+	"session":            "sesh",
+	"audit_log":          "adt_log",
+	"user":               "usr",
+	"internal_wallet_id": "int_wlt",
+	"request_id":         "req",
 }
 
 // init fails fast at startup if two resources were accidentally given the
