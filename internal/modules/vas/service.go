@@ -189,29 +189,34 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
 	if err != nil {
 		log.Printf("vas service: failed to normalize phone number - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, err
 	}
 	amount := payload.Amount
 
 	if amount < 100.00 {
 		log.Println("vas service: amount is less than NGN 100")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidISPAmount.Error(), "type": "airtime"})
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
 	if amount > 10000.00 {
 		log.Println("vas service: amount is greater than NGN 10,000")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidISPAmount.Error(), "type": "airtime"})
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
 
@@ -224,24 +229,29 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	log.Printf("vas service: wallet customer id: %s\n", wallet.WalletCustomerID)
 	if err != nil {
 		log.Printf("vas service: failed to check wallet balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
 	if !hasSufficientBalance {
 		log.Println("vas service: insufficient balance")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "airtime"})
 		return nil, appErr.ErrInsufficientBalance
 	}
 
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "airtime"})
 		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "airtime"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -254,6 +264,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, err
 	}
 
@@ -280,6 +291,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, err
 	}
 
@@ -289,6 +301,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to update transaction to failed after debit error - %s\n", updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
 
@@ -316,6 +329,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
 	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
@@ -351,29 +365,34 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	localizedPhone, err := phone.ToLocalFormat(strings.TrimSpace(payload.PhoneNumber))
 	if err != nil {
 		log.Printf("vas service: failed to normalize phone number - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, err
 	}
 	amount := payload.Amount
 
 	if amount < 100 {
 		log.Println("vas service: data amount is less than NGN 100")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidISPAmount.Error(), "type": "data"})
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
 	if amount > 10000 {
 		log.Println("vas service: data amount is greater than NGN 10,000")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidISPAmount.Error(), "type": "data"})
 		return nil, appErr.ErrInvalidISPAmount
 	}
 
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
 	}
 
@@ -385,20 +404,24 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
 	}
 	if !hasSufficientBalance {
 		log.Println("vas service: insufficient balance")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "data"})
 		return nil, appErr.ErrInsufficientBalance
 	}
 
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "data"})
 		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
@@ -406,6 +429,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "data"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -416,6 +440,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, err
 	}
 
@@ -442,6 +467,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, err
 	}
 
@@ -452,6 +478,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to update transaction to failed after debit error - %s\n", updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
 	}
 
@@ -481,6 +508,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
 	}
 	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
@@ -534,22 +562,26 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
 	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get user - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 	if user == nil {
 		log.Printf("vas service: user record not found mobile_user_id=%s", mobileUserID)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "user record not found", "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -561,20 +593,24 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 	if !hasSufficientBalance {
 		log.Println("vas service: insufficient balance")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "electricity"})
 		return nil, appErr.ErrInsufficientBalance
 	}
 
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "electricity"})
 		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
@@ -582,6 +618,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "electricity"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -601,26 +638,31 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	validationResult, err := s.validateElectricity(ctx, validateElectricityPayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate electricity account - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, err
 	}
 
 	if validationResult != nil {
 		if &validationResult.Data == nil {
 			log.Println("vas service: electricity validation returned nil data")
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrValidatingElectricity.Error(), "type": "electricity"})
 			return nil, appErr.ErrValidatingElectricity
 		}
 		if validationResult.Data.AccountNumber != accountNumber {
 			log.Printf("vas service: electricity validation account number mismatch expected=%s got=%s", accountNumber, validationResult.Data.AccountNumber)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountNumber.Error(), "type": "electricity"})
 			return nil, appErr.ErrInvalidAccountNumber
 		}
 
 		if string(validationResult.Data.AccountType) != string(payload.AccountType) {
 			log.Printf("vas service: electricity validation account type mismatch expected=%s got=%s", payload.AccountType, validationResult.Data.AccountType)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountType.Error(), "type": "electricity"})
 			return nil, appErr.ErrInvalidAccountType
 		}
 
 		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
 			log.Printf("vas service: failed to validate electricity account - %s\n", validationResult.ResponseMessage)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": validationResult.ResponseMessage, "type": "electricity"})
 			return nil, &appErr.XpressPayProviderError{
 				Code:    validationResult.ResponseCode,
 				Message: validationResult.ResponseMessage,
@@ -651,6 +693,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, err
 	}
 
@@ -660,6 +703,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to update transaction to failed after debit error - %s\n", updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -695,6 +739,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
 	}
 	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
@@ -744,22 +789,26 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	wallet, err := s.WalletService.GetBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 
 	user, err := s.User.GetUserByUserID(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get user - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 	if user == nil {
 		log.Printf("vas service: user record not found mobile_user_id=%s", mobileUserID)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "user record not found", "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
 	if err != nil {
 		log.Printf("vas service: failed to get cashback balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 
@@ -771,20 +820,24 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	hasSufficientBalance, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(amount))
 	if err != nil {
 		log.Printf("vas service: failed to check sufficient balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 	if !hasSufficientBalance {
 		log.Println("vas service: insufficient balance")
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "cable"})
 		return nil, appErr.ErrInsufficientBalance
 	}
 
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error: code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "cable"})
 		return nil, &appErr.XpressPayProviderError{
 			Code:    providerBal.ResponseCode,
 			Message: providerBal.ResponseMessage,
@@ -792,6 +845,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "cable"})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -811,15 +865,18 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	validateResult, err := s.ValidateCable(ctx, validateCablePayload)
 	if err != nil {
 		log.Printf("vas service: failed to validate cable account - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, err
 	}
 	if validateResult.Data.AccountNumber != accountNumber {
 		log.Printf("vas service: cable validation account number mismatch expected=%s got=%s", accountNumber, validateResult.Data.AccountNumber)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountNumber.Error(), "type": "cable"})
 		return nil, appErr.ErrInvalidAccountNumber
 	}
 
 	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
 		log.Printf("vas service: failed to validate cable account - %s\n", validateResult.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": validateResult.ResponseMessage, "type": "cable"})
 		return nil, &appErr.XpressPayProviderError{
 			Code:    validateResult.ResponseCode,
 			Message: validateResult.ResponseMessage,
@@ -849,6 +906,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, err
 	}
 
@@ -858,12 +916,14 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to update transaction to failed after debit error - %s\n", updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 
 	normalizedPhone, err := phone.ToLocalFormat(user.Phone)
 	if err != nil {
 		log.Printf("vas service: failed to normalize phone number - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 
@@ -894,6 +954,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	balanceAfter := wallet.AvailableBalance - ((amount + int64(debitResult.Data.TransactionFee)) * 100)
 	if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
 	}
 	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
@@ -1054,8 +1115,10 @@ func (s *Service) recheckSufficientBalanceOrRelease(ctx context.Context, txID, m
 		log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
 	}
 	if err != nil {
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error()})
 		return err
 	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error()})
 	return appErr.ErrInsufficientBalance
 }
 
@@ -1189,10 +1252,12 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
 		if err != nil {
 			log.Printf("vas service: failed to check wallet balance (cashback path) - %s\n", err)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime", "used_cashback": true})
 			return nil, err
 		}
 		if !hasBal {
 			log.Println("vas service: insufficient balance (cashback path)")
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "airtime", "used_cashback": true})
 			return nil, appErr.ErrInsufficientBalance
 		}
 	}
@@ -1200,19 +1265,23 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error (cashback path): code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "airtime", "used_cashback": true})
 		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d (cashback path)", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "airtime", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime", "used_cashback": true})
 		return nil, err
 	}
 
@@ -1239,6 +1308,7 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 	}
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime", "used_cashback": true})
 		return nil, err
 	}
 	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
@@ -1247,6 +1317,7 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to mark txID=%s failed after cashback reservation error: %v", txID, updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": reserveErr.Error(), "type": "airtime", "used_cashback": true})
 		return nil, reserveErr
 	}
 	cashbackCapped = reserved
@@ -1275,6 +1346,7 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
 			}
+			s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime", "used_cashback": true})
 			return nil, appErr.ErrGettingAirtime
 		}
 		txFee = debitResult.Data.TransactionFee
@@ -1336,10 +1408,12 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
 		if err != nil {
 			log.Printf("vas service: failed to check wallet balance (cashback path) - %s\n", err)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data", "used_cashback": true})
 			return nil, err
 		}
 		if !hasBal {
 			log.Println("vas service: insufficient balance (cashback path)")
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "data", "used_cashback": true})
 			return nil, appErr.ErrInsufficientBalance
 		}
 	}
@@ -1347,19 +1421,23 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error (cashback path): code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "data", "used_cashback": true})
 		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d (cashback path)", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "data", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data", "used_cashback": true})
 		return nil, err
 	}
 
@@ -1386,6 +1464,7 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 	}
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data", "used_cashback": true})
 		return nil, err
 	}
 	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
@@ -1394,6 +1473,7 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to mark txID=%s failed after cashback reservation error: %v", txID, updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": reserveErr.Error(), "type": "data", "used_cashback": true})
 		return nil, reserveErr
 	}
 	cashbackCapped = reserved
@@ -1422,6 +1502,7 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
 			}
+			s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data", "used_cashback": true})
 			return nil, appErr.ErrGettingData
 		}
 		txFee = debitResult.Data.TransactionFee
@@ -1483,10 +1564,12 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
 		if err != nil {
 			log.Printf("vas service: failed to check wallet balance (cashback path) - %s\n", err)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 			return nil, err
 		}
 		if !hasBal {
 			log.Println("vas service: insufficient balance (cashback path)")
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "electricity", "used_cashback": true})
 			return nil, appErr.ErrInsufficientBalance
 		}
 	}
@@ -1494,19 +1577,23 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error (cashback path): code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "electricity", "used_cashback": true})
 		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d (cashback path)", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "electricity", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 		return nil, err
 	}
 
@@ -1515,19 +1602,23 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 	})
 	if err != nil {
 		log.Printf("vas service: electricity validation failed (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 		return nil, err
 	}
 	if validationResult != nil {
 		if validationResult.Data.AccountNumber != accountNumber {
 			log.Printf("vas service: electricity validation account number mismatch (cashback path) expected=%s got=%s", accountNumber, validationResult.Data.AccountNumber)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountNumber.Error(), "type": "electricity", "used_cashback": true})
 			return nil, appErr.ErrInvalidAccountNumber
 		}
 		if string(validationResult.Data.AccountType) != string(payload.AccountType) {
 			log.Printf("vas service: electricity validation account type mismatch (cashback path) expected=%s got=%s", payload.AccountType, validationResult.Data.AccountType)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountType.Error(), "type": "electricity", "used_cashback": true})
 			return nil, appErr.ErrInvalidAccountType
 		}
 		if validationResult.ResponseCode != "00" && validationResult.ResponseCode != "01" {
 			log.Printf("vas service: electricity validation provider error (cashback path): code=%s msg=%q", validationResult.ResponseCode, validationResult.ResponseMessage)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": validationResult.ResponseMessage, "type": "electricity", "used_cashback": true})
 			return nil, &appErr.XpressPayProviderError{Code: validationResult.ResponseCode, Message: validationResult.ResponseMessage}
 		}
 	}
@@ -1555,6 +1646,7 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 	}
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 		return nil, err
 	}
 	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
@@ -1563,6 +1655,7 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to mark txID=%s failed after cashback reservation error: %v", txID, updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": reserveErr.Error(), "type": "electricity", "used_cashback": true})
 		return nil, reserveErr
 	}
 	cashbackCapped = reserved
@@ -1591,6 +1684,7 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
 			}
+			s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity", "used_cashback": true})
 			return nil, appErr.ErrPayingElectricityBill
 		}
 		txFee = debitResult.Data.TransactionFee
@@ -1657,10 +1751,12 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 		hasBal, err := s.hasSufficientBalance(ctx, wallet.WalletCustomerID, float64(walletNaira))
 		if err != nil {
 			log.Printf("vas service: failed to check wallet balance (cashback path) - %s\n", err)
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 			return nil, err
 		}
 		if !hasBal {
 			log.Println("vas service: insufficient balance (cashback path)")
+			s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInsufficientBalance.Error(), "type": "cable", "used_cashback": true})
 			return nil, appErr.ErrInsufficientBalance
 		}
 	}
@@ -1668,19 +1764,23 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 	providerBal, err := s.XpressPayments.GetWalletBalance(ctx)
 	if err != nil {
 		log.Printf("vas service: failed to check provider balance (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 	if providerBal.ResponseCode != "00" && providerBal.ResponseCode != "0" {
 		log.Printf("vas service: provider balance API error (cashback path): code=%s msg=%q", providerBal.ResponseCode, providerBal.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": providerBal.ResponseMessage, "type": "cable", "used_cashback": true})
 		return nil, &appErr.XpressPayProviderError{Code: providerBal.ResponseCode, Message: providerBal.ResponseMessage}
 	}
 	if providerBal.Data < float64(amount) {
 		log.Printf("vas service: provider wallet balance %.2f insufficient for amount %d (cashback path)", providerBal.Data, amount)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "provider wallet balance insufficient", "type": "cable", "used_cashback": true})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if err := s.PinVerifier.VerifyTransactionPin(ctx, mobileUserID, strings.TrimSpace(payload.Pin)); err != nil {
 		log.Printf("vas service: failed to verify transaction pin (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 		return nil, err
 	}
 
@@ -1689,14 +1789,17 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 	})
 	if err != nil {
 		log.Printf("vas service: cable validation failed (cashback path) - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 		return nil, err
 	}
 	if validateResult.Data.AccountNumber != accountNumber {
 		log.Printf("vas service: cable validation account number mismatch (cashback path) expected=%s got=%s", accountNumber, validateResult.Data.AccountNumber)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": appErr.ErrInvalidAccountNumber.Error(), "type": "cable", "used_cashback": true})
 		return nil, appErr.ErrInvalidAccountNumber
 	}
 	if validateResult.ResponseCode != "00" && validateResult.ResponseCode != "01" {
 		log.Printf("vas service: cable validation provider error (cashback path): code=%s msg=%q", validateResult.ResponseCode, validateResult.ResponseMessage)
+		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": validateResult.ResponseMessage, "type": "cable", "used_cashback": true})
 		return nil, &appErr.XpressPayProviderError{Code: validateResult.ResponseCode, Message: validateResult.ResponseMessage}
 	}
 
@@ -1723,6 +1826,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 	}
 	if err := s.Txr.AddTransaction(ctx, &txn); err != nil {
 		log.Printf("vas service: failed to add transaction record at pending state - %s\n", err)
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 		return nil, err
 	}
 	reserved, reserveErr := s.Repo.ReserveCashbackSpend(ctx, txID, mobileUserID, amountKobo, referrals.CashbackSourceVAS)
@@ -1731,6 +1835,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 		if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 			log.Printf("vas service: failed to mark txID=%s failed after cashback reservation error: %v", txID, updateErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": reserveErr.Error(), "type": "cable", "used_cashback": true})
 		return nil, reserveErr
 	}
 	cashbackCapped = reserved
@@ -1759,6 +1864,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 			if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
 				log.Printf("vas service: failed to update tx to failed - %s\n", updateErr)
 			}
+			s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 			return nil, appErr.ErrPayingCableBill
 		}
 		txFee = debitResult.Data.TransactionFee
@@ -1769,6 +1875,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 		if releaseErr := s.Repo.ReleaseCashbackSpend(ctx, txID, mobileUserID, referrals.CashbackSourceVAS); releaseErr != nil {
 			log.Printf("vas service: failed to release reserved cashback txID=%s: %v", txID, releaseErr)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "cable", "used_cashback": true})
 		return nil, appErr.ErrPayingCableBill
 	}
 
