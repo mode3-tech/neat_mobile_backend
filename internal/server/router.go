@@ -105,8 +105,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	r := gin.New()
 
 	r.Use(cors.New(cors.Config{
-		AllowedOrigins:   []string{"http://localhost:8000"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+		AllowOrigins:     []string{"http://localhost:8000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
