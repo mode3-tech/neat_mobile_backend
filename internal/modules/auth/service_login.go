@@ -65,7 +65,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 		return s.startNewDeviceFlow(ctx, user.ID, user.Phone, deviceID, ip)
 	}
 
-	deviceService := device.NewService(*s.deviceRepo)
+	deviceService := device.NewService(*s.deviceRepo, s.auditLogger)
 	challenge, err := deviceService.CreateChallenge(ctx, user.ID, deviceID, 0)
 	if err != nil {
 		log.Println("Error creating device challenge:", err)
@@ -104,7 +104,7 @@ func (s *Service) CreateChallenge(ctx context.Context, deviceID string) (*Challe
 	}
 
 	const ttl = 60 * time.Second
-	deviceService := device.NewService(*s.deviceRepo)
+	deviceService := device.NewService(*s.deviceRepo, s.auditLogger)
 	challenge, err := deviceService.CreateChallenge(ctx, deviceRecord.UserID, deviceRecord.DeviceID, ttl)
 	if err != nil {
 		return nil, err

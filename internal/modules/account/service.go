@@ -11,6 +11,9 @@ import (
 	"log"
 	"mime/multipart"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/transaction"
@@ -32,6 +35,7 @@ type Service struct {
 	TrfLimitAmount        string
 	CustomerAccountFinder CustomerAccountFinder
 	WalletFinder          WalletFinder
+	auditLogger           auditlog.AuditLogger
 }
 
 func NewService(repo *Repository,
@@ -41,7 +45,8 @@ func NewService(repo *Repository,
 	deviceVerifier DeviceVerifier,
 	trfLimitAmount string,
 	customerAccountFinder CustomerAccountFinder,
-	walletFinder WalletFinder) *Service {
+	walletFinder WalletFinder,
+	auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		Repo:                  repo,
 		B2:                    b2,
@@ -51,7 +56,24 @@ func NewService(repo *Repository,
 		TrfLimitAmount:        trfLimitAmount,
 		CustomerAccountFinder: customerAccountFinder,
 		WalletFinder:          walletFinder,
+		auditLogger:           auditLogger,
 	}
+}
+
+func (s *Service) logAccountAudit(ctx context.Context, action, mobileUserID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   mobileUserID,
+		ResourceType: auditlog.ResourceTypeUser,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*AccountSummary, error) {
@@ -315,8 +337,16 @@ func (s *Service) UpdateProfile(ctx context.Context, mobileUserID string, profil
 	}
 
 	if err := s.Repo.UpdateProfile(ctx, mobileUserID, data); err != nil {
+		s.logAccountAudit(ctx, "PROFILE_UPDATE", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist profile update",
+		})
 		return appErr.ErrUpdatingProfile //500
 	}
+
+	s.logAccountAudit(ctx, "PROFILE_UPDATE", mobileUserID, auditlog.StatusSuccess, map[string]interface{}{
+		"email_changed":   req.Email != nil,
+		"address_changed": req.Address != nil,
+	})
 
 	return nil
 }

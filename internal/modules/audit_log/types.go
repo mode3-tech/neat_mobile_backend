@@ -12,4 +12,16 @@ const (
 	ResourceTypeTierUpgrade     ResourceType = "tier_upgrade"
 	ResourceTypeDevice          ResourceType = "device"
 	ResourceTypeSession         ResourceType = "session"
+	ResourceTypeNIN             ResourceType = "nin"
+	ResourceTypeBVN             ResourceType = "bvn"
+	ResourceTypeBeneficiary     ResourceType = "beneficiary"
+	ResourceTypeCard            ResourceType = "card"
+	ResourceTypeSavingsGoal     ResourceType = "savings_goal"
+)
+
+type LogStatus string
+
+const (
+	StatusSuccess LogStatus = "success"
+	StatusFailure LogStatus = "failure"
 )

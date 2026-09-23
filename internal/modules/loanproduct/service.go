@@ -8,6 +8,9 @@ import (
 	"math"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/smsbilling"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
@@ -30,6 +33,7 @@ type Service struct {
 	deviceVerifier       DeviceVerifier
 	smsSender            SMSSender
 	appName              string
+	auditLogger          auditlog.AuditLogger
 }
 
 const (
@@ -43,7 +47,7 @@ var (
 	ErrTransactionPinTemporarilyLocked = errors.New("transaction pin is temporarily locked")
 )
 
-func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *authchecker.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier, smsSender SMSSender, appName string) *Service {
+func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoanFinder CoreLoanFinder, manualRepayer ManualRepayer, pinVerifier *authchecker.Verifier, repaymentTransferrer RepaymentFundTransferrer, deviceVerifier DeviceVerifier, smsSender SMSSender, appName string, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		repo:                 repo,
 		coreCustomerFinder:   coreCustomerFinder,
@@ -54,7 +58,24 @@ func NewService(repo *Repository, coreCustomerFinder CoreCustomerFinder, coreLoa
 		deviceVerifier:       deviceVerifier,
 		smsSender:            smsSender,
 		appName:              appName,
+		auditLogger:          auditLogger,
 	}
+}
+
+func (s *Service) logLoanAudit(ctx context.Context, resourceType auditlog.ResourceType, action, mobileUserID, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) GetAllLoanProducts(ctx context.Context) ([]PartialLoanProduct, error) {
@@ -240,8 +261,17 @@ func (s *Service) ApplyForLoan(ctx context.Context, req LoanRequest, mobileUserI
 	}
 
 	if err := s.repo.CreateEOI(ctx, eoi); err != nil {
+		s.logLoanAudit(ctx, auditlog.ResourceTypeLoanApplication, "LOAN_APPLICATION", mobileUserID, eoi.ID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist loan application",
+		})
 		return nil, err
 	}
+
+	s.logLoanAudit(ctx, auditlog.ResourceTypeLoanApplication, "LOAN_APPLICATION", mobileUserID, eoi.ID, auditlog.StatusSuccess, map[string]interface{}{
+		"application_ref":   eoi.ApplicationRef,
+		"loan_product_type": req.LoanProductType,
+		"requested_amount":  parsedAmount,
+	})
 
 	normalizedPhone, err := phone.NormalizeNigerianNumber(user.Phone)
 	if err != nil {
@@ -468,6 +498,10 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, 
 
 	if err := s.repaymentTransferrer.TransferForLoanRepayment(ctx, mobileUserID, req.Amount); err != nil {
 		log.Printf("manual repayment wallet transfer failed user=%s amount=%.2f err=%v", mobileUserID, req.Amount, err)
+		s.logLoanAudit(ctx, auditlog.ResourceTypeLoan, "LOAN_REPAYMENT", mobileUserID, req.LoanID, auditlog.StatusFailure, map[string]interface{}{
+			"amount":             req.Amount,
+			"reason_for_failure": "wallet transfer failed",
+		})
 		return appErr.ErrMakingRepayment
 	}
 
@@ -479,10 +513,17 @@ func (s *Service) MakeManualRepayment(ctx context.Context, mobileUserID string, 
 	})
 	if err != nil {
 		log.Printf("manual repayment CBA call failed user=%s loan_id=%s amount=%.2f err=%v", mobileUserID, req.LoanID, req.Amount, err)
+		s.logLoanAudit(ctx, auditlog.ResourceTypeLoan, "LOAN_REPAYMENT", mobileUserID, req.LoanID, auditlog.StatusFailure, map[string]interface{}{
+			"amount":             req.Amount,
+			"reason_for_failure": "cba repayment call failed",
+		})
 		return appErr.ErrMakingRepayment
 	}
 
 	log.Printf("manual repayment CBA call ok user=%s loan_id=%s", mobileUserID, req.LoanID)
+	s.logLoanAudit(ctx, auditlog.ResourceTypeLoan, "LOAN_REPAYMENT", mobileUserID, req.LoanID, auditlog.StatusSuccess, map[string]interface{}{
+		"amount": req.Amount,
+	})
 	return nil
 }
 

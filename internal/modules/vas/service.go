@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/user"
@@ -25,9 +28,10 @@ type Service struct {
 	XpressPayments VASService
 	PinVerifier    AuthService
 	User           UserFinder
+	auditLogger    auditlog.AuditLogger
 }
 
-func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService, userRepo UserFinder) *Service {
+func NewService(repo *Repository, xpressPayments VASService, walletService WalletService, txr TransactionService, baas BAAS, pinVerifier AuthService, userRepo UserFinder, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		Repo:           repo,
 		XpressPayments: xpressPayments,
@@ -36,7 +40,24 @@ func NewService(repo *Repository, xpressPayments VASService, walletService Walle
 		Baas:           baas,
 		PinVerifier:    pinVerifier,
 		User:           userRepo,
+		auditLogger:    auditLogger,
 	}
+}
+
+func (s *Service) logVASAudit(ctx context.Context, mobileUserID, txID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   txID,
+		ResourceType: auditlog.ResourceTypeTransaction,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       "VAS_PURCHASE",
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) FetchAllCategories(ctx context.Context) ([]vas.Category, error) {
@@ -275,20 +296,20 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 	log.Printf("vas service: local phone: %s, amount: %d\n", localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase airtime - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID, mobileUserID)
 		return nil, appErr.ErrGettingAirtime
 	}
 
 	switch result.ResponseCode {
 	case "01":
 		log.Printf("vas service: airtime purchase pending - %s\n", result.ResponseMessage)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID, mobileUserID)
 		return nil, appErr.ErrGettingAirtime
 	case "00":
 	default:
 		log.Printf("vas service: airtime purchase failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID, mobileUserID)
 		return nil, appErr.ErrGettingAirtime
 	}
 
@@ -297,6 +318,7 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
 		return nil, appErr.ErrGettingAirtime
 	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -436,7 +458,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	result, err := s.XpressPayments.GetData(ctx, requestID, uniqueCode, localizedPhone, amount)
 	if err != nil {
 		log.Printf("vas service: unable to purchase data - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID, mobileUserID)
 		return nil, appErr.ErrGettingData
 	}
 	if updateErr := s.Txr.UpdateTransactionStatus(ctx, txID, wallet.AvailableBalance, TransactionStatusFailed); updateErr != nil {
@@ -446,13 +468,13 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 	switch result.ResponseCode {
 	case "01":
 		log.Printf("vas service: data purchase pending - %s\n", result.ResponseMessage)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID, mobileUserID)
 		return nil, appErr.ErrGettingData
 	case "00":
 	default:
 		log.Printf("vas service: data purchase failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID, mobileUserID)
 		return nil, appErr.ErrGettingData
 	}
 
@@ -461,6 +483,7 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
 		return nil, appErr.ErrGettingData
 	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -652,20 +675,20 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 	)
 	if err != nil {
 		log.Printf("vas service: failed to pay electricity bill - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID, mobileUserID)
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
 	switch result.ResponseCode {
 	case "01":
 		log.Printf("vas service: electricity payment pending - %s\n", result.ResponseMessage)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID, mobileUserID)
 		return nil, appErr.ErrPayingElectricityBill
 	case "00":
 	default:
 		log.Printf("vas service: electricity payment failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID, mobileUserID)
 		return nil, appErr.ErrPayingElectricityBill
 	}
 
@@ -674,6 +697,7 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
 		return nil, appErr.ErrPayingElectricityBill
 	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -850,20 +874,20 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 	)
 	if err != nil {
 		log.Printf("vas service: failed to pay cable bill - %s\n", err)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, err, requestID, mobileUserID)
 		return nil, appErr.ErrPayingCableBill
 	}
 
 	switch result.ResponseCode {
 	case "01":
 		log.Printf("vas service: cable payment pending - %s\n", result.ResponseMessage)
-		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID)
+		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID, appErr.ErrVASAmbiguous, requestID, mobileUserID)
 		return nil, appErr.ErrPayingCableBill
 	case "00":
 	default:
 		log.Printf("vas service: cable payment failed - %s\n", result.ResponseMessage)
 		s.handleFulfilFailure(ctx, txID, amount, debitResult.Data.TransactionFee, wallet.AvailableBalance, metadata, wallet.WalletCustomerID,
-			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID)
+			&appErr.XpressPayProviderError{Code: result.ResponseCode, Message: result.ResponseMessage}, requestID, mobileUserID)
 		return nil, appErr.ErrPayingCableBill
 	}
 
@@ -872,6 +896,7 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		log.Printf("vas service: failed to update transaction record to successful - %s", err)
 		return nil, appErr.ErrPayingCableBill
 	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -925,8 +950,13 @@ func (s *Service) attemptRefund(ctx context.Context, txn *Transaction, customerI
 // For deterministic errors it attempts a refund via attemptRefund; if the
 // refund doesn't fully complete, the transaction is marked refund_pending
 // so the reconciliation sweep can retry only the missing piece.
-func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount int64, txFee int, balanceBefore int64, metadata map[string]any, customerID string, vasErr error, requestID string) {
+func (s *Service) handleFulfilFailure(ctx context.Context, txID string, amount int64, txFee int, balanceBefore int64, metadata map[string]any, customerID string, vasErr error, requestID, mobileUserID string) {
 	log.Printf("vas service: handling fulfil failure txID=%s requestID=%s ambiguous=%v err=%v", txID, requestID, errors.Is(vasErr, appErr.ErrVASAmbiguous), vasErr)
+	auditMetadata := map[string]interface{}{"reason_for_failure": vasErr.Error()}
+	for k, v := range metadata {
+		auditMetadata[k] = v
+	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, auditMetadata)
 	if errors.Is(vasErr, appErr.ErrVASAmbiguous) {
 		// Try to resolve ambiguity by checking status with the provider
 		status, checkErr := s.XpressPayments.CheckStatus(ctx, requestID)
@@ -1034,13 +1064,18 @@ func (s *Service) recheckSufficientBalanceOrRelease(ctx context.Context, txID, m
 // On deterministic failure, it reverses both the wallet and cashback portions.
 func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, requestID string, balanceBefore int64, walletKobo int64, cashbackCapped int64, txFee int, mobileUserID string, metadata map[string]any, customerID string, vasErr error) {
 	log.Printf("vas service: handling cashback fulfil failure txID=%s requestID=%s ambiguous=%v walletKobo=%d cashbackKobo=%d err=%v", txID, requestID, errors.Is(vasErr, appErr.ErrVASAmbiguous), walletKobo, cashbackCapped, vasErr)
+	auditMetadata := map[string]interface{}{"reason_for_failure": vasErr.Error(), "used_cashback": true}
+	for k, v := range metadata {
+		auditMetadata[k] = v
+	}
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, auditMetadata)
 	if errors.Is(vasErr, appErr.ErrVASAmbiguous) {
 		status, checkErr := s.XpressPayments.CheckStatus(ctx, requestID)
 		if checkErr == nil {
 			switch status.ResponseCode {
 			case "00":
 				balanceAfter := balanceBefore - (walletKobo + int64(txFee)*100)
-				s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+				s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter, metadata)
 				if status.ReferenceID != "" {
 					if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, status.ReferenceID); updateErr != nil {
 						log.Printf("vas service: failed to store provider reference txID=%s: %v", txID, updateErr)
@@ -1088,15 +1123,22 @@ func (s *Service) handleFulfilFailureCashback(ctx context.Context, txID, request
 	}
 }
 
-func (s *Service) settleCashbackAfterProviderSuccess(ctx context.Context, txID, mobileUserID string, cashbackKobo int64, balanceAfter int64) {
+func (s *Service) settleCashbackAfterProviderSuccess(ctx context.Context, txID, mobileUserID string, cashbackKobo int64, balanceAfter int64, metadata map[string]any) {
+	auditMetadata := map[string]interface{}{"used_cashback": true, "cashback_kobo": cashbackKobo}
+	for k, v := range metadata {
+		auditMetadata[k] = v
+	}
+
 	if cashbackKobo == 0 {
 		if err := s.Txr.UpdateTransactionStatus(ctx, txID, balanceAfter, TransactionStatusSuccessful); err != nil {
 			log.Printf("vas service: failed to update transaction successful txID=%s: %v", txID, err)
 		}
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, auditMetadata)
 		return
 	}
 
 	if _, err := s.Repo.CompleteCashbackSpend(ctx, txID, mobileUserID, cashbackKobo, referrals.CashbackSourceVAS, TransactionStatusSuccessful, balanceAfter); err == nil {
+		s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusSuccess, auditMetadata)
 		return
 	} else {
 		log.Printf("vas service: cashback settlement pending after provider success txID=%s: %v", txID, err)
@@ -1105,6 +1147,8 @@ func (s *Service) settleCashbackAfterProviderSuccess(ctx context.Context, txID, 
 	if err := s.Repo.MarkCashbackSettlementPending(ctx, txID, balanceAfter); err != nil {
 		log.Printf("vas service: failed to preserve successful transaction after cashback settlement failure txID=%s: %v", txID, err)
 	}
+	auditMetadata["reason_for_failure"] = "cashback settlement pending"
+	s.logVASAudit(ctx, mobileUserID, txID, auditlog.StatusFailure, auditMetadata)
 }
 
 func (s *Service) RetryPendingCashbackSettlements(ctx context.Context, limit int) error {
@@ -1254,7 +1298,7 @@ func (s *Service) getAirtimeWithCashback(ctx context.Context, payload AirtimePay
 	}
 
 	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
-	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -1401,7 +1445,7 @@ func (s *Service) getDataWithCashback(ctx context.Context, payload DataPayload, 
 	}
 
 	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
-	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -1578,7 +1622,7 @@ func (s *Service) payElectricityWithCashback(ctx context.Context, payload PayEle
 	}
 
 	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
-	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {
@@ -1750,7 +1794,7 @@ func (s *Service) payCableWithCashback(ctx context.Context, payload PayCablePayl
 	}
 
 	balanceAfter := wallet.AvailableBalance - (walletKobo + int64(txFee)*100)
-	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter)
+	s.settleCashbackAfterProviderSuccess(ctx, txID, mobileUserID, cashbackCapped, balanceAfter, metadata)
 
 	if result.ReferenceID != "" {
 		if updateErr := s.Txr.UpdateTransactionProviderReference(ctx, txID, result.ReferenceID); updateErr != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -89,6 +90,7 @@ type Service struct {
 	// whichever provider was configured at startup is the one every wallet
 	// this flow creates gets stamped with.
 	walletProviderName string
+	auditLogger        auditlog.AuditLogger
 }
 
 func NewService(
@@ -117,6 +119,7 @@ func NewService(
 	productID string,
 	activationCapKobo int64,
 	walletProviderName string,
+	auditLogger auditlog.AuditLogger,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -145,6 +148,7 @@ func NewService(
 		productID:            productID,
 		activationCapKobo:    activationCapKobo,
 		walletProviderName:   walletProviderName,
+		auditLogger:          auditLogger,
 	}
 }
 

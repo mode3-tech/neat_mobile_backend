@@ -93,14 +93,14 @@ func (s *Service) processRegistrationJob(ctx context.Context, job RegistrationJo
 			AppVersion:  snapshot.Device.AppVersion,
 			IP:          snapshot.IP,
 		}
-		deviceService := device.NewService(*deviceRepo)
+		deviceService := device.NewService(*deviceRepo, s.auditLogger)
 		if txErr = deviceService.BindDevice(ctx, job.MobileUserID, &deviceReq); txErr != nil {
 			return txErr
 		}
 
 		if snapshot.ReferralCode != "" {
 			referralsRepo := referrals.NewRepository(txDB)
-			if txErr = referrals.NewService(referralsRepo).RedeemReferralCode(ctx, job.MobileUserID, snapshot.ReferralCode); txErr != nil {
+			if txErr = referrals.NewService(referralsRepo, s.auditLogger).RedeemReferralCode(ctx, job.MobileUserID, snapshot.ReferralCode); txErr != nil {
 				return txErr
 			}
 		} else if snapshot.ReferrerUserID != "" {

@@ -7,11 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/net/context"
 )
 
 const (
 	RequestIDHeader     = "X-Request-ID"
 	RequestIDContextKey = "request_id"
+	ClientIPContextKey  = "client_ip"
 )
 
 // RequestContextLogger injects a request id and emits a single structured log record per request.
@@ -22,8 +24,13 @@ func RequestContextLogger() gin.HandlerFunc {
 			requestID = uuid.NewString()
 		}
 
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), RequestIDContextKey, requestID))
 		c.Set(RequestIDContextKey, requestID)
 		c.Writer.Header().Set(RequestIDHeader, requestID)
+
+		clientIP := c.ClientIP()
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ClientIPContextKey, clientIP))
+		c.Set(ClientIPContextKey, clientIP)
 
 		start := time.Now()
 		c.Next()
@@ -50,9 +57,29 @@ func RequestContextLogger() gin.HandlerFunc {
 			path,
 			status,
 			time.Since(start).Milliseconds(),
-			c.ClientIP(),
+			clientIP,
 			c.Request.UserAgent(),
 			strings.TrimSpace(c.Errors.String()),
 		)
 	}
+}
+
+func GetRequestID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if requestID, ok := ctx.Value(RequestIDContextKey).(string); ok {
+		return requestID
+	}
+	return ""
+}
+
+func GetClientIP(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if clientIP, ok := ctx.Value(ClientIPContextKey).(string); ok {
+		return clientIP
+	}
+	return ""
 }

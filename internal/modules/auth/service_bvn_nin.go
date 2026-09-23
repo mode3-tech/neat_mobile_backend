@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	auditlog "neat_mobile_app_backend/internal/audit_log"
 	"neat_mobile_app_backend/internal/email"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	phoneUtil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
@@ -22,12 +24,37 @@ import (
 	"gorm.io/gorm"
 )
 
+// logVerificationAudit records a BVN/NIN verification attempt. These flows run before
+// a user account exists, so there's no real user ID to attribute the action to —
+// resourceID doubles as ActorID, using whatever identity is available at that point
+// in the flow (the inbound verification ID, or a masked subject once one is minted).
+func (s *Service) logVerificationAudit(ctx context.Context, resourceType auditlog.ResourceType, action, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ActorType:    "unauthenticated",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      resourceID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
+}
+
 // ValidateNIN resolves the configured identity provider and performs the NIN lookup.
 // The same system_preferences row drives BVN and NIN, so flipping it moves both.
 func (s *Service) ValidateNIN(ctx context.Context, bvnVerificationID, nin string) (*ninInfo, error) {
 	provider, client := s.ninProviderFor(ctx)
 	if client == nil {
 		log.Printf("ValidateNIN: %s nin provider is not configured", provider)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", bvnVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                MaskSub(nin),
+			"provider":           provider,
+			"reason for failure": "provider is not configured",
+		})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
@@ -45,21 +72,37 @@ func (s *Service) ninProviderFor(ctx context.Context) (Provider, NINValidation) 
 
 func (s *Service) validateNINWith(ctx context.Context, provider Provider, client NINValidation, bvnVerificationID, nin string) (*ninInfo, error) {
 	if len(nin) != 11 {
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", bvnVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                MaskSub(nin),
+			"reason for failure": "invalid NIN",
+		})
 		return nil, appErr.ErrInvalidNIN
 	}
 
 	row, err := s.repo.GetValidationRow(ctx, bvnVerificationID)
 	if err != nil {
+		reason := "failed to load bvn verification row"
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			reason = "bvn verification not found"
+		}
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", bvnVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                MaskSub(nin),
+			"reason for failure": reason,
+		})
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErr.ErrBVNNotFound
 		}
-		auditlog.
 		return nil, err
 	}
 
 	resp, err := client.ValidateNIN(ctx, nin)
 	if err != nil {
 		log.Printf("ValidateNIN: %s provider call failed: %v", provider, err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", bvnVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                MaskSub(nin),
+			"provider":           provider,
+			"reason for failure": "provider call failed",
+		})
 		return nil, translateProviderError(err, appErr.ErrNINNotFound)
 	}
 
@@ -72,6 +115,10 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 
 	if err != nil {
 		log.Printf("ValidateNIN: BVN/NIN detail mismatch: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", bvnVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                MaskSub(nin),
+			"reason for failure": "bvn/nin detail mismatch",
+		})
 		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
@@ -84,6 +131,10 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(resp.Data.TelephoneNo)
 	if err != nil {
 		log.Printf("ValidateNIN: phone normalization failed phone=%q err=%v", resp.Data.TelephoneNo, err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                maskedNIN,
+			"reason for failure": "phone normalization failed",
+		})
 		return nil, err
 	}
 
@@ -105,6 +156,10 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 	}
 
 	if fullName == "" || strings.TrimSpace(resp.Data.BirthDate) == "" || strings.TrimSpace(resp.Data.TelephoneNo) == "" {
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                maskedNIN,
+			"reason for failure": "incomplete provider response",
+		})
 		return nil, appErr.ErrInvalidNIN
 	}
 
@@ -116,14 +171,27 @@ func (s *Service) validateNINWith(ctx context.Context, provider Provider, client
 
 	if err := s.verification.AddVerification(ctx, record); err != nil {
 		log.Printf("ValidateNIN: AddVerification failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                maskedNIN,
+			"reason for failure": "failed to persist verification record",
+		})
 		return nil, err
 	}
 
 	maskedPhone, err := phoneUtil.MaskPhone(phone)
 	if err != nil {
 		log.Printf("ValidateNIN: MaskPhone failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"NIN":                maskedNIN,
+			"reason for failure": "failed to mask phone",
+		})
 		return nil, err
 	}
+
+	s.logVerificationAudit(ctx, auditlog.ResourceTypeNIN, "NIN_VALIDATION", verificationID, auditlog.StatusSuccess, map[string]interface{}{
+		"NIN":      maskedNIN,
+		"provider": provider,
+	})
 
 	return &ninInfo{
 		name:           fullName,
@@ -161,26 +229,48 @@ func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error)
 func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.tender == nil {
 		log.Printf("tendar validator is not configured")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderTendar,
+			"reason for failure": "provider is not configured",
+		})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
 		log.Printf("bvn is required")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"reason for failure": "bvn is required",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	if len(bvn) != 11 {
 		log.Printf("invalid bvn number")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"reason for failure": "invalid bvn",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnDetails, err := s.tender.ValidateBVNWithTendar(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithTendar: provider call failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderTendar,
+			"reason for failure": "provider call failed",
+		})
 		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("invalid bvn number")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderTendar,
+			"reason for failure": "provider returned no data",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -222,12 +312,22 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	phone := strings.TrimSpace(bvnDetails.Data.Details.PhoneNumber)
 	if phone == "" {
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "missing phone number",
+		})
 		return nil, appErr.ErrMissingBVNPhoneNumber
 	}
 
 	normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 	if err != nil {
 		log.Printf("ValidateBVNWithTendar: phone normalization failed phone=%q err=%v", phone, err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "phone normalization failed",
+		})
 		return nil, err
 	}
 	record.VerifiedPhone = &normalizedPhoneNumber
@@ -267,11 +367,21 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	if fullName == "" || bvnDetails.Data.Details.DateOfBirth == "" || bvnDetails.Data.Details.PhoneNumber == "" {
 		log.Printf("invalid bvn number")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "incomplete provider response",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	if record.VerifiedPhone == nil {
 		log.Printf("ValidateBVNWithTendar: verified phone is nil bvn=%s", MaskSub(bvn))
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "verified phone is nil",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -302,16 +412,31 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		log.Printf("failed to add verification record err=%v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "failed to persist verification record",
+		})
 		return nil, err
 	}
 
 	maskedPhone, err := phoneUtil.MaskPhone(*record.VerifiedPhone)
 	if err != nil {
 		log.Printf("ValidateBVNWithTendar: MaskPhone failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderTendar,
+			"reason for failure": "failed to mask phone",
+		})
 		return nil, err
 	}
 
 	maskedEmail := email.MaskEmail(bvnDetails.Data.Details.Email)
+
+	s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusSuccess, map[string]interface{}{
+		"BVN":      maskedBVN,
+		"provider": ProviderTendar,
+	})
 
 	return &bvnInfo{
 		name:           fullName,
@@ -325,24 +450,46 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnInfo, error) {
 	if s.prembly == nil {
 		log.Printf("ValidateBVNWithPrembly: prembly provider not configured")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderPrembly,
+			"reason for failure": "provider is not configured",
+		})
 		return nil, appErr.ErrProviderServiceUnavailable
 	}
 
 	if bvn == "" {
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"reason for failure": "bvn is required",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	if len(bvn) != 11 {
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"reason for failure": "invalid bvn",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	bvnDetails, err := s.prembly.ValidateBVNWithPrembly(ctx, bvn)
 	if err != nil {
 		log.Printf("ValidateBVNWithPrembly: provider call failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderPrembly,
+			"reason for failure": "provider call failed",
+		})
 		return nil, translateProviderError(err, appErr.ErrBVNNotFound)
 	}
 	if bvnDetails == nil {
 		log.Printf("ValidateBVNWithPrembly: provider returned nil response")
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", MaskSub(bvn), auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                MaskSub(bvn),
+			"provider":           ProviderPrembly,
+			"reason for failure": "provider returned no data",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -397,6 +544,11 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 		normalizedPhoneNumber, err := phoneUtil.NormalizeNigerianNumber(phone)
 		if err != nil {
 			log.Printf("ValidateBVNWithPrembly: phone normalization failed phone=%q err=%v", phone, err)
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+				"BVN":                maskedBVN,
+				"provider":           ProviderPrembly,
+				"reason for failure": "phone normalization failed",
+			})
 			return nil, appErr.ErrInvalidBVN
 		}
 		record.VerifiedPhone = &normalizedPhoneNumber
@@ -434,11 +586,21 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 
 	if fullName == "" || dobField == "" || phoneField == "" {
 		log.Printf("ValidateBVNWithPrembly: incomplete response fullName=%q dob=%q phone=%q", fullName, dobField, phoneField)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderPrembly,
+			"reason for failure": "incomplete provider response",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
 	if record.VerifiedPhone == nil {
 		log.Printf("ValidateBVNWithPrembly: verified phone is nil bvn=%s", MaskSub(bvn))
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderPrembly,
+			"reason for failure": "verified phone is nil",
+		})
 		return nil, appErr.ErrInvalidBVN
 	}
 
@@ -464,14 +626,29 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 
 	if err := s.saveVerifiedBVN(ctx, record, bvnRecord); err != nil {
 		log.Printf("ValidateBVNWithPrembly: saveVerifiedBVN failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderPrembly,
+			"reason for failure": "failed to persist verification record",
+		})
 		return nil, err
 	}
 
 	maskedPhone, err := phoneUtil.MaskPhone(*record.VerifiedPhone)
 	if err != nil {
 		log.Printf("ValidateBVNWithPrembly: MaskPhone failed: %v", err)
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusFailure, map[string]interface{}{
+			"BVN":                maskedBVN,
+			"provider":           ProviderPrembly,
+			"reason for failure": "failed to mask phone",
+		})
 		return nil, err
 	}
+
+	s.logVerificationAudit(ctx, auditlog.ResourceTypeBVN, "BVN_VALIDATION", verificationID, auditlog.StatusSuccess, map[string]interface{}{
+		"BVN":      maskedBVN,
+		"provider": ProviderPrembly,
+	})
 
 	return &bvnInfo{
 		name:           fullName,
