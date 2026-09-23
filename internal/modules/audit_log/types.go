@@ -17,6 +17,9 @@ const (
 	ResourceTypeBeneficiary     ResourceType = "beneficiary"
 	ResourceTypeCard            ResourceType = "card"
 	ResourceTypeSavingsGoal     ResourceType = "savings_goal"
+	ResourceTypeLogout          ResourceType = "logout"
+	ResourceTypeLogin           ResourceType = "login"
+	ResourceTypeRefreshToken    ResourceType = "refresh_token"
 )
 
 type LogStatus string

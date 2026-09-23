@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"neat_mobile_app_backend/internal/helpers"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/referrals"
 	"neat_mobile_app_backend/internal/modules/wallet"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -359,7 +359,7 @@ func buildWalletRecordFromSnapshot(mobileUserID, internalWalletID string, wallet
 	}
 
 	return &wallet.CustomerWallet{
-		ID:               uuid.NewString(),
+		ID:               helpers.PrefixID("wallet"),
 		InternalWalletID: internalWalletID,
 		MobileUserID:     mobileUserID,
 		PhoneNumber:      walletResp.Customer.PhoneNumber,
