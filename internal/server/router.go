@@ -61,6 +61,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	swaggerFiles "github.com/swaggo/files"
@@ -102,6 +103,14 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	r := gin.New()
+
+	r.Use(cors.New(cors.Config{
+		AllowedOrigins:   []string{"http://localhost:8000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
 	r.Use(sentrygin.New(sentrygin.Options{
 		Repanic: true,
 	}))
