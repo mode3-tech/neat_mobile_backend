@@ -55,6 +55,15 @@ type NINFaceValidation interface {
 	ValidateNINWithFace(ctx context.Context, image, numberNin, dateOfBirth string) (*nin.PremblyNINWithFaceValidationSuccessResponse, error)
 }
 
+type NINFaceValidationTendar interface {
+	ValidateNINWithFace(ctx context.Context, number, imageURL string) (*nin.NINWithFaceResponse, error)
+}
+
+// BVNFaceValidationTendar is the Tendar implementation of the BVN-with-face lookup.
+type BVNFaceValidationTendar interface {
+	ValidateBVNWithFace(ctx context.Context, number, imageURL string) (*bvn.BVNWithFaceResponse, error)
+}
+
 type CoreCustomerFinder interface {
 	MatchCustomerByBVN(ctx context.Context, bvn string) (*loanproduct.CoreCustomerMatchData, error)
 }

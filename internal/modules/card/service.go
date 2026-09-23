@@ -2,8 +2,13 @@ package card
 
 import (
 	"context"
+	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/providers/card"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -12,14 +17,34 @@ type Service struct {
 	repo           *Repository
 	deviceVerifier DeviceVerifier
 	cardService    CardService
+	auditLogger    auditlog.AuditLogger
 }
 
-func NewService(repo *Repository, deviceVerifier DeviceVerifier, cardService CardService) *Service {
-	return &Service{repo: repo, deviceVerifier: deviceVerifier, cardService: cardService}
+func NewService(repo *Repository, deviceVerifier DeviceVerifier, cardService CardService, auditLogger auditlog.AuditLogger) *Service {
+	return &Service{repo: repo, deviceVerifier: deviceVerifier, cardService: cardService, auditLogger: auditLogger}
+}
+
+func (s *Service) logCardAudit(ctx context.Context, mobileUserID, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: auditlog.ResourceTypeCard,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       "CARD_REQUEST",
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) RequestForCard(ctx context.Context, mobileUserID, deviceID string, payload RequestForCardRequest) error {
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return appErr.ErrUnrecognizedDeviceCardRequest
+		}
 		return err
 	}
 
@@ -55,5 +80,17 @@ func (s *Service) RequestForCard(ctx context.Context, mobileUserID, deviceID str
 		BranchPickupLocation: payload.BranchPickupLocation,
 	}
 
-	return s.cardService.RequestCard(ctx, &cSPayload)
+	if err := s.cardService.RequestCard(ctx, &cSPayload); err != nil {
+		s.logCardAudit(ctx, mobileUserID, referenceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "provider card request failed",
+		})
+		return err
+	}
+
+	s.logCardAudit(ctx, mobileUserID, referenceID, auditlog.StatusSuccess, map[string]interface{}{
+		"delivery_fee":     payload.DeliveryFee,
+		"is_branch_pickup": true,
+	})
+
+	return nil
 }

@@ -88,6 +88,8 @@ func newTestService(deps serviceDeps) *Service {
 		deps.ninPrembly,
 		deps.ninTendar,
 		deps.ninFace,
+		nil, // ninFaceTendar
+		nil, // bvnFaceTendar
 		deps.source,
 		nil, nil, "", nil,
 		make(chan struct{}),
@@ -95,6 +97,7 @@ func newTestService(deps serviceDeps) *Service {
 		"",
 		0,
 		"",
+		nil,
 	)
 }
 

@@ -111,14 +111,14 @@ func (h *Handler) ValidateBVN(c *gin.Context) {
 	h.writeVerificationSuccess(c, verificationID, providerReferenceID, requiresOTP, message)
 }
 
-func (h *Handler) ValidateNIN(c *gin.Context) {
+func (h *Handler) ValidateNINWithOptimus(c *gin.Context) {
 	var request ValidateNINRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		h.writeInvalidRequest(c)
 		return
 	}
 
-	verificationID, providerReferenceID, err := h.service.ValidateNIN(c.Request.Context(), request.toOptimusRequest())
+	verificationID, providerReferenceID, err := h.service.ValidateNINWithOptimus(c.Request.Context(), request.toOptimusRequest())
 	if err != nil {
 		h.writeError(c, err)
 		return
@@ -127,8 +127,8 @@ func (h *Handler) ValidateNIN(c *gin.Context) {
 }
 
 // VerifyOTP confirms the OTP Optimus sent for a reference id (e.g. from
-// ValidateBVN/ValidateNIN's provider_reference_id). Generic across whatever
-// triggered the OTP challenge.
+// ValidateBVN/ValidateNINWithOptimus's provider_reference_id). Generic across
+// whatever triggered the OTP challenge.
 func (h *Handler) VerifyOTP(c *gin.Context) {
 	var request VerifyOTPRequest
 	if err := c.ShouldBindJSON(&request); err != nil {

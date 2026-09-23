@@ -154,4 +154,18 @@ type ValidationData struct {
 	BirthDate   string
 	TelephoneNo string
 	Email       string
+	Photo       string
+}
+
+
+type NINFaceValidationResult struct {
+	Matched      bool
+	Confidence   float64
+	Message      string
+	ResponseCode string
+}
+
+
+type NINWithFaceResponse struct {
+	FaceData NINFaceValidationResult
 }

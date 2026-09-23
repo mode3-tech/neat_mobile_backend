@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	authotp "neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/verification"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -25,6 +26,16 @@ type bvnInfo struct {
 
 type bvnWithFaceInfo struct {
 	faceCheckID string
+}
+
+type bvnFaceValidationResult struct {
+	Matched           bool
+	Confidence        float64
+	Message           string
+	ResponseCode      string
+	FaceImageProvided string
+	ReferenceID       string
+	TransactionID     string
 }
 
 type ninWithFaceInfo struct {
@@ -60,6 +71,8 @@ type Service struct {
 	ninPrembly           NINValidation
 	ninTendar            NINValidation
 	ninFace              NINFaceValidation
+	ninFaceTendar        NINFaceValidationTendar
+	bvnFaceTendar        BVNFaceValidationTendar
 	providerSource       ValidationProviderSource
 	otpManager           authotp.OTPManager
 	walletService        WalletService
@@ -77,6 +90,7 @@ type Service struct {
 	// whichever provider was configured at startup is the one every wallet
 	// this flow creates gets stamped with.
 	walletProviderName string
+	auditLogger        auditlog.AuditLogger
 }
 
 func NewService(
@@ -94,6 +108,8 @@ func NewService(
 	ninPrembly NINValidation,
 	ninTendar NINValidation,
 	ninFace NINFaceValidation,
+	ninFaceTendar NINFaceValidationTendar,
+	bvnFaceTendar BVNFaceValidationTendar,
 	providerSource ValidationProviderSource,
 	otpManager authotp.OTPManager,
 	walletService WalletService,
@@ -103,6 +119,7 @@ func NewService(
 	productID string,
 	activationCapKobo int64,
 	walletProviderName string,
+	auditLogger auditlog.AuditLogger,
 ) *Service {
 	return &Service{
 		repo:                 repo,
@@ -119,6 +136,8 @@ func NewService(
 		ninPrembly:           ninPrembly,
 		ninTendar:            ninTendar,
 		ninFace:              ninFace,
+		ninFaceTendar:        ninFaceTendar,
+		bvnFaceTendar:        bvnFaceTendar,
 		providerSource:       providerSource,
 		otpManager:           otpManager,
 		walletService:        walletService,
@@ -129,6 +148,7 @@ func NewService(
 		productID:            productID,
 		activationCapKobo:    activationCapKobo,
 		walletProviderName:   walletProviderName,
+		auditLogger:          auditLogger,
 	}
 }
 

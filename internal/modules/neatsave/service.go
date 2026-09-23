@@ -5,6 +5,9 @@ import (
 	"errors"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"strings"
 	"time"
 
@@ -15,10 +18,27 @@ type Service struct {
 	repository     *Repository
 	pinVerifier    *authchecker.Verifier
 	deviceVerifier DeviceVerifier
+	auditLogger    auditlog.AuditLogger
 }
 
-func NewService(repository *Repository, pinVerifier *authchecker.Verifier, deviceVerifier DeviceVerifier) *Service {
-	return &Service{repository: repository, pinVerifier: pinVerifier, deviceVerifier: deviceVerifier}
+func NewService(repository *Repository, pinVerifier *authchecker.Verifier, deviceVerifier DeviceVerifier, auditLogger auditlog.AuditLogger) *Service {
+	return &Service{repository: repository, pinVerifier: pinVerifier, deviceVerifier: deviceVerifier, auditLogger: auditLogger}
+}
+
+func (s *Service) logSaveAudit(ctx context.Context, action, mobileUserID, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: auditlog.ResourceTypeSavingsGoal,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) CreateGoal(ctx context.Context, mobileUserID string, req CreateGoalRequest) (*CreateGoalResponse, error) {
@@ -66,8 +86,17 @@ func (s *Service) CreateGoal(ctx context.Context, mobileUserID string, req Creat
 	}
 
 	if err := s.repository.CreateGoalWithRules(ctx, savingsGoal, autoSaveRule); err != nil {
+		s.logSaveAudit(ctx, "SAVINGS_GOAL_CREATE", mobileUserID, goalID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist savings goal",
+		})
 		return nil, appErr.ErrCreatingSavingsGoal
 	}
+
+	s.logSaveAudit(ctx, "SAVINGS_GOAL_CREATE", mobileUserID, goalID, auditlog.StatusSuccess, map[string]interface{}{
+		"target_amount":    targetAmount,
+		"auto_save_amount": autoSaveAmount,
+		"auto_save":        req.AutoSave,
+	})
 
 	return &CreateGoalResponse{
 		Status:  "success",
@@ -136,6 +165,9 @@ func (s *Service) DepositFromWallet(ctx context.Context, mobileUserID, deviceID 
 	}
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return nil, appErr.ErrUnrecognizedDeviceNeatsave
+		}
 		return nil, err
 	}
 

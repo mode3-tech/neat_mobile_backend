@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,15 +17,46 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo        Repository
+	auditLogger auditlog.AuditLogger
 }
 
 const challengeTTL = 5 * time.Minute
 
 var ErrDeviceNotEligible = errors.New("device not eligible for challenge")
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, auditLogger auditlog.AuditLogger) *Service {
+	return &Service{repo: repo, auditLogger: auditLogger}
+}
+
+// requestIDFromContext/clientIPFromContext read the same context keys
+// internal/middleware.RequestContextLogger sets - duplicated locally rather
+// than importing internal/middleware, which itself imports this package
+// (device.UserDevice) and would create an import cycle.
+func requestIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value("request_id").(string)
+	return v
+}
+
+func clientIPFromContext(ctx context.Context) string {
+	v, _ := ctx.Value("client_ip").(string)
+	return v
+}
+
+func (s *Service) logDeviceAudit(ctx context.Context, action, mobileUserID, deviceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   deviceID,
+		ResourceType: auditlog.ResourceTypeDevice,
+		ActorType:    "user",
+		RequestID:    requestIDFromContext(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    clientIPFromContext(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) BindDevice(ctx context.Context, userID string, req *DeviceBindingRequest) error {
@@ -41,7 +74,19 @@ func (s *Service) BindDevice(ctx context.Context, userID string, req *DeviceBind
 		IsTrusted:   true,
 		IsActive:    true,
 	}
-	return s.repo.Save(ctx, device)
+	if err := s.repo.Save(ctx, device); err != nil {
+		s.logDeviceAudit(ctx, "DEVICE_BIND", userID, req.DeviceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist device binding",
+		})
+		return err
+	}
+
+	s.logDeviceAudit(ctx, "DEVICE_BIND", userID, req.DeviceID, auditlog.StatusSuccess, map[string]interface{}{
+		"device_name":  req.DeviceName,
+		"device_model": req.DeviceModel,
+		"os":           req.OS,
+	})
+	return nil
 }
 
 func (s *Service) CreateChallenge(ctx context.Context, userID, deviceID string, ttl time.Duration) (string, error) {
@@ -115,5 +160,24 @@ func (s *Service) VerifyUserDevice(ctx context.Context, mobileUserID, deviceID s
 }
 
 func (s *Service) DeactivateDevice(ctx context.Context, mobileUserID, deviceID string) error {
-	return s.repo.DeactivateDevice(ctx, mobileUserID, deviceID)
+	if err := s.repo.DeactivateDevice(ctx, mobileUserID, deviceID); err != nil {
+		s.logDeviceAudit(ctx, "DEVICE_DEACTIVATE", mobileUserID, deviceID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist device deactivation",
+		})
+		return err
+	}
+
+	s.logDeviceAudit(ctx, "DEVICE_DEACTIVATE", mobileUserID, deviceID, auditlog.StatusSuccess, nil)
+	return nil
+}
+
+func (s *Service) FindDevice(ctx context.Context, mobileUserID, deviceID string) (*UserDevice, error) {
+	device, err := s.repo.FindDevice(ctx, mobileUserID, deviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrUnrecognizedDevice
+		}
+		return nil, err
+	}
+	return device, nil
 }

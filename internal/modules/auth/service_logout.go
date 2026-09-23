@@ -91,6 +91,9 @@ func (s *Service) RefreshAccessToken(ctx context.Context, deviceID, refreshToken
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, refreshTokenObj.UserID, deviceID); err != nil {
 		log.Println("verify user device failed:", err)
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return nil, appErr.ErrUnrecognizedDeviceLogout
+		}
 		return nil, err
 	}
 

@@ -413,6 +413,18 @@ func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models
 	return &record, nil
 }
 
+func (r *Repository) GetFaceCheckRecordByVerificationID(ctx context.Context, verificationRecordID string) (*models.FaceCheckRecord, error) {
+	var record models.FaceCheckRecord
+	err := r.db.WithContext(ctx).
+		Where("verification_record_id = ?", verificationRecordID).
+		Order("created_at DESC").
+		First(&record).Error
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
 func (r *Repository) IncrementFailedPinAttempts(ctx context.Context, userID string) error {
 	return r.db.WithContext(ctx).Model(&models.User{}).
 		Where("id = ?", userID).

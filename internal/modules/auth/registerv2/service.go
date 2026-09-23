@@ -10,6 +10,7 @@ import (
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -51,6 +52,7 @@ type Service struct {
 	tx                      *tx.Transactor
 	activationCapKobo       int64
 	optimusProductID        string
+	auditLogger             auditlog.AuditLogger
 }
 
 func NewService(
@@ -64,6 +66,7 @@ func NewService(
 	transactor *tx.Transactor,
 	activationCapKobo int64,
 	optimusProductID string,
+	auditLogger auditlog.AuditLogger,
 ) *Service {
 	return &Service{
 		repo:                    repo,
@@ -76,6 +79,7 @@ func NewService(
 		tx:                      transactor,
 		activationCapKobo:       activationCapKobo,
 		optimusProductID:        optimusProductID,
+		auditLogger:             auditLogger,
 	}
 }
 
@@ -298,7 +302,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		IsEmailVerified:        true,
 		IsPhoneVerified:        true,
 		IsBvnVerified:          true,
-		IsNinVerified:          true,
+		IsNinVerified:          false,
 		IsBiometricsEnabled:    *req.IsBiomtricsEnabled,
 		IsNotificationsEnabled: true,
 		ActivationCapAmount:    s.activationCapKobo,
@@ -359,7 +363,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			return txErr
 		}
 
-		deviceService := device.NewService(*deviceRepo)
+		deviceService := device.NewService(*deviceRepo, s.auditLogger)
 		if txErr := deviceService.BindDevice(providerCtx, mobileUserID, &device.DeviceBindingRequest{
 			DeviceID:    req.Device.DeviceID,
 			PublicKey:   req.Device.PublicKey,
@@ -382,7 +386,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			}
 		}
 
-		referralsService := referrals.NewService(referrals.NewRepository(txDB))
+		referralsService := referrals.NewService(referrals.NewRepository(txDB), s.auditLogger)
 
 		if strings.TrimSpace(req.ReferralCode) != "" {
 			if txErr := referralsService.RedeemReferralCode(providerCtx, mobileUserID, req.ReferralCode); txErr != nil {
@@ -588,7 +592,7 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 	return verificationID, providerReferenceID, true, nil
 }
 
-func (s *Service) ValidateNIN(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
+func (s *Service) ValidateNINWithOptimus(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
 	if s.optimus == nil {
 		return "", "", fmt.Errorf("optimus validation service is not configured")
 	}

@@ -10,6 +10,9 @@ import (
 	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/database/tx"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/autorepayment"
 	"neat_mobile_app_backend/internal/modules/device"
@@ -29,9 +32,10 @@ type Service struct {
 	deviceService       DeviceService
 	userService         UserService
 	cipher              *crypto.FieldCipher
+	auditLogger         auditlog.AuditLogger
 }
 
-func NewService(repo *Repository, loanService LoanService, xpressWalletService XpressWalletService, tx *tx.Transactor, walletService WalletService, deviceService DeviceService, userService UserService, cipher *crypto.FieldCipher) *Service {
+func NewService(repo *Repository, loanService LoanService, xpressWalletService XpressWalletService, tx *tx.Transactor, walletService WalletService, deviceService DeviceService, userService UserService, cipher *crypto.FieldCipher, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		repo:                repo,
 		loanService:         loanService,
@@ -41,11 +45,35 @@ func NewService(repo *Repository, loanService LoanService, xpressWalletService X
 		deviceService:       deviceService,
 		userService:         userService,
 		cipher:              cipher,
+		auditLogger:         auditLogger,
 	}
+}
+
+// logClosureAudit records the terminal outcome of an account closure attempt
+// (blocked or closed) in the shared audit table. Per-step detail already
+// lives in AccountClosureEvent; this just surfaces the outcome for
+// cross-module audit queries.
+func (s *Service) logClosureAudit(ctx context.Context, mobileUserID, closureID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   closureID,
+		ResourceType: auditlog.ResourceTypeUser,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       "ACCOUNT_CLOSURE",
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) CloseAccount(ctx context.Context, payload *AccountClosureRequest, mobileUserID, deviceID, IP, requestID string) (*AccountClosure, error) {
 	if _, err := s.repo.GetActiveClosureForUser(ctx, mobileUserID); err == nil {
+		s.logClosureAudit(ctx, mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "closure already in progress",
+		})
 		return nil, appErr.ErrAccountClosureAlreadyInProgress
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -150,6 +178,11 @@ func (s *Service) CloseAccount(ctx context.Context, payload *AccountClosureReque
 		closure.BlockerCode = &blockerCode
 		closure.BlockerDetails = blockerDetails
 
+		s.logClosureAudit(ctx, mobileUserID, closure.ID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": blockerCode,
+			"details":            blockerDetails,
+		})
+
 		return closure, nil
 	}
 
@@ -198,6 +231,11 @@ func (s *Service) CloseAccount(ctx context.Context, payload *AccountClosureReque
 		closure.Status = AccountClosureStatusBlocked
 		closure.BlockerCode = &blockerCode
 		closure.BlockerDetails = blockerDetails
+
+		s.logClosureAudit(ctx, mobileUserID, closure.ID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": blockerCode,
+			"details":            blockerDetails,
+		})
 
 		return closure, nil
 	}
@@ -288,6 +326,10 @@ func (s *Service) CloseAccount(ctx context.Context, payload *AccountClosureReque
 	closure.Status = AccountClosureStatusClosed
 	closure.BlockerCode = nil
 	closure.BlockerDetails = nil
+
+	s.logClosureAudit(ctx, mobileUserID, closure.ID, auditlog.StatusSuccess, map[string]interface{}{
+		"closure_reference": closure.ClosureReference,
+	})
 
 	return closure, nil
 }
