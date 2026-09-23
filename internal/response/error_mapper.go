@@ -5,6 +5,8 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"net/http"
 	"strings"
+
+	"github.com/getsentry/sentry-go"
 )
 
 type ErrorMapping struct {
@@ -15,6 +17,7 @@ type ErrorMapping struct {
 func MapError(err error) ErrorMapping {
 	switch {
 	case errors.Is(err, appErr.ErrInvalidCredentials):
+		sentry.CaptureException(err)
 		return ErrorMapping{
 			Status: http.StatusUnauthorized,
 			Error: APIError{
@@ -554,12 +557,57 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
-	case errors.Is(err, appErr.ErrUnrecognizedDevice):
+	case errors.Is(err, appErr.ErrUnrecognizedDeviceCardRequest):
 		return ErrorMapping{
 			Status: http.StatusForbidden,
 			Error: APIError{
 				Code:    "UNRECOGNIZED_DEVICE",
-				Message: "We could not recognize the device you are using, please contact support to resolve this issue",
+				Message: "We couldn't verify this device to process your card request. Please log in again to verify this device, then try again.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUnrecognizedDevicePushToken):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "We couldn't verify this device to enable notifications. Please log in again to verify it, then try again.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUnrecognizedDeviceNeatsave):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "We couldn't verify this device for this savings action. Please log in again to verify it, then retry.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUnrecognizedDeviceLogout):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "This device isn't recognized on your account, so we couldn't complete logout for it. Please log in again if you still need to sign out.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUnrecognizedDeviceBiometricLogin):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "This device isn't recognized for biometric login on this account. Please log in with your password to verify it again.",
+			},
+		}
+
+	case errors.Is(err, appErr.ErrUnrecognizedDeviceAuthGate), errors.Is(err, appErr.ErrUnrecognizedDevice):
+		return ErrorMapping{
+			Status: http.StatusForbidden,
+			Error: APIError{
+				Code:    "UNRECOGNIZED_DEVICE",
+				Message: "This device isn't recognized on your account. Please log in again to verify it, or contact support if the issue continues.",
 			},
 		}
 
@@ -1004,6 +1052,24 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrNINRecordMissingDOB):
+		return ErrorMapping{
+			Status: http.StatusUnprocessableEntity,
+			Error: APIError{
+				Code:    "NIN_RECORD_MISSING_DOB",
+				Message: appErr.ErrNINRecordMissingDOB.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrFaceCheckRecordFailed):
+		return ErrorMapping{
+			Status: http.StatusInternalServerError,
+			Error: APIError{
+				Code:    "FACE_CHECK_RECORD_FAILED",
+				Message: appErr.ErrFaceCheckRecordFailed.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrInvalidISPAmount):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
@@ -1175,7 +1241,7 @@ func MapError(err error) ErrorMapping {
 			}
 		}
 
-		var smsLiveErr *appErr.SMSLiveError
+		var smsLiveErr *appErr.SMSLiveErrorResponse
 		if errors.As(err, &smsLiveErr) {
 			return ErrorMapping{
 				Status: http.StatusBadGateway,

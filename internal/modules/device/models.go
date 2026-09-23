@@ -5,7 +5,7 @@ import "time"
 type UserDevice struct {
 	ID          string    `gorm:"column:id;primaryKey"`
 	UserID      string    `gorm:"column:user_id;type:text;not null;uniqueIndex:uq_user_devices_user_device"`
-	DeviceID    string    `gorm:"column:device_id;type:text;not null;uniqueIndex:uq_user_devices_user_device;uniqueIndex:uq_wallet_user_devices_device_id"`
+	DeviceID    string    `gorm:"column:device_id;type:text;not null;uniqueIndex:uq_user_devices_user_device"`
 	PublicKey   string    `gorm:"column:public_key"`
 	DeviceName  string    `gorm:"column:device_name;type:text"`
 	DeviceModel string    `gorm:"column:device_model"`

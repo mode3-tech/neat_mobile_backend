@@ -3,6 +3,9 @@ package loanproduct
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -13,11 +16,31 @@ import (
 )
 
 type InternalService struct {
-	repo *InternalRepository
+	repo        *InternalRepository
+	auditLogger auditlog.AuditLogger
 }
 
-func NewInternalService(repo *InternalRepository) *InternalService {
-	return &InternalService{repo: repo}
+func NewInternalService(repo *InternalRepository, auditLogger auditlog.AuditLogger) *InternalService {
+	return &InternalService{repo: repo, auditLogger: auditLogger}
+}
+
+// logCBAAudit records a loan/customer status transition applied by the CBA
+// webhook callback - the actor here is the core banking system, not the
+// mobile user, even though the resource being mutated belongs to the user.
+func (s *InternalService) logCBAAudit(ctx context.Context, resourceType auditlog.ResourceType, action, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ActorType:    "system",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      "cba",
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 var (
@@ -174,6 +197,11 @@ func (s *InternalService) ApplyCBACustomerUpdate(ctx context.Context, customerID
 		}
 
 		if normalizedCustomerStatus(user.CustomerStatus) != status && !canTransitionCustomerStatus(user.CustomerStatus, status) {
+			s.logCBAAudit(ctx, auditlog.ResourceTypeUser, "CUSTOMER_STATUS_UPDATE", user.ID, auditlog.StatusFailure, map[string]interface{}{
+				"from_status":        user.CustomerStatus,
+				"to_status":          status,
+				"reason_for_failure": "invalid customer status transition",
+			})
 			return ErrInvalidCustomerTransition
 		}
 
@@ -194,7 +222,16 @@ func (s *InternalService) ApplyCBACustomerUpdate(ctx context.Context, customerID
 			return nil
 		}
 
-		return repo.UpdateUserCustomer(ctx, customerID, req.Username, status)
+		if err := repo.UpdateUserCustomer(ctx, customerID, req.Username, status); err != nil {
+			return err
+		}
+
+		s.logCBAAudit(ctx, auditlog.ResourceTypeUser, "CUSTOMER_STATUS_UPDATE", user.ID, auditlog.StatusSuccess, map[string]interface{}{
+			"from_status": user.CustomerStatus,
+			"to_status":   status,
+		})
+
+		return nil
 	})
 }
 
@@ -226,6 +263,11 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 		}
 
 		if app.LoanStatus != status && !canTransition(app.LoanStatus, status) {
+			s.logCBAAudit(ctx, auditlog.ResourceTypeLoanApplication, "LOAN_STATUS_UPDATE", applicationRef, auditlog.StatusFailure, map[string]interface{}{
+				"from_status":        app.LoanStatus,
+				"to_status":          status,
+				"reason_for_failure": "invalid status transition",
+			})
 			return ErrInvalidTransition
 		}
 
@@ -246,7 +288,17 @@ func (s *InternalService) ApplyCBAStatusUpdate(ctx context.Context, applicationR
 			return nil
 		}
 
-		return repo.UpdateApplicationStatus(ctx, applicationRef, status, coreLoanID, now)
+		if err := repo.UpdateApplicationStatus(ctx, applicationRef, status, coreLoanID, now); err != nil {
+			return err
+		}
+
+		s.logCBAAudit(ctx, auditlog.ResourceTypeLoanApplication, "LOAN_STATUS_UPDATE", applicationRef, auditlog.StatusSuccess, map[string]interface{}{
+			"mobile_user_id": app.MobileUserID,
+			"from_status":    app.LoanStatus,
+			"to_status":      status,
+		})
+
+		return nil
 	})
 }
 

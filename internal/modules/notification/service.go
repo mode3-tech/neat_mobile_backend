@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"time"
@@ -29,16 +32,18 @@ type Service struct {
 	sender           Sender
 	defaultChannelID string
 	deviceVerifier   DeviceVerifier
+	auditLogger      auditlog.AuditLogger
 }
 
 var ErrSenderNotConfigured = errors.New("push sender is not configured")
 
-func NewService(repo Store, sender Sender, defaultChannelID string, deviceVerifier DeviceVerifier) *Service {
+func NewService(repo Store, sender Sender, defaultChannelID string, deviceVerifier DeviceVerifier, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		repo:             repo,
 		sender:           sender,
 		defaultChannelID: strings.TrimSpace(defaultChannelID),
 		deviceVerifier:   deviceVerifier,
+		auditLogger:      auditLogger,
 	}
 }
 
@@ -50,6 +55,9 @@ func (s *Service) RegisterToken(ctx context.Context, mobileUserID string, req Re
 	deviceID := strings.TrimSpace(req.DeviceID)
 
 	if _, err := s.deviceVerifier.VerifyUserDevice(ctx, mobileUserID, deviceID); err != nil {
+		if errors.Is(err, appErr.ErrUnrecognizedDevice) {
+			return appErr.ErrUnrecognizedDevicePushToken
+		}
 		return err
 	}
 
@@ -439,8 +447,39 @@ func (s *Service) MarkAllNotificationsRead(ctx context.Context, mobileUserID str
 func (s *Service) TogglePushNotifications(ctx context.Context, mobileUserID string) (*TogglePushNotificationsResponse, error) {
 	enabled, err := s.repo.TogglePushNotifications(ctx, mobileUserID)
 	if err != nil {
+		s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+			ID:           helpers.PrefixID("audit_log"),
+			ResourceID:   mobileUserID,
+			ResourceType: auditlog.ResourceTypeUser,
+			ActorType:    "user",
+			RequestID:    middleware.GetRequestID(ctx),
+			Timestamp:    time.Now().UTC(),
+			Status:       auditlog.StatusFailure,
+			ActorID:      mobileUserID,
+			Action:       "PUSH_NOTIFICATIONS_TOGGLE",
+			IPAddress:    middleware.GetClientIP(ctx),
+			Metadata: map[string]interface{}{
+				"reason_for_failure": "failed to persist preference toggle",
+			},
+		})
 		return nil, appErr.ErrTogglingPushNotification
 	}
+
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   mobileUserID,
+		ResourceType: auditlog.ResourceTypeUser,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       auditlog.StatusSuccess,
+		ActorID:      mobileUserID,
+		Action:       "PUSH_NOTIFICATIONS_TOGGLE",
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata: map[string]interface{}{
+			"enabled": enabled,
+		},
+	})
 
 	var message string
 

@@ -22,6 +22,7 @@ type AccountSummary struct {
 	IsNotificationsEnabled bool         `json:"is_notifications_enabled"`
 	ReferralCode           string       `json:"referral_code"`
 	CashbackBalance        float64      `json:"cashback_balance"`
+	Tier                   string       `json:"tier"`
 }
 
 type ActiveLoan struct {

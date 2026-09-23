@@ -132,7 +132,7 @@ func TestReconcileAmbiguousOutcome_StalePending_ResolvesSuccess_BackfillsToken(t
 		},
 	}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:            "tx-1",
@@ -182,7 +182,7 @@ func TestReconcileAmbiguousOutcome_ResolvesSuccess_NoReferenceID_SkipsProviderRe
 		},
 	}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:            "tx-9",
@@ -211,7 +211,7 @@ func TestReconcileAmbiguousOutcome_ResolvesFailure_IssuesRefundExactlyOnce(t *te
 	txr := &fakeReconciliationTxr{}
 	baasClient := &fakeReconciliationBAAS{}
 	wallet := &fakeReconciliationWallet{wallet: &CustomerWallet{WalletCustomerID: "cust-1"}}
-	svc := NewService(repo, vasProvider, wallet, txr, baasClient, nil, nil)
+	svc := NewService(repo, vasProvider, wallet, txr, baasClient, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:            "tx-2",
@@ -253,7 +253,7 @@ func TestReconcileAmbiguousOutcome_StillAmbiguous_TransitionsPendingToReversalPe
 		checkStatusResp: &vasprovider.CheckStatusResponse{Response: vasprovider.Response{ResponseCode: "01"}},
 	}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:            "tx-3",
@@ -278,7 +278,7 @@ func TestReconcileAmbiguousOutcome_AlreadyReversalPending_NoRedundantUpdate(t *t
 		checkStatusResp: &vasprovider.CheckStatusResponse{Response: vasprovider.Response{ResponseCode: "01"}},
 	}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:            "tx-4",
@@ -301,7 +301,7 @@ func TestReconcileAmbiguousOutcome_CheckStatusError_LeavesAsIs(t *testing.T) {
 
 	vasProvider := &fakeReconciliationVASProvider{checkStatusErr: errors.New("provider unreachable")}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{ID: "tx-5", VASRequestID: "req-5", Status: TransactionStatusReversalPending}
 
@@ -320,7 +320,7 @@ func TestReconcileAmbiguousOutcome_NoPersistedRequestID_SkipsCheckStatus(t *test
 		checkStatusResp: &vasprovider.CheckStatusResponse{Response: vasprovider.Response{ResponseCode: "00"}},
 	}
 	txr := &fakeReconciliationTxr{}
-	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil)
+	svc := NewService(repo, vasProvider, nil, txr, nil, nil, nil, nil)
 
 	txn := &Transaction{ID: "tx-6", VASRequestID: "", Status: TransactionStatusPending}
 
@@ -341,7 +341,7 @@ func TestReconcileRefundPending_PartialCompletion_OnlyRetriesMissingHalf(t *test
 	txr := &fakeReconciliationTxr{}
 	baasClient := &fakeReconciliationBAAS{}
 	wallet := &fakeReconciliationWallet{wallet: &CustomerWallet{WalletCustomerID: "cust-1"}}
-	svc := NewService(repo, nil, wallet, txr, baasClient, nil, nil)
+	svc := NewService(repo, nil, wallet, txr, baasClient, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:             "tx-7",
@@ -383,7 +383,7 @@ func TestReconcileRefundPending_CashbackReleaseFails_StaysRefundPending(t *testi
 	txr := &fakeReconciliationTxr{}
 	baasClient := &fakeReconciliationBAAS{}
 	wallet := &fakeReconciliationWallet{wallet: &CustomerWallet{WalletCustomerID: "cust-1"}}
-	svc := NewService(repo, nil, wallet, txr, baasClient, nil, nil)
+	svc := NewService(repo, nil, wallet, txr, baasClient, nil, nil, nil)
 
 	txn := &Transaction{
 		ID:             "tx-8",
