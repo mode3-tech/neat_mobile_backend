@@ -19,6 +19,7 @@ import (
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/database"
 	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/autorepayment"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/notification"
@@ -47,14 +48,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, err
 	}
 
+	auditLogger := auditlog.NewService(auditlog.NewRepository(db))
 	deviceRepo := device.NewRepository(db)
-	deviceService := device.NewService(*deviceRepo)
+	deviceService := device.NewService(*deviceRepo, auditLogger)
 
 	autorepaymentRepo := autorepayment.NewRepository(db)
 	walletRepo := wallet.NewRepository(db)
 	notificationRepo := notification.NewRepository(db)
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
-	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService, auditLogger)
 	providusClient := baas.NewProvidus(cfg.ProvidusSecretKey, cfg.ProvidusBaseURL)
 	cbaClient := cba.NewProviderClient(cfg.CBAInternalURL, cfg.CBAInternalKey)
 

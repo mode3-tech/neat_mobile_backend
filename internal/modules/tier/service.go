@@ -3,10 +3,13 @@ package tier
 import (
 	"context"
 	"errors"
+	"time"
 
 	"neat_mobile_app_backend/internal/crypto"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,16 +21,34 @@ type Service struct {
 	userService UserService
 	faceService FaceService
 	cipher      *crypto.FieldCipher
+	auditLogger auditlog.AuditLogger
 }
 
-func NewService(repo *Repository, ninService NINService, userService UserService, faceService FaceService, cipher *crypto.FieldCipher) *Service {
+func NewService(repo *Repository, ninService NINService, userService UserService, faceService FaceService, cipher *crypto.FieldCipher, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		repo:        repo,
 		ninService:  ninService,
 		userService: userService,
 		faceService: faceService,
 		cipher:      cipher,
+		auditLogger: auditLogger,
 	}
+}
+
+func (s *Service) logTierAudit(ctx context.Context, action, mobileUserID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   mobileUserID,
+		ResourceType: auditlog.ResourceTypeTierUpgrade,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 func (s *Service) GetRequirementStatus(ctx context.Context, mobileUserID string) ([]RequirementCheck, error) {
@@ -100,10 +121,16 @@ func (s *Service) ValidateNIN(ctx context.Context, mobileUserID string) error {
 	ninFullName := ninDetails.Data.FirstName + " " + ninDetails.Data.MiddleName + " " + ninDetails.Data.Surname
 
 	if !helpers.DOBsMatch(user.DOB.Format("2006-01-02"), ninDetails.Data.BirthDate) {
+		s.logTierAudit(ctx, "TIER_NIN_VALIDATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "dob mismatch",
+		})
 		return appErr.ErrNINDOBMismatch
 	}
 
 	if !helpers.NamesMatch(userFullName, ninFullName) {
+		s.logTierAudit(ctx, "TIER_NIN_VALIDATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "name mismatch",
+		})
 		return appErr.ErrNINNameMismatch
 	}
 
@@ -111,8 +138,13 @@ func (s *Service) ValidateNIN(ctx context.Context, mobileUserID string) error {
 
 	err = s.userService.UpdateUserNIN(ctx, mobileUserID, true, ninHash)
 	if err != nil {
+		s.logTierAudit(ctx, "TIER_NIN_VALIDATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist nin verification",
+		})
 		return err
 	}
+
+	s.logTierAudit(ctx, "TIER_NIN_VALIDATION", mobileUserID, auditlog.StatusSuccess, nil)
 	return nil
 }
 
@@ -161,9 +193,22 @@ func (s *Service) ValidateNINWithFace(ctx context.Context, mobileUserID, image s
 	}
 
 	if !result.Matched {
+		s.logTierAudit(ctx, "TIER_NIN_FACE_VALIDATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": result.Message,
+		})
 		return appErr.ErrValidatingNINWithFace
 	}
 
 	ninHash := crypto.Hash(plainNIN)
-	return s.userService.UpdateUserNIN(ctx, mobileUserID, true, ninHash)
+	if err := s.userService.UpdateUserNIN(ctx, mobileUserID, true, ninHash); err != nil {
+		s.logTierAudit(ctx, "TIER_NIN_FACE_VALIDATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist nin verification",
+		})
+		return err
+	}
+
+	s.logTierAudit(ctx, "TIER_NIN_FACE_VALIDATION", mobileUserID, auditlog.StatusSuccess, map[string]interface{}{
+		"submission_id": submission.ID,
+	})
+	return nil
 }

@@ -8,6 +8,9 @@ import (
 	"math"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"strings"
 	"time"
@@ -40,9 +43,10 @@ type Service struct {
 	appName            string
 	outgoingSMSService OutgoingSMSService
 	SMSBilling         SMSBillingRecovery
+	auditLogger        auditlog.AuditLogger
 }
 
-func NewService(repo *Repository, transferProviders map[string]TransferProviderService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService, smsBilling SMSBillingRecovery) *Service {
+func NewService(repo *Repository, transferProviders map[string]TransferProviderService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService, smsBilling SMSBillingRecovery, auditLogger auditlog.AuditLogger) *Service {
 	return &Service{
 		repo:               repo,
 		transferProviders:  transferProviders,
@@ -54,7 +58,27 @@ func NewService(repo *Repository, transferProviders map[string]TransferProviderS
 		appName:            appName,
 		outgoingSMSService: outgoingSMSService,
 		SMSBilling:         smsBilling,
+		auditLogger:        auditLogger,
 	}
+}
+
+// logWalletAudit records a mutating wallet action (transfer, beneficiary
+// change, etc). Unlike the pre-account auth flows, mobileUserID here is
+// always a real authenticated user.
+func (s *Service) logWalletAudit(ctx context.Context, resourceType auditlog.ResourceType, action, mobileUserID, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      mobileUserID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 // defaultTransferProvider is Providus, used by calls not scoped to a specific
@@ -153,6 +177,11 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 				log.Printf("wallet service: failed to mark tx=%s failed after insufficient-balance check: %v", txID, updateErr)
 			}
 			log.Printf("wallet service: insufficient balance mobile_user_id=%s requested=%.2f available=%.2f", mobileUserID, req.Amount, customerDetails.Customer.AvailableBalance)
+			s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+				"requested_amount":   req.Amount,
+				"available_amount":   customerDetails.Customer.AvailableBalance,
+				"reason_for_failure": "insufficient balance",
+			})
 			return nil, appErr.ErrInsufficientBalance
 		}
 	}
@@ -251,6 +280,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 			log.Printf("wallet service: failed to mark tx=%s failed after transfer-initiation error: %v", txID, updateErr)
 		}
 		log.Printf("wallet service: failed to initiate transfer tx=%s: %v", txID, err)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": "transfer initiation failed",
+		})
 		return nil, err
 	}
 
@@ -259,6 +292,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 			log.Printf("wallet service: failed to mark tx=%s failed after nil transfer response: %v", txID, updateErr)
 		}
 		log.Printf("wallet service: provider returned a nil transfer response tx=%s", txID)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": "provider returned nil transfer response",
+		})
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -271,6 +308,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 			message = "provider returned an unsuccessful transfer response"
 		}
 		log.Printf("wallet service: provider returned an unsuccessful transfer response tx=%s: %s", txID, message)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": message,
+		})
 		return nil, appErr.ErrFundsTransfer
 	}
 
@@ -282,8 +323,19 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 
 	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference, transaction.TransactionStatusPending, walletUser.WalletID, totalDebit, charges, vat); err != nil {
 		log.Printf("wallet service: failed to complete debit transaction: %v", err)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": "failed to complete debit transaction",
+		})
 		return nil, appErr.ErrFundsTransfer
 	}
+
+	s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "WALLET_TRANSFER", mobileUserID, txID, auditlog.StatusSuccess, map[string]interface{}{
+		"amount_kobo":            amountKobo,
+		"total_debit_kobo":       totalDebit,
+		"counterparty_account":   accountNumber,
+		"counterparty_bank_code": req.SortCode,
+	})
 
 	// normalizedPhone, err := phone.NormalizeNigerianNumber(user.Phone)
 	// if err != nil {
@@ -332,6 +384,11 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		}
 		if customerDetails.Customer.AvailableBalance < amountNaira {
 			log.Printf("wallet service: loan repayment insufficient balance user=%s requested=%.2f available=%.2f", mobileUserID, amountNaira, customerDetails.Customer.AvailableBalance)
+			s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "LOAN_REPAYMENT_TRANSFER", mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+				"requested_amount_naira": amountNaira,
+				"available_amount_naira": customerDetails.Customer.AvailableBalance,
+				"reason_for_failure":     "insufficient balance",
+			})
 			return appErr.ErrInsufficientBalance
 		}
 	}
@@ -377,6 +434,10 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 			log.Printf("wallet service: failed to mark loan repayment tx=%s failed after transfer-initiation error: %v", txID, updateErr)
 		}
 		log.Printf("wallet service: loan repayment transfer initiation failed tx=%s: %v", txID, err)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "LOAN_REPAYMENT_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": "transfer initiation failed",
+		})
 		return fmt.Errorf("%w: %v", ErrTransferProviderFailed, err)
 	}
 	if resp == nil || !resp.Status {
@@ -388,6 +449,10 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 			msg = resp.Message
 		}
 		log.Printf("wallet service: loan repayment transfer unsuccessful tx=%s: %s", txID, msg)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "LOAN_REPAYMENT_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": msg,
+		})
 		return fmt.Errorf("%w: %s", ErrTransferProviderFailed, msg)
 	}
 
@@ -397,8 +462,17 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 	if err := s.repo.CompleteDebitTransaction(ctx, txID, resp.Transfer.TransactionReference,
 		transaction.TransactionStatusPending, w.InternalWalletID, totalDebit, charges, vat); err != nil {
 		log.Printf("wallet service: loan repayment failed to complete debit transaction tx=%s: %v", txID, err)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "LOAN_REPAYMENT_TRANSFER", mobileUserID, txID, auditlog.StatusFailure, map[string]interface{}{
+			"amount_kobo":        amountKobo,
+			"reason_for_failure": "failed to complete debit transaction",
+		})
 		return fmt.Errorf("failed to complete debit transaction: %w", err)
 	}
+
+	s.logWalletAudit(ctx, auditlog.ResourceTypeTransaction, "LOAN_REPAYMENT_TRANSFER", mobileUserID, txID, auditlog.StatusSuccess, map[string]interface{}{
+		"amount_kobo":      amountKobo,
+		"total_debit_kobo": totalDebit,
+	})
 	return nil
 }
 
@@ -509,8 +583,16 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID string, req *
 
 	if err := s.repo.CreateBeneficiary(ctx, beneficiary); err != nil {
 		log.Printf("wallet service: failed to add beneficiary for user=%s: %v", mobileUserID, err)
+		s.logWalletAudit(ctx, auditlog.ResourceTypeBeneficiary, "ADD_BENEFICIARY", mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist beneficiary",
+		})
 		return nil, appErr.ErrAddingBeneficiary
 	}
+
+	s.logWalletAudit(ctx, auditlog.ResourceTypeBeneficiary, "ADD_BENEFICIARY", mobileUserID, beneficiary.ID, auditlog.StatusSuccess, map[string]interface{}{
+		"bank_code":      bankCode,
+		"account_number": accountNumber,
+	})
 
 	return beneficiary, nil
 }

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
+	"neat_mobile_app_backend/internal/middleware"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/transaction"
 	"neat_mobile_app_backend/models"
 	"time"
@@ -21,11 +24,28 @@ const (
 )
 
 type Service struct {
-	repo *Repository
+	repo        *Repository
+	auditLogger auditlog.AuditLogger
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, auditLogger auditlog.AuditLogger) *Service {
+	return &Service{repo: repo, auditLogger: auditLogger}
+}
+
+func (s *Service) logReferralAudit(ctx context.Context, resourceType auditlog.ResourceType, action, actorID, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       status,
+		ActorID:      actorID,
+		Action:       action,
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     metadata,
+	})
 }
 
 // GenerateAndAssignReferralCode creates a unique referral code for
@@ -67,10 +87,13 @@ func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code str
 		return nil
 	}
 	if referral.MobileUserID == mobileUserID {
+		s.logReferralAudit(ctx, auditlog.ResourceTypeUser, "REFERRAL_REDEMPTION", mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "self referral",
+		})
 		return appErr.ErrSelfReferral
 	}
 
-	return s.repo.WithTx(ctx, func(r *Repository) error {
+	err = s.repo.WithTx(ctx, func(r *Repository) error {
 		existing, findErr := r.FindRedemptionByReferredUser(ctx, mobileUserID)
 		if findErr == nil {
 			if existing.ReferrerUserID == referral.MobileUserID {
@@ -107,6 +130,19 @@ func (s *Service) RedeemReferralCode(ctx context.Context, mobileUserID, code str
 
 		return r.UpdateRedemptionCashbackStatus(ctx, redemption.ID, CashbackStatusCredited)
 	})
+
+	if err != nil {
+		s.logReferralAudit(ctx, auditlog.ResourceTypeUser, "REFERRAL_REDEMPTION", mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"referrer_user_id":   referral.MobileUserID,
+			"reason_for_failure": err.Error(),
+		})
+		return err
+	}
+
+	s.logReferralAudit(ctx, auditlog.ResourceTypeUser, "REFERRAL_REDEMPTION", mobileUserID, mobileUserID, auditlog.StatusSuccess, map[string]interface{}{
+		"referrer_user_id": referral.MobileUserID,
+	})
+	return nil
 }
 
 // RetryPendingReferralCredits finds redemptions whose referrer cashback
@@ -171,6 +207,9 @@ func (s *Service) creditReferralCashback(ctx context.Context, r *Repository, ref
 		CreatedAt:      time.Now().UTC(),
 	}
 	if err := r.CreateCashback(ctx, cashback); err != nil {
+		s.logReferralAudit(ctx, auditlog.ResourceTypeTransaction, "REFERRAL_CASHBACK_CREDIT", referrerUserID, transactionID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist cashback ledger entry",
+		})
 		return err
 	}
 
@@ -192,7 +231,17 @@ func (s *Service) creditReferralCashback(ctx context.Context, r *Repository, ref
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	return transaction.NewServie(transaction.NewRepository(r.db)).AddTransaction(ctx, txRow)
+	if err := transaction.NewServie(transaction.NewRepository(r.db)).AddTransaction(ctx, txRow); err != nil {
+		s.logReferralAudit(ctx, auditlog.ResourceTypeTransaction, "REFERRAL_CASHBACK_CREDIT", referrerUserID, transactionID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": "failed to persist transaction record",
+		})
+		return err
+	}
+
+	s.logReferralAudit(ctx, auditlog.ResourceTypeTransaction, "REFERRAL_CASHBACK_CREDIT", referrerUserID, transactionID, auditlog.StatusSuccess, map[string]interface{}{
+		"amount_kobo": ReferralCashbackAmountKobo,
+	})
+	return nil
 }
 
 func (s *Service) FetchRedeemReferrals(ctx context.Context, page, pageSize int) ([]RedeemedReferral, error) {

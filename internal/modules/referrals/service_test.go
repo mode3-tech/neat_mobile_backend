@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	appErr "neat_mobile_app_backend/internal/errors"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"regexp"
 	"testing"
 	"time"
@@ -12,6 +13,12 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+type noopAuditLogger struct{}
+
+func (noopAuditLogger) CreateAuditLog(ctx context.Context, log *auditlog.AuditLog) error {
+	return nil
+}
 
 func newMockService(t *testing.T) (*Service, sqlmock.Sqlmock, func()) {
 	t.Helper()
@@ -36,7 +43,7 @@ func newMockService(t *testing.T) (*Service, sqlmock.Sqlmock, func()) {
 		_ = sqlDB.Close()
 	}
 
-	return NewService(repo), mock, cleanup
+	return NewService(repo, noopAuditLogger{}), mock, cleanup
 }
 
 func findReferralByCodePattern() string {

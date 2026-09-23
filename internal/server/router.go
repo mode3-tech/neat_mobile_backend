@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"neat_mobile_app_backend/internal/adapters/cba"
 	optimusadapter "neat_mobile_app_backend/internal/adapters/optimus"
@@ -17,6 +18,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/account"
 	"neat_mobile_app_backend/internal/modules/accountclosure"
 	appversion "neat_mobile_app_backend/internal/modules/app_version"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
@@ -52,6 +54,7 @@ import (
 	smsProvider "neat_mobile_app_backend/providers/sms"
 	vasprovider "neat_mobile_app_backend/providers/vas"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +67,18 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 )
+
+// sentryLogWriter adapts a sentry.Logger to io.Writer so the standard
+// library logger (log.Printf, used throughout the codebase) forwards to
+// Sentry's Logs product alongside stderr.
+type sentryLogWriter struct {
+	logger sentry.Logger
+}
+
+func (w sentryLogWriter) Write(p []byte) (int, error) {
+	w.logger.Info().Emit(strings.TrimSpace(string(p)))
+	return len(p), nil
+}
 
 func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	db, err := connectPostgresWithRetry(cfg.DBUrl, 5, time.Second)
@@ -86,10 +101,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, err
 	}
 
-	ctx := context.Background()
-	logger := sentry.NewLogger(ctx)
-	logger.Info().Emitf("Something happened: %s", detail)
-
 	r := gin.New()
 	r.Use(sentrygin.New(sentrygin.Options{
 		Repanic: true,
@@ -107,19 +118,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	//    - call sentry.CaptureException(err) at specific failure points that matter
 
 	// 2. Everything else -> Logs (searchable, not alerting)
-	type sentryLogWriter struct {
-		logger *sentry.Logger
-	}
-
-	func (w sentryLogWriter) Write(p []byte) (int, error) {
-		w.logger.Info().Emit(strings.TrimSpace(string(p)))
-		return len(p), nil
-	}
-
-	ctx := context.Background()
-	sentryLogger := sentry.NewLogger(ctx)
+	sentryLogger := sentry.NewLogger(context.Background())
 	log.SetOutput(io.MultiWriter(os.Stderr, sentryLogWriter{logger: sentryLogger}))
-
 
 	r.Use(middleware.RequestContextLogger())
 	r.Use(gin.Recovery())
@@ -194,8 +194,9 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	providerSource := auth.NewDBProviderSource(db)
 	transactor := tx.NewTransactor(db)
+	auditLogger := auditlog.NewService(auditlog.NewRepository(db))
 	deviceRepo := device.NewRepository(db)
-	deviceService := device.NewService(*deviceRepo)
+	deviceService := device.NewService(*deviceRepo, auditLogger)
 
 	authRepo := auth.NewRespository(db, bvnNinCipher)
 	verificationRepo := verification.NewVerification(db, bvnNinCipher)
@@ -243,7 +244,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	cbaSyncSem := make(chan struct{}, 10)
 	cbaWalletUpdateSem := make(chan struct{}, 10)
-	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, ninTendarProvider, bvnProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider)
+	authService := auth.NewService(authRepo, cbaClient, cbaClient, verificationRepo, transactor, deviceRepo, billableSMSSenderTermii, cfg.Pepper, tokenSigner, bvnProvider, premblyProvider, ninPremblyProvider, ninTendarProvider, ninPremblyProvider, ninTendarProvider, bvnProvider, providerSource, otpManager, walletRegistrationService, cfg.WalletPayloadSeedKey, deviceService, cbaSyncSem, cbaWalletUpdateSem, optimusProductID, cfg.ActivationCapKobo, cfg.WalletProvider, auditLogger)
 	authGuard := middleware.AuthGuard(tokenSigner, authService)
 
 	transactionHandler := transaction.NewHandler(transactionService)
@@ -255,7 +256,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
 	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
-	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID)
+	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger)
 	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)
@@ -343,7 +344,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	// (e.g. inbound deposits) can push notifications to the customer.
 	expoSender := push.NewExpoClient(cfg.ExpoPushBaseURL, cfg.ExpoAccessToken)
 	notificationRepo := notification.NewRepository(db)
-	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService)
+	notificationService := notification.NewService(notificationRepo, expoSender, cfg.ExpoPushChannelID, deviceService, auditLogger)
 
 	smsRepo := sms.NewRepository(db)
 	smsService := sms.NewService(smsRepo)
@@ -362,10 +363,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
-	}, deviceService, billableSMSSenderSMSLive, notificationService, cfg.AppName, smsService, smsBillingService)
+	}, deviceService, billableSMSSenderSMSLive, notificationService, cfg.AppName, smsService, smsBillingService, auditLogger)
 
 	loanRepo := loanproduct.NewRepository(db, bvnNinCipher)
-	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, billableSMSSenderSMSLive, cfg.AppName)
+	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, billableSMSSenderSMSLive, cfg.AppName, auditLogger)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
@@ -373,7 +374,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	accountClosureRepo := accountclosure.NewRepository(db)
 	userService := user.NewService(user.NewRepository(db))
-	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService, bvnNinCipher)
+	accountClosureService := accountclosure.NewService(accountClosureRepo, loanService, providusWalletService, transactor, walletService, deviceService, userService, bvnNinCipher, auditLogger)
 	accountClosureHandler := accountclosure.NewHandler(accountClosureService)
 	accountclosure.RegisterRoutes(apiV1, authGuard, deviceValidator, accountClosureHandler)
 
@@ -382,7 +383,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Printf("xpress payments not configured: %v — VAS endpoints will be unavailable", xpressErr)
 	} else {
 		vasRepo := vas.NewRepository(db)
-		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db))
+		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db), auditLogger)
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 
@@ -446,7 +447,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	accountRepo := account.NewRepository(db, bvnNinCipher)
-	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService)
+	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService, auditLogger)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
 
@@ -510,7 +511,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 
 	internalLoanRepo := loanproduct.NewInternalRepository(db, bvnNinCipher)
-	internalLoanService := loanproduct.NewInternalService(internalLoanRepo)
+	internalLoanService := loanproduct.NewInternalService(internalLoanRepo, auditLogger)
 	internalLoanHandler := loanproduct.NewInternalHandler(internalLoanService)
 	internalAuth := middleware.InternalHMACAuth(cfg.CBAWebhookSecret)
 	if strings.TrimSpace(cfg.CBAWebhookSecret) == "" {
@@ -530,19 +531,19 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	neatsaveRepo := neatsave.NewRepository(db)
 	neatsavePinVerifier := authchecker.New(neatsaveRepo)
-	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService)
+	neatsaveService := neatsave.NewService(neatsaveRepo, neatsavePinVerifier, deviceService, auditLogger)
 	neatsaveHandler := neatsave.NewHandler(neatsaveService)
 	neatsave.RegisterRoutes(apiV1, authGuard, deviceValidator, neatsaveHandler)
 
 	optimusCardProvider := cardprovider.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusSecretKey, nil)
 	cardRepo := card.NewRepository(db)
-	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider)
+	cardService := card.NewService(cardRepo, deviceService, optimusCardProvider, auditLogger)
 	cardHandler := card.NewHandler(cardService)
 	card.RegisterRoutes(apiV1, authGuard, cardHandler)
 
 	referralsRepo := referrals.NewRepository(db)
 	authService.ConfigureReferralsRepo(referralsRepo)
-	referralsService := referrals.NewService(referralsRepo)
+	referralsService := referrals.NewService(referralsRepo, auditLogger)
 	referralsHandler := referrals.NewHandler(referralsService)
 	referrals.RegisterRoutes(apiV1, authGuard, deviceValidator, referralsHandler)
 	c.AddFunc("@every 5m", func() {
@@ -567,7 +568,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	faceNinService := ninfacevalidator.New(db, ninPremblyProvider, ninTendarProvider)
 
 	tierRepo := tier.NewRepository(db)
-	tierService := tier.NewService(tierRepo, ninValidator, userService, faceNinService, bvnNinCipher)
+	tierService := tier.NewService(tierRepo, ninValidator, userService, faceNinService, bvnNinCipher, auditLogger)
 	tierHandler := tier.NewHandler(tierService)
 	tier.RegisterRoutes(apiV1, authGuard, deviceValidator, tierHandler)
 
