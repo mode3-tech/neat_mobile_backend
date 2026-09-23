@@ -195,6 +195,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	providerSource := auth.NewDBProviderSource(db)
 	transactor := tx.NewTransactor(db)
 	auditLogger := auditlog.NewService(auditlog.NewRepository(db))
+	auditLogHandler := auditlog.NewHandler(auditLogger)
+	auditlog.RegisterRoutes(apiV1, auditLogHandler)
 	deviceRepo := device.NewRepository(db)
 	deviceService := device.NewService(*deviceRepo, auditLogger)
 
