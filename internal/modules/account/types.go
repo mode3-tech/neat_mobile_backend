@@ -47,7 +47,7 @@ type AccountSummaryRow struct {
 	CoreCustomerID         *string   `gorm:"core_customer_id"`
 	ReferralCode           string    `gorm:"column:code"`
 	CashbackBalance        int64     `gorm:"cashback_balance"`
-	Tier                   int       `gorm:"tier"`
+	Tier                   string    `gorm:"tier"`
 }
 
 type DashboardLoanItem struct {
