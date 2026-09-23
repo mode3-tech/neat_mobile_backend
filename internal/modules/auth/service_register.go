@@ -10,6 +10,7 @@ import (
 	"log"
 	"neat_mobile_app_backend/internal/authchecker"
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/helpers"
 	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/internal/timeutil"
@@ -173,9 +174,9 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 			return err
 		}
 
-		mobileUserID := uuid.NewString()
-		internalWalletID := uuid.NewString()
-		requestID := uuid.NewString()
+		mobileUserID := helpers.PrefixID("user")
+		internalWalletID := helpers.PrefixID("internal_wallet_id")
+		requestID := helpers.PrefixID("request_id")
 
 		snapshot, buildErr := s.buildRegistrationSnapshot(ctx, authRepo, req, normalizedPhone, normalizedEmail, mobileUserID, ip, requestID)
 		if buildErr != nil {

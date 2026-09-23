@@ -7,6 +7,7 @@ import (
 	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/internal/modules/account"
 	"neat_mobile_app_backend/internal/modules/accountclosure"
+	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
 	"neat_mobile_app_backend/internal/modules/auth/registerv2"
@@ -321,6 +322,7 @@ func Migrate(db *gorm.DB) error {
 		&registerv2.ProviderPreference{},
 		&smsbilling.SMSCharge{},
 		&tier.TierSubmission{},
+		&auditlog.AuditLog{},
 	); err != nil {
 		return err
 	}
