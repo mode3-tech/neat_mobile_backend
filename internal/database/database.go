@@ -281,6 +281,15 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Beneficiary.AccountNumber briefly had a global unique index, which made
+	// one user's saved account silently block every other user from saving
+	// it. It's replaced by the per-user composite idx_beneficiary_user_bank_acct
+	// (created by AutoMigrate below), but AutoMigrate never drops indexes, so
+	// remove the old one explicitly.
+	if err := db.Exec(`DROP INDEX IF EXISTS idx_wallet_beneficiaries_account_number;`).Error; err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.BVNRecord{},
