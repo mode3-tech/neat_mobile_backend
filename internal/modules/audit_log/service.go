@@ -1,6 +1,9 @@
 package auditlog
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Service struct {
 	Repo *Repository
@@ -14,7 +17,7 @@ func (s *Service) CreateAuditLog(ctx context.Context, log *AuditLog) error {
 	return s.Repo.CreateAuditLog(ctx, log)
 }
 
-func (s *Service) GetAuditLogs(ctx context.Context, filters map[string]interface{}, page, limit int) ([]AuditLog, int64, error) {
+func (s *Service) GetAuditLogs(ctx context.Context, filters map[string]interface{}, from, to *time.Time, page, limit int) ([]AuditLog, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -22,7 +25,7 @@ func (s *Service) GetAuditLogs(ctx context.Context, filters map[string]interface
 		limit = 10
 	}
 	offset := (page - 1) * limit
-	logs, total, err := s.Repo.GetAuditLogs(ctx, filters, limit, offset)
+	logs, total, err := s.Repo.GetAuditLogs(ctx, filters, from, to, limit, offset)
 	if err != nil {
 		return nil, total, err
 	}
