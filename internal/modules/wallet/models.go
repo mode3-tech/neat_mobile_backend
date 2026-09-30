@@ -33,17 +33,17 @@ type CustomerWallet struct {
 	// predating this column are backfilled by internal/database.Migrate()
 	// (matching BankCode against each provider's known value), not by a
 	// struct-tag default.
-	Provider string `gorm:"column:provider;type:text"`
-	AccountNumber    string        `gorm:"column:account_number;type:text;not null"`
-	AccountName      string        `gorm:"column:account_name;type:text;not null"`
-	AccountRef       string        `gorm:"column:account_ref;type:text;not null"`
-	BookedBalance    int64         `gorm:"column:booked_balance;type:bigint;not null;default:0"`
-	AvailableBalance int64         `gorm:"column:available_balance;type:bigint;not null;default:0"`
-	Status           string        `gorm:"column:status;type:text;not null"`
-	WalletType       string        `gorm:"column:wallet_type;type:text;not null"`
-	Updated          bool          `gorm:"column:updated;type:boolean;not null;default:false"`
-	CreatedAt        time.Time     `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
-	UpdatedAt        *time.Time    `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
+	Provider         string     `gorm:"column:provider;type:text"`
+	AccountNumber    string     `gorm:"column:account_number;type:text;not null"`
+	AccountName      string     `gorm:"column:account_name;type:text;not null"`
+	AccountRef       string     `gorm:"column:account_ref;type:text;not null"`
+	BookedBalance    int64      `gorm:"column:booked_balance;type:bigint;not null;default:0"`
+	AvailableBalance int64      `gorm:"column:available_balance;type:bigint;not null;default:0"`
+	Status           string     `gorm:"column:status;type:text;not null"`
+	WalletType       string     `gorm:"column:wallet_type;type:text;not null"`
+	Updated          bool       `gorm:"column:updated;type:boolean;not null;default:false"`
+	CreatedAt        time.Time  `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
+	UpdatedAt        *time.Time `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
 }
 
 func (CustomerWallet) TableName() string {
@@ -52,10 +52,10 @@ func (CustomerWallet) TableName() string {
 
 type Beneficiary struct {
 	ID            string     `gorm:"column:id;type:text;primaryKey;index"`
-	MobileUserID  string     `gorm:"column:mobile_user_id;type:text;not null;index"`
+	MobileUserID  string     `gorm:"column:mobile_user_id;type:text;not null;index;uniqueIndex:idx_beneficiary_user_bank_acct,priority:1"`
 	WalletID      string     `gorm:"column:wallet_id;type:text;not null;index"`
-	BankCode      string     `gorm:"column:bank_code;type:text;not null"`
-	AccountNumber string     `gorm:"column:account_number;type:text;not null"`
+	BankCode      string     `gorm:"column:bank_code;type:text;not null;uniqueIndex:idx_beneficiary_user_bank_acct,priority:2"`
+	AccountNumber string     `gorm:"column:account_number;type:text;not null;uniqueIndex:idx_beneficiary_user_bank_acct,priority:3"`
 	AccountName   string     `gorm:"column:account_name;type:text;not null"`
 	CreatedAt     time.Time  `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
 	UpdatedAt     *time.Time `gorm:"column:updated_at;type:timestamptz;autoUpdateTime"`
