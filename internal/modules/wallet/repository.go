@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -151,8 +152,20 @@ func (r *Repository) CompleteDebitTransaction(ctx context.Context, txID, provide
 	})
 }
 
-func (r *Repository) CreateBeneficiary(ctx context.Context, beneficiary *Beneficiary) error {
-	return r.db.WithContext(ctx).Create(beneficiary).Error
+// CreateBeneficiary inserts the beneficiary unless the user already has the
+// same bank_code/account_number saved. created is false when the row already
+// existed (nothing was inserted).
+func (r *Repository) CreateBeneficiary(ctx context.Context, beneficiary *Beneficiary) (bool, error) {
+	result := r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "mobile_user_id"}, {Name: "bank_code"}, {Name: "account_number"}},
+			DoNothing: true,
+		}).
+		Create(beneficiary)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func (r *Repository) GetBeneficiaries(ctx context.Context, mobileUserID string) ([]Beneficiary, error) {
