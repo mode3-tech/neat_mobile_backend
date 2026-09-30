@@ -581,12 +581,24 @@ func (s *Service) AddBeneficiary(ctx context.Context, mobileUserID string, req *
 		AccountName:   accountName,
 	}
 
-	if err := s.repo.CreateBeneficiary(ctx, beneficiary); err != nil {
+	created, err := s.repo.CreateBeneficiary(ctx, beneficiary)
+	if err != nil {
 		log.Printf("wallet service: failed to add beneficiary for user=%s: %v", mobileUserID, err)
 		s.logWalletAudit(ctx, auditlog.ResourceTypeBeneficiary, "ADD_BENEFICIARY", mobileUserID, mobileUserID, auditlog.StatusFailure, map[string]interface{}{
 			"reason_for_failure": "failed to persist beneficiary",
 		})
 		return nil, appErr.ErrAddingBeneficiary
+	}
+
+	// The user already has this bank_code/account_number saved; treat the
+	// re-add as idempotent success but record it as a duplicate.
+	if !created {
+		s.logWalletAudit(ctx, auditlog.ResourceTypeBeneficiary, "ADD_BENEFICIARY", mobileUserID, mobileUserID, auditlog.StatusSuccess, map[string]interface{}{
+			"bank_code":      bankCode,
+			"account_number": accountNumber,
+			"already_exists": true,
+		})
+		return beneficiary, nil
 	}
 
 	s.logWalletAudit(ctx, auditlog.ResourceTypeBeneficiary, "ADD_BENEFICIARY", mobileUserID, beneficiary.ID, auditlog.StatusSuccess, map[string]interface{}{
