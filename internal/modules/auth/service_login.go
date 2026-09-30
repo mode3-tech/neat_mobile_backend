@@ -50,6 +50,25 @@ func (s *Service) logLoginAudit(ctx context.Context, phone string, extra map[str
 	})
 }
 
+// logLoginSuccess records that a user actually completed login (i.e. session tokens were
+// issued), as distinct from the intermediate device/challenge steps that got them there.
+// Call this once, right after a login-completing token issuance succeeds.
+func (s *Service) logLoginSuccess(ctx context.Context, userID, phone, deviceID string) {
+	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
+		ID:           helpers.PrefixID("audit_log"),
+		ResourceID:   MaskSub(phone),
+		ResourceType: auditlog.ResourceTypeLogin,
+		ActorType:    "user",
+		RequestID:    middleware.GetRequestID(ctx),
+		Timestamp:    time.Now().UTC(),
+		Status:       auditlog.StatusSuccess,
+		ActorID:      userID,
+		Action:       "LOGIN",
+		IPAddress:    middleware.GetClientIP(ctx),
+		Metadata:     map[string]interface{}{"device_id": deviceID},
+	})
+}
+
 // logAuthEvent is the general-purpose audit helper for every other step in the login /
 // device-verification lifecycle (challenge creation, new-device flow, OTP resend, session
 // issuance, biometrics toggle). err, when non-nil, marks the event as a failure and its
@@ -153,6 +172,7 @@ func (s *Service) Login(ctx context.Context, deviceID, ip, phone, password strin
 
 	s.logLoginAudit(ctx, normalizedPhone, map[string]interface{}{"user_id": user.ID, "device_id": deviceID, "stage": "challenge_issued"}, nil)
 
+
 	return &LoginInitObject{
 		Status:    LoginStatusChallengeRequired,
 		Challenge: challenge,
@@ -231,6 +251,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 
 	var authObj *VerifiedDeviceResponse
 	var verifiedUserID string
+	var verifiedPhone string
 
 	err := s.tx.WithTx(ctx, func(txDB *gorm.DB) error {
 		deviceRepo := device.NewRepository(txDB)
@@ -327,6 +348,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 		if err != nil {
 			return err
 		}
+		verifiedPhone = user.Phone
 
 		authObj.IsBiometricsEnabled = user.IsBiometricsEnabled
 
@@ -338,6 +360,7 @@ func (s *Service) VerifyNewDevice(ctx context.Context, ip string, req NewDeviceR
 	}
 
 	s.logAuthEvent(ctx, auditlog.ResourceTypeDevice, "VERIFY_NEW_DEVICE", verifiedUserID, deviceID, nil, nil)
+	s.logLoginSuccess(ctx, verifiedUserID, verifiedPhone, deviceID)
 
 	return authObj, nil
 }
@@ -533,11 +556,14 @@ func (s *Service) VerifyDeviceChallenge(ctx context.Context, challenge, signatur
 	}
 
 	user, err := s.repo.GetUserByID(ctx, storedChallenge.UserID)
+	var phone string
 	if err == nil {
 		resp.IsBiometricsEnabled = user.IsBiometricsEnabled
+		phone = user.Phone
 	}
 
 	s.logAuthEvent(ctx, auditlog.ResourceTypeDevice, "VERIFY_DEVICE_CHALLENGE", storedChallenge.UserID, deviceID, nil, nil)
+	s.logLoginSuccess(ctx, storedChallenge.UserID, phone, deviceID)
 
 	return resp, nil
 }
