@@ -294,7 +294,7 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	// TODO: confirm with Optimus API docs the exact plaintext to encrypt
 	// (likely the BVN, but could be a JSON blob of multiple fields).
 
-	url := baseURL + "/Customer/create-by-bvn"
+	url := baseURL + "/v1/Customer/create-by-bvn"
 	log.Printf("Optimus URL for creating customer account with BVN: %s", url)
 	payload := OptimusPayload{
 		RequestId:         walletInfo.RequestID,
@@ -426,12 +426,12 @@ func (o *Optimus) LookupWalletByCustomerID(ctx context.Context, customerID strin
 // both successful and failed responses in its own response envelope, including
 // when the HTTP status itself is not 2xx.
 func (o *Optimus) ValidateBVN(ctx context.Context, payload registerv2.OptimusBVNValidationRequest) (*registerv2.OptimusResponse, error) {
-	return o.validateIdentity(ctx, "/Customer/validate-bvn", payload)
+	return o.validateIdentity(ctx, "/v1/Customer/validate-bvn", payload)
 }
 
 // ValidateNIN validates a NIN through the Optimus wallet API.
 func (o *Optimus) ValidateNIN(ctx context.Context, payload registerv2.OptimusNINValidationRequest) (*registerv2.OptimusResponse, error) {
-	return o.validateIdentity(ctx, "/Customer/validate-nin", payload)
+	return o.validateIdentity(ctx, "/v1/Customer/validate-nin", payload)
 }
 
 func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any) (*registerv2.OptimusResponse, error) {
@@ -557,9 +557,9 @@ func (o *Optimus) VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, ema
 
 	// /Customer/validate-otp lives alongside /Customer/validate-bvn and
 	// /Customer/validate-nin (see validateIdentity) - same WalletBaseURL, not
-	// AuthBaseURL. WalletBaseURL already ends in the API version segment
-	// (.../opti-finserve-api/v1), so no extra "/api/v1" prefix here.
-	url := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/Customer/validate-otp"
+	// AuthBaseURL. WalletBaseURL ends at .../opti-finserve-api, so the version
+	// segment is added here, matching the identity calls.
+	url := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/v1/Customer/validate-otp"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		log.Printf("optimus: build otp verify request failed: %v", err)
@@ -615,12 +615,10 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 	}
 
 	// Mirrors /Customer/validate-otp (see VerifyOTPWithOptimus): WalletBaseURL
-	// already ends in the API version segment (.../opti-finserve-api/v1), so no
-	// extra "/api/v1" prefix here - that was the same wrong assumption that
-	// caused validate-otp to 404 until it was moved off AuthBaseURL.
+	// ends at .../opti-finserve-api, so the version segment is added here.
 	query := url.Values{}
 	query.Set("referenceId", strings.TrimSpace(referenceID))
-	requestURL := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/Otp/resend?" + query.Encode()
+	requestURL := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/v1/Otp/resend?" + query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
