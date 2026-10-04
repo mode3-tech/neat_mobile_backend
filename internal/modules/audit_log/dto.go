@@ -9,6 +9,8 @@ type GetAuditLogsQuery struct {
 	Status       LogStatus    `form:"status"`
 	RequestID    string       `form:"request_id"`
 	IPAddress    string       `form:"ip_address"`
+	DateFrom     string       `form:"date_from"`
+	DateTo       string       `form:"date_to"`
 	Page         int          `form:"page"`
 	Limit        int          `form:"limit"`
 }
