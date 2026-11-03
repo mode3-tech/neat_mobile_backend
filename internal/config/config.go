@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 )
@@ -179,6 +180,7 @@ func readFileEnv(key string) string {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("config: %s is set but file %q could not be read: %v", key, path, err)
 		return ""
 	}
 	return string(data)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,7 @@ type Optimus struct {
 }
 
 func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey, privateKey string) *Optimus {
+	logOptimusPublicKey(publicKey)
 	return &Optimus{
 		WalletBaseURL: walletBaseURL,
 		AuthBaseURL:   authBaseURL,
@@ -45,6 +47,54 @@ func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey, priva
 		PrivateKey:    privateKey,
 		Client:        &http.Client{Timeout: time.Second * 15},
 	}
+}
+
+// logOptimusPublicKey logs the fingerprint and UIDs of the configured Optimus
+// public key (public information) so a key/environment mismatch — e.g. a UAT
+// key against the production gateway, or our own key in place of Optimus's —
+// is visible at startup rather than only as an opaque 400 from Optimus.
+func logOptimusPublicKey(armoredPublicKey string) {
+	if strings.TrimSpace(armoredPublicKey) == "" {
+		log.Printf("optimus: WARNING public key is empty (check OPTIMUS_PUBLIC_KEY_FILE); request encryption will fail")
+		return
+	}
+	keyRing, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armoredPublicKey))
+	if err != nil {
+		log.Printf("optimus: WARNING public key could not be parsed: %v", err)
+		return
+	}
+	for _, entity := range keyRing {
+		if entity.PrimaryKey == nil {
+			continue
+		}
+		uids := make([]string, 0, len(entity.Identities))
+		for name := range entity.Identities {
+			uids = append(uids, name)
+		}
+		log.Printf("optimus: loaded public key fingerprint=%X uids=%q subkeys=%d hasPrivate=%t",
+			entity.PrimaryKey.Fingerprint, uids, len(entity.Subkeys), entity.PrivateKey != nil)
+	}
+}
+
+// OptimusPlaintextError is returned by decodeOptimusEnvelope when Optimus
+// responds with a plain (unencrypted) string body such as
+// "Decryption failed or empty data." instead of PGP ciphertext.
+type OptimusPlaintextError struct {
+	Body string
+}
+
+func (e *OptimusPlaintextError) Error() string {
+	return fmt.Sprintf("optimus: plaintext error response: %q", e.Body)
+}
+
+// looksLikePGPCiphertext reports whether s is base64 that decodes to an
+// ASCII-armored PGP message — the only format pgpDecrypt can handle.
+func looksLikePGPCiphertext(s string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(decoded, []byte("-----BEGIN PGP"))
 }
 
 // pgpEncrypt serializes data to JSON (unless it is already a string), encrypts
@@ -193,6 +243,9 @@ func (o *Optimus) decodeOptimusEnvelope(body []byte) ([]byte, error) {
 	// response logs — json.Unmarshal strips the quotes and un-escapes properly).
 	var bare string
 	if err := json.Unmarshal(body, &bare); err == nil && strings.TrimSpace(bare) != "" {
+		if !looksLikePGPCiphertext(bare) {
+			return nil, &OptimusPlaintextError{Body: bare}
+		}
 		plaintext, err := pgpDecrypt(o.PrivateKey, bare)
 		if err != nil {
 			log.Printf("optimus: decrypt response (quoted body) failed: %v", err)
@@ -206,6 +259,9 @@ func (o *Optimus) decodeOptimusEnvelope(body []byte) ([]byte, error) {
 	// truly bare.
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed != "" && !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		if !looksLikePGPCiphertext(trimmed) {
+			return nil, &OptimusPlaintextError{Body: trimmed}
+		}
 		plaintext, err := pgpDecrypt(o.PrivateKey, trimmed)
 		if err != nil {
 			log.Printf("optimus: decrypt response (raw body) failed: %v", err)
@@ -491,6 +547,13 @@ func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any
 
 	result, decodeErr := o.decodeValidationResponse(body)
 	if decodeErr != nil {
+		var plainErr *OptimusPlaintextError
+		if errors.As(decodeErr, &plainErr) {
+			// Not user-fixable (e.g. "Decryption failed or empty data." means
+			// Optimus could not decrypt our request — wrong public key).
+			log.Printf("optimus: plaintext error url=%s status=%d body=%q", requestURL, resp.StatusCode, plainErr.Body)
+			return nil, fmt.Errorf("we could not verify your details right now. Please try again")
+		}
 		log.Printf("optimus: raw response = %s", string(body))
 		log.Printf("optimus: validation response decode failed url=%s status=%d err=%v", requestURL, resp.StatusCode, decodeErr)
 		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
