@@ -22,36 +22,26 @@ import (
 
 // DemoConfig configures a single whitelisted account (e.g. the Google Play
 // review account) whose OTP is a fixed, known code and whose delivery is
-// skipped. Applies to the demo phone (SMS) and to the email on that phone's
-// user account. Disabled unless Enabled is true and Destination/Code are set.
+// skipped. Applies to the demo phone (SMS) and the demo email (email), each
+// matched exactly. Disabled unless Enabled is true and Code is set.
 type DemoConfig struct {
 	Enabled     bool
 	Destination string // normalized demo phone (must match NormalizeDestination output)
-	Code        string // fixed OTP code accepted for the demo account
+	Email       string // normalized demo email (must match NormalizeDestination output); optional
+	Code        string // fixed OTP code accepted for these destinations
 }
 
-func (d DemoConfig) active() bool {
-	return d.Enabled && d.Code != "" && d.Destination != ""
-}
-
-// isDemoDestination reports whether the normalized destination belongs to the
-// demo account: the demo phone itself, or (email channel) the email stored on
-// the demo phone's user. A lookup error is logged and treated as "not demo"
-// so a DB hiccup can never widen the bypass.
-func (s *Service) isDemoDestination(ctx context.Context, channel Channel, dst string) bool {
-	if !s.demo.active() || dst == "" {
+// matches reports whether the normalized destination is the configured demo
+// phone (SMS) or demo email (email channel).
+func (d DemoConfig) matches(channel Channel, dst string) bool {
+	if !d.Enabled || d.Code == "" || dst == "" {
 		return false
 	}
 	switch channel {
 	case ChannelSMS:
-		return dst == s.demo.Destination
+		return dst == d.Destination
 	case ChannelEmail:
-		ok, err := s.repo.IsEmailForPhone(ctx, dst, s.demo.Destination)
-		if err != nil {
-			log.Printf("[otp.Issue] demo email lookup failed, treating as non-demo: err=%v", err)
-			return false
-		}
-		return ok
+		return dst == d.Email
 	default:
 		return false
 	}
@@ -163,7 +153,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 	// the one configured destination; the hash below still binds it normally so
 	// verification runs unchanged. Never log the code.
 	skipSend := false
-	if s.isDemoDestination(ctx, in.Channel, normalizeDestination) {
+	if s.demo.matches(in.Channel, normalizeDestination) {
 		code = s.demo.Code
 		skipSend = true
 		log.Printf("[otp.Issue] demo account: using fixed code, skipping delivery: purpose=%s", in.Purpose)

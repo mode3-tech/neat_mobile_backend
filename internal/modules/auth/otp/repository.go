@@ -105,18 +105,3 @@ func (r *Repository) GetVerificationRow(ctx context.Context, verificationID stri
 	}
 	return &verification, nil
 }
-
-// IsEmailForPhone reports whether a wallet user exists with this phone and
-// (case-insensitively) this email. Used to extend the demo-account OTP bypass
-// to the demo user's email without a separate config value.
-func (r *Repository) IsEmailForPhone(ctx context.Context, email, phone string) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).
-		Table("wallet_users").
-		Where("LOWER(email) = LOWER(?) AND phone = ?", email, phone).
-		Count(&count).Error
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}

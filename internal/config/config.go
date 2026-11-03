@@ -75,10 +75,11 @@ type Config struct {
 	XpressBaseURL    string
 
 	// Demo/review login account (e.g. Google Play review). Disabled unless
-	// DemoLoginEnabled is true. DemoLoginPhone, and the email on that phone's
-	// user account, get a fixed OTP and no SMS/email delivery.
+	// DemoLoginEnabled is true. DemoLoginPhone and DemoLoginEmail get a fixed
+	// OTP and no SMS/email delivery.
 	DemoLoginEnabled bool
 	DemoLoginPhone   string
+	DemoLoginEmail   string
 	DemoLoginOTP     string
 
 	RunMigrations bool
@@ -156,6 +157,7 @@ func Load() Config {
 
 		DemoLoginEnabled: getEnv("DEMO_LOGIN_ENABLED", "false") == "true",
 		DemoLoginPhone:   getEnv("DEMO_LOGIN_PHONE", ""),
+		DemoLoginEmail:   getEnv("DEMO_LOGIN_EMAIL", ""),
 		DemoLoginOTP:     getEnv("DEMO_LOGIN_OTP", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
