@@ -75,7 +75,8 @@ type Config struct {
 	XpressBaseURL    string
 
 	// Demo/review login account (e.g. Google Play review). Disabled unless
-	// DemoLoginEnabled is true. DemoLoginPhone gets a fixed OTP and no SMS.
+	// DemoLoginEnabled is true. DemoLoginPhone, and the email on that phone's
+	// user account, get a fixed OTP and no SMS/email delivery.
 	DemoLoginEnabled bool
 	DemoLoginPhone   string
 	DemoLoginOTP     string

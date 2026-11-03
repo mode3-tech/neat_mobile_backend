@@ -22,11 +22,39 @@ import (
 
 // DemoConfig configures a single whitelisted account (e.g. the Google Play
 // review account) whose OTP is a fixed, known code and whose delivery is
-// skipped. Disabled unless Enabled is true and Destination/Code are set.
+// skipped. Applies to the demo phone (SMS) and to the email on that phone's
+// user account. Disabled unless Enabled is true and Destination/Code are set.
 type DemoConfig struct {
 	Enabled     bool
-	Destination string // normalized demo phone/email (must match NormalizeDestination output)
-	Code        string // fixed OTP code accepted for this destination
+	Destination string // normalized demo phone (must match NormalizeDestination output)
+	Code        string // fixed OTP code accepted for the demo account
+}
+
+func (d DemoConfig) active() bool {
+	return d.Enabled && d.Code != "" && d.Destination != ""
+}
+
+// isDemoDestination reports whether the normalized destination belongs to the
+// demo account: the demo phone itself, or (email channel) the email stored on
+// the demo phone's user. A lookup error is logged and treated as "not demo"
+// so a DB hiccup can never widen the bypass.
+func (s *Service) isDemoDestination(ctx context.Context, channel Channel, dst string) bool {
+	if !s.demo.active() || dst == "" {
+		return false
+	}
+	switch channel {
+	case ChannelSMS:
+		return dst == s.demo.Destination
+	case ChannelEmail:
+		ok, err := s.repo.IsEmailForPhone(ctx, dst, s.demo.Destination)
+		if err != nil {
+			log.Printf("[otp.Issue] demo email lookup failed, treating as non-demo: err=%v", err)
+			return false
+		}
+		return ok
+	default:
+		return false
+	}
 }
 
 type Service struct {
@@ -135,7 +163,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 	// the one configured destination; the hash below still binds it normally so
 	// verification runs unchanged. Never log the code.
 	skipSend := false
-	if s.demo.Enabled && s.demo.Code != "" && s.demo.Destination != "" && normalizeDestination == s.demo.Destination {
+	if s.isDemoDestination(ctx, in.Channel, normalizeDestination) {
 		code = s.demo.Code
 		skipSend = true
 		log.Printf("[otp.Issue] demo account: using fixed code, skipping delivery: purpose=%s", in.Purpose)
