@@ -88,6 +88,7 @@ type OptimusBVNValidationRequest struct {
 	Dob          string `json:"Dob" binding:"required"`
 	Email        string `json:"Email" binding:"required,email"`
 	ReferralCode string `json:"ReferralCode" binding:"omitempty"`
+	PhoneNumber  string `json:"PhoneNumber" binding:"-"`
 }
 
 // ValidateBVNRequest is the client-facing (snake_case) body for
@@ -97,6 +98,7 @@ type ValidateBVNRequest struct {
 	Dob          string `json:"dob" binding:"required"`
 	Email        string `json:"email" binding:"required,email"`
 	ReferralCode string `json:"referral_code" binding:"omitempty"`
+	PhoneNumber  string `json:"phone_number" binding:"omitempty"`
 }
 
 func (r ValidateBVNRequest) toOptimusRequest() OptimusBVNValidationRequest {
@@ -105,6 +107,7 @@ func (r ValidateBVNRequest) toOptimusRequest() OptimusBVNValidationRequest {
 		Dob:          r.Dob,
 		Email:        r.Email,
 		ReferralCode: r.ReferralCode,
+		PhoneNumber:  r.PhoneNumber,
 	}
 }
 

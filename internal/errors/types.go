@@ -1,5 +1,7 @@
 package errors
 
+import "strings"
+
 type XpressPayProviderError struct {
 	Status  int
 	Code    string
@@ -79,4 +81,27 @@ type SMSLiveError struct {
 
 func (e SMSLiveErrorResponse) Error() string {
 	return e.Message
+}
+
+type AlatError struct {
+	StatusCode string   `json:"statusCode"`
+	Code       string   `json:"code"`
+	Message    string   `json:"message"`
+	Errors     []string `json:"errors"`
+}
+
+func (e *AlatError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Message != "" {
+		return e.Message
+	}
+	if len(e.Errors) > 0 {
+		return strings.Join(e.Errors, ", ")
+	}
+	if e.Code != "" {
+		return e.Code
+	}
+	return "wema alat provider error"
 }
