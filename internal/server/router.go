@@ -222,7 +222,6 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	optimusProductID := cfg.OptimusProductID
-
 	alatClient := baas.NewAlat(cfg.AlatBaseURL, cfg.AlatAPIKey, cfg.AlatSubscriptionKey)
 	wemaAdapter := wemaadapter.New(alatClient)
 
