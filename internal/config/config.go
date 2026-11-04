@@ -70,6 +70,10 @@ type Config struct {
 
 	WalletProvider string
 
+	AlatBaseURL         string
+	AlatAPIKey          string
+	AlatSubscriptionKey string
+
 	XpressPublicKey  string
 	XpressPrivateKey string
 	XpressBaseURL    string
@@ -148,6 +152,10 @@ func Load() Config {
 		LoginRateLimitBlockMinutes:     getEnvInt("LOGIN_RATE_LIMIT_BLOCK_MINUTES", 15),
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
+
+		AlatBaseURL:         getEnv("ALAT_BASE_URL", "https://apiplayground.alat.ng/account-creation"),
+		AlatAPIKey:          getEnv("ALAT_API_KEY", ""),
+		AlatSubscriptionKey: getEnv("ALAT_SUBSCRIPTION_KEY", ""),
 
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
