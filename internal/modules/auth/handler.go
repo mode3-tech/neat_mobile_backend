@@ -1200,7 +1200,7 @@ func (h *Handler) VerifyBVNWithFace(c *gin.Context) {
 		Status:  "success",
 		Message: "BVN with face verification was successful.",
 		Data: &BVNWithFaceValidationResponse{
-			BVNWithFaceVerificationID: info.faceCheckID,
+			BVNWithFaceVerificationID: info.FaceCheckID,
 		},
 	})
 }

@@ -3,7 +3,13 @@ package registerv2
 import (
 	"context"
 	"errors"
+	"neat_mobile_app_backend/internal/modules/auth"
+	"regexp"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type mockProviderPref struct {
@@ -63,6 +69,14 @@ func (m *mockAlatValidator) ResendOtp(ctx context.Context, trackingID string) er
 	return nil
 }
 
+func (m *mockAlatValidator) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
+	return "mock-tracking-face-123", nil
+}
+
+func (m *mockAlatValidator) GetAddressDropDownList(ctx context.Context) (any, error) {
+	return map[string]any{}, nil
+}
+
 func TestValidateBVN_Alat_RequiresPhone(t *testing.T) {
 	s := &Service{
 		providerPreference: &mockProviderPref{provider: "wema"},
@@ -120,3 +134,179 @@ func TestResendOTP_Alat_Error(t *testing.T) {
 	}
 }
 
+
+func TestVerifyOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqlDB.Close()
+
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open gorm db: %v", err)
+	}
+
+	repo := NewRepository(gormDB, nil)
+
+	var alatCalled bool
+	mockAlat := &mockAlatValidator{
+		verifyStep2Func: func(ctx context.Context, phone, otp, trackingID string) error {
+			alatCalled = true
+			return nil
+		},
+	}
+
+	s := &Service{
+		repo:               repo,
+		providerPreference: &mockProviderPref{provider: "optimus"}, // Preference changed to optimus!
+		alat:               mockAlat,
+	}
+
+	// Expect lookup of pending verification record with provider_verification_id = "tracking-ref-123"
+	rows := sqlmock.NewRows([]string{"id", "provider", "provider_verification_id", "status"}).
+		AddRow("rec-1", "wema", "tracking-ref-123", "pending")
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "wallet_verification_records" WHERE provider_verification_id = $1 ORDER BY created_at DESC LIMIT $2`)).
+		WithArgs("tracking-ref-123", 1).
+		WillReturnRows(rows)
+
+	// Expect update to verified (GORM wraps writes in Begin/Commit)
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "wallet_verification_records" SET "status"=$1,"verified_at"=$2,"updated_at"=$3 WHERE provider_verification_id = $4 AND status = $5`)).
+		WithArgs("verified", sqlmock.AnyArg(), sqlmock.AnyArg(), "tracking-ref-123", "pending").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = s.VerifyOTP(context.Background(), "08012345678", "123456", "test@example.com", "tracking-ref-123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !alatCalled {
+		t.Fatal("expected ALAT verification to be called based on DB record provider, but it was not")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestResendOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqlDB.Close()
+
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open gorm db: %v", err)
+	}
+
+	repo := NewRepository(gormDB, nil)
+
+	var alatResendCalled bool
+	mockAlat := &mockAlatValidator{
+		resendFunc: func(ctx context.Context, trackingID string) error {
+			alatResendCalled = true
+			return nil
+		},
+	}
+
+	s := &Service{
+		repo:               repo,
+		providerPreference: &mockProviderPref{provider: "optimus"}, // Preference changed to optimus!
+		alat:               mockAlat,
+	}
+
+	// Expect lookup of pending verification record with provider_verification_id = "tracking-ref-456"
+	rows := sqlmock.NewRows([]string{"id", "provider", "provider_verification_id", "status"}).
+		AddRow("rec-2", "wema", "tracking-ref-456", "pending")
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "wallet_verification_records" WHERE provider_verification_id = $1 ORDER BY created_at DESC LIMIT $2`)).
+		WithArgs("tracking-ref-456", 1).
+		WillReturnRows(rows)
+
+	ref, err := s.ResendOTP(context.Background(), "tracking-ref-456")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "tracking-ref-456" || !alatResendCalled {
+		t.Fatalf("expected ALAT resend to be called, got ref=%s, called=%v", ref, alatResendCalled)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+type stubSessionIssuer struct {
+	validateBVNWithFaceFunc func(ctx context.Context, payload auth.BVNWithFaceValidationRequest) (*auth.BVNWithFaceInfo, error)
+}
+
+func (s *stubSessionIssuer) IssueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*auth.VerifiedDeviceResponse, error) {
+	return nil, nil
+}
+
+func (s *stubSessionIssuer) ValidateBVN(ctx context.Context, bvn string) (*auth.BVNInfo, error) {
+	return nil, nil
+}
+
+func (s *stubSessionIssuer) ValidateBVNWithFace(ctx context.Context, payload auth.BVNWithFaceValidationRequest) (*auth.BVNWithFaceInfo, error) {
+	if s.validateBVNWithFaceFunc != nil {
+		return s.validateBVNWithFaceFunc(ctx, payload)
+	}
+	return &auth.BVNWithFaceInfo{FaceCheckID: "face-check-123"}, nil
+}
+
+func TestValidateBVNWithFace_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open gorm db: %v", err)
+	}
+
+	repo := NewRepository(gormDB, nil)
+	stubIssuer := &stubSessionIssuer{}
+
+	s := &Service{
+		repo:          repo,
+		sessionIssuer: stubIssuer,
+	}
+
+	// Expect update of verification record to verified
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "wallet_verification_records" SET .+ WHERE id = \$4`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "ver-123").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	faceCheckID, err := s.ValidateBVNWithFace(context.Background(), BVNWithFaceRequest{
+		VerificationID: "ver-123",
+		BVN:            "12345678901",
+		Image:          "base64image",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if faceCheckID != "face-check-123" {
+		t.Fatalf("expected faceCheckID 'face-check-123', got '%s'", faceCheckID)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestGetAddressDropDownList_Success(t *testing.T) {
+	mockAlat := &mockAlatValidator{}
+	s := &Service{alat: mockAlat}
+
+	data, err := s.GetAddressDropDownList(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+}

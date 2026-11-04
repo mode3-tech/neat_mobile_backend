@@ -167,3 +167,84 @@ func TestAlat_PartnerDebitRestrictionManagement(t *testing.T) {
 	}
 }
 
+func TestAlat_PostTier2PartnershipAccountWithFace(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		var req AlatTier2PartnershipRequestWithFace
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if req.BVN != "12345678901" || req.NIN != "12345678901" || req.LiveImageOfFace != "base64image" {
+			t.Errorf("unexpected payload: %+v", req)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(AlatResponseModel{
+			Status:     true,
+			Message:    "Tier 2 account creation enqueued",
+			Code:       "Success",
+			StatusCode: "OK",
+			Data: &AlatStep1Data{
+				TrackingID: "test-tracking-face-123",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAlat(server.URL, "test-api-key", "test-sub-key")
+	resp, err := client.PostTier2PartnershipAccountWithFace(context.Background(), AlatTier2PartnershipRequestWithFace{
+		BVN:             "12345678901",
+		NIN:             "12345678901",
+		PhoneNumber:     "08012345678",
+		EmailAddress:    "test@example.com",
+		LiveImageOfFace: "base64image",
+		CorrelationID:   "cor-123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Status {
+		t.Errorf("expected status true, got false")
+	}
+	if resp.Data == nil || resp.Data.TrackingID != "test-tracking-face-123" {
+		t.Errorf("expected tracking ID 'test-tracking-face-123', got %+v", resp.Data)
+	}
+}
+
+func TestAlat_GetAddressDropDownList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/create-account-face/api/CustomerInfo/GetDropDownList" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(AlatDropDownListResponse{
+			Status:  true,
+			Message: "Success",
+			Data: &AlatDropDownListData{
+				CountryModel: AlatCountryModel{
+					CountryList: []AlatCountry{{ID: 1, CountryCode: "NG", CountryName: "Nigeria"}},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAlat(server.URL, "test-api-key", "test-sub-key")
+	resp, err := client.GetAddressDropDownList(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Status {
+		t.Errorf("expected status true, got false")
+	}
+	if resp.Data == nil || len(resp.Data.CountryModel.CountryList) != 1 {
+		t.Errorf("expected 1 country, got %+v", resp.Data)
+	}
+}
+
