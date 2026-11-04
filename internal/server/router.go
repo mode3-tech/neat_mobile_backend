@@ -9,6 +9,7 @@ import (
 	"neat_mobile_app_backend/internal/adapters/cba"
 	optimusadapter "neat_mobile_app_backend/internal/adapters/optimus"
 	providusadapter "neat_mobile_app_backend/internal/adapters/providus"
+	wemaadapter "neat_mobile_app_backend/internal/adapters/wema"
 	"neat_mobile_app_backend/internal/authchecker"
 	"neat_mobile_app_backend/internal/config"
 	"neat_mobile_app_backend/internal/crypto"
@@ -222,10 +223,16 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	optimusProductID := cfg.OptimusProductID
 
+	alatClient := baas.NewAlat(cfg.AlatBaseURL, cfg.AlatAPIKey, cfg.AlatSubscriptionKey)
+	wemaAdapter := wemaadapter.New(alatClient)
+
 	var walletRegistrationService auth.WalletService
 	if cfg.WalletProvider == "optimus" {
 		walletRegistrationService = baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
 		log.Print("wallet provider: optimus")
+	} else if cfg.WalletProvider == "wema" || cfg.WalletProvider == "alat" {
+		walletRegistrationService = wemaAdapter
+		log.Print("wallet provider: wema alat")
 	} else {
 		walletRegistrationService = providusWalletService
 		log.Print("wallet provider: providus")
@@ -268,6 +275,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
 	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
 	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger)
+	optimusRegistrationService.SetAlatValidator(wemaAdapter)
 	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)

@@ -1215,6 +1215,21 @@ func MapError(err error) ErrorMapping {
 		}
 
 	default:
+		var alatErr *appErr.AlatError
+		if errors.As(err, &alatErr) {
+			code := alatErr.Code
+			if code == "" {
+				code = "ALAT_PROVIDER_ERROR"
+			}
+			return ErrorMapping{
+				Status: http.StatusUnprocessableEntity,
+				Error: APIError{
+					Code:    code,
+					Message: alatErr.Error(),
+				},
+			}
+		}
+
 		var xpressWalletErr *appErr.XpressWalletProviderError
 		if errors.As(err, &xpressWalletErr) {
 			return ErrorMapping{

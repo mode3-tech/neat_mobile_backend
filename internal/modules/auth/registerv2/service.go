@@ -53,6 +53,11 @@ type Service struct {
 	activationCapKobo       int64
 	optimusProductID        string
 	auditLogger             auditlog.AuditLogger
+	alat                    AlatValidator
+}
+
+func (s *Service) SetAlatValidator(alat AlatValidator) {
+	s.alat = alat
 }
 
 func NewService(
@@ -215,11 +220,31 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			return nil, fmt.Errorf("bvn otp verification is not complete")
 		}
 
+	case "wema", "alat":
+		if s.alat == nil {
+			log.Println("wema alat service is not configured")
+			return nil, fmt.Errorf("wema alat service is not configured")
+		}
+
+		bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
+		latestBVNRecord, err := s.repo.GetLatestByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case latestBVNRecord == nil:
+			return nil, fmt.Errorf("bvn is not verified")
+		case latestBVNRecord.Status == models.VerificationStatusVerified:
+			bvnRecord = latestBVNRecord
+			actualProvider = "wema"
+		case latestBVNRecord.Status == models.VerificationStatusFailed:
+			return nil, fmt.Errorf("bvn verification failed")
+		default:
+			return nil, fmt.Errorf("bvn otp verification is not complete")
+		}
+
 	default:
 		return nil, fmt.Errorf("registration provider %q is not supported by this flow", provider)
-	}
-	if walletGenerator == nil {
-		return nil, fmt.Errorf("wallet generation service is not configured")
 	}
 
 	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
@@ -246,24 +271,66 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	providerCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 	defer cancel()
 
-	walletResp, err := walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
-		RequestID:         mobileUserID,
-		BVN:               strings.TrimSpace(req.BVN),
-		FirstName:         strings.TrimSpace(req.FirstName),
-		LastName:          strings.TrimSpace(req.LastName),
-		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
-		DateOfBirth:       strings.TrimSpace(req.Dob),
-		PhoneNumber:       normalizedPhone,
-		Email:             normalizedEmail,
-		Address:           strings.TrimSpace(req.Address),
-		HouseNo:           strings.TrimSpace(req.HouseNo),
-		ProductId:         s.optimusProductID,
-		Gender:            strings.TrimSpace(req.Gender),
-		MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
-		Metadata:          map[string]interface{}{},
-	})
-	if err != nil {
-		return nil, err
+	var walletResp *auth.WalletResponse
+	if actualProvider == "wema" {
+		acctDetails, err := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch wema alat account details: %w", err)
+		}
+		if acctDetails == nil || strings.TrimSpace(acctDetails.AccountNumber) == "" {
+			return nil, fmt.Errorf("wema alat account was not generated yet")
+		}
+
+		_ = s.alat.PartnerDebitRestrictionManagement(providerCtx, "LiftPnd", acctDetails.AccountNumber)
+
+		fullName := strings.TrimSpace(acctDetails.FirstName + " " + acctDetails.LastName)
+		if fullName == "" {
+			fullName = strings.TrimSpace(req.FirstName + " " + req.LastName)
+		}
+
+		walletResp = &auth.WalletResponse{
+			Customer: &auth.WalletCustomer{
+				ID:          mobileUserID,
+				PhoneNumber: normalizedPhone,
+				FirstName:   req.FirstName,
+				LastName:    req.LastName,
+				Email:       normalizedEmail,
+				DateOfBirth: req.Dob,
+				Currency:    "NGN",
+				Tier:        "1",
+			},
+			Wallet: &auth.WalletInfo{
+				AccountNumber: acctDetails.AccountNumber,
+				AccountName:   fullName,
+				BankCode:      "000017",
+				BankName:      "WEMA BANK",
+				WalletId:      acctDetails.AccountNumber,
+				Status:        "active",
+			},
+		}
+	} else {
+		if walletGenerator == nil {
+			return nil, fmt.Errorf("wallet generation service is not configured")
+		}
+		walletResp, err = walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
+			RequestID:         mobileUserID,
+			BVN:               strings.TrimSpace(req.BVN),
+			FirstName:         strings.TrimSpace(req.FirstName),
+			LastName:          strings.TrimSpace(req.LastName),
+			MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
+			DateOfBirth:       strings.TrimSpace(req.Dob),
+			PhoneNumber:       normalizedPhone,
+			Email:             normalizedEmail,
+			Address:           strings.TrimSpace(req.Address),
+			HouseNo:           strings.TrimSpace(req.HouseNo),
+			ProductId:         s.optimusProductID,
+			Gender:            strings.TrimSpace(req.Gender),
+			MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
+			Metadata:          map[string]interface{}{},
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	if walletResp == nil || walletResp.Customer == nil || walletResp.Wallet == nil {
 		return nil, fmt.Errorf("wallet provider returned an incomplete response")
@@ -555,6 +622,32 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 		return "", "", false, nil
 	}
 
+	if strings.EqualFold(strings.TrimSpace(provider), "wema") || strings.EqualFold(strings.TrimSpace(provider), "alat") {
+		if s.alat == nil {
+			return "", "", false, fmt.Errorf("wema alat validation service is not configured")
+		}
+		phone := strings.TrimSpace(request.PhoneNumber)
+		if phone == "" {
+			return "", "", false, fmt.Errorf("phone_number is required for wema alat bvn validation")
+		}
+		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
+		if err != nil {
+			return "", "", false, err
+		}
+		trackingID, err := s.alat.PostPartnershipAccountCreationWithBvn(ctx, normalizedPhone, strings.TrimSpace(request.Email), strings.TrimSpace(request.Bvn))
+		if err != nil {
+			if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, err); recordErr != nil {
+				log.Printf("ValidateBVN (ALAT): failed to record failed verification: %v", recordErr)
+			}
+			return "", "", false, err
+		}
+		verificationID, err = s.createPendingIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, trackingID)
+		if err != nil {
+			return "", "", false, err
+		}
+		return verificationID, trackingID, true, nil
+	}
+
 	if s.optimus == nil {
 		return "", "", false, fmt.Errorf("optimus validation service is not configured")
 	}
@@ -619,11 +712,27 @@ func (s *Service) ValidateNINWithOptimus(ctx context.Context, request OptimusNIN
 	return verificationID, providerReferenceID, nil
 }
 
-// VerifyOTP confirms the OTP Optimus sent for referenceID and, on success,
+// VerifyOTP confirms the OTP Optimus/ALAT sent for referenceID and, on success,
 // flips the matching pending BVN/NIN verification record to verified. Generic
-// - works for any Optimus OTP challenge (BVN/NIN validation today), since the
-// reference id alone is what Optimus uses to identify which challenge this is.
+// - works for any Optimus/ALAT OTP challenge, since the reference id alone is
+// what the provider uses to identify which challenge this is.
 func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referenceID string) error {
+	provider, err := s.CurrentProvider(ctx)
+	if err == nil && (strings.EqualFold(strings.TrimSpace(provider), "wema") || strings.EqualFold(strings.TrimSpace(provider), "alat")) {
+		if s.alat == nil {
+			return fmt.Errorf("wema alat validation service is not configured")
+		}
+		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
+		if err != nil {
+			return err
+		}
+		err = s.alat.ValidateBVNandEnqueueAccountCreation(ctx, normalizedPhone, strings.TrimSpace(otpToken), strings.TrimSpace(referenceID))
+		if err != nil {
+			return err
+		}
+		return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
+	}
+
 	if s.optimus == nil {
 		return fmt.Errorf("optimus validation service is not configured")
 	}
@@ -633,12 +742,22 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 	return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
 }
 
-// ResendOTP asks Optimus to resend the OTP tied to referenceID, returning the
+// ResendOTP asks Optimus or ALAT to resend the OTP tied to referenceID, returning the
 // new reference id the caller must use for the next verify/resend. Also
-// repoints the pending verification record at the new reference id - without
-// this, VerifyOTP's later lookup (by provider reference id) would miss the
-// record entirely, since the client is required to verify against the new id.
+// repoints the pending verification record at the new reference id.
 func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, error) {
+	provider, err := s.CurrentProvider(ctx)
+	if err == nil && (strings.EqualFold(strings.TrimSpace(provider), "wema") || strings.EqualFold(strings.TrimSpace(provider), "alat")) {
+		if s.alat == nil {
+			return "", fmt.Errorf("wema alat validation service is not configured")
+		}
+		err = s.alat.ResendOtp(ctx, strings.TrimSpace(referenceID))
+		if err != nil {
+			return "", err
+		}
+		return referenceID, nil
+	}
+
 	if s.optimus == nil {
 		return "", fmt.Errorf("optimus validation service is not configured")
 	}

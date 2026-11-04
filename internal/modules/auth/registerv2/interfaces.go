@@ -13,6 +13,25 @@ type ProviderPreferenceRepository interface {
 	GetProviderPreference(ctx context.Context) (*ProviderPreference, error)
 }
 
+// AlatAccountDetails holds account info retrieved from Wema ALAT.
+type AlatAccountDetails struct {
+	AccountNumber string
+	FirstName     string
+	LastName      string
+	Email         string
+	PhoneNumber   string
+}
+
+// AlatValidator defines Wema ALAT account creation operations needed by registerv2.
+// Defined with local types to avoid import cycle between registerv2 and baas.
+type AlatValidator interface {
+	PostPartnershipAccountCreationWithBvn(ctx context.Context, phone, email, bvn string) (trackingID string, err error)
+	ValidateBVNandEnqueueAccountCreation(ctx context.Context, phone, otp, trackingID string) error
+	GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
+	PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error
+	ResendOtp(ctx context.Context, trackingID string) error
+}
+
 // OptimusValidator is implemented by the Optimus BaaS client. The Optimus API
 // returns the same response envelope for successful and failed HTTP requests,
 // so implementations must decode it before returning an error.
