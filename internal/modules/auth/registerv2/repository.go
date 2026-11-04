@@ -5,6 +5,7 @@ import (
 	"errors"
 	"neat_mobile_app_backend/internal/crypto"
 	"neat_mobile_app_backend/models"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -103,6 +104,35 @@ func (r *Repository) MarkVerificationVerifiedByProviderReference(ctx context.Con
 	return nil
 }
 
+// MarkVerificationVerified sets a verification record's status to verified by its record ID.
+func (r *Repository) MarkVerificationVerified(ctx context.Context, id string, verifiedAt time.Time) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.VerificationRecord{}).
+		Where("id = ?", id).
+		Updates(map[string]any{"status": models.VerificationStatusVerified, "verified_at": verifiedAt})
+	return result.Error
+}
+
+// GetVerificationByProviderReference finds the latest verification record by its provider reference ID.
+func (r *Repository) GetVerificationByProviderReference(ctx context.Context, providerReferenceID string) (*models.VerificationRecord, error) {
+	var rec models.VerificationRecord
+	result := r.db.WithContext(ctx).
+		Where("provider_verification_id = ?", strings.TrimSpace(providerReferenceID)).
+		Order("created_at DESC").
+		Limit(1).
+		Find(&rec)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+	if err := r.decryptVerifiedID(&rec); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
 // UpdateProviderVerificationReference repoints a pending verification record
 // from an old Optimus OTP reference id to the new one issued by a resend -
 // without this, VerifyOTP's lookup by reference id would miss the record,
@@ -160,4 +190,23 @@ func (r *Repository) AddVerification(ctx context.Context, record *models.Verific
 	}
 	toInsert.VerifiedID = &encrypted
 	return r.db.WithContext(ctx).Create(&toInsert).Error
+}
+
+func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models.FaceCheckRecord, error) {
+	var record models.FaceCheckRecord
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func (r *Repository) GetFaceCheckRecordByVerificationID(ctx context.Context, verificationRecordID string) (*models.FaceCheckRecord, error) {
+	var record models.FaceCheckRecord
+	if err := r.db.WithContext(ctx).
+		Where("verification_record_id = ?", verificationRecordID).
+		Order("created_at DESC").
+		First(&record).Error; err != nil {
+		return nil, err
+	}
+	return &record, nil
 }

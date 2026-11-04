@@ -30,8 +30,20 @@ type OptimusRegisterRequest struct {
 	TransactionPin        string              `json:"transaction_pin" binding:"required"`
 	ConfirmTransactionPin string              `json:"confirm_transaction_pin" binding:"required"`
 	IsBiomtricsEnabled    *bool               `json:"is_biometrics_enabled" binding:"required"`
-	ReferralCode          string              `json:"referral_code" binding:"omitempty"`
-	Device                DeviceRegisteration `json:"device" binding:"required"`
+	ReferralCode              string              `json:"referral_code" binding:"omitempty"`
+	Device                    DeviceRegisteration `json:"device" binding:"required"`
+	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id,omitempty"`
+	LiveImageOfFace           string              `json:"live_image_of_face,omitempty"`
+}
+
+type BVNWithFaceRequest struct {
+	VerificationID string `json:"verification_id"`
+	BVN            string `json:"bvn" binding:"required,len=11,numeric"`
+	Image          string `json:"image" binding:"required"`
+}
+
+type BVNWithFaceResponse struct {
+	BVNWithFaceVerificationID string `json:"bvn_w_face_verification_id"`
 }
 
 type RegisterResponse struct {

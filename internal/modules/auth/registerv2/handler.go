@@ -191,6 +191,41 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
+func (h *Handler) ValidateBVNWithFace(c *gin.Context) {
+	var request BVNWithFaceRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+
+	faceCheckID, err := h.service.ValidateBVNWithFace(c.Request.Context(), request)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response.APIResponse[BVNWithFaceResponse]{
+		Status:  "success",
+		Message: "BVN with face verification was successful.",
+		Data: &BVNWithFaceResponse{
+			BVNWithFaceVerificationID: faceCheckID,
+		},
+	})
+}
+
+func (h *Handler) GetAddressDropDownList(c *gin.Context) {
+	data, err := h.service.GetAddressDropDownList(c.Request.Context())
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Address dropdown options retrieved successfully.",
+		Data:    &data,
+	})
+}
+
 func (h *Handler) writeVerificationSuccess(c *gin.Context, verificationID, providerReferenceID string, requiresOTP bool, message string) {
 	data := OptimusVerificationResponse{VerificationID: verificationID, ProviderReferenceID: providerReferenceID, RequiresOTP: requiresOTP}
 	c.JSON(http.StatusOK, response.APIResponse[OptimusVerificationResponse]{

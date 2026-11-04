@@ -12,6 +12,8 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 		optimus.POST("/otp/email/request", handler.RequestEmailOTP)
 		optimus.POST("/otp/email/verify", handler.VerifyEmailOTP)
 		optimus.POST("/validate/bvn", handler.ValidateBVN)
+		optimus.POST("/validate/bvn-with-face", handler.ValidateBVNWithFace)
+		optimus.GET("/address-dropdown", handler.GetAddressDropDownList)
 		// /validate/nin intentionally not routed: NIN is now collected and
 		// stored via /register without a separate pre-flight validation step.
 		// handler.ValidateNINWithOptimus / Service.ValidateNINWithOptimus are

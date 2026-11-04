@@ -29,6 +29,9 @@ import (
 // resourceID doubles as ActorID, using whatever identity is available at that point
 // in the flow (the inbound verification ID, or a masked subject once one is minted).
 func (s *Service) logVerificationAudit(ctx context.Context, resourceType auditlog.ResourceType, action, resourceID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+	if s == nil || s.auditLogger == nil {
+		return
+	}
 	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
 		ID:           helpers.PrefixID("audit_log"),
 		ResourceID:   resourceID,

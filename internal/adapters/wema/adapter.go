@@ -95,3 +95,43 @@ func (a *Adapter) ResendOtp(ctx context.Context, trackingID string) error {
 	})
 	return err
 }
+
+// PostTier2PartnershipAccountWithFace calls Step 1c on ALAT to open a Tier 2 account with face biometrics.
+func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req registerv2.AlatTier2FaceRequest) (string, error) {
+	var address *baas.AlatResidentialAddress
+	if req.ResidentialAddress != nil {
+		address = &baas.AlatResidentialAddress{
+			BuildingNumber: req.ResidentialAddress.BuildingNumber,
+			Street:         req.ResidentialAddress.Street,
+			City:           req.ResidentialAddress.City,
+			State:          req.ResidentialAddress.State,
+			Lga:            req.ResidentialAddress.Lga,
+			Landmark:       req.ResidentialAddress.Landmark,
+			Country:        req.ResidentialAddress.Country,
+			FullAddress:    req.ResidentialAddress.FullAddress,
+		}
+	}
+
+	resp, err := a.alat.PostTier2PartnershipAccountWithFace(ctx, baas.AlatTier2PartnershipRequestWithFace{
+		BVN:                req.BVN,
+		NIN:                req.NIN,
+		PhoneNumber:        req.PhoneNumber,
+		EmailAddress:       req.EmailAddress,
+		ResidentialAddress: address,
+		LiveImageOfFace:    req.LiveImageOfFace,
+		CorrelationID:      req.CorrelationID,
+	})
+	if err != nil {
+		return "", err
+	}
+	trackingID := ""
+	if resp != nil && resp.Data != nil {
+		trackingID = resp.Data.TrackingID
+	}
+	return trackingID, nil
+}
+
+// GetAddressDropDownList calls Step 0 on ALAT to retrieve dropdown options for address entry.
+func (a *Adapter) GetAddressDropDownList(ctx context.Context) (any, error) {
+	return a.alat.GetAddressDropDownList(ctx)
+}

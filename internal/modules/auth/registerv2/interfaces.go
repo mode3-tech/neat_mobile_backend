@@ -22,6 +22,29 @@ type AlatAccountDetails struct {
 	PhoneNumber   string
 }
 
+// AlatResidentialAddress holds customer address breakdown for Tier 2 face account creation.
+type AlatResidentialAddress struct {
+	BuildingNumber string
+	Street         string
+	City           string
+	State          string
+	Lga            string
+	Landmark       string
+	Country        string
+	FullAddress    string
+}
+
+// AlatTier2FaceRequest holds parameters for Step 1c (Tier 2 Face Account Creation).
+type AlatTier2FaceRequest struct {
+	BVN                string
+	NIN                string
+	PhoneNumber        string
+	EmailAddress       string
+	ResidentialAddress *AlatResidentialAddress
+	LiveImageOfFace    string
+	CorrelationID      string
+}
+
 // AlatValidator defines Wema ALAT account creation operations needed by registerv2.
 // Defined with local types to avoid import cycle between registerv2 and baas.
 type AlatValidator interface {
@@ -30,6 +53,8 @@ type AlatValidator interface {
 	GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
 	PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error
 	ResendOtp(ctx context.Context, trackingID string) error
+	PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (trackingID string, err error)
+	GetAddressDropDownList(ctx context.Context) (any, error)
 }
 
 // OptimusValidator is implemented by the Optimus BaaS client. The Optimus API
@@ -48,7 +73,10 @@ type OptimusValidator interface {
 }
 
 // SessionIssuer is satisfied by *auth.Service - reused so registerv2 issues
-// sessions the exact same way the old login/registration flow does.
+// sessions the exact same way the old login/registration flow does, and can
+// run KYC provider validations (Tendar/Prembly).
 type SessionIssuer interface {
 	IssueSessionTokens(ctx context.Context, userID, deviceID, ip string) (*auth.VerifiedDeviceResponse, error)
+	ValidateBVN(ctx context.Context, bvn string) (*auth.BVNInfo, error)
+	ValidateBVNWithFace(ctx context.Context, payload auth.BVNWithFaceValidationRequest) (*auth.BVNWithFaceInfo, error)
 }

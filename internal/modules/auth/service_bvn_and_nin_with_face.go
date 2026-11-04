@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceValidationRequest) (*bvnWithFaceInfo, error) {
+func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceValidationRequest) (*BVNWithFaceInfo, error) {
 	verificationID := strings.TrimSpace(payload.VerificationID)
 	bvn := strings.TrimSpace(payload.BVN)
 	image := strings.TrimSpace(payload.Image)
@@ -41,7 +41,7 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 	// check, return it without invoking (and being billed by) the provider again.
 	existing, existingErr := s.repo.GetFaceCheckRecordByVerificationID(ctx, record.ID)
 	if existingErr == nil && existing != nil && existing.Matched {
-		return &bvnWithFaceInfo{faceCheckID: existing.ID}, nil
+		return &BVNWithFaceInfo{FaceCheckID: existing.ID}, nil
 	}
 
 	var faceResult *bvnFaceValidationResult
@@ -89,7 +89,9 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 		ResponseCode:         faceResult.ResponseCode,
 		ProviderMessage:      faceResult.Message,
 	}
-	if v := faceResult.FaceImageProvided; v != "" {
+	if image != "" {
+		faceRecord.FaceImageProvided = &image
+	} else if v := faceResult.FaceImageProvided; v != "" {
 		faceRecord.FaceImageProvided = &v
 	}
 	if v := faceResult.ReferenceID; v != "" {
@@ -108,7 +110,7 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 		return nil, appErr.ErrValidatingBVNWithFace
 	}
 
-	return &bvnWithFaceInfo{faceCheckID: faceRecord.ID}, nil
+	return &BVNWithFaceInfo{FaceCheckID: faceRecord.ID}, nil
 }
 
 func (s *Service) ValidateNINWithFace(ctx context.Context, payload NINWithFaceValidationRequest) (*ninWithFaceInfo, error) {

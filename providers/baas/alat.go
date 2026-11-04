@@ -65,6 +65,105 @@ type AlatPndRequest struct {
 	AccountNumber string `json:"accountNumber"`
 }
 
+// AlatResidentialAddress represents customer address details for Tier 2 face account opening.
+type AlatResidentialAddress struct {
+	BuildingNumber string `json:"buildingNumber"`
+	Street         string `json:"street"`
+	City           string `json:"city"`
+	State          string `json:"state"`
+	Lga            string `json:"lga"`
+	Landmark       string `json:"landmark"`
+	Country        string `json:"country"`
+	FullAddress    string `json:"fullAddress"`
+}
+
+// AlatTier2PartnershipRequestWithFace represents Step 1c payload for creating Tier 2 account with face biometrics.
+type AlatTier2PartnershipRequestWithFace struct {
+	BVN                string                  `json:"bvn"`
+	NIN                string                  `json:"nin"`
+	PhoneNumber        string                  `json:"phoneNumber"`
+	EmailAddress       string                  `json:"emailAddress"`
+	ResidentialAddress *AlatResidentialAddress `json:"residentialAddress,omitempty"`
+	LiveImageOfFace    string                  `json:"liveImageOfFace"`
+	CorrelationID      string                  `json:"correlationId"`
+}
+
+// AlatTier1BvnWithoutOtpRequest represents Step 1a payload for creating Tier 1 account with BVN without OTP.
+type AlatTier1BvnWithoutOtpRequest struct {
+	PhoneNumber   string `json:"phoneNumber"`
+	Email         string `json:"email"`
+	BVN           string `json:"bvn"`
+	CorrelationID string `json:"correlationId"`
+}
+
+// AlatTier1NinWithoutOtpRequest represents Step 1b payload for creating Tier 1 account with NIN without OTP.
+type AlatTier1NinWithoutOtpRequest struct {
+	PhoneNumber   string `json:"phoneNumber"`
+	Email         string `json:"email"`
+	NIN           string `json:"nin"`
+	CorrelationID string `json:"correlationId"`
+}
+
+// Dropdown models for Step 0 (GetAddressDropDownList)
+type AlatCountry struct {
+	ID          int64  `json:"id"`
+	CountryCode string `json:"countryCode"`
+	CountryName string `json:"countryName"`
+}
+
+type AlatState struct {
+	ID          int32  `json:"id"`
+	Name        string `json:"name"`
+	FinacleCode string `json:"finacleCode"`
+	Country     string `json:"country"`
+}
+
+type AlatLGA struct {
+	LgaID   int32  `json:"lgaId"`
+	StateID int32  `json:"stateId"`
+	Name    string `json:"name"`
+}
+
+type AlatLCDA struct {
+	LcdaID int32  `json:"lcdaId"`
+	LgaID  int32  `json:"lgaId"`
+	Name   string `json:"name"`
+}
+
+type AlatCity struct {
+	ID      int64  `json:"id"`
+	StateID int32  `json:"stateId"`
+	Name    string `json:"name"`
+}
+
+type AlatHousingType struct {
+	ID    int64  `json:"id"`
+	Value string `json:"value"`
+	Code  string `json:"code"`
+}
+
+type AlatCountryModel struct {
+	CountryList  []AlatCountry     `json:"countryList"`
+	StateList    []AlatState       `json:"stateList"`
+	LgaList      []AlatLGA         `json:"lgaList"`
+	LcdaList     []AlatLCDA        `json:"lcdaList"`
+	CityList     []AlatCity        `json:"cityList"`
+	HousingTypes []AlatHousingType `json:"housingTypes"`
+}
+
+type AlatDropDownListData struct {
+	CountryModel AlatCountryModel `json:"countryModel"`
+}
+
+type AlatDropDownListResponse struct {
+	Message    string                `json:"message"`
+	Status     bool                  `json:"status"`
+	Code       any                   `json:"code"`
+	StatusCode any                   `json:"statusCode"`
+	Errors     []string              `json:"errors"`
+	Data       *AlatDropDownListData `json:"data,omitempty"`
+}
+
 // AlatStep1Data holds data returned by Step 1, including the tracking ID needed for Step 2.
 type AlatStep1Data struct {
 	TrackingID                string  `json:"trackingId"`
@@ -166,11 +265,29 @@ func (a *Alat) ValidateBVNandEnqueueAccountCreation(ctx context.Context, req Ala
 	return &resp, nil
 }
 
-// Step 3: GetPartnershipAccountDetails fetches the created account details using the customer's phone number.
-func (a *Alat) GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetailsResponse, error) {
-	endpoint := fmt.Sprintf("%s/api/CustomerAccount/GetPartnershipAccountDetails?phoneNumber=%s", a.BaseURL, url.QueryEscape(phoneNumber))
-	var resp AlatAccountDetailsResponse
+// faceBaseURL returns the root URL with the /create-account-face prefix for biometric APIs.
+func (a *Alat) faceBaseURL() string {
+	root := strings.TrimRight(a.BaseURL, "/")
+	root = strings.TrimSuffix(root, "/account-creation")
+	root = strings.TrimSuffix(root, "/create-account-face")
+	return root + "/create-account-face"
+}
+
+// Step 0: GetAddressDropDownList fetches country, state, LGA, LCDA, city, and housing types.
+func (a *Alat) GetAddressDropDownList(ctx context.Context) (*AlatDropDownListResponse, error) {
+	endpoint := a.faceBaseURL() + "/api/CustomerInfo/GetDropDownList"
+	var resp AlatDropDownListResponse
 	if err := a.doRequest(ctx, http.MethodGet, endpoint, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// Step 1a: PostTier1BvnWithoutOtp creates a Tier 1 account using BVN without SMS OTP.
+func (a *Alat) PostTier1BvnWithoutOtp(ctx context.Context, req AlatTier1BvnWithoutOtpRequest) (*AlatResponseModel, error) {
+	endpoint := a.faceBaseURL() + "/api/partnership/tier1-bvn-withoutOtp-v2"
+	var resp AlatResponseModel
+	if err := a.doRequest(ctx, http.MethodPost, endpoint, req, &resp); err != nil {
 		return nil, err
 	}
 	if !resp.Status {
@@ -182,6 +299,85 @@ func (a *Alat) GetPartnershipAccountDetails(ctx context.Context, phoneNumber str
 		}
 	}
 	return &resp, nil
+}
+
+// Step 1b: PostTier1NinWithoutOtp creates a Tier 1 account using NIN without SMS OTP.
+func (a *Alat) PostTier1NinWithoutOtp(ctx context.Context, req AlatTier1NinWithoutOtpRequest) (*AlatResponseModel, error) {
+	endpoint := a.faceBaseURL() + "/api/partnership/tier1-nin-withoutOtp-v2"
+	var resp AlatResponseModel
+	if err := a.doRequest(ctx, http.MethodPost, endpoint, req, &resp); err != nil {
+		return nil, err
+	}
+	if !resp.Status {
+		return &resp, &appErr.AlatError{
+			StatusCode: resp.GetStatusCode(),
+			Code:       resp.GetCode(),
+			Message:    resp.Message,
+			Errors:     resp.Errors,
+		}
+	}
+	return &resp, nil
+}
+
+// Step 1c: PostTier2PartnershipAccountWithFace creates a Tier 2 account with BVN, NIN, live face image, and residential address without SMS OTP.
+func (a *Alat) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2PartnershipRequestWithFace) (*AlatResponseModel, error) {
+	endpoint := a.faceBaseURL() + "/api/partnership/tier2-partnershipaccount-withoutOtp-v2"
+	var resp AlatResponseModel
+	if err := a.doRequest(ctx, http.MethodPost, endpoint, req, &resp); err != nil {
+		return nil, err
+	}
+	if !resp.Status {
+		return &resp, &appErr.AlatError{
+			StatusCode: resp.GetStatusCode(),
+			Code:       resp.GetCode(),
+			Message:    resp.Message,
+			Errors:     resp.Errors,
+		}
+	}
+	return &resp, nil
+}
+
+// Step 2 / Step 3: GetPartnershipAccountDetails fetches the created account details using the customer's phone number.
+// Tries the standard endpoint first, and falls back to the face biometric endpoint if needed.
+func (a *Alat) GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetailsResponse, error) {
+	endpoint := fmt.Sprintf("%s/api/CustomerAccount/GetPartnershipAccountDetails?phoneNumber=%s", a.BaseURL, url.QueryEscape(phoneNumber))
+	var resp AlatAccountDetailsResponse
+	err := a.doRequest(ctx, http.MethodGet, endpoint, nil, &resp)
+	if err == nil && resp.Status && resp.Data != nil && strings.TrimSpace(resp.Data.AccountNumber) != "" {
+		return &resp, nil
+	}
+
+	// Try face biometric endpoint
+	faceEndpoint := fmt.Sprintf("%s/api/CustomerAccount/GetPartnershipAccountDetails?phoneNumber=%s", a.faceBaseURL(), url.QueryEscape(phoneNumber))
+	var faceResp AlatAccountDetailsResponse
+	if faceErr := a.doRequest(ctx, http.MethodGet, faceEndpoint, nil, &faceResp); faceErr == nil && faceResp.Status && faceResp.Data != nil && strings.TrimSpace(faceResp.Data.AccountNumber) != "" {
+		return &faceResp, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Status {
+		return &resp, &appErr.AlatError{
+			StatusCode: resp.GetStatusCode(),
+			Code:       resp.GetCode(),
+			Message:    resp.Message,
+			Errors:     resp.Errors,
+		}
+	}
+	return &resp, nil
+}
+
+// GetPartnershipAccountDetailsWithFace fetches account details preferring the face biometric endpoint.
+func (a *Alat) GetPartnershipAccountDetailsWithFace(ctx context.Context, phoneNumber string) (*AlatAccountDetailsResponse, error) {
+	faceEndpoint := fmt.Sprintf("%s/api/CustomerAccount/GetPartnershipAccountDetails?phoneNumber=%s", a.faceBaseURL(), url.QueryEscape(phoneNumber))
+	var resp AlatAccountDetailsResponse
+	err := a.doRequest(ctx, http.MethodGet, faceEndpoint, nil, &resp)
+	if err == nil && resp.Status && resp.Data != nil && strings.TrimSpace(resp.Data.AccountNumber) != "" {
+		return &resp, nil
+	}
+
+	return a.GetPartnershipAccountDetails(ctx, phoneNumber)
 }
 
 // Step 4: PartnerDebitRestrictionManagement removes or applies PND on an account (e.g. LiftPnd).
