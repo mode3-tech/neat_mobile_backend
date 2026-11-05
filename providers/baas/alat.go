@@ -239,12 +239,7 @@ func (a *Alat) PostPartnershipAccountCreationWithBvn(ctx context.Context, req Al
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("PostPartnershipAccountCreationWithBvn", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -257,12 +252,7 @@ func (a *Alat) ValidateBVNandEnqueueAccountCreation(ctx context.Context, req Ala
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("ValidateBVNandEnqueueAccountCreation", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -293,12 +283,7 @@ func (a *Alat) PostTier1BvnWithoutOtp(ctx context.Context, req AlatTier1BvnWitho
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("PostTier1BvnWithoutOtp", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -311,12 +296,7 @@ func (a *Alat) PostTier1NinWithoutOtp(ctx context.Context, req AlatTier1NinWitho
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("PostTier1NinWithoutOtp", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -329,12 +309,7 @@ func (a *Alat) PostTier2PartnershipAccountWithFace(ctx context.Context, req Alat
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("PostTier2PartnershipAccountWithFace", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -352,20 +327,18 @@ func (a *Alat) GetPartnershipAccountDetails(ctx context.Context, phoneNumber str
 	// Try face biometric endpoint
 	faceEndpoint := fmt.Sprintf("%s/api/CustomerAccount/GetPartnershipAccountDetails?phoneNumber=%s", a.faceBaseURL(), url.QueryEscape(phoneNumber))
 	var faceResp AlatAccountDetailsResponse
-	if faceErr := a.doRequest(ctx, http.MethodGet, faceEndpoint, nil, &faceResp); faceErr == nil && faceResp.Status && faceResp.Data != nil && strings.TrimSpace(faceResp.Data.AccountNumber) != "" {
+	faceErr := a.doRequest(ctx, http.MethodGet, faceEndpoint, nil, &faceResp)
+	if faceErr == nil && faceResp.Status && faceResp.Data != nil && strings.TrimSpace(faceResp.Data.AccountNumber) != "" {
 		return &faceResp, nil
 	}
+	log.Printf("[ALAT] level=INFO op=GetPartnershipAccountDetails no account on either endpoint phone=%s standard=(err=%v status=%t message=%q) face=(err=%v status=%t message=%q)",
+		maskTail(phoneNumber), err, resp.Status, resp.Message, faceErr, faceResp.Status, faceResp.Message)
 
 	if err != nil {
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("GetPartnershipAccountDetails", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -390,12 +363,7 @@ func (a *Alat) PartnerDebitRestrictionManagement(ctx context.Context, req AlatPn
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("PartnerDebitRestrictionManagement", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -408,12 +376,7 @@ func (a *Alat) ResendOtp(ctx context.Context, req AlatResendOtpRequest) (*AlatRe
 		return nil, err
 	}
 	if !resp.Status {
-		return &resp, &appErr.AlatError{
-			StatusCode: resp.GetStatusCode(),
-			Code:       resp.GetCode(),
-			Message:    resp.Message,
-			Errors:     resp.Errors,
-		}
+		return &resp, envelopeError("ResendOtp", resp.GetStatusCode(), resp.GetCode(), resp.Message, resp.Errors)
 	}
 	return &resp, nil
 }
@@ -424,7 +387,7 @@ func (a *Alat) LookupWalletByCustomerID(ctx context.Context, phoneOrID string) (
 	if err != nil {
 		var alatErr *appErr.AlatError
 		if errors.As(err, &alatErr) {
-			log.Printf("alat lookup wallet error: %v", alatErr)
+			log.Printf("[ALAT] level=INFO op=LookupWalletByCustomerID treating alat error as no account: %v", alatErr)
 			return nil, false, nil
 		}
 		return nil, false, err
@@ -505,6 +468,7 @@ func (a *Alat) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayloa
 		}
 	}
 
+	log.Printf("[ALAT] level=WARN op=GenerateWallet account not visible after %d polls phone=%s - a retry should find it", maxPollAttempts, maskTail(walletInfo.PhoneNumber))
 	return nil, errors.New("alat account generation pending; please check status shortly")
 }
 
@@ -514,7 +478,7 @@ func (a *Alat) liftPnd(ctx context.Context, accountNumber string) error {
 		PndType:       "LiftPnd",
 		AccountNumber: accountNumber,
 	}); err != nil {
-		log.Printf("alat: failed to lift PND on account %s: %v", accountNumber, err)
+		log.Printf("[ALAT] level=ERROR op=liftPnd account=%s: %v", accountNumber, err)
 		return fmt.Errorf("alat lift pnd failed for account %s: %w", accountNumber, err)
 	}
 	return nil
@@ -550,19 +514,28 @@ func (a *Alat) doRequest(ctx context.Context, method, endpoint string, body any,
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	// Log the path only - the query string can carry the customer's phone.
+	path := req.URL.Path
+	started := time.Now()
+
 	resp, err := a.Client.Do(req)
 	if err != nil {
-		log.Printf("alat http request failed [%s %s]: %v", method, endpoint, err)
+		log.Printf("[ALAT] level=ERROR http %s %s transport error after %s (ctx_err=%v): %v",
+			method, path, time.Since(started).Round(time.Millisecond), ctx.Err(), err)
 		return fmt.Errorf("alat request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("[ALAT] level=ERROR http %s %s status=%d reading body failed: %v", method, path, resp.StatusCode, err)
 		return fmt.Errorf("alat read response failed: %w", err)
 	}
+	elapsed := time.Since(started).Round(time.Millisecond)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[ALAT] level=WARN http %s %s status=%d dur=%s request_id=%s body=%s",
+			method, path, resp.StatusCode, elapsed, alatRequestID(resp.Header), truncateForLog(respBytes))
 		var alatErr appErr.AlatError
 		if json.Unmarshal(respBytes, &alatErr) == nil && (alatErr.Message != "" || alatErr.Code != "" || len(alatErr.Errors) > 0) {
 			return &alatErr
@@ -572,10 +545,49 @@ func (a *Alat) doRequest(ctx context.Context, method, endpoint string, body any,
 
 	if target != nil && len(respBytes) > 0 {
 		if err := json.Unmarshal(respBytes, target); err != nil {
-			log.Printf("alat decode response failed body=%s err=%v", string(respBytes), err)
+			log.Printf("[ALAT] level=ERROR http %s %s status=%d dur=%s decode failed: %v body=%s",
+				method, path, resp.StatusCode, elapsed, err, truncateForLog(respBytes))
 			return fmt.Errorf("alat decode response failed: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// envelopeError logs and builds the error for an HTTP-2xx ALAT response whose
+// envelope says status=false - the case doRequest can't see on its own.
+func envelopeError(op, statusCode, code, message string, errs []string) *appErr.AlatError {
+	log.Printf("[ALAT] level=WARN op=%s alat returned status=false: status_code=%s code=%s message=%q errors=%v",
+		op, statusCode, code, message, errs)
+	return &appErr.AlatError{StatusCode: statusCode, Code: code, Message: message, Errors: errs}
+}
+
+// alatRequestID picks out whichever correlation header the gateway sets, to
+// quote to Wema when escalating a failed call.
+func alatRequestID(h http.Header) string {
+	for _, k := range []string{"X-Request-Id", "X-Correlation-Id", "Request-Id", "Apim-Request-Id"} {
+		if v := strings.TrimSpace(h.Get(k)); v != "" {
+			return v
+		}
+	}
+	return "-"
+}
+
+// truncateForLog caps response bodies in logs. Bodies are only logged on
+// error/decode paths, which carry ALAT messages rather than account data.
+func truncateForLog(b []byte) string {
+	const max = 512
+	s := strings.TrimSpace(string(b))
+	if len(s) > max {
+		return s[:max] + "...(truncated)"
+	}
+	return s
+}
+
+func maskTail(v string) string {
+	v = strings.TrimSpace(v)
+	if len(v) <= 4 {
+		return v
+	}
+	return strings.Repeat("*", len(v)-4) + v[len(v)-4:]
 }

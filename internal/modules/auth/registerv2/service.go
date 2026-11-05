@@ -103,7 +103,11 @@ func (s *Service) CurrentProvider(ctx context.Context) (string, error) {
 // provider, creates the user, and issues a session. Kept synchronous -
 // Optimus's GenerateWallet is a single blocking call, unlike the old flow's
 // async job/poll/claim pattern.
-func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip string) (*RegisterResponse, error) {
+func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip string) (_ *RegisterResponse, retErr error) {
+	rl := newOpLogger("register")
+	defer rl.finish(&retErr)
+
+	rl.step("input")
 	if err := authchecker.ValidatePassword(req.Password); err != nil {
 		return nil, err
 	}
@@ -119,10 +123,15 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(req.PhoneNumber))
 	if err != nil {
+		rl.with("phone", maskPhone(req.PhoneNumber))
 		return nil, err
 	}
 	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
+	rl.with("phone", maskPhone(normalizedPhone)).
+		with("email", maskEmail(normalizedEmail)).
+		with("bvn", maskIdentityNumber(strings.TrimSpace(req.BVN)))
 
+	rl.step("phone_verification")
 	phoneRecord, err := s.repo.GetVerificationByID(ctx, strings.TrimSpace(req.PhoneVerificationID))
 	if err != nil {
 		return nil, err
@@ -130,9 +139,12 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if phoneRecord == nil || phoneRecord.Status != models.VerificationStatusVerified ||
 		phoneRecord.Type != models.VerificationTypePhone ||
 		phoneRecord.VerifiedPhone == nil || strings.TrimSpace(*phoneRecord.VerifiedPhone) != normalizedPhone {
+		rl.Warnf("phone verification rejected: %s", describeContactRecord(phoneRecord, models.VerificationTypePhone,
+			phoneRecord != nil && phoneRecord.VerifiedPhone != nil && strings.TrimSpace(*phoneRecord.VerifiedPhone) == normalizedPhone))
 		return nil, fmt.Errorf("phone number is not verified")
 	}
 
+	rl.step("email_verification")
 	emailRecord, err := s.repo.GetVerificationByID(ctx, strings.TrimSpace(req.EmailVerificationID))
 	if err != nil {
 		return nil, err
@@ -140,6 +152,8 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if emailRecord == nil || emailRecord.Status != models.VerificationStatusVerified ||
 		emailRecord.Type != models.VerificationTypeEmail ||
 		emailRecord.VerifiedEmail == nil || strings.ToLower(strings.TrimSpace(*emailRecord.VerifiedEmail)) != normalizedEmail {
+		rl.Warnf("email verification rejected: %s", describeContactRecord(emailRecord, models.VerificationTypeEmail,
+			emailRecord != nil && emailRecord.VerifiedEmail != nil && strings.ToLower(strings.TrimSpace(*emailRecord.VerifiedEmail)) == normalizedEmail))
 		return nil, fmt.Errorf("email is not verified")
 	}
 
@@ -150,8 +164,10 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	// A local user for this phone means registration already completed here
 	// previously - fail fast with a clear error rather than calling the
 	// wallet provider again, which would just be rejected as a duplicate.
+	rl.step("duplicate_check")
 	authRepo := auth.NewRespository(s.repo.db, s.repo.cipher)
-	if _, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
+	if existing, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
+		rl.Warnf("user already exists for this phone (user_id=%s)", existing.ID)
 		return nil, appErr.ErrUserExists
 	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return nil, lookupErr
@@ -162,29 +178,36 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if exists, existsErr := s.repo.UserExistsByIdentity(ctx, req.BVN, req.NIN); existsErr != nil {
 		return nil, existsErr
 	} else if exists {
+		rl.Warnf("user already exists with this bvn or nin (nin=%s)", maskIdentityNumber(strings.TrimSpace(req.NIN)))
 		return nil, appErr.ErrUserExists
 	}
 
+	rl.step("provider_preference")
 	provider, err := s.CurrentProvider(ctx)
 	if err != nil {
 		return nil, err
 	}
+	rl.with("provider", strings.TrimSpace(provider))
 
 	var latestBVNRecord *models.VerificationRecord
 	// requestedFace is the face check named by bvn_w_face_verification_id, if
 	// any - loaded once here and reused by the wema branch below.
 	var requestedFace *models.FaceCheckRecord
 	if strings.TrimSpace(provider) != "providus" {
+		rl.step("bvn_record")
 		rec, face, err := s.resolveBVNRecord(ctx, req.BVN, req.BVNWithFaceVerificationID)
 		if err != nil {
 			return nil, err
 		}
 		latestBVNRecord = rec
 		requestedFace = face
+		rl.Infof("bvn record resolved: %s; requested_face=%s", describeBVNRecord(rec), describeFaceRecord(face))
 	}
 	if err := checkBVNRecordUsable(latestBVNRecord); err != nil {
 		return nil, err
 	}
+
+	rl.step("provider_select")
 
 	// bvnRecord is only set (and later marked used) when Optimus/ALAT actually
 	// verified this BVN during onboarding - nil whenever Providus is the
@@ -207,7 +230,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 	case "optimus":
 		if s.optimus == nil {
-			log.Println("optimus service is not configured")
+			rl.Errorf("optimus client is nil - check optimus wiring in router.go")
 			return nil, fmt.Errorf("optimus service is not configured")
 		}
 
@@ -230,6 +253,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			// creation.
 			walletGenerator = s.providusWalletGenerator
 			actualProvider = "providus"
+			rl.Warnf("optimus rejected this bvn earlier (%s) - falling back to providus", describeBVNRecord(latestBVNRecord))
 
 		default:
 			// Pending: validate-bvn succeeded but the OTP challenge was never
@@ -241,7 +265,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 	case "wema", "alat":
 		if s.alat == nil {
-			log.Println("wema alat service is not configured")
+			rl.Errorf("alat client is nil - SetAlatValidator was not called")
 			return nil, fmt.Errorf("wema alat service is not configured")
 		}
 
@@ -261,7 +285,9 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	default:
 		return nil, fmt.Errorf("registration provider %q is not supported by this flow", provider)
 	}
+	rl.with("actual_provider", actualProvider)
 
+	rl.step("input")
 	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
 	if err != nil {
 		return nil, fmt.Errorf("invalid date of birth: %w", err)
@@ -269,6 +295,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 	mobileUserID := uuid.NewString()
 	internalWalletID := uuid.NewString()
+	rl.with("user_id", mobileUserID)
 
 	// We're about to trigger an external, irreversible side effect (wallet
 	// creation at the provider) - from here on, work must not be abortable
@@ -297,13 +324,19 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		// Security: live image MUST come from an authoritative, matched
 		// FaceCheckRecord linked to this BVN. Client-supplied raw images or
 		// unverified/mismatched face checks are rejected.
+		rl.step("face_check")
 		faceRecord, err := s.resolveMatchedFaceRecord(ctx, requestedFace, bvnRecord)
 		if err != nil {
 			return nil, err
 		}
 		if faceRecord == nil || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
+			rl.Warnf("no usable face check: %s requested_face=%s resolved_face=%s",
+				describeBVNRecord(bvnRecord), describeFaceRecord(requestedFace), describeFaceRecord(faceRecord))
 			return nil, fmt.Errorf("face biometric verification is required for wema registration and must be verified")
 		}
+		rl.with("face_check", faceRecord.ID)
+
+		rl.step("alat_account_lookup")
 
 		// 2. Check if the account already exists on Wema (e.g. from an earlier
 		// attempt whose DB write failed/timed out). Reusing the existing account
@@ -315,19 +348,23 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		if fetchErr != nil {
 			var alatErr *appErr.AlatError
 			if !errors.As(fetchErr, &alatErr) {
-				log.Printf("[ALAT] account details lookup failed for %s: %v", normalizedPhone, fetchErr)
+				rl.Errorf("transient alat account lookup error, not creating an account: %v", fetchErr)
 				return nil, fmt.Errorf("wema is temporarily unavailable, please try again shortly")
 			}
+			rl.Infof("alat reports no account yet (%s) - will create", describeAlatError(alatErr))
+		} else if existingDetails == nil || strings.TrimSpace(existingDetails.AccountNumber) == "" {
+			rl.Infof("alat returned no account number - will create")
 		}
 
 		if fetchErr == nil && existingDetails != nil && strings.TrimSpace(existingDetails.AccountNumber) != "" {
 			if !alatAccountMatchesApplicant(existingDetails, normalizedEmail, req.FirstName, req.LastName) {
-				log.Printf("[ALAT] CRITICAL: existing account %s for phone %s does not match applicant details (email/name mismatch), refusing reuse",
-					existingDetails.AccountNumber, normalizedPhone)
+				rl.Criticalf("existing alat account %s does not match applicant, refusing reuse: %s",
+					existingDetails.AccountNumber, describeIdentityMismatch(existingDetails, normalizedEmail, req.FirstName, req.LastName))
 				return nil, fmt.Errorf("a wema account already exists for this phone under different details")
 			}
 			acctDetails = existingDetails
-			log.Printf("[ALAT] Found existing account %s for phone %s, skipping Step 1c creation", existingDetails.AccountNumber, normalizedPhone)
+			rl.with("account", existingDetails.AccountNumber)
+			rl.Infof("reusing existing alat account, skipping Tier 2 creation")
 		} else {
 			liveImage := strings.TrimSpace(*faceRecord.FaceImageProvided)
 
@@ -342,12 +379,16 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 				CorrelationID:      uuid.NewString(),
 			}
 
+			rl.step("alat_tier2_create")
+			rl.with("correlation_id", tier2Req.CorrelationID)
 			trackingID, tier2Err := s.alat.PostTier2PartnershipAccountWithFace(providerCtx, tier2Req)
 			if tier2Err != nil {
-				log.Printf("[ALAT] Step 1c (Tier 2 Face Account Creation) failed for %s: %v", normalizedPhone, tier2Err)
 				return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", tier2Err)
 			}
-			log.Printf("[ALAT] Step 1c succeeded for %s with trackingID: %s", normalizedPhone, trackingID)
+			rl.with("tracking_id", trackingID)
+			rl.Infof("tier 2 account creation accepted by alat")
+
+			rl.step("alat_account_poll")
 
 			// 4. Poll GetPartnershipAccountDetails with a bounded backoff loop
 			const (
@@ -365,15 +406,20 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 				details, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
 				if fetchErr == nil && details != nil && strings.TrimSpace(details.AccountNumber) != "" {
 					acctDetails = details
-					log.Printf("[ALAT] Account creation resolved on attempt %d for phone %s (account: %s)", attempt, normalizedPhone, details.AccountNumber)
+					rl.with("account", details.AccountNumber)
+					rl.Infof("alat account available on poll attempt %d/%d", attempt, maxAccountPollAttempts)
 					break
 				}
+				rl.Infof("alat account not ready on poll attempt %d/%d (err=%v)", attempt, maxAccountPollAttempts, fetchErr)
 			}
 		}
 
 		if acctDetails == nil || strings.TrimSpace(acctDetails.AccountNumber) == "" {
+			rl.Warnf("alat accepted tier 2 creation but no account appeared while polling - a retry should pick it up via the existing-account path")
 			return nil, fmt.Errorf("wema alat account was not generated yet, please try again shortly")
 		}
+
+		rl.step("alat_lift_pnd")
 
 		// Lift PND restriction with retry so the account can be debited
 		var pndErr error
@@ -381,10 +427,10 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		for attempt := 1; attempt <= maxPndAttempts; attempt++ {
 			pndErr = s.alat.PartnerDebitRestrictionManagement(providerCtx, "LiftPnd", acctDetails.AccountNumber)
 			if pndErr == nil {
-				log.Printf("[ALAT] Successfully lifted PND debit restriction on account %s (attempt %d)", acctDetails.AccountNumber, attempt)
+				rl.Infof("lifted PND on attempt %d/%d", attempt, maxPndAttempts)
 				break
 			}
-			log.Printf("[ALAT] Attempt %d/%d to lift PND on account %s failed: %v", attempt, maxPndAttempts, acctDetails.AccountNumber, pndErr)
+			rl.Warnf("lift PND attempt %d/%d failed: %v", attempt, maxPndAttempts, pndErr)
 			if attempt < maxPndAttempts {
 				select {
 				case <-providerCtx.Done():
@@ -394,7 +440,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			}
 		}
 		if pndErr != nil {
-			log.Printf("[ALAT] CRITICAL: failed to lift debit restriction (PND) on account %s after retries: %v", acctDetails.AccountNumber, pndErr)
+			rl.Criticalf("could not lift PND after %d attempts - account exists at alat but nothing is saved locally yet: %v", maxPndAttempts, pndErr)
 			return nil, fmt.Errorf("failed to lift debit restriction on account: %w", pndErr)
 		}
 
@@ -424,7 +470,9 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			},
 		}
 	} else {
+		rl.step("wallet_generate")
 		if walletGenerator == nil {
+			rl.Errorf("wallet generator for %s is nil - check wiring in router.go", actualProvider)
 			return nil, fmt.Errorf("wallet generation service is not configured")
 		}
 		walletResp, err = walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
@@ -448,8 +496,13 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		}
 	}
 	if walletResp == nil || walletResp.Customer == nil || walletResp.Wallet == nil {
+		rl.Criticalf("wallet provider returned an incomplete response (customer_nil=%t wallet_nil=%t) - an account may exist at the provider",
+			walletResp == nil || walletResp.Customer == nil, walletResp == nil || walletResp.Wallet == nil)
 		return nil, fmt.Errorf("wallet provider returned an incomplete response")
 	}
+	rl.with("account", walletResp.Wallet.AccountNumber)
+
+	rl.step("persist")
 
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
@@ -583,16 +636,24 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		return nil
 	})
 	if err != nil {
+		// The provider account exists but the user/wallet rows were rolled
+		// back - this needs reconciling by hand if the user doesn't retry.
+		rl.Criticalf("provider account created but saving user/wallet failed (rolled back) - provider=%s account=%s: %v",
+			actualProvider, walletResp.Wallet.AccountNumber, err)
 		return nil, err
 	}
 
+	rl.step("session")
 	if s.sessionIssuer == nil {
+		rl.Errorf("session issuer is nil - user %s was created but cannot log in until it is wired", mobileUserID)
 		return nil, fmt.Errorf("session issuer is not configured")
 	}
 	session, err := s.sessionIssuer.IssueSessionTokens(providerCtx, mobileUserID, req.Device.DeviceID, ip)
 	if err != nil {
+		rl.Warnf("user created but session issuance failed - the user can log in normally: %v", err)
 		return nil, err
 	}
+	rl.step("")
 
 	return &RegisterResponse{
 		AccessToken:  session.AccessToken,
@@ -708,6 +769,14 @@ func (s *Service) validateBVNWithRetries(ctx context.Context, request OptimusBVN
 		}
 		if err == nil {
 			err = optimusResponseError(response)
+			code := "<nil response>"
+			if response != nil {
+				code = response.ResponseCode
+			}
+			log.Printf("[registerv2] level=WARN op=validate_bvn optimus attempt %d/%d rejected: response_code=%q message=%q",
+				attempt, bvnValidateMaxAttempts, code, err.Error())
+		} else {
+			log.Printf("[registerv2] level=WARN op=validate_bvn optimus attempt %d/%d failed: %v", attempt, bvnValidateMaxAttempts, err)
 		}
 		if attempt == bvnValidateMaxAttempts {
 			break
@@ -729,11 +798,21 @@ func (s *Service) validateBVNWithRetries(ctx context.Context, request OptimusBVN
 // this behaves as before - a real validate-bvn call that starts an Optimus
 // OTP challenge the client must confirm via VerifyOTP (requiresOTP true).
 func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (verificationID, providerReferenceID string, requiresOTP bool, err error) {
+	rl := newOpLogger("validate_bvn")
+	rl.with("bvn", maskIdentityNumber(strings.TrimSpace(request.Bvn))).with("phone", maskPhone(request.PhoneNumber))
+	defer func() {
+		rl.with("verification_id", verificationID).with("provider_ref", providerReferenceID)
+		rl.finish(&err)
+	}()
+
+	rl.step("provider_preference")
 	provider, err := s.CurrentProvider(ctx)
 	if err != nil {
 		return "", "", false, err
 	}
+	rl.with("provider", strings.TrimSpace(provider))
 	if strings.TrimSpace(provider) == "providus" {
+		rl.Infof("providus validates the bvn at wallet creation - nothing to do here")
 		return "", "", false, nil
 	}
 
@@ -744,10 +823,11 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 		// If sessionIssuer is configured, validate BVN via the active KYC provider (Tendar or Prembly)
 		// without requiring SMS OTP, since Face Biometrics will be used instead.
 		if s.sessionIssuer != nil {
+			rl.step("kyc_validate_bvn")
 			bvnResp, err := s.sessionIssuer.ValidateBVN(ctx, strings.TrimSpace(request.Bvn))
 			if err != nil {
 				if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, "wema", err); recordErr != nil {
-					log.Printf("ValidateBVN (ALAT): failed to record failed verification: %v", recordErr)
+					rl.Errorf("could not save the failed verification record: %v", recordErr)
 				}
 				return "", "", false, err
 			}
@@ -762,10 +842,11 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 		if err != nil {
 			return "", "", false, err
 		}
+		rl.step("alat_bvn_otp")
 		trackingID, err := s.alat.PostPartnershipAccountCreationWithBvn(ctx, normalizedPhone, strings.TrimSpace(request.Email), strings.TrimSpace(request.Bvn))
 		if err != nil {
 			if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, "wema", err); recordErr != nil {
-				log.Printf("ValidateBVN (ALAT): failed to record failed verification: %v", recordErr)
+				rl.Errorf("could not save the failed verification record: %v", recordErr)
 			}
 			return "", "", false, err
 		}
@@ -787,13 +868,14 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 	// Retried below before we conclude anything - a single failure here could
 	// just as easily be a momentary Optimus blip as a genuinely incorrect BVN,
 	// and only the latter should count against this BVN for fallback purposes.
+	rl.step("optimus_validate_bvn")
 	response, err := s.validateBVNWithRetries(ctx, request)
 	if err != nil {
 		// Record the failure so Register can tell "validate-bvn was called and
 		// consistently failed" (fallback-eligible) apart from "never called"
 		// (not fallback-eligible).
 		if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, "optimus", err); recordErr != nil {
-			log.Printf("ValidateBVN: failed to record failed verification: %v", recordErr)
+			rl.Errorf("could not save the failed verification record: %v", recordErr)
 		}
 		return "", "", false, err
 	}
@@ -842,12 +924,21 @@ func (s *Service) ValidateNINWithOptimus(ctx context.Context, request OptimusNIN
 
 // ValidateBVNWithFace performs face biometric verification against the BVN on record using
 // the active KYC provider (Tendar or Prembly) configured in system preferences.
-func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceRequest) (string, error) {
+func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceRequest) (faceCheckID string, retErr error) {
+	rl := newOpLogger("validate_bvn_with_face")
+	rl.with("bvn", maskIdentityNumber(strings.TrimSpace(req.BVN))).with("verification_id", strings.TrimSpace(req.VerificationID))
+	defer func() {
+		rl.with("face_check", faceCheckID)
+		rl.finish(&retErr)
+	}()
+
 	if s.sessionIssuer == nil {
+		rl.Errorf("session issuer is nil - check wiring in router.go")
 		return "", fmt.Errorf("session issuer is not configured")
 	}
 
 	verificationID := strings.TrimSpace(req.VerificationID)
+	rl.step("bvn_record")
 
 	// Check the BVN record before paying for a face check against it. Two
 	// valid states reach here: already verified (Tendar/Prembly
@@ -860,9 +951,14 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 			return "", err
 		}
 		if rec == nil || rec.Type != models.VerificationTypeBVN {
+			if rec != nil {
+				rl.Warnf("verification record has type %s, want bvn", rec.Type)
+			}
 			return "", fmt.Errorf("bvn verification record not found")
 		}
+		rl.Infof("loaded %s", describeBVNRecord(rec))
 		if rec.SubjectHash != bvnSubjectHash(req.BVN) {
+			rl.Warnf("request bvn does not hash to the record's subject_hash - client sent a different bvn than it validated")
 			return "", fmt.Errorf("bvn does not match the verification record")
 		}
 		switch rec.Status {
@@ -878,6 +974,7 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 		record = rec
 	}
 
+	rl.step("face_provider")
 	info, err := s.sessionIssuer.ValidateBVNWithFace(ctx, auth.BVNWithFaceValidationRequest{
 		VerificationID: req.VerificationID,
 		BVN:            req.BVN,
@@ -887,6 +984,8 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 		return "", err
 	}
 
+	rl.step("mark_verified")
+
 	// A pending record becomes verified now that the face check passed, so
 	// Register recognizes it. An already-verified record needs no update -
 	// MarkVerificationVerified deliberately only flips pending records.
@@ -894,6 +993,7 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 		if err := s.repo.MarkVerificationVerified(ctx, record.ID, time.Now().UTC()); err != nil {
 			return "", fmt.Errorf("failed to mark verification record verified: %w", err)
 		}
+		rl.Infof("pending bvn record marked verified by face check")
 	}
 
 	return info.FaceCheckID, nil
@@ -1023,14 +1123,13 @@ func (s *Service) GetAddressDropDownList(ctx context.Context) (any, error) {
 // flips the matching pending BVN/NIN verification record to verified. Generic
 // - works for any Optimus/ALAT OTP challenge, since the reference id alone is
 // what the provider uses to identify which challenge this is.
-func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referenceID string) error {
-	var provider string
-	if s.repo != nil {
-		rec, err := s.repo.GetVerificationByProviderReference(ctx, referenceID)
-		if err == nil && rec != nil {
-			provider = strings.TrimSpace(rec.Provider)
-		}
-	}
+func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referenceID string) (retErr error) {
+	rl := newOpLogger("verify_otp")
+	rl.with("phone", maskPhone(phone)).with("provider_ref", strings.TrimSpace(referenceID))
+	defer rl.finish(&retErr)
+
+	rl.step("resolve_provider")
+	provider := s.providerForReference(ctx, rl, referenceID)
 	if provider == "" {
 		p, err := s.CurrentProvider(ctx)
 		if err != nil {
@@ -1038,6 +1137,8 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 		}
 		provider = p
 	}
+	rl.with("provider", provider)
+	rl.step("provider_verify")
 
 	if strings.EqualFold(provider, "wema") || strings.EqualFold(provider, "alat") {
 		if s.alat == nil {
@@ -1052,6 +1153,7 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 			return err
 		}
 		if s.repo != nil {
+			rl.step("mark_verified")
 			return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
 		}
 		return nil
@@ -1064,6 +1166,7 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 		return err
 	}
 	if s.repo != nil {
+		rl.step("mark_verified")
 		return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
 	}
 	return nil
@@ -1072,14 +1175,16 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 // ResendOTP asks Optimus or ALAT to resend the OTP tied to referenceID, returning the
 // new reference id the caller must use for the next verify/resend. Also
 // repoints the pending verification record at the new reference id.
-func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, error) {
-	var provider string
-	if s.repo != nil {
-		rec, err := s.repo.GetVerificationByProviderReference(ctx, referenceID)
-		if err == nil && rec != nil {
-			provider = strings.TrimSpace(rec.Provider)
-		}
-	}
+func (s *Service) ResendOTP(ctx context.Context, referenceID string) (newRef string, retErr error) {
+	rl := newOpLogger("resend_otp")
+	rl.with("provider_ref", strings.TrimSpace(referenceID))
+	defer func() {
+		rl.with("new_provider_ref", newRef)
+		rl.finish(&retErr)
+	}()
+
+	rl.step("resolve_provider")
+	provider := s.providerForReference(ctx, rl, referenceID)
 	if provider == "" {
 		p, err := s.CurrentProvider(ctx)
 		if err != nil {
@@ -1087,6 +1192,8 @@ func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, er
 		}
 		provider = p
 	}
+	rl.with("provider", provider)
+	rl.step("provider_resend")
 
 	if strings.EqualFold(provider, "wema") || strings.EqualFold(provider, "alat") {
 		if s.alat == nil {
@@ -1111,6 +1218,27 @@ func (s *Service) ResendOTP(ctx context.Context, referenceID string) (string, er
 		}
 	}
 	return newReferenceID, nil
+}
+
+// providerForReference returns the provider that issued the OTP challenge
+// referenceID belongs to, or "" (caller falls back to the current
+// preference). Lookup errors are logged rather than returned: falling back is
+// still the right behaviour, but a DB error here should be visible.
+func (s *Service) providerForReference(ctx context.Context, rl *opLogger, referenceID string) string {
+	if s.repo == nil {
+		return ""
+	}
+	rec, err := s.repo.GetVerificationByProviderReference(ctx, referenceID)
+	switch {
+	case err != nil:
+		rl.Warnf("verification lookup by provider reference failed, falling back to current provider preference: %v", err)
+		return ""
+	case rec == nil:
+		rl.Warnf("no verification record for this provider reference, falling back to current provider preference")
+		return ""
+	}
+	rl.with("verification_id", rec.ID)
+	return strings.TrimSpace(rec.Provider)
 }
 
 // createFailedIdentityVerification records that Optimus's validate-bvn/nin
