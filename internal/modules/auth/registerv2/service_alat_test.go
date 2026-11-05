@@ -277,8 +277,8 @@ func TestValidateBVNWithFace_Success(t *testing.T) {
 
 	// Expect update of verification record to verified
 	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE "wallet_verification_records" SET .+ WHERE id = \$4`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "ver-123").
+	mock.ExpectExec(`UPDATE "wallet_verification_records" SET .+ WHERE id = \$4 AND type = \$5 AND status = \$6 AND \(expires_at IS NULL OR expires_at > \$7\)`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "ver-123", "bvn", "pending", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 

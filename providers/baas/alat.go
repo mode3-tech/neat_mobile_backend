@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -35,7 +37,7 @@ func NewAlat(baseURL, apiKey, subscriptionKey string) *Alat {
 		BaseURL:         strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		APIKey:          strings.TrimSpace(apiKey),
 		SubscriptionKey: strings.TrimSpace(subscriptionKey),
-		Client:          &http.Client{Timeout: 60 * time.Second},
+		Client:          &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -459,17 +461,39 @@ func (a *Alat) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayloa
 		return existing, nil
 	}
 
-	// Trigger Step 1 account creation with BVN
-	_, err = a.PostPartnershipAccountCreationWithBvn(ctx, AlatPartnershipRequestWithBvn{
-		PhoneNumber: walletInfo.PhoneNumber,
-		Email:       walletInfo.Email,
-		BVN:         walletInfo.BVN,
+	// Trigger Step 1a account creation with BVN without OTP
+	_, err = a.PostTier1BvnWithoutOtp(ctx, AlatTier1BvnWithoutOtpRequest{
+		PhoneNumber:   walletInfo.PhoneNumber,
+		Email:         walletInfo.Email,
+		BVN:           walletInfo.BVN,
+		CorrelationID: uuid.NewString(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("alat wallet initiation failed: %w", err)
+		return nil, fmt.Errorf("alat wallet creation failed: %w", err)
 	}
 
-	return nil, errors.New("alat wallet initiation successful: otp required to complete account creation")
+	// Poll for generated account
+	const maxPollAttempts = 4
+	pollInterval := 1000 * time.Millisecond
+	for attempt := 1; attempt <= maxPollAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(pollInterval):
+		}
+
+		wallet, found, lookupErr := a.LookupWalletByCustomerID(ctx, walletInfo.PhoneNumber)
+		if lookupErr == nil && found && wallet != nil && wallet.Wallet != nil && wallet.Wallet.AccountNumber != "" {
+			// Best effort: lift PND so the account is active
+			_, _ = a.PartnerDebitRestrictionManagement(ctx, AlatPndRequest{
+				PndType:       "LiftPnd",
+				AccountNumber: wallet.Wallet.AccountNumber,
+			})
+			return wallet, nil
+		}
+	}
+
+	return nil, errors.New("alat account generation pending; please check status shortly")
 }
 
 func (a *Alat) doRequest(ctx context.Context, method, endpoint string, body any, target any) error {

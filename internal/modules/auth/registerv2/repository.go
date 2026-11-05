@@ -69,7 +69,6 @@ func (r *Repository) GetVerificationByID(ctx context.Context, id string) (*model
 func (r *Repository) GetLatestByTypeAndHash(ctx context.Context, verificationType, subjectHash string) (*models.VerificationRecord, error) {
 	var rec models.VerificationRecord
 	result := r.db.WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("type = ? AND subject_hash = ?", verificationType, subjectHash).
 		Order("created_at DESC").
 		Limit(1).
@@ -105,12 +104,19 @@ func (r *Repository) MarkVerificationVerifiedByProviderReference(ctx context.Con
 }
 
 // MarkVerificationVerified sets a verification record's status to verified by its record ID.
+// Validates that the record exists, has type BVN, is currently pending, and is not expired.
 func (r *Repository) MarkVerificationVerified(ctx context.Context, id string, verifiedAt time.Time) error {
 	result := r.db.WithContext(ctx).
 		Model(&models.VerificationRecord{}).
-		Where("id = ?", id).
+		Where("id = ? AND type = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", id, models.VerificationTypeBVN, models.VerificationStatusPending, verifiedAt).
 		Updates(map[string]any{"status": models.VerificationStatusVerified, "verified_at": verifiedAt})
-	return result.Error
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("verification record not eligible for verification (not pending, wrong type, or expired)")
+	}
+	return nil
 }
 
 // GetVerificationByProviderReference finds the latest verification record by its provider reference ID.
