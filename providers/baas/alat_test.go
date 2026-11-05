@@ -3,8 +3,10 @@ package baas
 import (
 	"context"
 	"encoding/json"
+	"neat_mobile_app_backend/internal/modules/auth"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -248,3 +250,62 @@ func TestAlat_GetAddressDropDownList(t *testing.T) {
 	}
 }
 
+// An existing account whose PND can't be lifted must surface as an error, so
+// the registration job retries instead of handing back an undebitable account.
+func TestAlat_GenerateWallet_ExistingAccountPndFailureReturnsError(t *testing.T) {
+	var pndCalls, createCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/GetPartnershipAccountDetails"):
+			_ = json.NewEncoder(w).Encode(AlatAccountDetailsResponse{
+				Status: true,
+				Data:   &AlatAccountDetails{AccountNumber: "0123456789", FirstName: "Test", LastName: "User"},
+			})
+		case strings.HasSuffix(r.URL.Path, "/PartnerDebitRestrictionManagement"):
+			pndCalls++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"statusCode":400,"code":1,"message":"pnd lift failed","errors":[]}`))
+		default:
+			createCalls++
+			_ = json.NewEncoder(w).Encode(AlatResponseModel{Status: true})
+		}
+	}))
+	defer server.Close()
+
+	client := NewAlat(server.URL, "test-api-key", "test-sub-key")
+	_, err := client.GenerateWallet(context.Background(), &auth.WalletPayload{PhoneNumber: "2348012345678", BVN: "12345678901"})
+	if err == nil || !strings.Contains(err.Error(), "lift pnd failed") {
+		t.Fatalf("expected PND failure error, got %v", err)
+	}
+	if pndCalls != 1 {
+		t.Fatalf("expected one PND call, got %d", pndCalls)
+	}
+	if createCalls != 0 {
+		t.Fatalf("existing account must not be re-created, got %d create calls", createCalls)
+	}
+}
+
+// A transient lookup failure must not lead on to creating a (possibly
+// duplicate) account.
+func TestAlat_GenerateWallet_TransientLookupErrorDoesNotCreate(t *testing.T) {
+	var createCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/GetPartnershipAccountDetails") {
+			w.WriteHeader(http.StatusBadGateway) // no ALAT error envelope
+			return
+		}
+		createCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(AlatResponseModel{Status: true})
+	}))
+	defer server.Close()
+
+	client := NewAlat(server.URL, "test-api-key", "test-sub-key")
+	if _, err := client.GenerateWallet(context.Background(), &auth.WalletPayload{PhoneNumber: "2348012345678"}); err == nil {
+		t.Fatal("expected an error")
+	}
+	if createCalls != 0 {
+		t.Fatalf("expected no create calls, got %d", createCalls)
+	}
+}

@@ -2,10 +2,13 @@ package registerv2
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"gorm.io/driver/postgres"
@@ -26,6 +29,11 @@ type mockAlatValidator struct {
 	getStep3Func    func(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
 	pndStep4Func    func(ctx context.Context, pndType, accountNumber string) error
 	resendFunc      func(ctx context.Context, trackingID string) error
+	tier2Func       func(ctx context.Context, req AlatTier2FaceRequest) (string, error)
+
+	getStep3Calls int
+	tier2Calls    int
+	pndCalls      int
 }
 
 func (m *mockAlatValidator) PostPartnershipAccountCreationWithBvn(ctx context.Context, phone, email, bvn string) (string, error) {
@@ -43,6 +51,7 @@ func (m *mockAlatValidator) ValidateBVNandEnqueueAccountCreation(ctx context.Con
 }
 
 func (m *mockAlatValidator) GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error) {
+	m.getStep3Calls++
 	if m.getStep3Func != nil {
 		return m.getStep3Func(ctx, phoneNumber)
 	}
@@ -56,6 +65,7 @@ func (m *mockAlatValidator) GetPartnershipAccountDetails(ctx context.Context, ph
 }
 
 func (m *mockAlatValidator) PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error {
+	m.pndCalls++
 	if m.pndStep4Func != nil {
 		return m.pndStep4Func(ctx, pndType, accountNumber)
 	}
@@ -70,6 +80,10 @@ func (m *mockAlatValidator) ResendOtp(ctx context.Context, trackingID string) er
 }
 
 func (m *mockAlatValidator) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
+	m.tier2Calls++
+	if m.tier2Func != nil {
+		return m.tier2Func(ctx, req)
+	}
 	return "mock-tracking-face-123", nil
 }
 
@@ -133,7 +147,6 @@ func TestResendOTP_Alat_Error(t *testing.T) {
 		t.Fatal("expected error on upstream ALAT failure")
 	}
 }
-
 
 func TestVerifyOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
 	sqlDB, mock, err := sqlmock.New()
@@ -255,27 +268,38 @@ func (s *stubSessionIssuer) ValidateBVNWithFace(ctx context.Context, payload aut
 	return &auth.BVNWithFaceInfo{FaceCheckID: "face-check-123"}, nil
 }
 
-func TestValidateBVNWithFace_Success(t *testing.T) {
+func newSQLMockRepo(t *testing.T) (*Repository, sqlmock.Sqlmock) {
+	t.Helper()
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{DisableAutomaticPing: true})
 	if err != nil {
 		t.Fatalf("open gorm db: %v", err)
 	}
+	return NewRepository(gormDB, nil), mock
+}
 
-	repo := NewRepository(gormDB, nil)
-	stubIssuer := &stubSessionIssuer{}
+var verificationCols = []string{"id", "type", "status", "subject_hash", "verified_phone", "verified_email", "expires_at"}
 
-	s := &Service{
-		repo:          repo,
-		sessionIssuer: stubIssuer,
+func expectVerificationByID(mock sqlmock.Sqlmock, id string, row []driver.Value) {
+	rows := sqlmock.NewRows(verificationCols)
+	if row != nil {
+		rows.AddRow(row...)
 	}
+	mock.ExpectQuery(`SELECT \* FROM "wallet_verification_records" WHERE id = \$1 LIMIT \$2 FOR UPDATE`).
+		WithArgs(id, 1).
+		WillReturnRows(rows)
+}
 
-	// Expect update of verification record to verified
+func TestValidateBVNWithFace_PendingRecordIsMarkedVerified(t *testing.T) {
+	repo, mock := newSQLMockRepo(t)
+	s := &Service{repo: repo, sessionIssuer: &stubSessionIssuer{}}
+
+	expectVerificationByID(mock, "ver-123", []driver.Value{"ver-123", "bvn", "pending", bvnSubjectHash(testBVN), nil, nil, nil})
 	mock.ExpectBegin()
 	mock.ExpectExec(`UPDATE "wallet_verification_records" SET .+ WHERE id = \$4 AND type = \$5 AND status = \$6 AND \(expires_at IS NULL OR expires_at > \$7\)`).
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "ver-123", "bvn", "pending", sqlmock.AnyArg()).
@@ -284,7 +308,7 @@ func TestValidateBVNWithFace_Success(t *testing.T) {
 
 	faceCheckID, err := s.ValidateBVNWithFace(context.Background(), BVNWithFaceRequest{
 		VerificationID: "ver-123",
-		BVN:            "12345678901",
+		BVN:            testBVN,
 		Image:          "base64image",
 	})
 	if err != nil {
@@ -295,6 +319,71 @@ func TestValidateBVNWithFace_Success(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+// Tendar/Prembly /validate/bvn saves records as verified straight away - the
+// face step must accept that and must not try to re-mark it (which would fail,
+// as MarkVerificationVerified only flips pending records).
+func TestValidateBVNWithFace_AlreadyVerifiedRecordSucceedsWithoutUpdate(t *testing.T) {
+	repo, mock := newSQLMockRepo(t)
+	s := &Service{repo: repo, sessionIssuer: &stubSessionIssuer{}}
+
+	expectVerificationByID(mock, "ver-123", []driver.Value{"ver-123", "bvn", "verified", bvnSubjectHash(testBVN), nil, nil, nil})
+
+	faceCheckID, err := s.ValidateBVNWithFace(context.Background(), BVNWithFaceRequest{
+		VerificationID: "ver-123",
+		BVN:            testBVN,
+		Image:          "base64image",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if faceCheckID != "face-check-123" {
+		t.Fatalf("expected faceCheckID 'face-check-123', got '%s'", faceCheckID)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestValidateBVNWithFace_RejectsIneligibleRecords(t *testing.T) {
+	past := time.Now().Add(-time.Hour)
+	cases := []struct {
+		name    string
+		row     []driver.Value
+		wantErr string
+	}{
+		{"missing", nil, "not found"},
+		{"wrong type", []driver.Value{"ver-123", "nin", "verified", bvnSubjectHash(testBVN), nil, nil, nil}, "not found"},
+		{"used", []driver.Value{"ver-123", "bvn", "used", bvnSubjectHash(testBVN), nil, nil, nil}, "already been used"},
+		{"failed", []driver.Value{"ver-123", "bvn", "failed", bvnSubjectHash(testBVN), nil, nil, nil}, "verification failed"},
+		{"expired", []driver.Value{"ver-123", "bvn", "verified", bvnSubjectHash(testBVN), nil, nil, past}, "expired"},
+		{"other bvn", []driver.Value{"ver-123", "bvn", "verified", bvnSubjectHash("99999999999"), nil, nil, nil}, "does not match"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, mock := newSQLMockRepo(t)
+			issuerCalled := false
+			s := &Service{repo: repo, sessionIssuer: &stubSessionIssuer{
+				validateBVNWithFaceFunc: func(ctx context.Context, payload auth.BVNWithFaceValidationRequest) (*auth.BVNWithFaceInfo, error) {
+					issuerCalled = true
+					return &auth.BVNWithFaceInfo{FaceCheckID: "x"}, nil
+				},
+			}}
+			expectVerificationByID(mock, "ver-123", tc.row)
+
+			_, err := s.ValidateBVNWithFace(context.Background(), BVNWithFaceRequest{VerificationID: "ver-123", BVN: testBVN, Image: "img"})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+			if issuerCalled {
+				t.Fatal("face provider must not be called for an ineligible record")
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet sql expectations: %v", err)
+			}
+		})
 	}
 }
 

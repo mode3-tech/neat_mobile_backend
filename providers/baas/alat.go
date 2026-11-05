@@ -455,9 +455,20 @@ func (a *Alat) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayloa
 		return nil, errors.New("wallet payload is required")
 	}
 
-	// First check if account details already exist
+	// First check if account details already exist (e.g. a retried
+	// registration job whose earlier attempt created the account). A
+	// transient lookup error says nothing about whether the account exists,
+	// so it must not lead on to creating a second one.
 	existing, found, err := a.LookupWalletByCustomerID(ctx, walletInfo.PhoneNumber)
-	if err == nil && found {
+	if err != nil {
+		return nil, fmt.Errorf("alat account lookup failed: %w", err)
+	}
+	if found && existing != nil && existing.Wallet != nil && existing.Wallet.AccountNumber != "" {
+		// Lift PND here too: an earlier attempt may have created the account
+		// and then failed to lift it.
+		if err := a.liftPnd(ctx, existing.Wallet.AccountNumber); err != nil {
+			return nil, err
+		}
 		return existing, nil
 	}
 
@@ -484,16 +495,29 @@ func (a *Alat) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayloa
 
 		wallet, found, lookupErr := a.LookupWalletByCustomerID(ctx, walletInfo.PhoneNumber)
 		if lookupErr == nil && found && wallet != nil && wallet.Wallet != nil && wallet.Wallet.AccountNumber != "" {
-			// Best effort: lift PND so the account is active
-			_, _ = a.PartnerDebitRestrictionManagement(ctx, AlatPndRequest{
-				PndType:       "LiftPnd",
-				AccountNumber: wallet.Wallet.AccountNumber,
-			})
+			// The account can't be debited until PND is lifted. On failure
+			// the caller retries, finds the account via the existing-account
+			// path above, and lifts PND again there.
+			if err := a.liftPnd(ctx, wallet.Wallet.AccountNumber); err != nil {
+				return nil, err
+			}
 			return wallet, nil
 		}
 	}
 
 	return nil, errors.New("alat account generation pending; please check status shortly")
+}
+
+// liftPnd removes the post-no-debit restriction ALAT places on new accounts.
+func (a *Alat) liftPnd(ctx context.Context, accountNumber string) error {
+	if _, err := a.PartnerDebitRestrictionManagement(ctx, AlatPndRequest{
+		PndType:       "LiftPnd",
+		AccountNumber: accountNumber,
+	}); err != nil {
+		log.Printf("alat: failed to lift PND on account %s: %v", accountNumber, err)
+		return fmt.Errorf("alat lift pnd failed for account %s: %w", accountNumber, err)
+	}
+	return nil
 }
 
 func (a *Alat) doRequest(ctx context.Context, method, endpoint string, body any, target any) error {
@@ -555,4 +579,3 @@ func (a *Alat) doRequest(ctx context.Context, method, endpoint string, body any,
 
 	return nil
 }
-

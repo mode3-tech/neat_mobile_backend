@@ -222,6 +222,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	})
 
 	optimusProductID := cfg.OptimusProductID
+	// Not fatal: Wema may not be the active provider. But surface it at
+	// startup rather than as a request-time failure on the first Wema call.
+	if strings.TrimSpace(cfg.AlatBaseURL) == "" || strings.TrimSpace(cfg.AlatAPIKey) == "" {
+		log.Print("WARNING: ALAT_BASE_URL or ALAT_API_KEY is empty - Wema/ALAT is unavailable; registrations routed to wema will fail")
+	}
 	alatClient := baas.NewAlat(cfg.AlatBaseURL, cfg.AlatAPIKey, cfg.AlatSubscriptionKey)
 	wemaAdapter := wemaadapter.New(alatClient)
 

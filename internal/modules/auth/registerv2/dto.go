@@ -11,25 +11,25 @@ type DeviceRegisteration struct {
 }
 
 type OptimusRegisterRequest struct {
-	FirstName             string              `json:"first_name" binding:"required"`
-	LastName              string              `json:"last_name" binding:"required"`
-	Dob                   string              `json:"dob" binding:"required"`
-	Email                 string              `json:"email" binding:"required"`
-	EmailVerificationID   string              `json:"email_verification_id" binding:"required"`
-	Gender                string              `json:"gender" binding:"required"`
-	MaritalStatus         string              `json:"marital_status" binding:"required"`
-	MothersMaidenName     string              `json:"mothers_maiden_name" binding:"required"`
-	Address               string              `json:"address" binding:"required"`
-	HouseNo               string              `json:"house_no" binding:"required"`
-	PhoneNumber           string              `json:"phone_number" binding:"required"`
-	PhoneVerificationID   string              `json:"phone_verification_id" binding:"required"`
-	BVN                   string              `json:"bvn" binding:"required"`
-	NIN                   string              `json:"nin" binding:"required,len=11,numeric"`
-	Password              string              `json:"password" binding:"required"`
-	ConfirmPassword       string              `json:"confirm_password" binding:"required"`
-	TransactionPin        string              `json:"transaction_pin" binding:"required"`
-	ConfirmTransactionPin string              `json:"confirm_transaction_pin" binding:"required"`
-	IsBiomtricsEnabled    *bool               `json:"is_biometrics_enabled" binding:"required"`
+	FirstName                 string              `json:"first_name" binding:"required"`
+	LastName                  string              `json:"last_name" binding:"required"`
+	Dob                       string              `json:"dob" binding:"required"`
+	Email                     string              `json:"email" binding:"required"`
+	EmailVerificationID       string              `json:"email_verification_id" binding:"required"`
+	Gender                    string              `json:"gender" binding:"required"`
+	MaritalStatus             string              `json:"marital_status" binding:"required"`
+	MothersMaidenName         string              `json:"mothers_maiden_name" binding:"required"`
+	Address                   string              `json:"address" binding:"required"`
+	HouseNo                   string              `json:"house_no" binding:"required"`
+	PhoneNumber               string              `json:"phone_number" binding:"required"`
+	PhoneVerificationID       string              `json:"phone_verification_id" binding:"required"`
+	BVN                       string              `json:"bvn" binding:"required"`
+	NIN                       string              `json:"nin" binding:"required,len=11,numeric"`
+	Password                  string              `json:"password" binding:"required"`
+	ConfirmPassword           string              `json:"confirm_password" binding:"required"`
+	TransactionPin            string              `json:"transaction_pin" binding:"required"`
+	ConfirmTransactionPin     string              `json:"confirm_transaction_pin" binding:"required"`
+	IsBiomtricsEnabled        *bool               `json:"is_biometrics_enabled" binding:"required"`
 	ReferralCode              string              `json:"referral_code" binding:"omitempty"`
 	Device                    DeviceRegisteration `json:"device" binding:"required"`
 	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id,omitempty"`

@@ -156,6 +156,14 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return nil, lookupErr
 	}
+	// Same reasoning for BVN/NIN: wallet_users.bvn_hash/nin_hash are unique,
+	// so a duplicate would otherwise only fail at CreateUser - after the
+	// provider account had already been created and left orphaned.
+	if exists, existsErr := s.repo.UserExistsByIdentity(ctx, req.BVN, req.NIN); existsErr != nil {
+		return nil, existsErr
+	} else if exists {
+		return nil, appErr.ErrUserExists
+	}
 
 	provider, err := s.CurrentProvider(ctx)
 	if err != nil {
@@ -163,13 +171,19 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	}
 
 	var latestBVNRecord *models.VerificationRecord
+	// requestedFace is the face check named by bvn_w_face_verification_id, if
+	// any - loaded once here and reused by the wema branch below.
+	var requestedFace *models.FaceCheckRecord
 	if strings.TrimSpace(provider) != "providus" {
-		bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
-		rec, err := s.repo.GetLatestByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
+		rec, face, err := s.resolveBVNRecord(ctx, req.BVN, req.BVNWithFaceVerificationID)
 		if err != nil {
 			return nil, err
 		}
 		latestBVNRecord = rec
+		requestedFace = face
+	}
+	if err := checkBVNRecordUsable(latestBVNRecord); err != nil {
+		return nil, err
 	}
 
 	// bvnRecord is only set (and later marked used) when Optimus/ALAT actually
@@ -235,6 +249,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		case latestBVNRecord == nil:
 			return nil, fmt.Errorf("bvn is not verified")
 		case latestBVNRecord.Status == models.VerificationStatusVerified:
+			// Expired/used records were already rejected by checkBVNRecordUsable.
 			bvnRecord = latestBVNRecord
 			actualProvider = "wema"
 		case latestBVNRecord.Status == models.VerificationStatusFailed:
@@ -275,34 +290,45 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if actualProvider == "wema" {
 		var acctDetails *AlatAccountDetails
 
-		// 1. Check if the account already exists on Wema (e.g. from an earlier attempt whose DB write failed/timed out).
-		// Reusing the existing account prevents ALAT duplicate errors on retry.
+		// 1. Resolve and verify the face check record. Required on every path,
+		// including reuse of an existing account below - otherwise anyone with
+		// verified phone/email/BVN records could claim an existing Wema account
+		// without ever passing the face check.
+		// Security: live image MUST come from an authoritative, matched
+		// FaceCheckRecord linked to this BVN. Client-supplied raw images or
+		// unverified/mismatched face checks are rejected.
+		faceRecord, err := s.resolveMatchedFaceRecord(ctx, requestedFace, bvnRecord)
+		if err != nil {
+			return nil, err
+		}
+		if faceRecord == nil || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
+			return nil, fmt.Errorf("face biometric verification is required for wema registration and must be verified")
+		}
+
+		// 2. Check if the account already exists on Wema (e.g. from an earlier
+		// attempt whose DB write failed/timed out). Reusing the existing account
+		// prevents ALAT duplicate errors on retry. Only a clean "no account"
+		// answer (success with empty data, or ALAT's own error envelope) may
+		// lead to creation - a network/timeout error says nothing about whether
+		// an account exists, so creating one then could duplicate it.
 		existingDetails, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
+		if fetchErr != nil {
+			var alatErr *appErr.AlatError
+			if !errors.As(fetchErr, &alatErr) {
+				log.Printf("[ALAT] account details lookup failed for %s: %v", normalizedPhone, fetchErr)
+				return nil, fmt.Errorf("wema is temporarily unavailable, please try again shortly")
+			}
+		}
+
 		if fetchErr == nil && existingDetails != nil && strings.TrimSpace(existingDetails.AccountNumber) != "" {
+			if !alatAccountMatchesApplicant(existingDetails, normalizedEmail, req.FirstName, req.LastName) {
+				log.Printf("[ALAT] CRITICAL: existing account %s for phone %s does not match applicant details (email/name mismatch), refusing reuse",
+					existingDetails.AccountNumber, normalizedPhone)
+				return nil, fmt.Errorf("a wema account already exists for this phone under different details")
+			}
 			acctDetails = existingDetails
 			log.Printf("[ALAT] Found existing account %s for phone %s, skipping Step 1c creation", existingDetails.AccountNumber, normalizedPhone)
 		} else {
-			// 2. Resolve and verify face check record.
-			// Security: live image MUST come from an authoritative, matched FaceCheckRecord linked to this BVN.
-			// Client-supplied raw images or unverified/mismatched face checks are rejected.
-			var faceRecord *models.FaceCheckRecord
-			if strings.TrimSpace(req.BVNWithFaceVerificationID) != "" {
-				if fc, err := s.repo.GetFaceCheckRecord(ctx, req.BVNWithFaceVerificationID); err == nil && fc != nil {
-					if bvnRecord != nil && fc.VerificationRecordID == bvnRecord.ID && fc.Matched {
-						faceRecord = fc
-					}
-				}
-			}
-			if faceRecord == nil && bvnRecord != nil {
-				if fc, err := s.repo.GetFaceCheckRecordByVerificationID(ctx, bvnRecord.ID); err == nil && fc != nil && fc.Matched {
-					faceRecord = fc
-				}
-			}
-
-			if faceRecord == nil || !faceRecord.Matched || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
-				return nil, fmt.Errorf("face biometric verification is required for wema registration and must be verified")
-			}
-
 			liveImage := strings.TrimSpace(*faceRecord.FaceImageProvided)
 
 			// 3. Invoke Step 1c (Tier 2 Face Account Creation) without residential address
@@ -821,6 +847,37 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 		return "", fmt.Errorf("session issuer is not configured")
 	}
 
+	verificationID := strings.TrimSpace(req.VerificationID)
+
+	// Check the BVN record before paying for a face check against it. Two
+	// valid states reach here: already verified (Tendar/Prembly
+	// /validate/bvn saves records as verified straight away) and pending (the
+	// ALAT OTP path, where this face check is what completes verification).
+	var record *models.VerificationRecord
+	if verificationID != "" && s.repo != nil {
+		rec, err := s.repo.GetVerificationByID(ctx, verificationID)
+		if err != nil {
+			return "", err
+		}
+		if rec == nil || rec.Type != models.VerificationTypeBVN {
+			return "", fmt.Errorf("bvn verification record not found")
+		}
+		if rec.SubjectHash != bvnSubjectHash(req.BVN) {
+			return "", fmt.Errorf("bvn does not match the verification record")
+		}
+		switch rec.Status {
+		case models.VerificationStatusVerified, models.VerificationStatusPending:
+		case models.VerificationStatusUsed:
+			return "", fmt.Errorf("this bvn has already been used for registration")
+		default:
+			return "", fmt.Errorf("bvn verification failed, please validate again")
+		}
+		if isExpired(rec.ExpiresAt, time.Now().UTC()) {
+			return "", fmt.Errorf("bvn verification has expired, please validate again")
+		}
+		record = rec
+	}
+
 	info, err := s.sessionIssuer.ValidateBVNWithFace(ctx, auth.BVNWithFaceValidationRequest{
 		VerificationID: req.VerificationID,
 		BVN:            req.BVN,
@@ -830,14 +887,128 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 		return "", err
 	}
 
-	// Update verification record to verified so Register recognizes it
-	if req.VerificationID != "" && s.repo != nil {
-		if err := s.repo.MarkVerificationVerified(ctx, req.VerificationID, time.Now().UTC()); err != nil {
+	// A pending record becomes verified now that the face check passed, so
+	// Register recognizes it. An already-verified record needs no update -
+	// MarkVerificationVerified deliberately only flips pending records.
+	if record != nil && record.Status == models.VerificationStatusPending {
+		if err := s.repo.MarkVerificationVerified(ctx, record.ID, time.Now().UTC()); err != nil {
 			return "", fmt.Errorf("failed to mark verification record verified: %w", err)
 		}
 	}
 
 	return info.FaceCheckID, nil
+}
+
+// bvnSubjectHash is the SubjectHash VerificationRecords carry for a BVN.
+func bvnSubjectHash(bvn string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
+	return hex.EncodeToString(sum[:])
+}
+
+func isExpired(expiresAt *time.Time, now time.Time) bool {
+	return expiresAt != nil && !expiresAt.After(now)
+}
+
+// resolveBVNRecord picks the BVN verification record Register should use.
+// When the client names a face check, the record that face check was taken
+// against wins, provided it's still a valid verified record for this same BVN
+// - otherwise a second /validate/bvn call would leave the face check pointing
+// at an older record than the latest-by-hash lookup returns, and Register
+// would wrongly report the face check as missing. Falls back to the latest
+// record for the BVN. The face check record named by the client (if found) is
+// returned too, so the caller doesn't have to load it again.
+func (s *Service) resolveBVNRecord(ctx context.Context, bvn, faceVerificationID string) (*models.VerificationRecord, *models.FaceCheckRecord, error) {
+	hash := bvnSubjectHash(bvn)
+
+	var face *models.FaceCheckRecord
+	if id := strings.TrimSpace(faceVerificationID); id != "" {
+		fc, err := s.repo.GetFaceCheckRecord(ctx, id)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, err
+		}
+		if err == nil && fc != nil {
+			face = fc
+			rec, err := s.repo.GetVerificationByID(ctx, fc.VerificationRecordID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if rec != nil &&
+				rec.Type == models.VerificationTypeBVN &&
+				rec.SubjectHash == hash &&
+				rec.Status == models.VerificationStatusVerified &&
+				!isExpired(rec.ExpiresAt, time.Now().UTC()) {
+				return rec, face, nil
+			}
+		}
+	}
+
+	rec, err := s.repo.GetLatestByTypeAndHash(ctx, models.VerificationTypeBVN, hash)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rec, face, nil
+}
+
+// checkBVNRecordUsable turns used and expired BVN records into specific
+// errors, instead of the generic "otp not complete"/"not verified" messages
+// they'd otherwise fall through to. A nil record is left to the caller.
+func checkBVNRecordUsable(rec *models.VerificationRecord) error {
+	if rec == nil {
+		return nil
+	}
+	switch {
+	case rec.Status == models.VerificationStatusUsed:
+		return fmt.Errorf("this bvn has already been used for registration")
+	case rec.Status == models.VerificationStatusVerified && isExpired(rec.ExpiresAt, time.Now().UTC()):
+		return fmt.Errorf("bvn verification has expired, please validate again")
+	}
+	return nil
+}
+
+// resolveMatchedFaceRecord returns a matched face check taken against
+// bvnRecord: the one the client named if it qualifies, otherwise the latest
+// one recorded for bvnRecord. Returns nil (no error) when none qualifies.
+func (s *Service) resolveMatchedFaceRecord(ctx context.Context, requested *models.FaceCheckRecord, bvnRecord *models.VerificationRecord) (*models.FaceCheckRecord, error) {
+	if bvnRecord == nil {
+		return nil, nil
+	}
+	if requested != nil && requested.VerificationRecordID == bvnRecord.ID && requested.Matched {
+		return requested, nil
+	}
+	fc, err := s.repo.GetFaceCheckRecordByVerificationID(ctx, bvnRecord.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if fc == nil || !fc.Matched {
+		return nil, nil
+	}
+	return fc, nil
+}
+
+// alatAccountMatchesApplicant reports whether an existing ALAT account looks
+// like it belongs to this applicant. Each field ALAT returns must match;
+// fields ALAT leaves empty are not held against the applicant.
+func alatAccountMatchesApplicant(d *AlatAccountDetails, email, firstName, lastName string) bool {
+	if d == nil {
+		return false
+	}
+	if v := strings.TrimSpace(d.Email); v != "" && !strings.EqualFold(v, strings.TrimSpace(email)) {
+		return false
+	}
+	if v := normalizeName(d.FirstName); v != "" && v != normalizeName(firstName) {
+		return false
+	}
+	if v := normalizeName(d.LastName); v != "" && v != normalizeName(lastName) {
+		return false
+	}
+	return true
+}
+
+func normalizeName(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
 }
 
 // GetAddressDropDownList calls ALAT Step 0 to retrieve address dropdown choices.

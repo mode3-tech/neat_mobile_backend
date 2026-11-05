@@ -198,6 +198,39 @@ func (r *Repository) AddVerification(ctx context.Context, record *models.Verific
 	return r.db.WithContext(ctx).Create(&toInsert).Error
 }
 
+// UserExistsByIdentity reports whether a user already exists with this BVN or
+// NIN. wallet_users.bvn_hash/nin_hash are unique, so without this check a
+// duplicate would only surface at CreateUser - after the provider account had
+// already been created. Uses the same crypto.Hash that auth.Repository.CreateUser
+// writes. An empty value is skipped rather than matched against hash("").
+func (r *Repository) UserExistsByIdentity(ctx context.Context, bvn, nin string) (bool, error) {
+	bvn = strings.TrimSpace(bvn)
+	nin = strings.TrimSpace(nin)
+
+	conditions := make([]string, 0, 2)
+	args := make([]any, 0, 2)
+	if bvn != "" {
+		conditions = append(conditions, "bvn_hash = ?")
+		args = append(args, crypto.Hash(bvn))
+	}
+	if nin != "" {
+		conditions = append(conditions, "nin_hash = ?")
+		args = append(args, crypto.Hash(nin))
+	}
+	if len(conditions) == 0 {
+		return false, nil
+	}
+
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where(strings.Join(conditions, " OR "), args...).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models.FaceCheckRecord, error) {
 	var record models.FaceCheckRecord
 	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
