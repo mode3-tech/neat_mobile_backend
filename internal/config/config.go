@@ -153,7 +153,7 @@ func Load() Config {
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
 
-		AlatBaseURL:         getEnv("ALAT_BASE_URL", "https://apiplayground.alat.ng/account-creation"),
+		AlatBaseURL:         getEnv("ALAT_BASE_URL", ""),
 		AlatAPIKey:          getEnv("ALAT_API_KEY", ""),
 		AlatSubscriptionKey: getEnv("ALAT_SUBSCRIPTION_KEY", ""),
 

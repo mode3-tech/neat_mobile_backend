@@ -1,6 +1,10 @@
 package errors
 
-import "strings"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
 
 type XpressPayProviderError struct {
 	Status  int
@@ -88,6 +92,27 @@ type AlatError struct {
 	Code       string   `json:"code"`
 	Message    string   `json:"message"`
 	Errors     []string `json:"errors"`
+}
+
+func (e *AlatError) UnmarshalJSON(data []byte) error {
+	type Alias AlatError
+	aux := struct {
+		StatusCode any `json:"statusCode"`
+		Code       any `json:"code"`
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.StatusCode != nil {
+		e.StatusCode = fmt.Sprint(aux.StatusCode)
+	}
+	if aux.Code != nil {
+		e.Code = fmt.Sprint(aux.Code)
+	}
+	return nil
 }
 
 func (e *AlatError) Error() string {

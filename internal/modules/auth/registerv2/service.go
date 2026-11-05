@@ -157,24 +157,19 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		return nil, lookupErr
 	}
 
-	bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
+	provider, err := s.CurrentProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var latestBVNRecord *models.VerificationRecord
-	if s.repo != nil {
+	if strings.TrimSpace(provider) != "providus" {
+		bvnHash := sha256.Sum256([]byte(strings.TrimSpace(req.BVN)))
 		rec, err := s.repo.GetLatestByTypeAndHash(ctx, models.VerificationTypeBVN, hex.EncodeToString(bvnHash[:]))
 		if err != nil {
 			return nil, err
 		}
 		latestBVNRecord = rec
-	}
-
-	provider, err := s.CurrentProvider(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// If the user's BVN was already verified under a specific provider during onboarding,
-	// stick with that provider so mid-registration preference changes don't misroute the user.
-	if latestBVNRecord != nil && latestBVNRecord.Status == models.VerificationStatusVerified && strings.TrimSpace(latestBVNRecord.Provider) != "" {
-		provider = latestBVNRecord.Provider
 	}
 
 	// bvnRecord is only set (and later marked used) when Optimus/ALAT actually
@@ -280,23 +275,37 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if actualProvider == "wema" {
 		var acctDetails *AlatAccountDetails
 
-		// Resolve live face image from request or face check record
-		var liveImage string
-		if strings.TrimSpace(req.LiveImageOfFace) != "" {
-			liveImage = strings.TrimSpace(req.LiveImageOfFace)
-		} else if strings.TrimSpace(req.BVNWithFaceVerificationID) != "" {
-			if fc, err := s.repo.GetFaceCheckRecord(ctx, req.BVNWithFaceVerificationID); err == nil && fc != nil && fc.FaceImageProvided != nil {
-				liveImage = *fc.FaceImageProvided
+		// 1. Check if the account already exists on Wema (e.g. from an earlier attempt whose DB write failed/timed out).
+		// Reusing the existing account prevents ALAT duplicate errors on retry.
+		existingDetails, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
+		if fetchErr == nil && existingDetails != nil && strings.TrimSpace(existingDetails.AccountNumber) != "" {
+			acctDetails = existingDetails
+			log.Printf("[ALAT] Found existing account %s for phone %s, skipping Step 1c creation", existingDetails.AccountNumber, normalizedPhone)
+		} else {
+			// 2. Resolve and verify face check record.
+			// Security: live image MUST come from an authoritative, matched FaceCheckRecord linked to this BVN.
+			// Client-supplied raw images or unverified/mismatched face checks are rejected.
+			var faceRecord *models.FaceCheckRecord
+			if strings.TrimSpace(req.BVNWithFaceVerificationID) != "" {
+				if fc, err := s.repo.GetFaceCheckRecord(ctx, req.BVNWithFaceVerificationID); err == nil && fc != nil {
+					if bvnRecord != nil && fc.VerificationRecordID == bvnRecord.ID && fc.Matched {
+						faceRecord = fc
+					}
+				}
 			}
-		}
-		if liveImage == "" && bvnRecord != nil {
-			if fc, err := s.repo.GetFaceCheckRecordByVerificationID(ctx, bvnRecord.ID); err == nil && fc != nil && fc.FaceImageProvided != nil {
-				liveImage = *fc.FaceImageProvided
+			if faceRecord == nil && bvnRecord != nil {
+				if fc, err := s.repo.GetFaceCheckRecordByVerificationID(ctx, bvnRecord.ID); err == nil && fc != nil && fc.Matched {
+					faceRecord = fc
+				}
 			}
-		}
 
-		// When live face image is present, invoke Step 1c (Tier 2 Face Account Creation) without residential address
-		if liveImage != "" {
+			if faceRecord == nil || !faceRecord.Matched || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
+				return nil, fmt.Errorf("face biometric verification is required for wema registration and must be verified")
+			}
+
+			liveImage := strings.TrimSpace(*faceRecord.FaceImageProvided)
+
+			// 3. Invoke Step 1c (Tier 2 Face Account Creation) without residential address
 			tier2Req := AlatTier2FaceRequest{
 				BVN:                strings.TrimSpace(req.BVN),
 				NIN:                strings.TrimSpace(req.NIN),
@@ -313,34 +322,25 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 				return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", tier2Err)
 			}
 			log.Printf("[ALAT] Step 1c succeeded for %s with trackingID: %s", normalizedPhone, trackingID)
-		}
 
-		// Account creation is enqueued asynchronously on Wema's side.
-		// Poll GetPartnershipAccountDetails with backoff to absorb queue delay automatically.
-		const (
-			maxAccountPollAttempts = 10
-			accountPollInterval    = 1500 * time.Millisecond
-		)
+			// 4. Poll GetPartnershipAccountDetails with a bounded backoff loop
+			const (
+				maxAccountPollAttempts = 4
+				accountPollInterval    = 1000 * time.Millisecond
+			)
 
-		for attempt := 1; attempt <= maxAccountPollAttempts; attempt++ {
-			if err := providerCtx.Err(); err != nil {
-				return nil, fmt.Errorf("context canceled while waiting for account creation: %w", err)
-			}
-
-			details, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
-			if fetchErr == nil && details != nil && strings.TrimSpace(details.AccountNumber) != "" {
-				acctDetails = details
-				log.Printf("[ALAT] Account creation resolved on attempt %d for phone %s (account: %s)", attempt, normalizedPhone, details.AccountNumber)
-				break
-			}
-
-			if attempt < maxAccountPollAttempts {
-				log.Printf("[ALAT] Account creation still pending for %s (attempt %d/%d): details=%v, err=%v. Waiting %v...",
-					normalizedPhone, attempt, maxAccountPollAttempts, details, fetchErr, accountPollInterval)
+			for attempt := 1; attempt <= maxAccountPollAttempts; attempt++ {
 				select {
 				case <-providerCtx.Done():
-					return nil, providerCtx.Err()
+					return nil, fmt.Errorf("context canceled while waiting for account creation: %w", providerCtx.Err())
 				case <-time.After(accountPollInterval):
+				}
+
+				details, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
+				if fetchErr == nil && details != nil && strings.TrimSpace(details.AccountNumber) != "" {
+					acctDetails = details
+					log.Printf("[ALAT] Account creation resolved on attempt %d for phone %s (account: %s)", attempt, normalizedPhone, details.AccountNumber)
+					break
 				}
 			}
 		}
@@ -832,7 +832,9 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 
 	// Update verification record to verified so Register recognizes it
 	if req.VerificationID != "" && s.repo != nil {
-		_ = s.repo.MarkVerificationVerified(ctx, req.VerificationID, time.Now().UTC())
+		if err := s.repo.MarkVerificationVerified(ctx, req.VerificationID, time.Now().UTC()); err != nil {
+			return "", fmt.Errorf("failed to mark verification record verified: %w", err)
+		}
 	}
 
 	return info.FaceCheckID, nil
