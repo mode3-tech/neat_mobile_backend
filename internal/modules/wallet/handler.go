@@ -55,6 +55,23 @@ func (h *Handler) FetchBanks(c *gin.Context) {
 
 }
 
+func (h *Handler) FetchWemaBanks(c *gin.Context) {
+	banks, err := h.service.FetchWemaBanks(c.Request.Context(), strings.TrimSpace(c.GetString(middleware.UserIDContextKey)))
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[[]Bank]{
+		Status:  "success",
+		Message: "Banks fetched successfully with sortcodes",
+		Data:    &banks,
+	})
+}
+
 func (h *Handler) FetchBankDetails(c *gin.Context) {
 	var query BankDetailsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -82,6 +99,39 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 		AccountNumber: bankDetails.AccountNumber,
 	}
 
+	c.JSON(http.StatusOK, response.APIResponse[*BankDetails]{
+		Status:  "success",
+		Message: "Bank details fetched successfully",
+		Data:    &resp,
+	})
+}
+
+func (h *Handler) FetchWemaBankDetails(c *gin.Context) {
+	var query BankDetailsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		mapped := response.MapError(appErr.ErrMissingRequiredQueryParameter)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	bankDetails, err := h.service.FetchWemaBankDetails(c.Request.Context(), strings.TrimSpace(c.GetString(middleware.UserIDContextKey)), query.AccountNumber, query.BankCode)
+	if err != nil {
+		mapped := response.MapError(err)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
+			Status: "error",
+			Error:  &mapped.Error,
+		})
+		return
+	}
+
+	resp := &BankDetails{
+		BankCode:      bankDetails.BankCode,
+		AccountName:   bankDetails.AccountName,
+		AccountNumber: bankDetails.AccountNumber,
+	}
 	c.JSON(http.StatusOK, response.APIResponse[*BankDetails]{
 		Status:  "success",
 		Message: "Bank details fetched successfully",

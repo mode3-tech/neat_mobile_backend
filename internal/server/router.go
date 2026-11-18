@@ -291,13 +291,12 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	optimusRegistrationClient := baas.NewOptimus(cfg.OptimusWalletBaseURL, cfg.OptimusAuthBaseURL, cfg.OptimusUsername, cfg.OptimusPassword, cfg.OptimusPublicKey, cfg.OptimusPrivateKey)
 	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
-	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger)
-	optimusRegistrationService.SetAlatValidator(wemaAdapter)
 	demoRegistrationPhone := ""
 	if demoOTP.Enabled {
 		demoRegistrationPhone = demoOTP.Destination
 	}
 	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger, demoRegistrationPhone)
+	optimusRegistrationService.SetAlatValidator(wemaAdapter)
 	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)
@@ -473,6 +472,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	walletHandler.SetAlatAccountCreationListener(optimusRegistrationService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 	wallet.RegisterV2AccountStatementRoutes(apiV2, walletHandler, authGuard, deviceValidator)
+	wallet.RegisterV2BankRoutes(apiV2, walletHandler, authGuard, deviceValidator)
 
 	accountClosureRepo := accountclosure.NewRepository(db)
 	userService := user.NewService(user.NewRepository(db))

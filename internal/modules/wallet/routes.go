@@ -29,6 +29,14 @@ func RegisterV2AccountStatementRoutes(rg *gin.RouterGroup, handler *Handler, aut
 	}
 }
 
+func RegisterV2BankRoutes(rg *gin.RouterGroup, handler *Handler, authGuard, deviceValidator gin.HandlerFunc) {
+	wallet := rg.Group("/wallet", authGuard, deviceValidator)
+	{
+		wallet.GET("/banks", handler.FetchWemaBanks)
+		wallet.GET("/bank/details", handler.FetchWemaBankDetails)
+	}
+}
+
 func RegisterWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth gin.HandlerFunc) {
 	providus := rg.Group("/providus", webhookAuth)
 	{
