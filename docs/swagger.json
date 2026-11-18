@@ -33,12 +33,16 @@
       "description": "Account summary and profile endpoints"
     },
     {
+      "name": "Tier",
+      "description": "KYC and Wema/ALAT account upgrade endpoints"
+    },
+    {
       "name": "Account Closure",
       "description": "Account closure request endpoints"
     },
     {
       "name": "Wallet",
-      "description": "Bank lookup and account resolution endpoints"
+      "description": "Wema/ALAT bank lookup and account-name resolution v2 endpoints, plus legacy wallet endpoints"
     },
     {
       "name": "Transaction",
@@ -70,6 +74,194 @@
     }
   ],
   "paths": {
+    "/v2/wallet/banks": {
+      "servers": [
+        {
+          "url": "https://neat-mobile-backend-2wbh.onrender.com/api"
+        }
+      ],
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "List Wema-supported banks",
+        "description": "Returns the bank list from ALAT for the authenticated user's Wema wallet. Use a returned bank code with the Wema account-name resolution endpoint.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Banks fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BankListResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "This endpoint requires a Wema wallet",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not recognised",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "User wallet not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch banks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          },
+          "503": {
+            "description": "Wema banking services are unavailable",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API503Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/wallet/bank/details": {
+      "servers": [
+        {
+          "url": "https://neat-mobile-backend-2wbh.onrender.com/api"
+        }
+      ],
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Resolve a Wema recipient account name",
+        "description": "Resolves an account number and ALAT bank code through ALAT account name enquiry. Requires the authenticated user to have a Wema wallet.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable device installation identifier from the mobile app."
+          },
+          {
+            "in": "query",
+            "name": "account_number",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Destination bank account number."
+          },
+          {
+            "in": "query",
+            "name": "bank_code",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "ALAT bank code returned by GET /api/v2/wallet/banks."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account details fetched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Bank details fetched successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "bankCode": { "type": "string", "example": "058" },
+                        "accountName": { "type": "string", "example": "John Doe" },
+                        "accountNumber": { "type": "string", "example": "0123456789" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing query parameter or this endpoint requires a Wema wallet",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Device not trusted or not recognised",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API403Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "User wallet not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to resolve bank account details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          },
+          "503": {
+            "description": "Wema banking services are unavailable",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API503Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/account/statement/": {
       "servers": [
         {
@@ -79,7 +271,7 @@
       "post": {
         "tags": ["Account"],
         "summary": "Initiate an account statement",
-        "description": "Initiates an ALAT statement for the authenticated user's Wema account.",
+        "description": "Initiates an ALAT statement for the authenticated user's Wema account. The returned statement ID is user-bound and must be used to fetch the transactions.",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
@@ -146,6 +338,14 @@
                 "schema": { "$ref": "#/components/schemas/API401Error" }
               }
             }
+          },
+          "500": {
+            "description": "Statement initiation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
           }
         }
       }
@@ -195,9 +395,17 @@
                           "amount": { "type": "number" },
                           "type": { "type": "string" },
                           "date": { "type": "string" },
+                          "transaction_date": { "type": "string" },
                           "narration": { "type": "string" },
                           "status": { "type": "string" },
+                          "credit_type": { "type": "string" },
+                          "sender": { "type": "string" },
+                          "sender_account_number": { "type": "string" },
+                          "destination_bank": { "type": "string" },
+                          "destination_account_number": { "type": "string" },
+                          "receiver_name": { "type": "string" },
                           "reference_id": { "type": "string" },
+                          "is_view_receipt_enabled": { "type": "boolean" },
                           "tran_id": { "type": "string" }
                         }
                       }
@@ -220,6 +428,14 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Statement fetch failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API500Error" }
               }
             }
           }
@@ -413,7 +629,7 @@
       "post": {
         "tags": ["Registration v2"],
         "summary": "Validate a BVN",
-        "description": "Uses snake_case client fields. With Providus, requires_otp is false and both IDs are empty. With Optimus, requires_otp is true and provider_reference_id is used by the OTP endpoints.",
+        "description": "Uses snake_case client fields. With Providus, requires_otp is false and both IDs are empty. With Optimus, requires_otp is true and provider_reference_id is used by the OTP endpoints. For Wema, requires_otp is false; continue with /v2/auth/validate/bvn-with-face and include its face-check ID in the registration request.",
         "requestBody": {
           "required": true,
           "content": {
@@ -458,6 +674,16 @@
                         "requires_otp": true
                       }
                     }
+                  },
+                  "wema": {
+                    "value": {
+                      "status": "success",
+                      "data": {
+                        "verification_id": "ver_bvn_123",
+                        "provider_reference_id": "",
+                        "requires_otp": false
+                      }
+                    }
                   }
                 }
               }
@@ -473,6 +699,76 @@
           },
           "422": {
             "description": "Provider validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/auth/validate/bvn-with-face": {
+      "servers": [
+        { "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }
+      ],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Verify BVN with face",
+        "description": "Required for Wema signup. The returned face-check ID must be sent to /v2/auth/register.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["bvn", "image"],
+                "properties": {
+                  "verification_id": {
+                    "type": "string",
+                    "description": "Verification ID returned by /v2/auth/validate/bvn."
+                  },
+                  "bvn": { "type": "string", "minLength": 11, "maxLength": 11 },
+                  "image": {
+                    "type": "string",
+                    "description": "Face image in the format expected by the configured KYC provider."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Face check passed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "bvn_w_face_verification_id": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "Face check failed",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/API422Error" }
@@ -596,8 +892,8 @@
       ],
       "post": {
         "tags": ["Registration v2"],
-        "summary": "Complete synchronous registration",
-        "description": "Creates the account and returns tokens directly. There is no polling or claim step.",
+        "summary": "Complete registration",
+        "description": "Creates the account. Wema account creation can return pending; set supports_pending=true and retain registration_id and claim_token to poll /v2/auth/register/status. Wema requires a successful BVN face check and its bvn_w_face_verification_id.",
         "requestBody": {
           "required": true,
           "content": {
@@ -614,9 +910,27 @@
                 "schema": { "$ref": "#/components/schemas/V2RegisterResponse" },
                 "example": {
                   "status": "success",
+                  "message": "Registration successful.",
                   "data": {
+                    "status": "completed",
                     "access_token": "eyJ...",
                     "refresh_token": "eyJ..."
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Wema account creation is still pending",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2RegisterResponse" },
+                "example": {
+                  "status": "success",
+                  "data": {
+                    "status": "pending",
+                    "registration_id": "registration-123",
+                    "claim_token": "claim-token-123"
                   }
                 }
               }
@@ -643,6 +957,65 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/API500Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/auth/register/status": {
+      "servers": [
+        { "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }
+      ],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Poll pending registration",
+        "description": "Poll using the registration ID and claim token returned by /v2/auth/register. The claim token is needed to retrieve the completed session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["registration_id", "claim_token"],
+                "properties": {
+                  "registration_id": { "type": "string" },
+                  "claim_token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registration completed or terminal state returned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2RegisterResponse" }
+              }
+            }
+          },
+          "202": {
+            "description": "Registration is still pending",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2RegisterResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Registration not found or claim token invalid",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API404Error" }
+              }
+            }
+          },
+          "409": {
+            "description": "Registration already claimed; user should log in",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API409Error" }
               }
             }
           }
@@ -5586,6 +5959,226 @@
         }
       }
     },
+    "/tier/validate/nin/face": {
+      "post": {
+        "tags": ["Tier"],
+        "summary": "Verify NIN with face",
+        "description": "Requires authentication and X-Device-ID. For a Wema account, a successful face match also submits the bank-side Tier 2 upgrade.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "description": "Face image in the format expected by the configured KYC provider."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Face match and any applicable Wema Tier 2 submission succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "NIN/face verification or ALAT Tier 2 upgrade failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tier/upgrade/tier3": {
+      "post": {
+        "tags": ["Tier"],
+        "summary": "Submit Wema Tier 3 upgrade",
+        "description": "Requires authentication and X-Device-ID. Submits the residential address to ALAT for the user's Wema account.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["residential_address"],
+                "properties": {
+                  "residential_address": {
+                    "type": "object",
+                    "required": ["building_number", "street", "city", "state", "lga", "country", "full_address"],
+                    "properties": {
+                      "building_number": { "type": "string" },
+                      "apartment": { "type": "string" },
+                      "street": { "type": "string" },
+                      "city": { "type": "string" },
+                      "town": { "type": "string" },
+                      "state": { "type": "string" },
+                      "lga": { "type": "string" },
+                      "lcda": { "type": "string" },
+                      "landmark": { "type": "string" },
+                      "additional_information": { "type": "string" },
+                      "country": { "type": "string" },
+                      "full_address": { "type": "string" },
+                      "postal_code": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upgrade request submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "ALAT rejected the upgrade request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tier/kyc-status": {
+      "get": {
+        "tags": ["Tier"],
+        "summary": "Get Wema account KYC status",
+        "description": "Requires authentication and X-Device-ID. Returns ALAT's current account tier, status, restrictions, and address verification status.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KYC status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "accountNumber": { "type": "string" },
+                        "accountName": { "type": "string" },
+                        "accountTier": { "type": "string" },
+                        "accountStatus": { "type": "string" },
+                        "restrictionStatus": { "type": "string" },
+                        "addressVerificationStatus": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "Wema account or ALAT status unavailable",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API422Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/account/statement": {
       "post": {
         "tags": ["Account"],
@@ -9686,6 +10279,7 @@
         "required": ["status", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
+          "message": { "type": "string" },
           "data": {
             "type": "object",
             "required": ["verification_id", "requires_otp"],
@@ -9770,10 +10364,16 @@
         "required": ["status", "data"],
         "properties": {
           "status": { "type": "string", "example": "success" },
+          "message": { "type": "string" },
           "data": {
             "type": "object",
-            "required": ["access_token", "refresh_token"],
+            "required": ["status"],
             "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["completed", "pending", "failed", "expired"],
+                "example": "pending"
+              },
               "access_token": {
                 "type": "string",
                 "example": "eyJhbGciOiJIUzI1NiJ9..."
@@ -9781,7 +10381,17 @@
               "refresh_token": {
                 "type": "string",
                 "example": "eyJhbGciOiJIUzI1NiJ9..."
-              }
+              },
+              "registration_id": {
+                "type": "string",
+                "description": "Returned for a pending registration."
+              },
+              "claim_token": {
+                "type": "string",
+                "description": "Returned by /register for polling; keep securely."
+              },
+              "message": { "type": "string" },
+              "login_required": { "type": "boolean" }
             }
           }
         }
@@ -9991,6 +10601,14 @@
           },
           "device": {
             "$ref": "#/components/schemas/DeviceRegistrationRequest"
+          },
+          "bvn_w_face_verification_id": {
+            "type": "string",
+            "description": "Required for Wema registration; returned by /v2/auth/validate/bvn-with-face."
+          },
+          "supports_pending": {
+            "type": "boolean",
+            "description": "Set true to receive a pending registration ID and poll /v2/auth/register/status if ALAT account creation is still in progress."
           }
         }
       },

@@ -131,6 +131,54 @@ func (s *Service) FetchBankDetails(ctx context.Context, mobileUserID, accountNum
 	return bankDetails, nil
 }
 
+func (s *Service) FetchWemaBanks(ctx context.Context, mobileUserID string) ([]Bank, error) {
+	provider, err := s.wemaTransferProviderForUser(ctx, mobileUserID)
+	if err != nil {
+		return nil, err
+	}
+	banks, err := provider.FetchBanks(ctx)
+	if err != nil {
+		log.Printf("wallet service: failed to fetch Wema banks: %v", err)
+		return nil, appErr.ErrFetchingBanks
+	}
+	return banks, nil
+}
+
+func (s *Service) FetchWemaBankDetails(ctx context.Context, mobileUserID, accountNumber, bankCode string) (*BankDetails, error) {
+	provider, err := s.wemaTransferProviderForUser(ctx, mobileUserID)
+	if err != nil {
+		return nil, err
+	}
+	bankDetails, err := provider.FetchBankDetails(ctx, accountNumber, bankCode)
+	if err != nil {
+		log.Printf("wallet service: failed to fetch Wema bank details account_number=%s bank_code=%s: %v", accountNumber, bankCode, err)
+		return nil, appErr.ErrFetchingBankDetails
+	}
+	return bankDetails, nil
+}
+
+func (s *Service) wemaTransferProviderForUser(ctx context.Context, mobileUserID string) (TransferProviderService, error) {
+	if s.wema == nil {
+		return nil, appErr.ErrWemaUnavailable
+	}
+	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErr.ErrMissingUserWallet
+		}
+		log.Printf("wallet service: failed to get wallet for Wema bank lookup: %v", err)
+		return nil, err
+	}
+	if !IsWemaProvider(wallet.Provider) {
+		return nil, appErr.ErrWemaWalletRequired
+	}
+	provider, err := s.transferProviderForWallet(wallet)
+	if err != nil {
+		return nil, appErr.ErrWemaUnavailable
+	}
+	return provider, nil
+}
+
 func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req *TransferRequest) (*TransferResponse, error) {
 	if err := s.pinVerifier.Verify(ctx, mobileUserID, req.TransactionPin); err != nil {
 		return nil, err
