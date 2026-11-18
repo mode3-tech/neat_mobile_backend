@@ -36,7 +36,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			reason = "otp verification not found"
 		}
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": reason,
 		})
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -46,7 +46,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	}
 
 	if otpRow.Type != models.VerificationTypeOTP {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "invalid verification type",
 		})
 		return nil, appErr.ErrInvalidVerificationType
@@ -55,7 +55,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	phoneVerified := otpRow.VerifiedPhone != nil && strings.TrimSpace(*otpRow.VerifiedPhone) != ""
 	emailVerified := otpRow.VerifiedEmail != nil && strings.TrimSpace(*otpRow.VerifiedEmail) != ""
 	if !phoneVerified && !emailVerified {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "phone or email not verified",
 		})
 		return nil, appErr.ErrPhoneOrEmailNotFound
@@ -65,7 +65,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	if phoneVerified {
 		normalizedPhone, err = phone.NormalizeNigerianNumber(strings.TrimSpace(*otpRow.VerifiedPhone))
 		if err != nil {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "phone normalization failed",
 			})
 			return nil, err
@@ -81,7 +81,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	// must supply an alternate phone that was itself OTP-verified (type "phone").
 	if !phoneVerified {
 		if req.SubmittedPhoneVerificationID == "" {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "submitted phone verification id missing",
 			})
 			return nil, appErr.ErrPhoneOrEmailNotFound
@@ -92,7 +92,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 			if errors.Is(subErr, gorm.ErrRecordNotFound) {
 				reason = "submitted phone verification not found"
 			}
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": reason,
 			})
 			if errors.Is(subErr, gorm.ErrRecordNotFound) {
@@ -103,14 +103,14 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		if submittedPhoneRow.Type != models.VerificationTypePhone ||
 			submittedPhoneRow.VerifiedPhone == nil ||
 			strings.TrimSpace(*submittedPhoneRow.VerifiedPhone) == "" {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "invalid submitted phone verification type",
 			})
 			return nil, appErr.ErrInvalidVerificationType
 		}
 		normalizedPhone, err = phone.NormalizeNigerianNumber(strings.TrimSpace(*submittedPhoneRow.VerifiedPhone))
 		if err != nil {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "submitted phone normalization failed",
 			})
 			return nil, err
@@ -119,7 +119,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 
 	idempotencyKey, err := registrationIdempotencyKey(req, normalizedPhone, normalizedEmail)
 	if err != nil {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "failed to build idempotency key",
 		})
 		return nil, err
@@ -166,7 +166,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 		openJob, err := authRepo.GetOpenRegistrationJobByPhone(ctx, normalizedPhone)
 		switch {
 		case err == nil && openJob != nil:
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", req.OTPVerificationID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "registration already in progress",
 			})
 			return appErr.ErrRegistrationAlreadyInProgress
@@ -217,7 +217,7 @@ func (s *Service) Register(ctx context.Context, req RegisterationRequest, ip str
 	}
 
 	if job != nil {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", job.MobileUserID, auditlog.StatusSuccess, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", job.MobileUserID, auditlog.StatusSuccess, map[string]any{
 			"registration_job_id": job.ID,
 			"status":              job.Status,
 		})
@@ -273,7 +273,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			return nil, err
 		}
 		if existingUser != nil {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "phone already registered",
 			})
 			return nil, appErr.ErrUserExists
@@ -286,7 +286,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 			return nil, emailErr
 		}
 		if existingByEmail != nil {
-			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 				"reason for failure": "email already registered",
 			})
 			return nil, appErr.ErrUserExists
@@ -295,7 +295,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	bvnRecord, err := repo.GetValidationRow(ctx, req.BVNVerificationID)
 	if err != nil || bvnRecord.Type != models.VerificationTypeBVN || bvnRecord.VerifiedName == nil || bvnRecord.VerifiedDOB == nil || bvnRecord.VerifiedID == nil {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "bvn verification not found",
 		})
 		return nil, appErr.ErrBVNNotFound
@@ -303,7 +303,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	faceCheck, err := repo.GetFaceCheckRecord(ctx, req.BVNWithFaceVerificationID)
 	if err != nil || !faceCheck.Matched || faceCheck.VerificationRecordID != bvnRecord.ID {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "bvn face verification not found or not matched",
 		})
 		return nil, appErr.ErrBVNWithFaceVerificationNotFound
@@ -311,7 +311,7 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	ninRecord, err := repo.GetValidationRow(ctx, req.NINVerificationID)
 	if err != nil || ninRecord.Type != models.VerificationTypeNIN || ninRecord.VerifiedName == nil || ninRecord.VerifiedDOB == nil || ninRecord.VerifiedID == nil {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "nin verification not found",
 		})
 		return nil, appErr.ErrNINNotFound
@@ -319,35 +319,35 @@ func (s *Service) buildRegistrationSnapshot(ctx context.Context, repo *Repositor
 
 	ninFaceCheck, err := repo.GetFaceCheckRecord(ctx, req.NINWithFaceVerificationID)
 	if err != nil || !ninFaceCheck.Matched || ninFaceCheck.VerificationRecordID != ninRecord.ID {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "nin face verification not found or not matched",
 		})
 		return nil, appErr.ErrNINWithFaceVerificationNotFound
 	}
 
 	if !namesMatch(*bvnRecord.VerifiedName, *ninRecord.VerifiedName) || !dobsMatch(*bvnRecord.VerifiedDOB, *ninRecord.VerifiedDOB) {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "bvn/nin detail mismatch",
 		})
 		return nil, appErr.ErrNINAndBVNMismatch
 	}
 
 	if req.Password != req.ConfirmPassword {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "password mismatch",
 		})
 		return nil, appErr.ErrPasswordMismatch
 	}
 	if err = authchecker.ValidatePassword(req.Password); err != nil {
 		log.Printf("invalid password: %v", err)
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "invalid password",
 		})
 		return nil, appErr.ErrInvalidPassword
 	}
 
 	if req.TransactionPin != req.ConfirmTransactionPin {
-		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+		s.logVerificationAudit(ctx, auditlog.ResourceTypeUser, "USER_REGISTRATION", mobileUserID, auditlog.StatusFailure, map[string]any{
 			"reason for failure": "transaction pin mismatch",
 		})
 		return nil, appErr.ErrTransactionPinMismatch

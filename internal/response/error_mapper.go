@@ -881,6 +881,33 @@ func MapError(err error) ErrorMapping {
 			},
 		}
 
+	case errors.Is(err, appErr.ErrWemaWalletRequired):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "WEMA_WALLET_REQUIRED",
+				Message: appErr.ErrWemaWalletRequired.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrWemaUnavailable):
+		return ErrorMapping{
+			Status: http.StatusServiceUnavailable,
+			Error: APIError{
+				Code:    "WEMA_UNAVAILABLE",
+				Message: appErr.ErrWemaUnavailable.Error(),
+			},
+		}
+
+	case errors.Is(err, appErr.ErrInvalidStatementID):
+		return ErrorMapping{
+			Status: http.StatusNotFound,
+			Error: APIError{
+				Code:    "STATEMENT_NOT_FOUND",
+				Message: appErr.ErrInvalidStatementID.Error(),
+			},
+		}
+
 	case errors.Is(err, appErr.ErrMissingUserWallet):
 		return ErrorMapping{
 			Status: http.StatusUnprocessableEntity,
@@ -986,6 +1013,14 @@ func MapError(err error) ErrorMapping {
 			Error: APIError{
 				Code:    "INSUFFICIENT_CASHBACK",
 				Message: appErr.ErrInsufficientCashback.Error(),
+			},
+		}
+	case errors.Is(err, appErr.ErrWemaCashbackUnsupported):
+		return ErrorMapping{
+			Status: http.StatusBadRequest,
+			Error: APIError{
+				Code:    "WEMA_VAS_CASHBACK_UNSUPPORTED",
+				Message: appErr.ErrWemaCashbackUnsupported.Error(),
 			},
 		}
 

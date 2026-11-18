@@ -47,12 +47,11 @@ type AlatTier2FaceRequest struct {
 
 // AlatValidator defines Wema ALAT account creation operations needed by registerv2.
 // Defined with local types to avoid import cycle between registerv2 and baas.
+// Registration uses the face biometric (liveness) API only; ALAT's BVN + OTP
+// account creation API is not part of it.
 type AlatValidator interface {
-	PostPartnershipAccountCreationWithBvn(ctx context.Context, phone, email, bvn string) (trackingID string, err error)
-	ValidateBVNandEnqueueAccountCreation(ctx context.Context, phone, otp, trackingID string) error
 	GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
 	PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error
-	ResendOtp(ctx context.Context, trackingID string) error
 	PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (trackingID string, err error)
 	GetAddressDropDownList(ctx context.Context) (any, error)
 }

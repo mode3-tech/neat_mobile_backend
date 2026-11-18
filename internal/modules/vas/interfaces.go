@@ -37,6 +37,16 @@ type BAAS interface {
 	GetCustomerWallet(ctx context.Context, customerID string) (*baas.ProvidusCustomerWalletResponse, error)
 }
 
+type WemaVASProvider interface {
+	GetWalletBalance(ctx context.Context, accountNumber string) (float64, error)
+	GetBills(ctx context.Context) (*baas.AlatBillsResponse, error)
+	GetDataPlans(ctx context.Context) (*baas.AlatDataPlansResponse, error)
+	ValidateBill(ctx context.Context, identifier string, packageID int) (*baas.AlatBillValidationResponse, error)
+	PurchaseAirtime(ctx context.Context, accountNumber, network, phoneNumber string, amount float64, reference string) (*baas.AlatClientVASResponse, error)
+	PurchaseData(ctx context.Context, accountNumber, network, phoneNumber string, packageCode int, amount float64, reference string) (*baas.AlatClientVASResponse, error)
+	PayBill(ctx context.Context, accountNumber, customerIdentifier, customerEmail, customerPhone, customerName string, packageID int, amount, charge float64, reference string) (*baas.AlatClientVASResponse, error)
+}
+
 type AuthService interface {
 	VerifyTransactionPin(ctx context.Context, mobileUserID, pin string) error
 }

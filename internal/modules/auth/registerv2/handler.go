@@ -1,8 +1,7 @@
 package registerv2
 
 import (
-	"bytes"
-	"io"
+	"errors"
 	"log"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/response"
@@ -105,29 +104,19 @@ func (h *Handler) ValidateBVN(c *gin.Context) {
 	}
 
 	message := "BVN validated successfully."
-	if !requiresOTP {
-		message = "BVN check queued. Continue to the next step."
+	switch {
+	case requiresOTP:
+		message = "BVN validated. Confirm the OTP sent to you to continue."
+	case verificationID == "":
+		// Providus: nothing was checked here; it validates the BVN when the
+		// account is opened.
+		message = "Your BVN will be verified when your account is opened. Continue to the next step."
 	}
 	h.writeVerificationSuccess(c, verificationID, providerReferenceID, requiresOTP, message)
 }
 
-func (h *Handler) ValidateNINWithOptimus(c *gin.Context) {
-	var request ValidateNINRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		h.writeInvalidRequest(c)
-		return
-	}
-
-	verificationID, providerReferenceID, err := h.service.ValidateNINWithOptimus(c.Request.Context(), request.toOptimusRequest())
-	if err != nil {
-		h.writeError(c, err)
-		return
-	}
-	h.writeVerificationSuccess(c, verificationID, providerReferenceID, true, "NIN validated successfully.")
-}
-
 // VerifyOTP confirms the OTP Optimus sent for a reference id (e.g. from
-// ValidateBVN/ValidateNINWithOptimus's provider_reference_id). Generic across
+// ValidateBVN's provider_reference_id). Generic across
 // whatever triggered the OTP challenge.
 func (h *Handler) VerifyOTP(c *gin.Context) {
 	var request VerifyOTPRequest
@@ -167,10 +156,8 @@ func (h *Handler) ResendOTP(c *gin.Context) {
 }
 
 func (h *Handler) Register(c *gin.Context) {
-	bodyBytes, _ := io.ReadAll(c.Request.Body)
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-	log.Printf("registerv2: register request payload: %s", bodyBytes)
-
+	// Never log this body: it carries the password, transaction PIN, BVN, NIN
+	// and face image.
 	var request OptimusRegisterRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		log.Printf("registerv2: register request binding failed: %v", err)
@@ -183,10 +170,55 @@ func (h *Handler) Register(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
+	h.writeRegistration(c, resp)
+}
 
-	c.JSON(http.StatusOK, response.APIResponse[RegisterResponse]{
+// RegistrationStatus lets a client follow a registration /register returned
+// as pending, and collects its session once it completes.
+func (h *Handler) RegistrationStatus(c *gin.Context) {
+	var request RegistrationStatusRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+	resp, err := h.service.RegistrationStatus(c.Request.Context(), request.RegistrationID, request.ClaimToken, c.ClientIP())
+	if err != nil {
+		if errors.Is(err, errRegistrationNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, response.APIResponse[any]{
+				Status: "error",
+				Error:  &response.APIError{Code: "REGISTRATION_NOT_FOUND", Message: err.Error()},
+			})
+			return
+		}
+		if errors.Is(err, errRegistrationClaimed) {
+			c.AbortWithStatusJSON(http.StatusConflict, response.APIResponse[any]{
+				Status: "error",
+				Error:  &response.APIError{Code: "REGISTRATION_ALREADY_CLAIMED", Message: err.Error()},
+			})
+			return
+		}
+		h.writeError(c, err)
+		return
+	}
+	h.writeRegistration(c, resp)
+}
+
+// writeRegistration answers 200 for a completed registration and 202 while
+// it's still pending (or failed/expired, with the reason in data.message).
+func (h *Handler) writeRegistration(c *gin.Context, resp *RegisterResponse) {
+	code, message := http.StatusOK, "Registration successful."
+	if resp.LoginRequired {
+		message = resp.Message
+	}
+	switch resp.Status {
+	case RegistrationStatusPending:
+		code, message = http.StatusAccepted, "Your account is being opened. Check the registration status shortly."
+	case RegistrationStatusFailed, RegistrationStatusExpired:
+		message = resp.Message
+	}
+	c.JSON(code, response.APIResponse[RegisterResponse]{
 		Status:  "success",
-		Message: "Registration successful.",
+		Message: message,
 		Data:    resp,
 	})
 }
@@ -243,14 +275,35 @@ func (h *Handler) writeInvalidRequest(c *gin.Context) {
 	})
 }
 
+// writeError renders registration errors without leaking internals:
+//   - errors the response mapper knows keep their mapping (ALAT's own
+//     validation messages included);
+//   - an ALAT call that got no answer is "temporarily unavailable", not its
+//     plumbing text;
+//   - messages written for the customer (userError, e.g. Optimus's
+//     ResponseMessage or "phone number is not verified") are returned as 422;
+//   - anything else (DB errors, misconfiguration) is logged in full and
+//     returned as a generic 500.
 func (h *Handler) writeError(c *gin.Context, err error) {
-	// Optimus supplies a user-facing ResponseMessage. Preserve that message for
-	// this public flow instead of replacing it with the generic error mapper text.
 	mapped := response.MapError(err)
-	if mapped.Status == http.StatusInternalServerError {
+
+	var alatErr *appErr.AlatError
+	switch {
+	case errors.As(err, &alatErr) && alatErr.NoResponse:
+		log.Printf("registerv2: %s %s: wema unavailable: %v", c.Request.Method, c.FullPath(), err)
+		mapped.Status = http.StatusServiceUnavailable
+		mapped.Error.Code = "PROVIDER_UNAVAILABLE"
+		mapped.Error.Message = "Wema is temporarily unavailable, please try again shortly."
+	case mapped.Status != http.StatusInternalServerError:
+		// Mapped by the shared error mapper.
+	case isUserError(err):
 		mapped.Status = http.StatusUnprocessableEntity
-		mapped.Error.Code = "OPTIMUS_VALIDATION_FAILED"
+		mapped.Error.Code = "REGISTRATION_VALIDATION_FAILED"
 		mapped.Error.Message = err.Error()
+	default:
+		log.Printf("registerv2: %s %s: internal error: %v", c.Request.Method, c.FullPath(), err)
+		mapped.Error.Code = "INTERNAL_ERROR"
+		mapped.Error.Message = "Something went wrong on our side. Please try again."
 	}
 	c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 		Status: "error",

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 )
@@ -73,15 +74,27 @@ type Config struct {
 	AlatBaseURL         string
 	AlatAPIKey          string
 	AlatSubscriptionKey string
+	AlatChannelID       string
+	// AlatSecuritySecret keys the HMAC we send ALAT as securityInfo on
+	// debits/payouts and check in the Authentication Callback.
+	AlatSecuritySecret string
+	// AlatWebhookAllowedIPs lists the IPs/CIDRs Wema calls our webhooks from
+	// (comma-separated). Empty rejects every ALAT webhook.
+	AlatWebhookAllowedIPs string
+	// AlatWebhookTrustedProxies lists our own proxies/load balancers
+	// (IPs/CIDRs) whose X-Forwarded-For is believed. Empty = use the TCP peer.
+	AlatWebhookTrustedProxies string
 
 	XpressPublicKey  string
 	XpressPrivateKey string
 	XpressBaseURL    string
 
 	// Demo/review login account (e.g. Google Play review). Disabled unless
-	// DemoLoginEnabled is true. DemoLoginPhone gets a fixed OTP and no SMS.
+	// DemoLoginEnabled is true. DemoLoginPhone and DemoLoginEmail get a fixed
+	// OTP and no SMS/email delivery.
 	DemoLoginEnabled bool
 	DemoLoginPhone   string
+	DemoLoginEmail   string
 	DemoLoginOTP     string
 
 	RunMigrations bool
@@ -153,9 +166,14 @@ func Load() Config {
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
 
-		AlatBaseURL:         getEnv("ALAT_BASE_URL", "https://apiplayground.alat.ng/account-creation"),
+		AlatBaseURL:         getEnv("ALAT_BASE_URL", ""),
 		AlatAPIKey:          getEnv("ALAT_API_KEY", ""),
 		AlatSubscriptionKey: getEnv("ALAT_SUBSCRIPTION_KEY", ""),
+		AlatChannelID:       getEnv("ALAT_CHANNEL_ID", ""),
+		AlatSecuritySecret:  getEnv("ALAT_SECURITY_SECRET", ""),
+
+		AlatWebhookAllowedIPs:     getEnv("ALAT_WEBHOOK_ALLOWED_IPS", ""),
+		AlatWebhookTrustedProxies: getEnv("ALAT_WEBHOOK_TRUSTED_PROXIES", ""),
 
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
@@ -163,6 +181,7 @@ func Load() Config {
 
 		DemoLoginEnabled: getEnv("DEMO_LOGIN_ENABLED", "false") == "true",
 		DemoLoginPhone:   getEnv("DEMO_LOGIN_PHONE", ""),
+		DemoLoginEmail:   getEnv("DEMO_LOGIN_EMAIL", ""),
 		DemoLoginOTP:     getEnv("DEMO_LOGIN_OTP", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
@@ -184,6 +203,7 @@ func readFileEnv(key string) string {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("config: %s is set but file %q could not be read: %v", key, path, err)
 		return ""
 	}
 	return string(data)

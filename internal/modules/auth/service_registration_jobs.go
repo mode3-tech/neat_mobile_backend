@@ -206,7 +206,7 @@ func (s *Service) lookupWalletResponseForJob(ctx context.Context, job *Registrat
 		return nil, false, errors.New("wallet service not configured")
 	}
 
-	resp, found, err := s.walletService.LookupWalletByCustomerID(ctx, job.MobileUserID)
+	resp, found, err := s.walletService.LookupWalletByCustomerID(ctx, s.walletLookupKey(job, snapshot))
 	if err != nil || !found {
 		return nil, found, err
 	}
@@ -261,6 +261,35 @@ func decodeRegistrationSnapshot(snapshotJSON string) (*registrationJobSnapshot, 
 	}
 
 	return &snapshot, nil
+}
+
+// walletLookupKey is what to pass to WalletService.LookupWalletByCustomerID
+// for this job. Optimus/Providus look wallets up by our customer ID, but ALAT
+// only looks accounts up by phone number - the same (possibly seeded) phone
+// GenerateWallet sent it.
+func (s *Service) walletLookupKey(job *RegistrationJob, snapshot *registrationJobSnapshot) string {
+	switch strings.ToLower(strings.TrimSpace(s.walletProviderName)) {
+	case "wema", "alat":
+	default:
+		return job.MobileUserID
+	}
+
+	phone := walletPhoneFromSnapshot(snapshot)
+	if s.walletPayloadSeedKey == "" {
+		return phone
+	}
+	// Mirror the seeding resolveWalletResponseForJob applies before GenerateWallet,
+	// so the lookup uses the phone ALAT actually has on file.
+	seeded, err := SeedWalletPayload(&WalletPayload{
+		BVN:         snapshot.BVN,
+		PhoneNumber: phone,
+		Email:       snapshot.WalletEmail,
+		DateOfBirth: snapshot.DOB.Format("2006-01-02"),
+	}, s.walletPayloadSeedKey, false)
+	if err != nil {
+		return phone
+	}
+	return seeded.PhoneNumber
 }
 
 // walletPhoneFromSnapshot returns the BVN-linked phone to send to the wallet

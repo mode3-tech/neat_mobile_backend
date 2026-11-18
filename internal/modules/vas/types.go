@@ -124,6 +124,7 @@ type CustomerWallet struct {
 	MerchantID       string        `gorm:"column:merchant_id;type:text;not null"`
 	Tier             string        `gorm:"column:tier;type:text;not null"`
 	WalletID         string        `gorm:"column:wallet_id;type:text;not null"`
+	Provider         string        `gorm:"column:provider;type:text"`
 	Mode             string        `gorm:"column:mode;type:text;not null"`
 	BankName         string        `gorm:"column:bank_name;type:text;not null"`
 	BankCode         string        `gorm:"column:bank_code;type:text;not null"`

@@ -61,3 +61,49 @@ type AccountFundedData struct {
 	AccountNumber                     string    `json:"accountNumber"`
 	BankVerificationCode              string    `json:"BankVerificationCode"`
 }
+
+// AlatWebhook is ALAT's webhook envelope (PlatformWebHookResponse on their
+// documentation). Data's shape depends on RequestType.
+type AlatWebhook[T any] struct {
+	Title       string `json:"title"`
+	Message     string `json:"message"`
+	Data        *T     `json:"data"`
+	Request     int    `json:"request"`
+	RequestType int    `json:"requestType"`
+}
+
+// AlatAccountCreationData is the data of ALAT's account creation webhook
+// (PartnerNubanModel on their documentation).
+type AlatAccountCreationData struct {
+	Email       string `json:"email"`
+	Nuban       string `json:"nuban"`
+	NubanName   string `json:"nubanName"`
+	Type        int    `json:"type"`
+	NubanStatus string `json:"nubanStatus"`
+	PhoneNumber string `json:"phoneNumber"`
+	CustomerID  string `json:"customerId"`
+}
+
+// AlatTransactionCallbackData is the data of ALAT's Transaction Callback
+// (GlobalResponse on their documentation). TransactionReference is the
+// reference we sent - our transaction ID.
+type AlatTransactionCallbackData struct {
+	Status                       string `json:"status"`
+	Message                      string `json:"message"`
+	Narration                    string `json:"narration"`
+	TransactionReference         string `json:"transactionReference"`
+	PlatformTransactionReference string `json:"platformTransactionReference"`
+	TransactionStan              string `json:"transactionStan"`
+	OriginalTxnTransactionDate   string `json:"orinalTxnTransactionDate"` // ALAT's spelling
+}
+
+// AlatTransactionNotification is ALAT's Transaction Notification (prod only),
+// pushed for every credit and debit on wallets we generated. It carries no
+// transaction reference and no signature.
+type AlatTransactionNotification struct {
+	AccountNumber   string  `json:"accountNumber"`
+	TransactionType string  `json:"transactionType"` // "Credit" or "Debit"
+	Amount          float64 `json:"amount"`
+	Narration       string  `json:"narration"`
+	TransactionDate string  `json:"transactionDate"`
+}

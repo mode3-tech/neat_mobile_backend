@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"context"
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/middleware"
 	"neat_mobile_app_backend/internal/response"
@@ -13,6 +14,22 @@ import (
 type Handler struct {
 	service *Service
 	apiKey  string
+	// alatAccountListener finishes registrations waiting on an ALAT account
+	// (registerv2). Optional: without it the webhook only logs.
+	alatAccountListener AlatAccountCreationListener
+}
+
+// AlatAccountCreationListener is told when ALAT's Account Creation webhook
+// reports an account for a phone number. Implementations must confirm the
+// account with ALAT before acting - the webhook is unsigned.
+type AlatAccountCreationListener interface {
+	OnAlatAccountCreated(ctx context.Context, phoneNumber string)
+}
+
+// SetAlatAccountCreationListener wires the Account Creation webhook to
+// registration.
+func (h *Handler) SetAlatAccountCreationListener(l AlatAccountCreationListener) {
+	h.alatAccountListener = l
 }
 
 func NewHandler(service *Service, apiKey string) *Handler {
@@ -20,7 +37,7 @@ func NewHandler(service *Service, apiKey string) *Handler {
 }
 
 func (h *Handler) FetchBanks(c *gin.Context) {
-	banks, err := h.service.FetchBanks(c.Request.Context())
+	banks, err := h.service.FetchBanks(c.Request.Context(), strings.TrimSpace(c.GetString(middleware.UserIDContextKey)))
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
@@ -49,7 +66,7 @@ func (h *Handler) FetchBankDetails(c *gin.Context) {
 		return
 	}
 
-	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), query.AccountNumber, query.BankCode)
+	bankDetails, err := h.service.FetchBankDetails(c.Request.Context(), strings.TrimSpace(c.GetString(middleware.UserIDContextKey)), query.AccountNumber, query.BankCode)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{

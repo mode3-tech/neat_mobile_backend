@@ -26,6 +26,7 @@ type Service struct {
 	Txr            TransactionService
 	Baas           BAAS
 	XpressPayments VASService
+	Wema           WemaVASProvider
 	PinVerifier    AuthService
 	User           UserFinder
 	auditLogger    auditlog.AuditLogger
@@ -212,6 +213,9 @@ func (s *Service) GetAirtime(ctx context.Context, payload AirtimePayload, mobile
 		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "airtime"})
 		return nil, appErr.ErrGettingAirtime
 	}
+	if s.isWemaWallet(wallet) {
+		return s.getWemaAirtime(ctx, payload, mobileUserID, localizedPhone, wallet)
+	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
 	if err != nil {
@@ -387,6 +391,9 @@ func (s *Service) GetData(ctx context.Context, payload DataPayload, mobileUserID
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
 		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "data"})
 		return nil, appErr.ErrGettingData
+	}
+	if s.isWemaWallet(wallet) {
+		return s.getWemaData(ctx, payload, mobileUserID, localizedPhone, wallet)
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
@@ -564,6 +571,17 @@ func (s *Service) PayElectricity(ctx context.Context, payload PayElectricityPayl
 		log.Printf("vas service: failed to get wallet balance - %s\n", err)
 		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": err.Error(), "type": "electricity"})
 		return nil, appErr.ErrPayingElectricityBill
+	}
+	if s.isWemaWallet(wallet) {
+		user, err := s.User.GetUserByUserID(ctx, mobileUserID)
+		if err != nil || user == nil {
+			return nil, appErr.ErrPayingElectricityBill
+		}
+		phoneNumber, err := phone.ToLocalFormat(user.Phone)
+		if err != nil {
+			return nil, err
+		}
+		return s.payWemaElectricity(ctx, payload, mobileUserID, wallet, user.FullName, phoneNumber)
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)
@@ -803,6 +821,13 @@ func (s *Service) PayCable(ctx context.Context, payload PayCablePayload, mobileU
 		log.Printf("vas service: user record not found mobile_user_id=%s", mobileUserID)
 		s.logVASAudit(ctx, mobileUserID, "", auditlog.StatusFailure, map[string]interface{}{"reason_for_failure": "user record not found", "type": "cable"})
 		return nil, appErr.ErrPayingCableBill
+	}
+	if s.isWemaWallet(wallet) {
+		phoneNumber, err := phone.ToLocalFormat(user.Phone)
+		if err != nil {
+			return nil, err
+		}
+		return s.payWemaCable(ctx, payload, mobileUserID, wallet, user.FullName, phoneNumber)
 	}
 
 	cashbackBalance, err := s.Repo.GetLatestCashbackBalance(ctx, mobileUserID)

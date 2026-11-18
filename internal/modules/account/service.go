@@ -17,6 +17,7 @@ import (
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/notification"
 	"neat_mobile_app_backend/internal/modules/transaction"
+	walletpkg "neat_mobile_app_backend/internal/modules/wallet"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +36,10 @@ type Service struct {
 	TrfLimitAmount        string
 	CustomerAccountFinder CustomerAccountFinder
 	WalletFinder          WalletFinder
-	auditLogger           auditlog.AuditLogger
+	// WemaAccountFinder looks up balances for Wema ALAT wallets, keyed by
+	// account number. Nil when Wema isn't wired.
+	WemaAccountFinder CustomerAccountFinder
+	auditLogger       auditlog.AuditLogger
 }
 
 func NewService(repo *Repository,
@@ -60,7 +64,7 @@ func NewService(repo *Repository,
 	}
 }
 
-func (s *Service) logAccountAudit(ctx context.Context, action, mobileUserID string, status auditlog.LogStatus, metadata map[string]interface{}) {
+func (s *Service) logAccountAudit(ctx context.Context, action, mobileUserID string, status auditlog.LogStatus, metadata map[string]any) {
 	s.auditLogger.CreateAuditLog(ctx, &auditlog.AuditLog{
 		ID:           helpers.PrefixID("audit_log"),
 		ResourceID:   mobileUserID,
@@ -93,10 +97,25 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 		return nil, appErr.ErrFetchingAccountSummary //500
 	}
 
-	customerDetails, err := s.CustomerAccountFinder.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+	finder, lookupKey := s.CustomerAccountFinder, wallet.WalletCustomerID
+	if walletpkg.IsWemaProvider(wallet.Provider) {
+		if s.WemaAccountFinder == nil {
+			log.Printf("account service: wema wallet but no wema account finder configured - %s", mobileUserID)
+			return nil, appErr.ErrFetchingAccountSummary //500
+		}
+		finder, lookupKey = s.WemaAccountFinder, wallet.AccountNumber
+	}
+
+	customerDetails, err := finder.GetCustomerDetails(ctx, lookupKey)
 	if err != nil {
 		log.Printf("account service: error finding customer details - %s", err)
 		return nil, appErr.ErrFetchingAccountSummary //500
+	}
+
+	fullName := strings.TrimSpace(customerDetails.Customer.FirstName + " " + customerDetails.Customer.LastName)
+	if fullName == "" {
+		// ALAT's wallet lookup returns no names.
+		fullName = strings.TrimSpace(wallet.AccountName)
 	}
 
 	var loanBalance float64
@@ -127,7 +146,7 @@ func (s *Service) GetAccountSummary(ctx context.Context, mobileUserID string) (*
 	}
 
 	return &AccountSummary{
-		FullName:               strings.TrimSpace(customerDetails.Customer.FirstName + " " + customerDetails.Customer.LastName),
+		FullName:               fullName,
 		BankName:               accountInfo.BankName,
 		Email:                  accountInfo.Email,
 		BVN:                    accountInfo.BVN,

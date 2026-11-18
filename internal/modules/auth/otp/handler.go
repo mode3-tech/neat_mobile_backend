@@ -170,33 +170,36 @@ func parseChannel(v string) (Channel, error) {
 	}
 }
 
+// MapOTPError turns the OTP manager's plain errors into the app error the
+// response mapper knows, or returns nil for anything unrecognised.
+func MapOTPError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.HasPrefix(err.Error(), "sms send failed with status:") {
+		return appErr.ErrSMSDeliveryFailed
+	}
+	switch err.Error() {
+	case "too many requests":
+		return appErr.ErrTooManyRequests
+	case "invalid otp":
+		return appErr.ErrInvalidOTP
+	case "invalid email":
+		return appErr.ErrInvalidEmail
+	case "invalid Nigerian number":
+		return appErr.ErrInvalidPhone
+	case "unsupported channel":
+		return appErr.ErrInvalidChannel
+	case "sms service not configured":
+		return appErr.ErrSMSServiceNotConfigured
+	}
+	return nil
+}
+
 func writeOTPError(c *gin.Context, err error) {
 	log.Printf("otp error: %v", err)
 
-	var mappedErr error
-	switch {
-	case strings.HasPrefix(err.Error(), "sms send failed with status:"):
-		mappedErr = appErr.ErrSMSDeliveryFailed
-	default:
-		switch err.Error() {
-		case "too many requests":
-			mappedErr = appErr.ErrTooManyRequests
-		case "invalid otp":
-			mappedErr = appErr.ErrInvalidOTP
-		case "invalid email":
-			mappedErr = appErr.ErrInvalidEmail
-		case "invalid Nigerian number":
-			mappedErr = appErr.ErrInvalidPhone
-		case "unsupported channel":
-			mappedErr = appErr.ErrInvalidChannel
-		case "sms service not configured":
-			mappedErr = appErr.ErrSMSServiceNotConfigured
-		default:
-			mappedErr = nil
-		}
-	}
-
-	mapped := response.MapError(mappedErr)
+	mapped := response.MapError(MapOTPError(err))
 	c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{
 		Status: "error",
 		Error:  &mapped.Error,
