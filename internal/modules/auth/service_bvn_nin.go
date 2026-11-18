@@ -220,6 +220,12 @@ func (s *Service) resolveProvider(ctx context.Context) Provider {
 	return provider
 }
 
+// BVNVerificationTTL is how long a verified BVN record stays usable for the
+// face check and registration. Long enough that a slow provider (e.g. ALAT
+// queueing account creation) doesn't force the customer to pay for a fresh
+// BVN and face check on retry.
+const BVNVerificationTTL = 24 * time.Hour
+
 func (s *Service) ValidateBVN(ctx context.Context, bvn string) (*bvnInfo, error) {
 	switch s.resolveProvider(ctx) {
 	case ProviderPrembly:
@@ -289,7 +295,7 @@ func (s *Service) ValidateBVNWithTendar(ctx context.Context, bvn string) (*bvnIn
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(30 * time.Minute)
+	expiresAt := now.Add(BVNVerificationTTL)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{
@@ -517,7 +523,7 @@ func (s *Service) ValidateBVNWithPrembly(ctx context.Context, bvn string) (*bvnI
 	subjectHashBytes := sha256.Sum256([]byte(strings.TrimSpace(bvn)))
 	subjectHash := hex.EncodeToString(subjectHashBytes[:])
 	now := time.Now().UTC()
-	expiresAt := now.Add(30 * time.Minute)
+	expiresAt := now.Add(BVNVerificationTTL)
 	maskedBVN := MaskSub(bvn)
 
 	record := &models.VerificationRecord{

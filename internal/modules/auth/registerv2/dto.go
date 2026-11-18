@@ -33,7 +33,10 @@ type OptimusRegisterRequest struct {
 	ReferralCode              string              `json:"referral_code" binding:"omitempty"`
 	Device                    DeviceRegisteration `json:"device" binding:"required"`
 	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id,omitempty"`
-	LiveImageOfFace           string              `json:"live_image_of_face,omitempty"`
+	// SupportsPending tells /register this client can follow a registration
+	// that finishes after the request (status "pending" + /register/status).
+	// Without it, a Wema account ALAT is still queueing returns "try again".
+	SupportsPending bool `json:"supports_pending,omitempty"`
 }
 
 type BVNWithFaceRequest struct {
@@ -46,9 +49,30 @@ type BVNWithFaceResponse struct {
 	BVNWithFaceVerificationID string `json:"bvn_w_face_verification_id"`
 }
 
+// RegisterResponse is returned by /register and /register/status.
+//   - status "completed": access_token and refresh_token are set - unless
+//     login_required is true, in which case the account exists but the
+//     customer must log in to get a session.
+//   - status "pending": the account is still being opened. Poll
+//     /register/status with registration_id and claim_token (claim_token is
+//     only returned by /register - keep it).
+//   - status "failed" / "expired": registration can't complete; see message.
 type RegisterResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	Status         string `json:"status"`
+	AccessToken    string `json:"access_token,omitempty"`
+	RefreshToken   string `json:"refresh_token,omitempty"`
+	RegistrationID string `json:"registration_id,omitempty"`
+	ClaimToken     string `json:"claim_token,omitempty"`
+	Message        string `json:"message,omitempty"`
+	// LoginRequired: registration completed but no session could be issued;
+	// the client should send the customer to log in.
+	LoginRequired bool `json:"login_required,omitempty"`
+}
+
+// RegistrationStatusRequest polls a pending registration.
+type RegistrationStatusRequest struct {
+	RegistrationID string `json:"registration_id" binding:"required"`
+	ClaimToken     string `json:"claim_token" binding:"required"`
 }
 
 // OptimusPhoneValidationRequest starts verification of the phone number the
@@ -124,7 +148,8 @@ func (r ValidateBVNRequest) toOptimusRequest() OptimusBVNValidationRequest {
 }
 
 // OptimusNINValidationRequest is Optimus's own wire format - see
-// OptimusBVNValidationRequest. ValidateNINRequest is the client-facing shape.
+// OptimusBVNValidationRequest. Not used by the registration flow today: NIN
+// is collected by /register without a separate validation step.
 type OptimusNINValidationRequest struct {
 	RequestId    string `json:"RequestId" binding:"-"`
 	Nin          string `json:"Nin" binding:"required,len=11,numeric"`
@@ -134,31 +159,6 @@ type OptimusNINValidationRequest struct {
 	Dob          string `json:"Dob" binding:"required"`
 	Email        string `json:"Email" binding:"required,email"`
 	ReferralCode string `json:"ReferralCode" binding:"omitempty"`
-}
-
-// ValidateNINRequest is the client-facing (snake_case) body for NIN
-// validation. Kept for parity with ValidateBVNRequest even though
-// /validate/nin is not currently routed (see routes.go).
-type ValidateNINRequest struct {
-	Nin          string `json:"nin" binding:"required,len=11,numeric"`
-	FirstName    string `json:"first_name" binding:"required"`
-	LastName     string `json:"last_name" binding:"required"`
-	Gender       string `json:"gender" binding:"required"`
-	Dob          string `json:"dob" binding:"required"`
-	Email        string `json:"email" binding:"required,email"`
-	ReferralCode string `json:"referral_code" binding:"omitempty"`
-}
-
-func (r ValidateNINRequest) toOptimusRequest() OptimusNINValidationRequest {
-	return OptimusNINValidationRequest{
-		Nin:          r.Nin,
-		FirstName:    r.FirstName,
-		LastName:     r.LastName,
-		Gender:       r.Gender,
-		Dob:          r.Dob,
-		Email:        r.Email,
-		ReferralCode: r.ReferralCode,
-	}
 }
 
 type OptimusVerificationResponse struct {

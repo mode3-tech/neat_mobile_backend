@@ -329,6 +329,7 @@ func Migrate(db *gorm.DB) error {
 		&referrals.ReferralRedemption{},
 		&models.Cashback{},
 		&registerv2.ProviderPreference{},
+		&registerv2.PendingWemaRegistration{},
 		&smsbilling.SMSCharge{},
 		&tier.TierSubmission{},
 		&auditlog.AuditLog{},
@@ -788,6 +789,15 @@ func backfillBVNNINEncryption(db *gorm.DB) error {
 	}
 	if err := backfillEncryptedColumn(db, cipher, "wallet_verification_records", "verified_id"); err != nil {
 		return fmt.Errorf("backfill wallet_verification_records.verified_id: %w", err)
+	}
+
+	// Selfies are biometric data: failed matches no longer keep one at all,
+	// and the matched ones are encrypted like BVN/NIN.
+	if err := db.Exec(`UPDATE wallet_face_check_records SET face_image_provided = NULL WHERE matched = false AND face_image_provided IS NOT NULL`).Error; err != nil {
+		return fmt.Errorf("clear unmatched face images: %w", err)
+	}
+	if err := backfillEncryptedColumn(db, cipher, "wallet_face_check_records", "face_image_provided"); err != nil {
+		return fmt.Errorf("backfill wallet_face_check_records.face_image_provided: %w", err)
 	}
 	return nil
 }

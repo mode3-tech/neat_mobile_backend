@@ -73,6 +73,16 @@ type Config struct {
 	AlatBaseURL         string
 	AlatAPIKey          string
 	AlatSubscriptionKey string
+	AlatChannelID       string
+	// AlatSecuritySecret keys the HMAC we send ALAT as securityInfo on
+	// debits/payouts and check in the Authentication Callback.
+	AlatSecuritySecret string
+	// AlatWebhookAllowedIPs lists the IPs/CIDRs Wema calls our webhooks from
+	// (comma-separated). Empty rejects every ALAT webhook.
+	AlatWebhookAllowedIPs string
+	// AlatWebhookTrustedProxies lists our own proxies/load balancers
+	// (IPs/CIDRs) whose X-Forwarded-For is believed. Empty = use the TCP peer.
+	AlatWebhookTrustedProxies string
 
 	XpressPublicKey  string
 	XpressPrivateKey string
@@ -156,6 +166,11 @@ func Load() Config {
 		AlatBaseURL:         getEnv("ALAT_BASE_URL", ""),
 		AlatAPIKey:          getEnv("ALAT_API_KEY", ""),
 		AlatSubscriptionKey: getEnv("ALAT_SUBSCRIPTION_KEY", ""),
+		AlatChannelID:       getEnv("ALAT_CHANNEL_ID", ""),
+		AlatSecuritySecret:  getEnv("ALAT_SECURITY_SECRET", ""),
+
+		AlatWebhookAllowedIPs:     getEnv("ALAT_WEBHOOK_ALLOWED_IPS", ""),
+		AlatWebhookTrustedProxies: getEnv("ALAT_WEBHOOK_TRUSTED_PROXIES", ""),
 
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),

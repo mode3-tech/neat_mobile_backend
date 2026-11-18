@@ -89,10 +89,14 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, payload BVNWithFaceVa
 		ResponseCode:         faceResult.ResponseCode,
 		ProviderMessage:      faceResult.Message,
 	}
-	if image != "" {
-		faceRecord.FaceImageProvided = &image
-	} else if v := faceResult.FaceImageProvided; v != "" {
-		faceRecord.FaceImageProvided = &v
+	// Keep the selfie only for a match: Wema account creation needs it as the
+	// live image, and a failed attempt's biometrics have no further use.
+	if faceResult.Matched {
+		if image != "" {
+			faceRecord.FaceImageProvided = &image
+		} else if v := faceResult.FaceImageProvided; v != "" {
+			faceRecord.FaceImageProvided = &v
+		}
 	}
 	if v := faceResult.ReferenceID; v != "" {
 		faceRecord.ProviderReferenceID = &v

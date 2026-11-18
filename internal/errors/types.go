@@ -92,6 +92,11 @@ type AlatError struct {
 	Code       string   `json:"code"`
 	Message    string   `json:"message"`
 	Errors     []string `json:"errors"`
+	// NoResponse is true when ALAT gave no usable answer: client not
+	// configured, transport/read/decode failure, or a non-2xx without ALAT's
+	// error body. Callers must not read such an error as ALAT saying "no"
+	// (e.g. "no account exists") - the request may have gone through.
+	NoResponse bool `json:"-"`
 }
 
 func (e *AlatError) UnmarshalJSON(data []byte) error {

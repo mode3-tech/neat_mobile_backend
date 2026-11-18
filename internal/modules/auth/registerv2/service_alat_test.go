@@ -24,30 +24,13 @@ func (m *mockProviderPref) GetProviderPreference(ctx context.Context) (*Provider
 }
 
 type mockAlatValidator struct {
-	postStep1Func   func(ctx context.Context, phone, email, bvn string) (string, error)
-	verifyStep2Func func(ctx context.Context, phone, otp, trackingID string) error
-	getStep3Func    func(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
-	pndStep4Func    func(ctx context.Context, pndType, accountNumber string) error
-	resendFunc      func(ctx context.Context, trackingID string) error
-	tier2Func       func(ctx context.Context, req AlatTier2FaceRequest) (string, error)
+	getStep3Func func(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
+	pndStep4Func func(ctx context.Context, pndType, accountNumber string) error
+	tier2Func    func(ctx context.Context, req AlatTier2FaceRequest) (string, error)
 
 	getStep3Calls int
 	tier2Calls    int
 	pndCalls      int
-}
-
-func (m *mockAlatValidator) PostPartnershipAccountCreationWithBvn(ctx context.Context, phone, email, bvn string) (string, error) {
-	if m.postStep1Func != nil {
-		return m.postStep1Func(ctx, phone, email, bvn)
-	}
-	return "mock-tracking-id-1234", nil
-}
-
-func (m *mockAlatValidator) ValidateBVNandEnqueueAccountCreation(ctx context.Context, phone, otp, trackingID string) error {
-	if m.verifyStep2Func != nil {
-		return m.verifyStep2Func(ctx, phone, otp, trackingID)
-	}
-	return nil
 }
 
 func (m *mockAlatValidator) GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error) {
@@ -72,13 +55,6 @@ func (m *mockAlatValidator) PartnerDebitRestrictionManagement(ctx context.Contex
 	return nil
 }
 
-func (m *mockAlatValidator) ResendOtp(ctx context.Context, trackingID string) error {
-	if m.resendFunc != nil {
-		return m.resendFunc(ctx, trackingID)
-	}
-	return nil
-}
-
 func (m *mockAlatValidator) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
 	m.tier2Calls++
 	if m.tier2Func != nil {
@@ -91,158 +67,68 @@ func (m *mockAlatValidator) GetAddressDropDownList(ctx context.Context) (any, er
 	return map[string]any{}, nil
 }
 
-func TestValidateBVN_Alat_RequiresPhone(t *testing.T) {
+// Wema registration validates the BVN through the KYC provider (no OTP); it
+// never falls back to ALAT's BVN + OTP account creation API.
+func TestValidateBVN_Wema_RequiresKYCProvider(t *testing.T) {
 	s := &Service{
 		providerPreference: &mockProviderPref{provider: "wema"},
 		alat:               &mockAlatValidator{},
 	}
-
-	_, _, _, err := s.ValidateBVN(context.Background(), OptimusBVNValidationRequest{
-		Bvn:   "12345678901",
-		Email: "test@example.com",
-		// PhoneNumber omitted
+	_, ref, requiresOTP, err := s.ValidateBVN(context.Background(), OptimusBVNValidationRequest{
+		Bvn:         "12345678901",
+		Email:       "test@example.com",
+		PhoneNumber: "08012345678",
 	})
-	if err == nil {
-		t.Fatal("expected error when phone_number is missing for ALAT")
+	if err == nil || ref != "" || requiresOTP {
+		t.Fatalf("got ref=%q requiresOTP=%v err=%v; want a not-configured error and no OTP", ref, requiresOTP, err)
 	}
 }
 
-func TestResendOTP_Alat_Success(t *testing.T) {
-	var calledTrackingID string
-	mock := &mockAlatValidator{
-		resendFunc: func(ctx context.Context, trackingID string) error {
-			calledTrackingID = trackingID
-			return nil
-		},
-	}
-
-	s := &Service{
-		providerPreference: &mockProviderPref{provider: "wema"},
-		alat:               mock,
-	}
-
-	ref, err := s.ResendOTP(context.Background(), "tracking-uuid-xyz")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ref != "tracking-uuid-xyz" || calledTrackingID != "tracking-uuid-xyz" {
-		t.Errorf("expected tracking id tracking-uuid-xyz, got ref=%s called=%s", ref, calledTrackingID)
+func TestOTP_Wema_Rejected(t *testing.T) {
+	for _, provider := range []string{"wema", "alat"} {
+		s := &Service{
+			providerPreference: &mockProviderPref{provider: provider},
+			alat:               &mockAlatValidator{},
+		}
+		if err := s.VerifyOTP(context.Background(), "08012345678", "123456", "test@example.com", "ref-1"); !errors.Is(err, errWemaNoOTP) {
+			t.Errorf("%s VerifyOTP err = %v; want errWemaNoOTP", provider, err)
+		}
+		if _, err := s.ResendOTP(context.Background(), "ref-1"); !errors.Is(err, errWemaNoOTP) {
+			t.Errorf("%s ResendOTP err = %v; want errWemaNoOTP", provider, err)
+		}
 	}
 }
 
-func TestResendOTP_Alat_Error(t *testing.T) {
-	mock := &mockAlatValidator{
-		resendFunc: func(ctx context.Context, trackingID string) error {
-			return errors.New("upstream alat error")
-		},
-	}
-
-	s := &Service{
-		providerPreference: &mockProviderPref{provider: "alat"},
-		alat:               mock,
-	}
-
-	_, err := s.ResendOTP(context.Background(), "tracking-uuid-xyz")
-	if err == nil {
-		t.Fatal("expected error on upstream ALAT failure")
-	}
-}
-
-func TestVerifyOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
+// An OTP challenge is routed by the provider on its verification record, not
+// the current preference; a Wema record is rejected since Wema has no OTP.
+func TestOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
 	sqlDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
 	}
 	defer sqlDB.Close()
-
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
 	if err != nil {
 		t.Fatalf("open gorm db: %v", err)
 	}
-
-	repo := NewRepository(gormDB, nil)
-
-	var alatCalled bool
-	mockAlat := &mockAlatValidator{
-		verifyStep2Func: func(ctx context.Context, phone, otp, trackingID string) error {
-			alatCalled = true
-			return nil
-		},
-	}
-
 	s := &Service{
-		repo:               repo,
-		providerPreference: &mockProviderPref{provider: "optimus"}, // Preference changed to optimus!
-		alat:               mockAlat,
+		repo:               NewRepository(gormDB, nil),
+		providerPreference: &mockProviderPref{provider: "optimus"}, // preference changed to optimus
+		alat:               &mockAlatValidator{},
 	}
 
-	// Expect lookup of pending verification record with provider_verification_id = "tracking-ref-123"
-	rows := sqlmock.NewRows([]string{"id", "provider", "provider_verification_id", "status"}).
-		AddRow("rec-1", "wema", "tracking-ref-123", "pending")
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "wallet_verification_records" WHERE provider_verification_id = $1 ORDER BY created_at DESC LIMIT $2`)).
-		WithArgs("tracking-ref-123", 1).
-		WillReturnRows(rows)
-
-	// Expect update to verified (GORM wraps writes in Begin/Commit)
-	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "wallet_verification_records" SET "status"=$1,"verified_at"=$2,"updated_at"=$3 WHERE provider_verification_id = $4 AND status = $5`)).
-		WithArgs("verified", sqlmock.AnyArg(), sqlmock.AnyArg(), "tracking-ref-123", "pending").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-
-	err = s.VerifyOTP(context.Background(), "08012345678", "123456", "test@example.com", "tracking-ref-123")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !alatCalled {
-		t.Fatal("expected ALAT verification to be called based on DB record provider, but it was not")
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
-	}
-}
-
-func TestResendOTP_UsesRecordProviderEvenIfPreferenceChanged(t *testing.T) {
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("create sqlmock: %v", err)
-	}
-	defer sqlDB.Close()
-
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
-	if err != nil {
-		t.Fatalf("open gorm db: %v", err)
+	for _, ref := range []string{"tracking-ref-123", "tracking-ref-456"} {
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "wallet_verification_records" WHERE provider_verification_id = $1 ORDER BY created_at DESC LIMIT $2`)).
+			WithArgs(ref, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "provider", "provider_verification_id", "status"}).
+				AddRow("rec-"+ref, "wema", ref, "pending"))
 	}
 
-	repo := NewRepository(gormDB, nil)
-
-	var alatResendCalled bool
-	mockAlat := &mockAlatValidator{
-		resendFunc: func(ctx context.Context, trackingID string) error {
-			alatResendCalled = true
-			return nil
-		},
+	if err := s.VerifyOTP(context.Background(), "08012345678", "123456", "test@example.com", "tracking-ref-123"); !errors.Is(err, errWemaNoOTP) {
+		t.Fatalf("VerifyOTP err = %v; want errWemaNoOTP (record provider wema)", err)
 	}
-
-	s := &Service{
-		repo:               repo,
-		providerPreference: &mockProviderPref{provider: "optimus"}, // Preference changed to optimus!
-		alat:               mockAlat,
-	}
-
-	// Expect lookup of pending verification record with provider_verification_id = "tracking-ref-456"
-	rows := sqlmock.NewRows([]string{"id", "provider", "provider_verification_id", "status"}).
-		AddRow("rec-2", "wema", "tracking-ref-456", "pending")
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "wallet_verification_records" WHERE provider_verification_id = $1 ORDER BY created_at DESC LIMIT $2`)).
-		WithArgs("tracking-ref-456", 1).
-		WillReturnRows(rows)
-
-	ref, err := s.ResendOTP(context.Background(), "tracking-ref-456")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ref != "tracking-ref-456" || !alatResendCalled {
-		t.Fatalf("expected ALAT resend to be called, got ref=%s, called=%v", ref, alatResendCalled)
+	if _, err := s.ResendOTP(context.Background(), "tracking-ref-456"); !errors.Is(err, errWemaNoOTP) {
+		t.Fatalf("ResendOTP err = %v; want errWemaNoOTP (record provider wema)", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
@@ -290,7 +176,7 @@ func expectVerificationByID(mock sqlmock.Sqlmock, id string, row []driver.Value)
 	if row != nil {
 		rows.AddRow(row...)
 	}
-	mock.ExpectQuery(`SELECT \* FROM "wallet_verification_records" WHERE id = \$1 LIMIT \$2 FOR UPDATE`).
+	mock.ExpectQuery(`SELECT \* FROM "wallet_verification_records" WHERE id = \$1 LIMIT \$2`).
 		WithArgs(id, 1).
 		WillReturnRows(rows)
 }

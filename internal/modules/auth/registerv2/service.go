@@ -13,15 +13,13 @@ import (
 	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
-	"neat_mobile_app_backend/internal/modules/device"
-	"neat_mobile_app_backend/internal/modules/referrals"
-	"neat_mobile_app_backend/internal/modules/wallet"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
 	"net/mail"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -54,6 +52,11 @@ type Service struct {
 	optimusProductID        string
 	auditLogger             auditlog.AuditLogger
 	alat                    AlatValidator
+
+	// Test seams; zero values mean production behaviour.
+	wemaPollInterval time.Duration // between ALAT account polls (default 1s)
+	lockOverride     func(ctx context.Context, keys ...string) (release func(), ok bool, err error)
+	persistOverride  func(ctx context.Context, rl *opLogger, reg *registration, walletResp *auth.WalletResponse, provider string, inTx func(*gorm.DB) error) error
 }
 
 func (s *Service) SetAlatValidator(alat AlatValidator) {
@@ -88,6 +91,13 @@ func NewService(
 	}
 }
 
+func (s *Service) lockRegistration(ctx context.Context, keys ...string) (func(), bool, error) {
+	if s.lockOverride != nil {
+		return s.lockOverride(ctx, keys...)
+	}
+	return s.repo.LockRegistration(ctx, keys...)
+}
+
 // CurrentProvider returns which BaaS provider should be used for the next
 // registration.
 func (s *Service) CurrentProvider(ctx context.Context) (string, error) {
@@ -109,16 +119,16 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 	rl.step("input")
 	if err := authchecker.ValidatePassword(req.Password); err != nil {
-		return nil, err
+		return nil, asUserError(err)
 	}
 	if req.Password != req.ConfirmPassword {
-		return nil, fmt.Errorf("password and confirm password do not match")
+		return nil, userErrorf("password and confirm password do not match")
 	}
 	if err := authchecker.ValidatePin(req.TransactionPin); err != nil {
-		return nil, err
+		return nil, asUserError(err)
 	}
 	if req.TransactionPin != req.ConfirmTransactionPin {
-		return nil, fmt.Errorf("transaction pin and confirm transaction pin do not match")
+		return nil, userErrorf("transaction pin and confirm transaction pin do not match")
 	}
 
 	normalizedPhone, err := phoneutil.NormalizeNigerianNumber(strings.TrimSpace(req.PhoneNumber))
@@ -141,7 +151,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		phoneRecord.VerifiedPhone == nil || strings.TrimSpace(*phoneRecord.VerifiedPhone) != normalizedPhone {
 		rl.Warnf("phone verification rejected: %s", describeContactRecord(phoneRecord, models.VerificationTypePhone,
 			phoneRecord != nil && phoneRecord.VerifiedPhone != nil && strings.TrimSpace(*phoneRecord.VerifiedPhone) == normalizedPhone))
-		return nil, fmt.Errorf("phone number is not verified")
+		return nil, userErrorf("phone number is not verified")
 	}
 
 	rl.step("email_verification")
@@ -154,12 +164,27 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		emailRecord.VerifiedEmail == nil || strings.ToLower(strings.TrimSpace(*emailRecord.VerifiedEmail)) != normalizedEmail {
 		rl.Warnf("email verification rejected: %s", describeContactRecord(emailRecord, models.VerificationTypeEmail,
 			emailRecord != nil && emailRecord.VerifiedEmail != nil && strings.ToLower(strings.TrimSpace(*emailRecord.VerifiedEmail)) == normalizedEmail))
-		return nil, fmt.Errorf("email is not verified")
+		return nil, userErrorf("email is not verified")
 	}
 
 	// NIN is collected and persisted below but no longer gates registration -
 	// it isn't sent to either provider's wallet-creation call, so validating
 	// it up front only added friction without changing the outcome.
+
+	// One registration per person at a time: without this, two parallel
+	// calls both pass the duplicate checks below, both reach the provider,
+	// and only one can be saved - the other's account is orphaned. Held
+	// until Register returns.
+	rl.step("registration_lock")
+	release, locked, err := s.lockRegistration(ctx, "phone:"+normalizedPhone, "bvn:"+bvnSubjectHash(req.BVN))
+	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		rl.Warnf("another registration for this phone or bvn is in progress")
+		return nil, userErrorf("a registration for this phone number or BVN is already in progress, please wait a moment and try again")
+	}
+	defer release()
 
 	// A local user for this phone means registration already completed here
 	// previously - fail fast with a clear error rather than calling the
@@ -239,7 +264,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			// /auth/validate/bvn was never called for this BVN - fallback only
 			// applies to calls that were made and Optimus rejected, so this is
 			// a hard stop, not a fallback trigger.
-			return nil, fmt.Errorf("bvn is not verified")
+			return nil, userErrorf("bvn is not verified")
 
 		case latestBVNRecord.Status == models.VerificationStatusVerified:
 			// Optimus validated the BVN and its OTP challenge was confirmed - use it.
@@ -260,7 +285,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			// confirmed (or failed). This is not a fallback case - falling back
 			// here would let someone route around the OTP consent step just by
 			// not completing it, so the user must resolve it instead.
-			return nil, fmt.Errorf("bvn otp verification is not complete")
+			return nil, userErrorf("bvn otp verification is not complete")
 		}
 
 	case "wema", "alat":
@@ -271,15 +296,15 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 
 		switch {
 		case latestBVNRecord == nil:
-			return nil, fmt.Errorf("bvn is not verified")
+			return nil, userErrorf("bvn is not verified")
 		case latestBVNRecord.Status == models.VerificationStatusVerified:
 			// Expired/used records were already rejected by checkBVNRecordUsable.
 			bvnRecord = latestBVNRecord
 			actualProvider = "wema"
 		case latestBVNRecord.Status == models.VerificationStatusFailed:
-			return nil, fmt.Errorf("bvn verification failed")
+			return nil, userErrorf("bvn verification failed")
 		default:
-			return nil, fmt.Errorf("bvn otp verification is not complete")
+			return nil, userErrorf("bvn otp verification is not complete")
 		}
 
 	default:
@@ -290,12 +315,52 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	rl.step("input")
 	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
 	if err != nil {
-		return nil, fmt.Errorf("invalid date of birth: %w", err)
+		return nil, &userError{msg: "invalid date of birth, use the format YYYY-MM-DD", err: err}
 	}
 
-	mobileUserID := uuid.NewString()
-	internalWalletID := uuid.NewString()
-	rl.with("user_id", mobileUserID)
+	// The profile's name and DOB must be the BVN's, checked before anything is
+	// created at the provider. Records from providers that don't return them
+	// (e.g. Optimus) skip the check.
+	rl.step("bvn_identity")
+	if err := checkApplicantMatchesBVN(bvnRecord, req.FirstName, req.LastName, req.Dob); err != nil {
+		rl.Warnf("applicant does not match bvn record %s: %v", bvnRecordID(bvnRecord), err)
+		return nil, err
+	}
+
+	passwordHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+	pinHash, err := auth.HashPassword(req.TransactionPin)
+	if err != nil {
+		return nil, err
+	}
+
+	reg := &registration{
+		mobileUserID:      uuid.NewString(),
+		internalWalletID:  uuid.NewString(),
+		phone:             normalizedPhone,
+		email:             normalizedEmail,
+		firstName:         req.FirstName,
+		lastName:          req.LastName,
+		dobRaw:            strings.TrimSpace(req.Dob),
+		dob:               dob,
+		address:           strings.TrimSpace(req.Address),
+		bvn:               strings.TrimSpace(req.BVN),
+		nin:               strings.TrimSpace(req.NIN),
+		passwordHash:      passwordHash,
+		pinHash:           pinHash,
+		biometrics:        *req.IsBiomtricsEnabled,
+		referralCode:      strings.TrimSpace(req.ReferralCode),
+		device:            req.Device,
+		ip:                ip,
+		phoneVerification: phoneRecord.ID,
+		emailVerification: emailRecord.ID,
+	}
+	if bvnRecord != nil {
+		reg.bvnVerification = bvnRecord.ID
+	}
+	rl.with("user_id", reg.mobileUserID)
 
 	// We're about to trigger an external, irreversible side effect (wallet
 	// creation at the provider) - from here on, work must not be abortable
@@ -313,352 +378,38 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	providerCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 	defer cancel()
 
-	var walletResp *auth.WalletResponse
 	if actualProvider == "wema" {
-		var acctDetails *AlatAccountDetails
-
-		// 1. Resolve and verify the face check record. Required on every path,
-		// including reuse of an existing account below - otherwise anyone with
-		// verified phone/email/BVN records could claim an existing Wema account
-		// without ever passing the face check.
-		// Security: live image MUST come from an authoritative, matched
-		// FaceCheckRecord linked to this BVN. Client-supplied raw images or
-		// unverified/mismatched face checks are rejected.
-		rl.step("face_check")
-		faceRecord, err := s.resolveMatchedFaceRecord(ctx, requestedFace, bvnRecord)
-		if err != nil {
-			return nil, err
-		}
-		if faceRecord == nil || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
-			rl.Warnf("no usable face check: %s requested_face=%s resolved_face=%s",
-				describeBVNRecord(bvnRecord), describeFaceRecord(requestedFace), describeFaceRecord(faceRecord))
-			return nil, fmt.Errorf("face biometric verification is required for wema registration and must be verified")
-		}
-		rl.with("face_check", faceRecord.ID)
-
-		rl.step("alat_account_lookup")
-
-		// 2. Check if the account already exists on Wema (e.g. from an earlier
-		// attempt whose DB write failed/timed out). Reusing the existing account
-		// prevents ALAT duplicate errors on retry. Only a clean "no account"
-		// answer (success with empty data, or ALAT's own error envelope) may
-		// lead to creation - a network/timeout error says nothing about whether
-		// an account exists, so creating one then could duplicate it.
-		existingDetails, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
-		if fetchErr != nil {
-			var alatErr *appErr.AlatError
-			if !errors.As(fetchErr, &alatErr) {
-				rl.Errorf("transient alat account lookup error, not creating an account: %v", fetchErr)
-				return nil, fmt.Errorf("wema is temporarily unavailable, please try again shortly")
-			}
-			rl.Infof("alat reports no account yet (%s) - will create", describeAlatError(alatErr))
-		} else if existingDetails == nil || strings.TrimSpace(existingDetails.AccountNumber) == "" {
-			rl.Infof("alat returned no account number - will create")
-		}
-
-		if fetchErr == nil && existingDetails != nil && strings.TrimSpace(existingDetails.AccountNumber) != "" {
-			if !alatAccountMatchesApplicant(existingDetails, normalizedEmail, req.FirstName, req.LastName) {
-				rl.Criticalf("existing alat account %s does not match applicant, refusing reuse: %s",
-					existingDetails.AccountNumber, describeIdentityMismatch(existingDetails, normalizedEmail, req.FirstName, req.LastName))
-				return nil, fmt.Errorf("a wema account already exists for this phone under different details")
-			}
-			acctDetails = existingDetails
-			rl.with("account", existingDetails.AccountNumber)
-			rl.Infof("reusing existing alat account, skipping Tier 2 creation")
-		} else {
-			liveImage := strings.TrimSpace(*faceRecord.FaceImageProvided)
-
-			// 3. Invoke Step 1c (Tier 2 Face Account Creation) without residential address
-			tier2Req := AlatTier2FaceRequest{
-				BVN:                strings.TrimSpace(req.BVN),
-				NIN:                strings.TrimSpace(req.NIN),
-				PhoneNumber:        normalizedPhone,
-				EmailAddress:       normalizedEmail,
-				ResidentialAddress: nil, // Omitted for Tier 2; address is added when upgrading to Tier 3
-				LiveImageOfFace:    liveImage,
-				CorrelationID:      uuid.NewString(),
-			}
-
-			rl.step("alat_tier2_create")
-			rl.with("correlation_id", tier2Req.CorrelationID)
-			trackingID, tier2Err := s.alat.PostTier2PartnershipAccountWithFace(providerCtx, tier2Req)
-			if tier2Err != nil {
-				return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", tier2Err)
-			}
-			rl.with("tracking_id", trackingID)
-			rl.Infof("tier 2 account creation accepted by alat")
-
-			rl.step("alat_account_poll")
-
-			// 4. Poll GetPartnershipAccountDetails with a bounded backoff loop
-			const (
-				maxAccountPollAttempts = 4
-				accountPollInterval    = 1000 * time.Millisecond
-			)
-
-			for attempt := 1; attempt <= maxAccountPollAttempts; attempt++ {
-				select {
-				case <-providerCtx.Done():
-					return nil, fmt.Errorf("context canceled while waiting for account creation: %w", providerCtx.Err())
-				case <-time.After(accountPollInterval):
-				}
-
-				details, fetchErr := s.alat.GetPartnershipAccountDetails(providerCtx, normalizedPhone)
-				if fetchErr == nil && details != nil && strings.TrimSpace(details.AccountNumber) != "" {
-					acctDetails = details
-					rl.with("account", details.AccountNumber)
-					rl.Infof("alat account available on poll attempt %d/%d", attempt, maxAccountPollAttempts)
-					break
-				}
-				rl.Infof("alat account not ready on poll attempt %d/%d (err=%v)", attempt, maxAccountPollAttempts, fetchErr)
-			}
-		}
-
-		if acctDetails == nil || strings.TrimSpace(acctDetails.AccountNumber) == "" {
-			rl.Warnf("alat accepted tier 2 creation but no account appeared while polling - a retry should pick it up via the existing-account path")
-			return nil, fmt.Errorf("wema alat account was not generated yet, please try again shortly")
-		}
-
-		rl.step("alat_lift_pnd")
-
-		// Lift PND restriction with retry so the account can be debited
-		var pndErr error
-		const maxPndAttempts = 3
-		for attempt := 1; attempt <= maxPndAttempts; attempt++ {
-			pndErr = s.alat.PartnerDebitRestrictionManagement(providerCtx, "LiftPnd", acctDetails.AccountNumber)
-			if pndErr == nil {
-				rl.Infof("lifted PND on attempt %d/%d", attempt, maxPndAttempts)
-				break
-			}
-			rl.Warnf("lift PND attempt %d/%d failed: %v", attempt, maxPndAttempts, pndErr)
-			if attempt < maxPndAttempts {
-				select {
-				case <-providerCtx.Done():
-					return nil, providerCtx.Err()
-				case <-time.After(time.Duration(attempt*500) * time.Millisecond):
-				}
-			}
-		}
-		if pndErr != nil {
-			rl.Criticalf("could not lift PND after %d attempts - account exists at alat but nothing is saved locally yet: %v", maxPndAttempts, pndErr)
-			return nil, fmt.Errorf("failed to lift debit restriction on account: %w", pndErr)
-		}
-
-		fullName := strings.TrimSpace(acctDetails.FirstName + " " + acctDetails.LastName)
-		if fullName == "" {
-			fullName = strings.TrimSpace(req.FirstName + " " + req.LastName)
-		}
-
-		walletResp = &auth.WalletResponse{
-			Customer: &auth.WalletCustomer{
-				ID:          mobileUserID,
-				PhoneNumber: normalizedPhone,
-				FirstName:   req.FirstName,
-				LastName:    req.LastName,
-				Email:       normalizedEmail,
-				DateOfBirth: req.Dob,
-				Currency:    "NGN",
-				Tier:        "2",
-			},
-			Wallet: &auth.WalletInfo{
-				AccountNumber: acctDetails.AccountNumber,
-				AccountName:   fullName,
-				BankCode:      "000017",
-				BankName:      "WEMA BANK",
-				WalletId:      acctDetails.AccountNumber,
-				Status:        "active",
-			},
-		}
-	} else {
-		rl.step("wallet_generate")
-		if walletGenerator == nil {
-			rl.Errorf("wallet generator for %s is nil - check wiring in router.go", actualProvider)
-			return nil, fmt.Errorf("wallet generation service is not configured")
-		}
-		walletResp, err = walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
-			RequestID:         mobileUserID,
-			BVN:               strings.TrimSpace(req.BVN),
-			FirstName:         strings.TrimSpace(req.FirstName),
-			LastName:          strings.TrimSpace(req.LastName),
-			MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
-			DateOfBirth:       strings.TrimSpace(req.Dob),
-			PhoneNumber:       normalizedPhone,
-			Email:             normalizedEmail,
-			Address:           strings.TrimSpace(req.Address),
-			HouseNo:           strings.TrimSpace(req.HouseNo),
-			ProductId:         s.optimusProductID,
-			Gender:            strings.TrimSpace(req.Gender),
-			MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
-			Metadata:          map[string]interface{}{},
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	if walletResp == nil || walletResp.Customer == nil || walletResp.Wallet == nil {
-		rl.Criticalf("wallet provider returned an incomplete response (customer_nil=%t wallet_nil=%t) - an account may exist at the provider",
-			walletResp == nil || walletResp.Customer == nil, walletResp == nil || walletResp.Wallet == nil)
-		return nil, fmt.Errorf("wallet provider returned an incomplete response")
-	}
-	rl.with("account", walletResp.Wallet.AccountNumber)
-
-	rl.step("persist")
-
-	passwordHash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		return nil, err
-	}
-	pinHash, err := auth.HashPassword(req.TransactionPin)
-	if err != nil {
-		return nil, err
+		return s.registerWema(providerCtx, rl, req, reg, requestedFace, bvnRecord)
 	}
 
-	address := strings.TrimSpace(req.Address)
-	if walletResp.Customer.Address != nil && strings.TrimSpace(*walletResp.Customer.Address) != "" {
-		address = strings.TrimSpace(*walletResp.Customer.Address)
+	rl.step("wallet_generate")
+	if walletGenerator == nil {
+		rl.Errorf("wallet generator for %s is nil - check wiring in router.go", actualProvider)
+		return nil, fmt.Errorf("wallet generation service is not configured")
 	}
-
-	capExpiresAt := time.Now().UTC().Add(24 * time.Hour)
-	addressCopy := address
-	emailCopy := normalizedEmail
-	user := &models.User{
-		ID:                     mobileUserID,
-		WalletID:               internalWalletID,
-		Phone:                  normalizedPhone,
-		Address:                &addressCopy,
-		Email:                  &emailCopy,
-		FirstName:              req.FirstName,
-		LastName:               req.LastName,
-		PasswordHash:           passwordHash,
-		PinHash:                pinHash,
-		DOB:                    dob,
-		BVN:                    strings.TrimSpace(req.BVN),
-		NIN:                    strings.TrimSpace(req.NIN),
-		IsEmailVerified:        true,
-		IsPhoneVerified:        true,
-		IsBvnVerified:          true,
-		IsNinVerified:          false,
-		IsBiometricsEnabled:    *req.IsBiomtricsEnabled,
-		IsNotificationsEnabled: true,
-		ActivationCapAmount:    s.activationCapKobo,
-		ActivationCapExpiresAt: &capExpiresAt,
-	}
-
-	walletRecord := &wallet.CustomerWallet{
-		ID:               uuid.NewString(),
-		InternalWalletID: internalWalletID,
-		MobileUserID:     mobileUserID,
-		PhoneNumber:      walletResp.Customer.PhoneNumber,
-		WalletCustomerID: walletResp.Customer.ID,
-		Metadata:         walletResp.Customer.Metadata,
-		BVN:              walletResp.Customer.BVN,
-		Currency:         walletResp.Customer.Currency,
-		DateOfBirth:      walletResp.Customer.DateOfBirth,
-		FirstName:        walletResp.Customer.FirstName,
-		LastName:         walletResp.Customer.LastName,
-		Email:            walletResp.Customer.Email,
-		Address:          address,
-		MerchantID:       walletResp.Customer.MerchantId,
-		Tier:             walletResp.Customer.Tier,
-		WalletID:         walletResp.Wallet.WalletId,
-		Mode:             walletResp.Customer.Mode,
-		BankName:         walletResp.Wallet.BankName,
-		BankCode:         walletResp.Wallet.BankCode,
-		Provider:         actualProvider,
-		AccountNumber:    walletResp.Wallet.AccountNumber,
-		AccountName:      walletResp.Wallet.AccountName,
-		AccountRef:       walletResp.Wallet.AccountReference,
-		BookedBalance:    walletResp.Wallet.BookedBalance,
-		AvailableBalance: walletResp.Wallet.AvailableBalance,
-		Status:           walletResp.Wallet.Status,
-		WalletType:       walletResp.Wallet.WalletType,
-		Updated:          walletResp.Wallet.Updated,
-		CreatedAt:        time.Now().UTC(),
-	}
-
-	now := time.Now().UTC()
-	usedVerificationIDs := []string{phoneRecord.ID, emailRecord.ID}
-	if bvnRecord != nil {
-		usedVerificationIDs = append(usedVerificationIDs, bvnRecord.ID)
-	}
-
-	err = s.tx.WithTx(providerCtx, func(txDB *gorm.DB) error {
-		authRepo := auth.NewRespository(txDB, s.repo.cipher)
-		walletRepo := wallet.NewRepository(txDB)
-		deviceRepo := device.NewRepository(txDB)
-		verificationRepo := NewRepository(txDB, s.repo.cipher)
-
-		if _, txErr := authRepo.CreateUser(providerCtx, user); txErr != nil {
-			return txErr
-		}
-		if txErr := authRepo.LinkBVNRecordToUser(providerCtx, user.BVN, user.ID); txErr != nil {
-			return txErr
-		}
-		if txErr := walletRepo.CreateWallet(providerCtx, walletRecord); txErr != nil {
-			return txErr
-		}
-
-		deviceService := device.NewService(*deviceRepo, s.auditLogger)
-		if txErr := deviceService.BindDevice(providerCtx, mobileUserID, &device.DeviceBindingRequest{
-			DeviceID:    req.Device.DeviceID,
-			PublicKey:   req.Device.PublicKey,
-			DeviceName:  req.Device.DeviceName,
-			DeviceModel: req.Device.DeviceModel,
-			OS:          req.Device.OS,
-			OSVersion:   req.Device.OSVersion,
-			AppVersion:  req.Device.AppVersion,
-			IP:          ip,
-		}); txErr != nil {
-			return txErr
-		}
-
-		for _, id := range usedVerificationIDs {
-			if id == "" {
-				continue
-			}
-			if txErr := verificationRepo.MarkVerificationUsed(providerCtx, id, now); txErr != nil {
-				return txErr
-			}
-		}
-
-		referralsService := referrals.NewService(referrals.NewRepository(txDB), s.auditLogger)
-
-		if strings.TrimSpace(req.ReferralCode) != "" {
-			if txErr := referralsService.RedeemReferralCode(providerCtx, mobileUserID, req.ReferralCode); txErr != nil {
-				return txErr
-			}
-		}
-
-		if txErr := referralsService.GenerateAndAssignReferralCode(providerCtx, mobileUserID); txErr != nil {
-			return txErr
-		}
-
-		return nil
+	walletResp, err := walletGenerator.GenerateWallet(providerCtx, &auth.WalletPayload{
+		RequestID:         reg.mobileUserID,
+		BVN:               reg.bvn,
+		FirstName:         strings.TrimSpace(req.FirstName),
+		LastName:          strings.TrimSpace(req.LastName),
+		MothersMaidenName: strings.TrimSpace(req.MothersMaidenName),
+		DateOfBirth:       reg.dobRaw,
+		PhoneNumber:       normalizedPhone,
+		Email:             normalizedEmail,
+		Address:           reg.address,
+		HouseNo:           strings.TrimSpace(req.HouseNo),
+		ProductId:         s.optimusProductID,
+		Gender:            strings.TrimSpace(req.Gender),
+		MaritalStatus:     strings.TrimSpace(req.MaritalStatus),
+		Metadata:          map[string]interface{}{},
 	})
 	if err != nil {
-		// The provider account exists but the user/wallet rows were rolled
-		// back - this needs reconciling by hand if the user doesn't retry.
-		rl.Criticalf("provider account created but saving user/wallet failed (rolled back) - provider=%s account=%s: %v",
-			actualProvider, walletResp.Wallet.AccountNumber, err)
 		return nil, err
 	}
-
-	rl.step("session")
-	if s.sessionIssuer == nil {
-		rl.Errorf("session issuer is nil - user %s was created but cannot log in until it is wired", mobileUserID)
-		return nil, fmt.Errorf("session issuer is not configured")
-	}
-	session, err := s.sessionIssuer.IssueSessionTokens(providerCtx, mobileUserID, req.Device.DeviceID, ip)
-	if err != nil {
-		rl.Warnf("user created but session issuance failed - the user can log in normally: %v", err)
+	if err := s.persistRegistration(providerCtx, rl, reg, walletResp, actualProvider, nil); err != nil {
 		return nil, err
 	}
-	rl.step("")
-
-	return &RegisterResponse{
-		AccessToken:  session.AccessToken,
-		RefreshToken: session.RefreshToken,
-	}, nil
+	return s.issueSession(providerCtx, rl, reg.mobileUserID, reg.device.DeviceID, ip)
 }
 
 // RequestPhoneOTP sends an OTP to the given phone number, delegating to the
@@ -683,7 +434,7 @@ func (s *Service) RequestPhoneOTP(ctx context.Context, phone string) (string, er
 		Destination: normalized,
 	})
 	if err != nil {
-		return "", err
+		return "", otpError(err)
 	}
 	return result.OTPID, nil
 }
@@ -701,7 +452,7 @@ func (s *Service) VerifyPhoneOTP(ctx context.Context, otpID, code string) (strin
 		Code:    strings.TrimSpace(code),
 	})
 	if err != nil {
-		return "", err
+		return "", otpError(err)
 	}
 	return result.VerificationID, nil
 }
@@ -717,7 +468,7 @@ func (s *Service) RequestEmailOTP(ctx context.Context, email string) (string, er
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	address, err := mail.ParseAddress(normalized)
 	if err != nil || address.Address != normalized {
-		return "", fmt.Errorf("invalid email address")
+		return "", userErrorf("invalid email address")
 	}
 
 	result, err := s.otpManager.Issue(ctx, otp.IssueOTPInput{
@@ -726,7 +477,7 @@ func (s *Service) RequestEmailOTP(ctx context.Context, email string) (string, er
 		Destination: normalized,
 	})
 	if err != nil {
-		return "", err
+		return "", otpError(err)
 	}
 	return result.OTPID, nil
 }
@@ -744,7 +495,7 @@ func (s *Service) VerifyEmailOTP(ctx context.Context, otpID, code string) (strin
 		Code:    strings.TrimSpace(code),
 	})
 	if err != nil {
-		return "", err
+		return "", otpError(err)
 	}
 	return result.VerificationID, nil
 }
@@ -797,6 +548,10 @@ func (s *Service) validateBVNWithRetries(ctx context.Context, request OptimusBVN
 // false, verificationID/providerReferenceID empty). When Optimus is active,
 // this behaves as before - a real validate-bvn call that starts an Optimus
 // OTP challenge the client must confirm via VerifyOTP (requiresOTP true).
+// errWemaNoOTP: Wema registration verifies the customer with face liveness,
+// so there is no OTP challenge to verify or resend.
+var errWemaNoOTP error = &userError{msg: "wema registration does not use an otp"}
+
 func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationRequest) (verificationID, providerReferenceID string, requiresOTP bool, err error) {
 	rl := newOpLogger("validate_bvn")
 	rl.with("bvn", maskIdentityNumber(strings.TrimSpace(request.Bvn))).with("phone", maskPhone(request.PhoneNumber))
@@ -820,41 +575,22 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 		if s.alat == nil {
 			return "", "", false, fmt.Errorf("wema alat validation service is not configured")
 		}
-		// If sessionIssuer is configured, validate BVN via the active KYC provider (Tendar or Prembly)
-		// without requiring SMS OTP, since Face Biometrics will be used instead.
-		if s.sessionIssuer != nil {
-			rl.step("kyc_validate_bvn")
-			bvnResp, err := s.sessionIssuer.ValidateBVN(ctx, strings.TrimSpace(request.Bvn))
-			if err != nil {
-				if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, "wema", err); recordErr != nil {
-					rl.Errorf("could not save the failed verification record: %v", recordErr)
-				}
-				return "", "", false, err
-			}
-			return bvnResp.GetVerificationID(), "", false, nil
+		// Wema registration opens the account with face biometrics (liveness),
+		// so the BVN is validated via the active KYC provider (Tendar or
+		// Prembly) without an SMS OTP. ALAT's BVN + OTP account creation API
+		// is deliberately not used here.
+		if s.sessionIssuer == nil {
+			return "", "", false, fmt.Errorf("wema bvn validation requires a kyc provider, which is not configured")
 		}
-
-		phone := strings.TrimSpace(request.PhoneNumber)
-		if phone == "" {
-			return "", "", false, fmt.Errorf("phone_number is required for wema alat bvn validation")
-		}
-		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
-		if err != nil {
-			return "", "", false, err
-		}
-		rl.step("alat_bvn_otp")
-		trackingID, err := s.alat.PostPartnershipAccountCreationWithBvn(ctx, normalizedPhone, strings.TrimSpace(request.Email), strings.TrimSpace(request.Bvn))
+		rl.step("kyc_validate_bvn")
+		bvnResp, err := s.sessionIssuer.ValidateBVN(ctx, strings.TrimSpace(request.Bvn))
 		if err != nil {
 			if recordErr := s.createFailedIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, "wema", err); recordErr != nil {
 				rl.Errorf("could not save the failed verification record: %v", recordErr)
 			}
 			return "", "", false, err
 		}
-		verificationID, err = s.createPendingIdentityVerification(ctx, models.VerificationTypeBVN, request.Bvn, trackingID, "wema")
-		if err != nil {
-			return "", "", false, err
-		}
-		return verificationID, trackingID, true, nil
+		return bvnResp.GetVerificationID(), "", false, nil
 	}
 
 	if s.optimus == nil {
@@ -895,33 +631,6 @@ func (s *Service) ValidateBVN(ctx context.Context, request OptimusBVNValidationR
 	return verificationID, providerReferenceID, true, nil
 }
 
-func (s *Service) ValidateNINWithOptimus(ctx context.Context, request OptimusNINValidationRequest) (string, string, error) {
-	if s.optimus == nil {
-		return "", "", fmt.Errorf("optimus validation service is not configured")
-	}
-
-	// RequestId is our correlation ID for this call, not client input -
-	// always generated server-side, overwriting anything the caller sent.
-	request.RequestId = uuid.NewString()
-
-	response, err := s.optimus.ValidateNIN(ctx, request)
-	if err != nil {
-		return "", "", err
-	}
-	if response == nil || !isOptimusSuccess(response.ResponseCode) {
-		return "", "", optimusResponseError(response)
-	}
-
-	// See the matching comment in ValidateBVN: record starts pending, not
-	// verified, until VerifyOTP confirms the OTP challenge this call triggered.
-	providerReferenceID := strings.TrimSpace(response.Data)
-	verificationID, err := s.createPendingIdentityVerification(ctx, models.VerificationTypeNIN, request.Nin, providerReferenceID, "optimus")
-	if err != nil {
-		return "", "", err
-	}
-	return verificationID, providerReferenceID, nil
-}
-
 // ValidateBVNWithFace performs face biometric verification against the BVN on record using
 // the active KYC provider (Tendar or Prembly) configured in system preferences.
 func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceRequest) (faceCheckID string, retErr error) {
@@ -954,22 +663,22 @@ func (s *Service) ValidateBVNWithFace(ctx context.Context, req BVNWithFaceReques
 			if rec != nil {
 				rl.Warnf("verification record has type %s, want bvn", rec.Type)
 			}
-			return "", fmt.Errorf("bvn verification record not found")
+			return "", userErrorf("bvn verification record not found")
 		}
 		rl.Infof("loaded %s", describeBVNRecord(rec))
 		if rec.SubjectHash != bvnSubjectHash(req.BVN) {
 			rl.Warnf("request bvn does not hash to the record's subject_hash - client sent a different bvn than it validated")
-			return "", fmt.Errorf("bvn does not match the verification record")
+			return "", userErrorf("bvn does not match the verification record")
 		}
 		switch rec.Status {
 		case models.VerificationStatusVerified, models.VerificationStatusPending:
 		case models.VerificationStatusUsed:
-			return "", fmt.Errorf("this bvn has already been used for registration")
+			return "", userErrorf("this bvn has already been used for registration")
 		default:
-			return "", fmt.Errorf("bvn verification failed, please validate again")
+			return "", userErrorf("bvn verification failed, please validate again")
 		}
 		if isExpired(rec.ExpiresAt, time.Now().UTC()) {
-			return "", fmt.Errorf("bvn verification has expired, please validate again")
+			return "", userErrorf("bvn verification has expired, please validate again")
 		}
 		record = rec
 	}
@@ -1058,9 +767,9 @@ func checkBVNRecordUsable(rec *models.VerificationRecord) error {
 	}
 	switch {
 	case rec.Status == models.VerificationStatusUsed:
-		return fmt.Errorf("this bvn has already been used for registration")
+		return userErrorf("this bvn has already been used for registration")
 	case rec.Status == models.VerificationStatusVerified && isExpired(rec.ExpiresAt, time.Now().UTC()):
-		return fmt.Errorf("bvn verification has expired, please validate again")
+		return userErrorf("bvn verification has expired, please validate again")
 	}
 	return nil
 }
@@ -1088,15 +797,20 @@ func (s *Service) resolveMatchedFaceRecord(ctx context.Context, requested *model
 	return fc, nil
 }
 
-// alatAccountMatchesApplicant reports whether an existing ALAT account looks
-// like it belongs to this applicant. Each field ALAT returns must match;
-// fields ALAT leaves empty are not held against the applicant.
-func alatAccountMatchesApplicant(d *AlatAccountDetails, email, firstName, lastName string) bool {
+// alatAccountMatchesApplicant reports whether an existing ALAT account belongs
+// to this applicant. ALAT names the account from the BVN, so its names are
+// matched against the BVN record's name - not what the customer typed, which
+// would strand a retry whenever the typed name differs from the BVN (e.g.
+// "Bayo" vs "Adebayo") after ALAT had already created the account. Email is
+// not compared: it's a contact detail the customer may change between
+// attempts. Without a BVN name (e.g. Optimus records), it falls back to the
+// submitted names. Fields ALAT leaves empty aren't held against the applicant.
+func alatAccountMatchesApplicant(d *AlatAccountDetails, bvnRecord *models.VerificationRecord, firstName, lastName string) bool {
 	if d == nil {
 		return false
 	}
-	if v := strings.TrimSpace(d.Email); v != "" && !strings.EqualFold(v, strings.TrimSpace(email)) {
-		return false
+	if bvnName := verifiedName(bvnRecord); bvnName != "" {
+		return nameTokensWithin(bvnName, d.FirstName, d.LastName)
 	}
 	if v := normalizeName(d.FirstName); v != "" && v != normalizeName(firstName) {
 		return false
@@ -1105,6 +819,61 @@ func alatAccountMatchesApplicant(d *AlatAccountDetails, email, firstName, lastNa
 		return false
 	}
 	return true
+}
+
+// checkApplicantMatchesBVN rejects a registration whose first name, last name
+// or date of birth differ from the verified BVN. Names match when every word
+// of the submitted first and last name appears in the BVN name, so word order
+// and an omitted middle name don't count against the customer.
+func checkApplicantMatchesBVN(bvnRecord *models.VerificationRecord, firstName, lastName, dob string) error {
+	if bvnName := verifiedName(bvnRecord); bvnName != "" {
+		if !nameTokensWithin(bvnName, firstName, lastName) {
+			return userErrorf("first and last name must match the name on your BVN")
+		}
+	}
+	if bvnRecord != nil && bvnRecord.VerifiedDOB != nil && strings.TrimSpace(*bvnRecord.VerifiedDOB) != "" {
+		if !auth.DOBsMatch(*bvnRecord.VerifiedDOB, dob) {
+			return userErrorf("date of birth must match the date of birth on your BVN")
+		}
+	}
+	return nil
+}
+
+func verifiedName(rec *models.VerificationRecord) string {
+	if rec == nil || rec.VerifiedName == nil {
+		return ""
+	}
+	return strings.TrimSpace(*rec.VerifiedName)
+}
+
+func bvnRecordID(rec *models.VerificationRecord) string {
+	if rec == nil {
+		return "-"
+	}
+	return rec.ID
+}
+
+// nameTokensWithin reports whether every word in names appears in full, and
+// at least one word is given. Comparison ignores case and punctuation.
+func nameTokensWithin(full string, names ...string) bool {
+	have := map[string]bool{}
+	for _, t := range nameTokens(full) {
+		have[t] = true
+	}
+	n := 0
+	for _, name := range names {
+		for _, t := range nameTokens(name) {
+			if !have[t] {
+				return false
+			}
+			n++
+		}
+	}
+	return n > 0
+}
+
+func nameTokens(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) })
 }
 
 func normalizeName(s string) string {
@@ -1141,22 +910,7 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, otpToken, email, referen
 	rl.step("provider_verify")
 
 	if strings.EqualFold(provider, "wema") || strings.EqualFold(provider, "alat") {
-		if s.alat == nil {
-			return fmt.Errorf("wema alat validation service is not configured")
-		}
-		normalizedPhone, err := phoneutil.NormalizeNigerianNumber(phone)
-		if err != nil {
-			return err
-		}
-		err = s.alat.ValidateBVNandEnqueueAccountCreation(ctx, normalizedPhone, strings.TrimSpace(otpToken), strings.TrimSpace(referenceID))
-		if err != nil {
-			return err
-		}
-		if s.repo != nil {
-			rl.step("mark_verified")
-			return s.repo.MarkVerificationVerifiedByProviderReference(ctx, strings.TrimSpace(referenceID), time.Now().UTC())
-		}
-		return nil
+		return errWemaNoOTP
 	}
 
 	if s.optimus == nil {
@@ -1196,13 +950,7 @@ func (s *Service) ResendOTP(ctx context.Context, referenceID string) (newRef str
 	rl.step("provider_resend")
 
 	if strings.EqualFold(provider, "wema") || strings.EqualFold(provider, "alat") {
-		if s.alat == nil {
-			return "", fmt.Errorf("wema alat validation service is not configured")
-		}
-		if err := s.alat.ResendOtp(ctx, strings.TrimSpace(referenceID)); err != nil {
-			return "", err
-		}
-		return referenceID, nil
+		return "", errWemaNoOTP
 	}
 
 	if s.optimus == nil {
@@ -1305,15 +1053,15 @@ func isOptimusSuccess(code string) bool {
 
 func optimusResponseError(response *OptimusResponse) error {
 	if response == nil {
-		return fmt.Errorf("we could not verify your details right now. Please try again")
+		return userErrorf("we could not verify your details right now. Please try again")
 	}
 	if message := strings.TrimSpace(response.ResponseMessage); message != "" {
-		return fmt.Errorf("%s", message)
+		return userErrorf("%s", message)
 	}
 	if response.Error != nil {
-		return fmt.Errorf("%v", response.Error)
+		return userErrorf("%v", response.Error)
 	}
-	return fmt.Errorf("we could not verify your details. Please check them and try again")
+	return userErrorf("we could not verify your details. Please check them and try again")
 }
 
 func maskIdentityNumber(value string) string {

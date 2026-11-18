@@ -227,8 +227,13 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	if strings.TrimSpace(cfg.AlatBaseURL) == "" || strings.TrimSpace(cfg.AlatAPIKey) == "" {
 		log.Print("WARNING: ALAT_BASE_URL or ALAT_API_KEY is empty - Wema/ALAT is unavailable; registrations routed to wema will fail")
 	}
-	alatClient := baas.NewAlat(cfg.AlatBaseURL, cfg.AlatAPIKey, cfg.AlatSubscriptionKey)
+	alatClient := baas.NewAlat(cfg.AlatBaseURL, cfg.AlatAPIKey, cfg.AlatSubscriptionKey, cfg.AlatChannelID)
 	wemaAdapter := wemaadapter.New(alatClient)
+	alatSigner := wemaadapter.NewSigner(cfg.AlatSecuritySecret)
+	if !alatSigner.Configured() {
+		log.Print("WARNING: ALAT_SECURITY_SECRET is empty - Wema transfers, payouts, VAS purchases and statements will fail")
+	}
+	wemaTransfers := wemaadapter.NewTransferAdapter(alatClient, alatSigner)
 
 	var walletRegistrationService auth.WalletService
 	if cfg.WalletProvider == "optimus" {
@@ -381,19 +386,80 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	transferProviders := map[string]wallet.TransferProviderService{
 		"providus": providusAdapter,
 		"optimus":  optimusadapter.New(optimusRegistrationClient),
+		// Wallet rows store whichever of these WALLET_PROVIDER held.
+		wallet.ProviderWema: wemaTransfers,
+		wallet.ProviderAlat: wemaTransfers,
 	}
 	walletService := wallet.NewService(walletRepo, transferProviders, walletPinVerifier, wallet.SettlementAccount{
 		AccountNumber: cfg.LoanRepaymentAccountNumber,
 		BankCode:      cfg.LoanRepaymentBankCode,
 		AccountName:   cfg.LoanRepaymentAccountName,
 	}, deviceService, billableSMSSenderSMSLive, notificationService, cfg.AppName, smsService, smsBillingService, auditLogger)
+	walletService.ConfigureWema(wemaTransfers, alatSigner)
+
+	// Finishes Wema registrations whose ALAT account appeared without (or
+	// before) a webhook reaching us, and expires ones that never did.
+	var pendingWemaRegMu sync.Mutex
+	var pendingWemaRegRunning bool
+	c.AddFunc("@every 1m", func() {
+		pendingWemaRegMu.Lock()
+		if pendingWemaRegRunning {
+			pendingWemaRegMu.Unlock()
+			return
+		}
+		pendingWemaRegRunning = true
+		pendingWemaRegMu.Unlock()
+
+		defer func() {
+			pendingWemaRegMu.Lock()
+			pendingWemaRegRunning = false
+			pendingWemaRegMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := optimusRegistrationService.SweepPendingWemaRegistrations(ctx, 20); err != nil {
+			log.Printf("pending wema registration sweep: %v", err)
+		}
+	})
+
+	// Polls ALAT for pending Wema debits/payouts. ALAT's Transaction Callback
+	// (/api/v1/alat/transaction) settles most of them first; this sweep
+	// catches callbacks that were missed or arrived before ALAT was final.
+	var wemaReconcileMu sync.Mutex
+	var wemaReconcileRunning bool
+	c.AddFunc("@every 1m", func() {
+		wemaReconcileMu.Lock()
+		if wemaReconcileRunning {
+			wemaReconcileMu.Unlock()
+			return
+		}
+		wemaReconcileRunning = true
+		wemaReconcileMu.Unlock()
+
+		defer func() {
+			wemaReconcileMu.Lock()
+			wemaReconcileRunning = false
+			wemaReconcileMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := walletService.ReconcilePendingWemaTransactions(ctx, 50); err != nil {
+			log.Printf("wema transfer reconciliation sweep: %v", err)
+		}
+	})
 
 	loanRepo := loanproduct.NewRepository(db, bvnNinCipher)
 	loanService := loanproduct.NewService(loanRepo, cbaClient, cbaClient, cbaClient, authchecker.New(loanRepo), walletService, deviceService, billableSMSSenderSMSLive, cfg.AppName, auditLogger)
 	loanHandler := loanproduct.NewHandler(loanService)
 	loanproduct.RegisterRoutes(apiV1, loanHandler, authGuard, deviceValidator)
 	walletHandler := wallet.NewHandler(walletService, cfg.ProvidusSecretKey)
+	// ALAT's Account Creation webhook finishes registrations still waiting on
+	// their Wema account.
+	walletHandler.SetAlatAccountCreationListener(optimusRegistrationService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
+	wallet.RegisterV2AccountStatementRoutes(apiV2, walletHandler, authGuard, deviceValidator)
 
 	accountClosureRepo := accountclosure.NewRepository(db)
 	userService := user.NewService(user.NewRepository(db))
@@ -407,6 +473,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	} else {
 		vasRepo := vas.NewRepository(db)
 		vasService := vas.NewService(vasRepo, xpressPayments, vasRepo, vasRepo, providusWalletService, authService, user.NewRepository(db), auditLogger)
+		vasService.ConfigureWema(wemaTransfers)
 		vasHandler := vas.NewHandler(vasService)
 		vas.RegisterRoutes(apiV1, authGuard, deviceValidator, vasHandler)
 
@@ -465,12 +532,16 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Print("Providus webhook secret is not configured; credit webhook will reject all requests")
 	}
 	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusSecretKey))
+	alatWebhookAuth := middleware.AlatWebhookIPAllowlist(cfg.AlatWebhookAllowedIPs, cfg.AlatWebhookTrustedProxies)
+	wallet.RegisterAlatCallbackRoutes(webhooksGroup, walletHandler, alatWebhookAuth)
+	wallet.RegisterAlatWebhookRoutes(apiV1, walletHandler, alatWebhookAuth)
 
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
 
 	accountRepo := account.NewRepository(db, bvnNinCipher)
 	accountService := account.NewService(accountRepo, s3bucketClient, notificationService, cfg.PDFShiftAPIKey, deviceService, cfg.TransferLimitAmount, providusWalletService, walletService, auditLogger)
+	accountService.WemaAccountFinder = wemaadapter.NewAccountFinder(alatClient)
 	accountHandler := account.NewHandler(accountService)
 	account.RegisterRoutes(apiV1, accountHandler, authGuard, deviceValidator)
 
@@ -541,6 +612,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 		log.Print("CBA webhook secret is not configured; internal callback endpoints will reject requests")
 	}
 	loanproduct.RegisterInternalRoutes(internalV1, internalLoanHandler, internalAuth)
+	wallet.RegisterInternalRoutes(internalV1, walletHandler, internalAuth)
 
 	reportingRepo := reporting.NewRepository(db, bvnNinCipher)
 	reportingService := reporting.NewService(reportingRepo)
@@ -592,6 +664,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 
 	tierRepo := tier.NewRepository(db)
 	tierService := tier.NewService(tierRepo, ninValidator, userService, faceNinService, bvnNinCipher, auditLogger)
+	tierService.ConfigureWema(walletService, wemaadapter.NewTierUpgrader(alatClient))
 	tierHandler := tier.NewHandler(tierService)
 	tier.RegisterRoutes(apiV1, authGuard, deviceValidator, tierHandler)
 

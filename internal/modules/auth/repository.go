@@ -398,8 +398,32 @@ func (r *Repository) CheckSession(ctx context.Context, sid, mobileUserID, device
 	return true, nil
 }
 
+// CreateFaceCheckRecord stores a face check. The selfie is biometric data and
+// is encrypted at rest like BVN/NIN; the caller's struct keeps its plaintext.
 func (r *Repository) CreateFaceCheckRecord(ctx context.Context, record *models.FaceCheckRecord) error {
-	return r.db.WithContext(ctx).Create(record).Error
+	toInsert := *record
+	if record.FaceImageProvided != nil && *record.FaceImageProvided != "" {
+		enc, err := r.cipher.Encrypt(*record.FaceImageProvided)
+		if err != nil {
+			return err
+		}
+		toInsert.FaceImageProvided = &enc
+	}
+	return r.db.WithContext(ctx).Create(&toInsert).Error
+}
+
+// decryptFaceImage reverses CreateFaceCheckRecord's encryption. Rows written
+// before encryption hold plain base64, which Decrypt passes through.
+func decryptFaceImage(cipher *crypto.FieldCipher, record *models.FaceCheckRecord) error {
+	if record == nil || record.FaceImageProvided == nil || *record.FaceImageProvided == "" {
+		return nil
+	}
+	plain, err := cipher.Decrypt(*record.FaceImageProvided)
+	if err != nil {
+		return err
+	}
+	record.FaceImageProvided = &plain
+	return nil
 }
 
 func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models.FaceCheckRecord, error) {
@@ -408,6 +432,9 @@ func (r *Repository) GetFaceCheckRecord(ctx context.Context, id string) (*models
 		Where("id = ?", id).
 		First(&record).Error
 	if err != nil {
+		return nil, err
+	}
+	if err := decryptFaceImage(r.cipher, &record); err != nil {
 		return nil, err
 	}
 	return &record, nil
@@ -420,6 +447,9 @@ func (r *Repository) GetFaceCheckRecordByVerificationID(ctx context.Context, ver
 		Order("created_at DESC").
 		First(&record).Error
 	if err != nil {
+		return nil, err
+	}
+	if err := decryptFaceImage(r.cipher, &record); err != nil {
 		return nil, err
 	}
 	return &record, nil

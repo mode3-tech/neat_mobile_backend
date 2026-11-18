@@ -70,6 +70,162 @@
     }
   ],
   "paths": {
+    "/v2/account/statement/": {
+      "servers": [
+        {
+          "url": "https://neat-mobile-backend-2wbh.onrender.com/api"
+        }
+      ],
+      "post": {
+        "tags": ["Account"],
+        "summary": "Initiate an account statement",
+        "description": "Initiates an ALAT statement for the authenticated user's Wema account.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["date_from", "date_to"],
+                "properties": {
+                  "date_from": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD or RFC 3339."
+                  },
+                  "date_to": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD or RFC 3339."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Statement initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "statement_id": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date range or request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/account/statement/{statement_id}": {
+      "servers": [
+        {
+          "url": "https://neat-mobile-backend-2wbh.onrender.com/api"
+        }
+      ],
+      "get": {
+        "tags": ["Account"],
+        "summary": "Fetch an account statement",
+        "description": "Fetches a previously initiated ALAT statement for the authenticated user's Wema account.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Device-ID",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "in": "path",
+            "name": "statement_id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Statement ID returned by the initiate endpoint."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statement transactions fetched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": { "type": "string" },
+                          "amount": { "type": "number" },
+                          "type": { "type": "string" },
+                          "date": { "type": "string" },
+                          "narration": { "type": "string" },
+                          "status": { "type": "string" },
+                          "reference_id": { "type": "string" },
+                          "tran_id": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or missing statement ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized or missing device ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API401Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/auth/otp/phone/request": {
       "servers": [
         { "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }

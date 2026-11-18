@@ -334,6 +334,26 @@ func TestReconcileAmbiguousOutcome_NoPersistedRequestID_SkipsCheckStatus(t *test
 	}
 }
 
+func TestReconcileAmbiguousOutcome_WemaDoesNotUseXpressOrProvidusRefund(t *testing.T) {
+	vasProvider := &fakeReconciliationVASProvider{}
+	txr := &fakeReconciliationTxr{}
+	svc := NewService(nil, vasProvider, nil, txr, nil, nil, nil, nil)
+
+	svc.reconcileAmbiguousOutcome(context.Background(), &Transaction{
+		ID:           "wema-tx",
+		Status:       TransactionStatusPending,
+		VASRequestID: "wema-ref",
+		Metadata:     map[string]any{"provider": "wema"},
+	})
+
+	if len(vasProvider.checkStatusCalls) != 0 {
+		t.Errorf("Wema transaction was sent to Xpress CheckStatus: %v", vasProvider.checkStatusCalls)
+	}
+	if len(txr.updates) != 0 {
+		t.Errorf("Wema transaction was modified without ALAT status confirmation: %+v", txr.updates)
+	}
+}
+
 func TestReconcileRefundPending_PartialCompletion_OnlyRetriesMissingHalf(t *testing.T) {
 	repo, mock, cleanup := newMockVASRepository(t)
 	defer cleanup()

@@ -44,6 +44,10 @@ type Service struct {
 	outgoingSMSService OutgoingSMSService
 	SMSBilling         SMSBillingRecovery
 	auditLogger        auditlog.AuditLogger
+
+	// Set by ConfigureWema; nil when Wema ALAT isn't wired.
+	wema   WemaProvider
+	signer TokenSigner
 }
 
 func NewService(repo *Repository, transferProviders map[string]TransferProviderService, pinVerifier *authchecker.Verifier, settlementAccount SettlementAccount, deviceVerifier DeviceVerifier, smsSender SmsSender, notifier NotificationSender, appName string, outgoingSMSService OutgoingSMSService, smsBilling SMSBillingRecovery, auditLogger auditlog.AuditLogger) *Service {
@@ -105,8 +109,10 @@ func (s *Service) transferProviderForWallet(w *CustomerWallet) (TransferProvider
 	return provider, nil
 }
 
-func (s *Service) FetchBanks(ctx context.Context) ([]Bank, error) {
-	banks, err := s.defaultTransferProvider().FetchBanks(ctx)
+// FetchBanks lists banks from the provider that issued the user's wallet, so
+// the bank codes match what that provider's transfer endpoint expects.
+func (s *Service) FetchBanks(ctx context.Context, mobileUserID string) ([]Bank, error) {
+	banks, err := s.providerForUser(ctx, mobileUserID).FetchBanks(ctx)
 	if err != nil {
 		log.Printf("wallet service: failed to fetch banks: %v", err)
 		return nil, appErr.ErrFetchingBanks
@@ -115,8 +121,8 @@ func (s *Service) FetchBanks(ctx context.Context) ([]Bank, error) {
 	return banks, nil
 }
 
-func (s *Service) FetchBankDetails(ctx context.Context, accountNumber, bankCode string) (*BankDetails, error) {
-	bankDetails, err := s.defaultTransferProvider().FetchBankDetails(ctx, accountNumber, bankCode)
+func (s *Service) FetchBankDetails(ctx context.Context, mobileUserID, accountNumber, bankCode string) (*BankDetails, error) {
+	bankDetails, err := s.providerForUser(ctx, mobileUserID).FetchBankDetails(ctx, accountNumber, bankCode)
 	if err != nil {
 		log.Printf("wallet service: failed to fetch bank details account_number=%s bank_code=%s: %v", accountNumber, bankCode, err)
 		return nil, appErr.ErrFetchingBankDetails
@@ -152,10 +158,10 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 	}
 
 	// Optimus has no GetCustomerDetails/balance-lookup equivalent, so this
-	// check only runs for Providus - Optimus's own transfer endpoint is the
-	// source of truth on sufficiency and will reject the request itself.
+	// check only runs for Providus and Wema - Optimus's own transfer endpoint
+	// is the source of truth on sufficiency and will reject the request itself.
 	if strings.TrimSpace(wallet.Provider) != "optimus" {
-		customerDetails, err := transferProvider.GetCustomerDetails(ctx, wallet.WalletCustomerID)
+		customerDetails, err := transferProvider.GetCustomerDetails(ctx, customerLookupKey(wallet))
 		if err != nil {
 			if updateErr := s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed); updateErr != nil {
 				log.Printf("wallet service: failed to mark tx=%s failed after customer-details error: %v", txID, updateErr)
@@ -234,7 +240,7 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		narration = *req.Narration
 	}
 
-	bankName, err := s.resolveBankDetails(ctx, req.SortCode)
+	bankName, err := s.resolveBankDetails(ctx, transferProvider, req.SortCode)
 	if err != nil {
 		return nil, appErr.ErrFundsTransfer
 	}
@@ -373,7 +379,7 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 	// See the matching comment in InitiateTransfer: Optimus has no
 	// GetCustomerDetails/balance-lookup equivalent.
 	if strings.TrimSpace(w.Provider) != "optimus" {
-		customerDetails, err := transferProvider.GetCustomerDetails(ctx, w.WalletCustomerID)
+		customerDetails, err := transferProvider.GetCustomerDetails(ctx, customerLookupKey(w))
 		if err != nil {
 			log.Printf("wallet service: failed to get customer details: %v", err)
 			return appErr.ErrMakingLoanRepayment
@@ -428,6 +434,9 @@ func (s *Service) TransferForLoanRepayment(ctx context.Context, mobileUserID str
 		AccountNumber: s.settlementAccount.AccountNumber,
 		AccountName:   &accountName,
 		Narration:     &narration,
+		// Same purpose as in InitiateTransfer; the Wema adapter also uses
+		// it as the ALAT transaction reference.
+		Metadata: map[string]any{"internal_transaction_id": txID},
 	})
 	if err != nil {
 		if updateErr := s.repo.UpdateTransactionStatus(ctx, txID, transaction.TransactionStatusFailed); updateErr != nil {
@@ -685,8 +694,8 @@ func (s *Service) GetUserWalletBalance(ctx context.Context, mobileUserID string)
 	return wallet, nil
 }
 
-func (s *Service) resolveBankDetails(ctx context.Context, sortCode string) (string, error) {
-	banks, err := s.defaultTransferProvider().FetchBanks(ctx)
+func (s *Service) resolveBankDetails(ctx context.Context, provider TransferProviderService, sortCode string) (string, error) {
+	banks, err := provider.FetchBanks(ctx)
 	if err != nil {
 		log.Printf("wallet service: failed to fetch banks - %s", err)
 		return "", err

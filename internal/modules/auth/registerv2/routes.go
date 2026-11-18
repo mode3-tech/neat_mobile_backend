@@ -14,12 +14,11 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 		optimus.POST("/validate/bvn", handler.ValidateBVN)
 		optimus.POST("/validate/bvn-with-face", handler.ValidateBVNWithFace)
 		optimus.GET("/address-dropdown", handler.GetAddressDropDownList)
-		// /validate/nin intentionally not routed: NIN is now collected and
-		// stored via /register without a separate pre-flight validation step.
-		// handler.ValidateNINWithOptimus / Service.ValidateNINWithOptimus are
-		// kept for potential reuse but are unreachable from the client flow.
+		// No /validate/nin: NIN is collected via /register without a separate
+		// pre-flight validation step.
 		optimus.POST("/otp/verify", handler.VerifyOTP)
 		optimus.POST("/otp/resend", handler.ResendOTP)
 		optimus.POST("/register", handler.Register)
+		optimus.POST("/register/status", handler.RegistrationStatus)
 	}
 }
