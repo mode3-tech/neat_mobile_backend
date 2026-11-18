@@ -10479,7 +10479,15 @@
           },
           "is_biometrics_enabled": { "type": "boolean", "example": true },
           "referral_code": { "type": "string", "example": "JANE10" },
-          "device": { "$ref": "#/components/schemas/DeviceRegistrationRequest" }
+          "device": { "$ref": "#/components/schemas/DeviceRegistrationRequest" },
+          "bvn_w_face_verification_id": {
+            "type": "string",
+            "description": "Required for Wema registration; returned by /v2/auth/validate/bvn-with-face."
+          },
+          "supports_pending": {
+            "type": "boolean",
+            "description": "Set true to receive a pending registration ID and poll /v2/auth/register/status if ALAT account creation is still in progress."
+          }
         }
       },
       "DeviceRegistrationRequest": {
@@ -10601,14 +10609,6 @@
           },
           "device": {
             "$ref": "#/components/schemas/DeviceRegistrationRequest"
-          },
-          "bvn_w_face_verification_id": {
-            "type": "string",
-            "description": "Required for Wema registration; returned by /v2/auth/validate/bvn-with-face."
-          },
-          "supports_pending": {
-            "type": "boolean",
-            "description": "Set true to receive a pending registration ID and poll /v2/auth/register/status if ALAT account creation is still in progress."
           }
         }
       },
