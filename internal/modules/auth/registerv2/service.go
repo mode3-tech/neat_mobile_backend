@@ -13,6 +13,7 @@ import (
 	auditlog "neat_mobile_app_backend/internal/modules/audit_log"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/auth/otp"
+	"neat_mobile_app_backend/internal/modules/device"
 	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/models"
 	"net/mail"
@@ -52,6 +53,9 @@ type Service struct {
 	optimusProductID        string
 	auditLogger             auditlog.AuditLogger
 	alat                    AlatValidator
+	// demoPhone is the normalized whitelisted demo phone (DEMO_LOGIN_PHONE).
+	// Registration for it skips wallet generation and user inserts; empty disables it.
+	demoPhone string
 
 	// Test seams; zero values mean production behaviour.
 	wemaPollInterval time.Duration // between ALAT account polls (default 1s)
@@ -61,10 +65,6 @@ type Service struct {
 
 func (s *Service) SetAlatValidator(alat AlatValidator) {
 	s.alat = alat
-	// demoPhone is the normalized whitelisted demo phone (DEMO_LOGIN_PHONE).
-	// Registration for it skips wallet generation and all inserts except the
-	// device binding, since the demo account already exists. Empty = disabled.
-	demoPhone string
 }
 
 func NewService(
@@ -192,16 +192,9 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	}
 	defer release()
 
-	// A local user for this phone means registration already completed here
-	// previously - fail fast with a clear error rather than calling the
-	// wallet provider again, which would just be rejected as a duplicate.
+	// The demo account is the exception: it already exists, so reuse it rather
+	// than provisioning another wallet or inserting a second user.
 	rl.step("duplicate_check")
-	authRepo := auth.NewRespository(s.repo.db, s.repo.cipher)
-	if existing, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
-		rl.Warnf("user already exists for this phone (user_id=%s)", existing.ID)
-		return nil, appErr.ErrUserExists
-	// The demo account is the exception: it always exists already, so instead
-	// of rejecting it we keep the existing user and short-circuit below.
 	authRepo := auth.NewRespository(s.repo.db, s.repo.cipher)
 	var existingUser *models.User
 	isDemo := false
@@ -214,6 +207,10 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return nil, lookupErr
 	}
+	if isDemo {
+		return s.registerDemo(ctx, existingUser, req, ip)
+	}
+
 	// Same reasoning for BVN/NIN: wallet_users.bvn_hash/nin_hash are unique,
 	// so a duplicate would otherwise only fail at CreateUser - after the
 	// provider account had already been created and left orphaned.
@@ -330,9 +327,6 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	rl.with("actual_provider", actualProvider)
 
 	rl.step("input")
-	if isDemo {
-		return s.registerDemo(ctx, existingUser, req, ip)
-	}
 
 	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
 	if err != nil {
