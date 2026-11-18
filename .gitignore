@@ -3,6 +3,7 @@
 .env
 /cmd/seed-dev-user
 *.md
+!docs/wema-handover.md
 *.exe
 *.txt
 *.asc

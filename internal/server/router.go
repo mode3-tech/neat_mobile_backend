@@ -473,6 +473,7 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	walletHandler.SetAlatAccountCreationListener(optimusRegistrationService)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 	wallet.RegisterV2AccountStatementRoutes(apiV2, walletHandler, authGuard, deviceValidator)
+	wallet.RegisterV2BankRoutes(apiV2, walletHandler, authGuard, deviceValidator)
 
 	accountClosureRepo := accountclosure.NewRepository(db)
 	userService := user.NewService(user.NewRepository(db))
