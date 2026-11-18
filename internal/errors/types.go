@@ -1,5 +1,11 @@
 package errors
 
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
 type XpressPayProviderError struct {
 	Status  int
 	Code    string
@@ -79,4 +85,53 @@ type SMSLiveError struct {
 
 func (e SMSLiveErrorResponse) Error() string {
 	return e.Message
+}
+
+type AlatError struct {
+	StatusCode string   `json:"statusCode"`
+	Code       string   `json:"code"`
+	Message    string   `json:"message"`
+	Errors     []string `json:"errors"`
+	// NoResponse is true when ALAT gave no usable answer: client not
+	// configured, transport/read/decode failure, or a non-2xx without ALAT's
+	// error body. Callers must not read such an error as ALAT saying "no"
+	// (e.g. "no account exists") - the request may have gone through.
+	NoResponse bool `json:"-"`
+}
+
+func (e *AlatError) UnmarshalJSON(data []byte) error {
+	type Alias AlatError
+	aux := struct {
+		StatusCode any `json:"statusCode"`
+		Code       any `json:"code"`
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.StatusCode != nil {
+		e.StatusCode = fmt.Sprint(aux.StatusCode)
+	}
+	if aux.Code != nil {
+		e.Code = fmt.Sprint(aux.Code)
+	}
+	return nil
+}
+
+func (e *AlatError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Message != "" {
+		return e.Message
+	}
+	if len(e.Errors) > 0 {
+		return strings.Join(e.Errors, ", ")
+	}
+	if e.Code != "" {
+		return e.Code
+	}
+	return "wema alat provider error"
 }

@@ -299,3 +299,115 @@ func (r *Repository) FindUserByWalletCustomerID(ctx context.Context, walletCusto
 	}
 	return &user, nil
 }
+
+// FindPendingProviderTransactions returns pending transactions on wallets
+// issued by any of providers that have a provider reference and were created
+// between newerThan and olderThan - the candidates for a status poll. Least
+// recently polled come first.
+func (r *Repository) FindPendingProviderTransactions(ctx context.Context, providers []string, olderThan, newerThan time.Time, limit int) ([]transaction.Transaction, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var txs []transaction.Transaction
+	err := r.db.WithContext(ctx).
+		Table("wallet_transactions").
+		Select("wallet_transactions.*").
+		Joins("JOIN wallet_customer_wallets ON wallet_customer_wallets.internal_wallet_id = wallet_transactions.wallet_id").
+		Where("LOWER(wallet_customer_wallets.provider) IN ?", providers).
+		Where("wallet_transactions.status = ?", transaction.TransactionStatusPending).
+		Where("wallet_transactions.provider_reference <> ''").
+		Where("wallet_transactions.created_at < ? AND wallet_transactions.created_at > ?", olderThan, newerThan).
+		Order("wallet_transactions.last_reconciliation_attempt_at ASC NULLS FIRST").
+		Limit(limit).
+		Find(&txs).Error
+	return txs, err
+}
+
+// FindPendingProviderTransactionByID returns transaction id if it is still
+// pending, has a provider reference, and belongs to a wallet issued by one of
+// providers. It returns gorm.ErrRecordNotFound otherwise.
+func (r *Repository) FindPendingProviderTransactionByID(ctx context.Context, id string, providers []string) (*transaction.Transaction, error) {
+	var tx transaction.Transaction
+	err := r.db.WithContext(ctx).
+		Table("wallet_transactions").
+		Select("wallet_transactions.*").
+		Joins("JOIN wallet_customer_wallets ON wallet_customer_wallets.internal_wallet_id = wallet_transactions.wallet_id").
+		Where("wallet_transactions.id = ?", id).
+		Where("LOWER(wallet_customer_wallets.provider) IN ?", providers).
+		Where("wallet_transactions.status = ?", transaction.TransactionStatusPending).
+		Where("wallet_transactions.provider_reference <> ''").
+		First(&tx).Error
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}
+
+// MarkReconciliationAttempt records that a status poll ran for txID.
+func (r *Repository) MarkReconciliationAttempt(ctx context.Context, txID string) error {
+	return r.db.WithContext(ctx).Model(&transaction.Transaction{}).
+		Where("id = ?", txID).
+		Updates(map[string]interface{}{
+			"reconciliation_attempts":        gorm.Expr("reconciliation_attempts + 1"),
+			"last_reconciliation_attempt_at": time.Now().UTC(),
+		}).Error
+}
+
+// MarkPendingTransactionStatus moves txID out of pending. A transaction that
+// is no longer pending is left alone, so a concurrent settlement wins.
+func (r *Repository) MarkPendingTransactionStatus(ctx context.Context, txID string, status transaction.TransactionStatus) error {
+	return r.db.WithContext(ctx).Model(&transaction.Transaction{}).
+		Where("id = ? AND status = ?", txID, transaction.TransactionStatusPending).
+		Update("status", status).Error
+}
+
+// CompleteCreditTransaction settles a pending credit: marks it successful,
+// snapshots the balances and credits the wallet. A no-op if txID is no longer
+// pending.
+func (r *Repository) CompleteCreditTransaction(ctx context.Context, txID, walletID string) error {
+	return r.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
+		var tx transaction.Transaction
+		if err := db.Set("gorm:query_option", "FOR UPDATE").
+			Where("id = ?", txID).
+			First(&tx).Error; err != nil {
+			return err
+		}
+		if tx.Status != transaction.TransactionStatusPending {
+			return nil
+		}
+
+		var wallet CustomerWallet
+		if err := db.Set("gorm:query_option", "FOR UPDATE").
+			Where("internal_wallet_id = ?", walletID).
+			First(&wallet).Error; err != nil {
+			return err
+		}
+
+		if err := db.Model(&transaction.Transaction{}).
+			Where("id = ?", txID).
+			Updates(map[string]interface{}{
+				"status":         transaction.TransactionStatusSuccessful,
+				"balance_before": wallet.AvailableBalance,
+				"balance_after":  wallet.AvailableBalance + tx.Amount,
+			}).Error; err != nil {
+			return err
+		}
+		return db.Model(&CustomerWallet{}).
+			Where("internal_wallet_id = ?", walletID).
+			Updates(map[string]interface{}{
+				"booked_balance":    gorm.Expr("booked_balance + ?", tx.Amount),
+				"available_balance": gorm.Expr("available_balance + ?", tx.Amount),
+				"updated_at":        time.Now(),
+			}).Error
+	})
+}
+
+// FindTransactionByReference looks a transaction up by its internal
+// reference (used as the idempotency key for internal payouts).
+func (r *Repository) FindTransactionByReference(ctx context.Context, reference string) (*transaction.Transaction, error) {
+	var tx transaction.Transaction
+	if err := r.db.WithContext(ctx).Where("reference = ?", reference).First(&tx).Error; err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}

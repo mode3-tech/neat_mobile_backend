@@ -2,6 +2,7 @@ package vas
 
 type AirtimePayload struct {
 	UniqueCode  string `json:"unique_code" binding:"required"`
+	Network     string `json:"network"`
 	PhoneNumber string `json:"phone_number" binding:"required"`
 	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
@@ -10,6 +11,8 @@ type AirtimePayload struct {
 
 type DataPayload struct {
 	UniqueCode  string `json:"unique_code" binding:"required"`
+	Network     string `json:"network"`
+	PackageCode int    `json:"package_code"`
 	PhoneNumber string `json:"phone_number" binding:"required"`
 	Amount      int64  `json:"amount" binding:"required,gt=0"`
 	Pin         string `json:"pin" binding:"required"`
@@ -24,6 +27,8 @@ type ElectricityValidationPayload struct {
 
 type PayElectricityPayload struct {
 	UniqueCode    string      `json:"unique_code" binding:"required"`
+	PackageID     int         `json:"package_id"`
+	Charge        float64     `json:"charge"`
 	AccountNumber string      `json:"account_number" binding:"required"`
 	AccountType   AccountType `json:"account_type" binding:"required"`
 	Amount        int64       `json:"amount" binding:"required,gt=0"`
@@ -38,13 +43,15 @@ type ValidateCablePayload struct {
 }
 
 type PayCablePayload struct {
-	UniqueCode    string `json:"unique_code" binding:"required"`
-	AccountNumber string `json:"account_number" binding:"required"`
-	AccountType   string `json:"account_type" binding:"required"`
-	NoOfMonth     int    `json:"no_of_month" binding:"required,gt=0"`
-	Amount        int64  `json:"amount" binding:"required,gt=0"`
-	Pin           string `json:"pin" binding:"required"`
-	UseCashback   bool   `json:"use_cashback"`
+	UniqueCode    string  `json:"unique_code" binding:"required"`
+	PackageID     int     `json:"package_id"`
+	Charge        float64 `json:"charge"`
+	AccountNumber string  `json:"account_number" binding:"required"`
+	AccountType   string  `json:"account_type" binding:"required"`
+	NoOfMonth     int     `json:"no_of_month" binding:"required,gt=0"`
+	Amount        int64   `json:"amount" binding:"required,gt=0"`
+	Pin           string  `json:"pin" binding:"required"`
+	UseCashback   bool    `json:"use_cashback"`
 }
 
 type BillingsByCategoryIDPayload struct {
@@ -70,6 +77,7 @@ type Biller struct {
 	ID           int              `json:"id"`
 	Name         string           `json:"name"`
 	BillerCode   string           `json:"biller_code"`
+	Charge       float64          `json:"charge,omitempty"`
 	Description  string           `json:"description"`
 	CategoryDTOs []BillerCategory `json:"category_dtos"`
 	Image        string           `json:"image"`
@@ -90,6 +98,9 @@ type ProductsResponse []Product
 type Product struct {
 	Name        string  `json:"name"`
 	UniqueCode  string  `json:"unique_code"`
+	Network     string  `json:"network,omitempty"`
+	PackageCode int     `json:"package_code,omitempty"`
+	Charge      float64 `json:"charge,omitempty"`
 	LookUp      bool    `json:"look_up"`
 	FixedAmount bool    `json:"fixed_amount"`
 	Amount      float32 `json:"amount"`

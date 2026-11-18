@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type bvnInfo struct {
+type BVNInfo struct {
 	name           string
 	dob            string
 	phone          string
@@ -24,9 +24,20 @@ type bvnInfo struct {
 	verificationID string
 }
 
-type bvnWithFaceInfo struct {
-	faceCheckID string
+func (b *BVNInfo) GetVerificationID() string {
+	if b == nil {
+		return ""
+	}
+	return b.verificationID
 }
+
+type bvnInfo = BVNInfo
+
+type BVNWithFaceInfo struct {
+	FaceCheckID string
+}
+
+type bvnWithFaceInfo = BVNWithFaceInfo
 
 type bvnFaceValidationResult struct {
 	Matched           bool

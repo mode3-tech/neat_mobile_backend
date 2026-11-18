@@ -2,6 +2,7 @@ package tier
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -22,6 +23,16 @@ type Service struct {
 	faceService FaceService
 	cipher      *crypto.FieldCipher
 	auditLogger auditlog.AuditLogger
+
+	// Set by ConfigureWema; nil when Wema ALAT isn't wired.
+	wemaAccounts WemaAccountResolver
+	wemaUpgrader WemaTierUpgrader
+}
+
+// ConfigureWema enables bank-side tier upgrades for Wema ALAT users.
+func (s *Service) ConfigureWema(accounts WemaAccountResolver, upgrader WemaTierUpgrader) {
+	s.wemaAccounts = accounts
+	s.wemaUpgrader = upgrader
 }
 
 func NewService(repo *Repository, ninService NINService, userService UserService, faceService FaceService, cipher *crypto.FieldCipher, auditLogger auditlog.AuditLogger) *Service {
@@ -210,5 +221,76 @@ func (s *Service) ValidateNINWithFace(ctx context.Context, mobileUserID, image s
 	s.logTierAudit(ctx, "TIER_NIN_FACE_VALIDATION", mobileUserID, auditlog.StatusSuccess, map[string]interface{}{
 		"submission_id": submission.ID,
 	})
+
+	// Wema ALAT accounts are upgraded with the bank too, using the face image
+	// that just matched. A bank-side failure is returned so the user can
+	// retry; the local NIN verification above stands either way.
+	return s.upgradeWemaTier2(ctx, mobileUserID, user.BVN, plainNIN, image)
+}
+
+func (s *Service) upgradeWemaTier2(ctx context.Context, mobileUserID, encryptedBVN, plainNIN, image string) error {
+	if s.wemaAccounts == nil || s.wemaUpgrader == nil {
+		return nil
+	}
+	accountNumber, ok, err := s.wemaAccounts.WemaAccountNumber(ctx, mobileUserID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	plainBVN, err := s.cipher.Decrypt(encryptedBVN)
+	if err != nil {
+		return err
+	}
+	if err := s.wemaUpgrader.UpgradeToTier2(ctx, accountNumber, plainNIN, plainBVN, image); err != nil {
+		s.logTierAudit(ctx, "WEMA_TIER2_UPGRADE", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": err.Error(),
+		})
+		return err
+	}
+	s.logTierAudit(ctx, "WEMA_TIER2_UPGRADE", mobileUserID, auditlog.StatusSuccess, nil)
 	return nil
+}
+
+// wemaAccountNumber returns the user's Wema account number, or
+// ErrWemaWalletRequired / ErrWemaUnavailable.
+func (s *Service) wemaAccountNumber(ctx context.Context, mobileUserID string) (string, error) {
+	if s.wemaAccounts == nil || s.wemaUpgrader == nil {
+		return "", appErr.ErrWemaUnavailable
+	}
+	accountNumber, ok, err := s.wemaAccounts.WemaAccountNumber(ctx, mobileUserID)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", appErr.ErrWemaWalletRequired
+	}
+	return accountNumber, nil
+}
+
+// UpgradeWemaTier3 upgrades the user's Wema ALAT account to Tier 3 with the
+// given residential address.
+func (s *Service) UpgradeWemaTier3(ctx context.Context, mobileUserID string, address ResidentialAddress) error {
+	accountNumber, err := s.wemaAccountNumber(ctx, mobileUserID)
+	if err != nil {
+		return err
+	}
+	if err := s.wemaUpgrader.UpgradeToTier3(ctx, accountNumber, address); err != nil {
+		s.logTierAudit(ctx, "WEMA_TIER3_UPGRADE", mobileUserID, auditlog.StatusFailure, map[string]interface{}{
+			"reason_for_failure": err.Error(),
+		})
+		return err
+	}
+	s.logTierAudit(ctx, "WEMA_TIER3_UPGRADE", mobileUserID, auditlog.StatusSuccess, nil)
+	return nil
+}
+
+// GetWemaKYCStatus returns ALAT's raw KYC status for the user's Wema account.
+func (s *Service) GetWemaKYCStatus(ctx context.Context, mobileUserID string) (json.RawMessage, error) {
+	accountNumber, err := s.wemaAccountNumber(ctx, mobileUserID)
+	if err != nil {
+		return nil, err
+	}
+	return s.wemaUpgrader.KYCStatus(ctx, accountNumber)
 }

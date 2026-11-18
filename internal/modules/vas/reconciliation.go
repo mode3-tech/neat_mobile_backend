@@ -88,6 +88,13 @@ func (s *Service) reconcileAmbiguousOutcome(ctx context.Context, txn *Transactio
 		// check status on. Left alone per the confirmed decision.
 		return
 	}
+	if txn.Metadata["provider"] == "wema" {
+		// ALAT's single-account VAS APIs do not document a client-transaction
+		// status endpoint. Never query Xpress or issue a Providus refund for
+		// these transactions.
+		log.Printf("vas reconciliation: Wema transaction remains pending txID=%s; ALAT client-status API is unavailable", txn.ID)
+		return
+	}
 
 	status, err := s.XpressPayments.CheckStatus(ctx, txn.VASRequestID)
 	if err != nil {

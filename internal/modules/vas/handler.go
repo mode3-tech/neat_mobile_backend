@@ -22,7 +22,13 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) FetchAllCategories(c *gin.Context) {
-	categories, err := h.service.FetchAllCategories(c.Request.Context())
+	mobileUserID := strings.TrimSpace(c.GetString(middleware.UserIDContextKey))
+	if mobileUserID == "" {
+		mapped := response.MapError(appErr.ErrMissingUserID)
+		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
+		return
+	}
+	categories, err := h.service.FetchAllCategoriesForUser(c.Request.Context(), mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})
@@ -52,7 +58,7 @@ func (h *Handler) FetchBillersByCategoryID(c *gin.Context) {
 		return
 	}
 
-	result, page, size, totalCount, totalPages, hasNext, hasPrev, err := h.service.FetchBillingsByCategoryID(c.Request.Context(), BillingsByCategoryIDPayload{
+	result, page, size, totalCount, totalPages, hasNext, hasPrev, err := h.service.FetchBillingsByCategoryIDForUser(c.Request.Context(), mobileUserID, BillingsByCategoryIDPayload{
 		CategoryID: req.CategoryID,
 	}, req.Size, req.Page)
 	if err != nil {
@@ -91,7 +97,7 @@ func (h *Handler) FetchProducts(c *gin.Context) {
 		return
 	}
 
-	result, page, size, totalCount, totalPages, hasNext, hasPrev, err := h.service.FetchProductsByCategoryIDAndBillerID(c.Request.Context(), FetchProductsByCategoryIDAndBillerIDPayload{
+	result, page, size, totalCount, totalPages, hasNext, hasPrev, err := h.service.FetchProductsByCategoryIDAndBillerIDForUser(c.Request.Context(), mobileUserID, FetchProductsByCategoryIDAndBillerIDPayload{
 		CategoryID: req.CategoryID,
 		BillerID:   req.BillerID,
 	}, req.Size, req.Page)
@@ -137,9 +143,16 @@ func (h *Handler) GetAirtime(c *gin.Context) {
 		return
 	}
 
+	status, message := "success", "Airtime purchased successfully"
+	if result.ResponseCode == "01" {
+		status, message = "pending", result.ResponseMessage
+		if message == "" {
+			message = "Airtime purchase is pending provider confirmation"
+		}
+	}
 	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.ISPResponse]{
-		Status:  "success",
-		Message: "Airtime purchased successfully",
+		Status:  status,
+		Message: message,
 		Data:    &result,
 	})
 }
@@ -167,9 +180,16 @@ func (h *Handler) GetData(c *gin.Context) {
 		return
 	}
 
+	status, message := "success", "Data purchased successfully"
+	if result.ResponseCode == "01" {
+		status, message = "pending", result.ResponseMessage
+		if message == "" {
+			message = "Data purchase is pending provider confirmation"
+		}
+	}
 	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.ISPResponse]{
-		Status:  "success",
-		Message: "Data purchased successfully",
+		Status:  status,
+		Message: message,
 		Data:    &result,
 	})
 }
@@ -198,9 +218,16 @@ func (h *Handler) PayElectricity(c *gin.Context) {
 		return
 	}
 
+	status, message := "success", "Electricity bill paid successfully"
+	if result.ResponseCode == "01" {
+		status, message = "pending", result.ResponseMessage
+		if message == "" {
+			message = "Electricity payment is pending provider confirmation"
+		}
+	}
 	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.PayElectricityResponse]{
-		Status:  "success",
-		Message: "Electricity bill paid successfully",
+		Status:  status,
+		Message: message,
 		Data:    &result,
 	})
 }
@@ -228,9 +255,16 @@ func (h *Handler) PayCable(c *gin.Context) {
 		return
 	}
 
+	status, message := "success", "Cable bill paid successfully"
+	if result.ResponseCode == "01" {
+		status, message = "pending", result.ResponseMessage
+		if message == "" {
+			message = "Cable payment is pending provider confirmation"
+		}
+	}
 	c.JSON(http.StatusOK, response.APIResponse[*vasprovider.PayCableResponse]{
-		Status:  "success",
-		Message: "Cable bill paid successfully",
+		Status:  status,
+		Message: message,
 		Data:    &result,
 	})
 }
@@ -251,7 +285,7 @@ func (h *Handler) CheckStatus(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.CheckStatus(c.Request.Context(), requestID)
+	result, err := h.service.CheckStatusForUser(c.Request.Context(), requestID, mobileUserID)
 	if err != nil {
 		mapped := response.MapError(err)
 		c.AbortWithStatusJSON(mapped.Status, response.APIResponse[any]{Status: "error", Error: &mapped.Error})

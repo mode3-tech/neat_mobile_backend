@@ -130,6 +130,12 @@ func dobsMatch(a, b string) bool {
 	return SerializeDOB(a) == SerializeDOB(b)
 }
 
+// DOBsMatch reports whether two dates of birth are the same calendar day,
+// whatever BVN/NIN provider format each is in (see dobsMatch).
+func DOBsMatch(a, b string) bool {
+	return dobsMatch(a, b)
+}
+
 func Generate6DigitOTP() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 
