@@ -61,6 +61,10 @@ type Service struct {
 
 func (s *Service) SetAlatValidator(alat AlatValidator) {
 	s.alat = alat
+	// demoPhone is the normalized whitelisted demo phone (DEMO_LOGIN_PHONE).
+	// Registration for it skips wallet generation and all inserts except the
+	// device binding, since the demo account already exists. Empty = disabled.
+	demoPhone string
 }
 
 func NewService(
@@ -75,6 +79,7 @@ func NewService(
 	activationCapKobo int64,
 	optimusProductID string,
 	auditLogger auditlog.AuditLogger,
+	demoPhone string,
 ) *Service {
 	return &Service{
 		repo:                    repo,
@@ -88,6 +93,7 @@ func NewService(
 		activationCapKobo:       activationCapKobo,
 		optimusProductID:        optimusProductID,
 		auditLogger:             auditLogger,
+		demoPhone:               strings.TrimSpace(demoPhone),
 	}
 }
 
@@ -194,6 +200,17 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	if existing, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
 		rl.Warnf("user already exists for this phone (user_id=%s)", existing.ID)
 		return nil, appErr.ErrUserExists
+	// The demo account is the exception: it always exists already, so instead
+	// of rejecting it we keep the existing user and short-circuit below.
+	authRepo := auth.NewRespository(s.repo.db, s.repo.cipher)
+	var existingUser *models.User
+	isDemo := false
+	if u, lookupErr := authRepo.GetUserByPhone(ctx, normalizedPhone); lookupErr == nil {
+		if s.demoPhone == "" || normalizedPhone != s.demoPhone {
+			return nil, appErr.ErrUserExists
+		}
+		existingUser = u
+		isDemo = true
 	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return nil, lookupErr
 	}
@@ -313,6 +330,10 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	rl.with("actual_provider", actualProvider)
 
 	rl.step("input")
+	if isDemo {
+		return s.registerDemo(ctx, existingUser, req, ip)
+	}
+
 	dob, err := time.Parse("2006-01-02", strings.TrimSpace(req.Dob))
 	if err != nil {
 		return nil, &userError{msg: "invalid date of birth, use the format YYYY-MM-DD", err: err}
@@ -410,6 +431,47 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		return nil, err
 	}
 	return s.issueSession(providerCtx, rl, reg.mobileUserID, reg.device.DeviceID, ip)
+}
+
+// registerDemo completes registration for the whitelisted demo account,
+// which already has its user and wallet records: no GenerateWallet call and no
+// user/wallet/verification/referral inserts. The device is still bound (if not
+// already) so later device-validated requests from the reviewer's device pass.
+func (s *Service) registerDemo(ctx context.Context, existingUser *models.User, req OptimusRegisterRequest, ip string) (*RegisterResponse, error) {
+	log.Printf("[registerv2.Register] demo account: skipping wallet generation and inserts")
+
+	if s.sessionIssuer == nil {
+		return nil, fmt.Errorf("session issuer is not configured")
+	}
+
+	deviceRepo := device.NewRepository(s.repo.db)
+	if _, findErr := deviceRepo.FindDevice(ctx, existingUser.ID, req.Device.DeviceID); findErr != nil {
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return nil, findErr
+		}
+		deviceService := device.NewService(*deviceRepo, s.auditLogger)
+		if err := deviceService.BindDevice(ctx, existingUser.ID, &device.DeviceBindingRequest{
+			DeviceID:    req.Device.DeviceID,
+			PublicKey:   req.Device.PublicKey,
+			DeviceName:  req.Device.DeviceName,
+			DeviceModel: req.Device.DeviceModel,
+			OS:          req.Device.OS,
+			OSVersion:   req.Device.OSVersion,
+			AppVersion:  req.Device.AppVersion,
+			IP:          ip,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	session, err := s.sessionIssuer.IssueSessionTokens(ctx, existingUser.ID, req.Device.DeviceID, ip)
+	if err != nil {
+		return nil, err
+	}
+	return &RegisterResponse{
+		AccessToken:  session.AccessToken,
+		RefreshToken: session.RefreshToken,
+	}, nil
 }
 
 // RequestPhoneOTP sends an OTP to the given phone number, delegating to the

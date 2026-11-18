@@ -256,7 +256,15 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 			log.Printf("demo login: disabled (invalid DEMO_LOGIN_PHONE or empty DEMO_LOGIN_OTP): err=%v", err)
 		} else {
 			demoOTP = otp.DemoConfig{Enabled: true, Destination: normalizedDemoPhone, Code: cfg.DemoLoginOTP}
-			log.Printf("demo login: ENABLED for a single whitelisted account")
+			if strings.TrimSpace(cfg.DemoLoginEmail) != "" {
+				normalizedDemoEmail, emailErr := otp.NormalizeDestination(cfg.DemoLoginEmail, otp.ChannelEmail)
+				if emailErr != nil {
+					log.Printf("demo login: ignoring invalid DEMO_LOGIN_EMAIL: err=%v", emailErr)
+				} else {
+					demoOTP.Email = normalizedDemoEmail
+				}
+			}
+			log.Printf("demo login: ENABLED for a single whitelisted account (email bypass: %t)", demoOTP.Email != "")
 		}
 	}
 
@@ -285,6 +293,11 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	optimusRegistrationRepo := registerv2.NewRepository(db, bvnNinCipher)
 	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger)
 	optimusRegistrationService.SetAlatValidator(wemaAdapter)
+	demoRegistrationPhone := ""
+	if demoOTP.Enabled {
+		demoRegistrationPhone = demoOTP.Destination
+	}
+	optimusRegistrationService := registerv2.NewService(optimusRegistrationRepo, optimusRegistrationRepo, optimusRegistrationClient, optimusRegistrationClient, providusWalletService, authService, otpManager, transactor, cfg.ActivationCapKobo, optimusProductID, auditLogger, demoRegistrationPhone)
 	registerv2.RegisterRoutes(apiV2, registerv2.NewHandler(optimusRegistrationService))
 
 	authService.ConfigureOTPManager(otpManager)

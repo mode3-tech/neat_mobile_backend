@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 )
@@ -89,9 +90,11 @@ type Config struct {
 	XpressBaseURL    string
 
 	// Demo/review login account (e.g. Google Play review). Disabled unless
-	// DemoLoginEnabled is true. DemoLoginPhone gets a fixed OTP and no SMS.
+	// DemoLoginEnabled is true. DemoLoginPhone and DemoLoginEmail get a fixed
+	// OTP and no SMS/email delivery.
 	DemoLoginEnabled bool
 	DemoLoginPhone   string
+	DemoLoginEmail   string
 	DemoLoginOTP     string
 
 	RunMigrations bool
@@ -178,6 +181,7 @@ func Load() Config {
 
 		DemoLoginEnabled: getEnv("DEMO_LOGIN_ENABLED", "false") == "true",
 		DemoLoginPhone:   getEnv("DEMO_LOGIN_PHONE", ""),
+		DemoLoginEmail:   getEnv("DEMO_LOGIN_EMAIL", ""),
 		DemoLoginOTP:     getEnv("DEMO_LOGIN_OTP", ""),
 
 		RunMigrations: getEnv("RUN_MIGRATIONS", "false") == "true",
@@ -199,6 +203,7 @@ func readFileEnv(key string) string {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("config: %s is set but file %q could not be read: %v", key, path, err)
 		return ""
 	}
 	return string(data)

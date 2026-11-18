@@ -22,11 +22,29 @@ import (
 
 // DemoConfig configures a single whitelisted account (e.g. the Google Play
 // review account) whose OTP is a fixed, known code and whose delivery is
-// skipped. Disabled unless Enabled is true and Destination/Code are set.
+// skipped. Applies to the demo phone (SMS) and the demo email (email), each
+// matched exactly. Disabled unless Enabled is true and Code is set.
 type DemoConfig struct {
 	Enabled     bool
-	Destination string // normalized demo phone/email (must match NormalizeDestination output)
-	Code        string // fixed OTP code accepted for this destination
+	Destination string // normalized demo phone (must match NormalizeDestination output)
+	Email       string // normalized demo email (must match NormalizeDestination output); optional
+	Code        string // fixed OTP code accepted for these destinations
+}
+
+// matches reports whether the normalized destination is the configured demo
+// phone (SMS) or demo email (email channel).
+func (d DemoConfig) matches(channel Channel, dst string) bool {
+	if !d.Enabled || d.Code == "" || dst == "" {
+		return false
+	}
+	switch channel {
+	case ChannelSMS:
+		return dst == d.Destination
+	case ChannelEmail:
+		return dst == d.Email
+	default:
+		return false
+	}
 }
 
 type Service struct {
@@ -135,7 +153,7 @@ func (s *Service) Issue(ctx context.Context, in IssueOTPInput) (*IssueOTPResult,
 	// the one configured destination; the hash below still binds it normally so
 	// verification runs unchanged. Never log the code.
 	skipSend := false
-	if s.demo.Enabled && s.demo.Code != "" && s.demo.Destination != "" && normalizeDestination == s.demo.Destination {
+	if s.demo.matches(in.Channel, normalizeDestination) {
 		code = s.demo.Code
 		skipSend = true
 		log.Printf("[otp.Issue] demo account: using fixed code, skipping delivery: purpose=%s", in.Purpose)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,7 @@ type Optimus struct {
 }
 
 func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey, privateKey string) *Optimus {
+	logOptimusPublicKey(publicKey)
 	return &Optimus{
 		WalletBaseURL: walletBaseURL,
 		AuthBaseURL:   authBaseURL,
@@ -45,6 +47,54 @@ func NewOptimus(walletBaseURL, authBaseURL, username, password, publicKey, priva
 		PrivateKey:    privateKey,
 		Client:        &http.Client{Timeout: time.Second * 15},
 	}
+}
+
+// logOptimusPublicKey logs the fingerprint and UIDs of the configured Optimus
+// public key (public information) so a key/environment mismatch — e.g. a UAT
+// key against the production gateway, or our own key in place of Optimus's —
+// is visible at startup rather than only as an opaque 400 from Optimus.
+func logOptimusPublicKey(armoredPublicKey string) {
+	if strings.TrimSpace(armoredPublicKey) == "" {
+		log.Printf("optimus: WARNING public key is empty (check OPTIMUS_PUBLIC_KEY_FILE); request encryption will fail")
+		return
+	}
+	keyRing, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armoredPublicKey))
+	if err != nil {
+		log.Printf("optimus: WARNING public key could not be parsed: %v", err)
+		return
+	}
+	for _, entity := range keyRing {
+		if entity.PrimaryKey == nil {
+			continue
+		}
+		uids := make([]string, 0, len(entity.Identities))
+		for name := range entity.Identities {
+			uids = append(uids, name)
+		}
+		log.Printf("optimus: loaded public key fingerprint=%X uids=%q subkeys=%d hasPrivate=%t",
+			entity.PrimaryKey.Fingerprint, uids, len(entity.Subkeys), entity.PrivateKey != nil)
+	}
+}
+
+// OptimusPlaintextError is returned by decodeOptimusEnvelope when Optimus
+// responds with a plain (unencrypted) string body such as
+// "Decryption failed or empty data." instead of PGP ciphertext.
+type OptimusPlaintextError struct {
+	Body string
+}
+
+func (e *OptimusPlaintextError) Error() string {
+	return fmt.Sprintf("optimus: plaintext error response: %q", e.Body)
+}
+
+// looksLikePGPCiphertext reports whether s is base64 that decodes to an
+// ASCII-armored PGP message — the only format pgpDecrypt can handle.
+func looksLikePGPCiphertext(s string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(decoded, []byte("-----BEGIN PGP"))
 }
 
 // pgpEncrypt serializes data to JSON (unless it is already a string), encrypts
@@ -193,6 +243,9 @@ func (o *Optimus) decodeOptimusEnvelope(body []byte) ([]byte, error) {
 	// response logs — json.Unmarshal strips the quotes and un-escapes properly).
 	var bare string
 	if err := json.Unmarshal(body, &bare); err == nil && strings.TrimSpace(bare) != "" {
+		if !looksLikePGPCiphertext(bare) {
+			return nil, &OptimusPlaintextError{Body: bare}
+		}
 		plaintext, err := pgpDecrypt(o.PrivateKey, bare)
 		if err != nil {
 			log.Printf("optimus: decrypt response (quoted body) failed: %v", err)
@@ -206,6 +259,9 @@ func (o *Optimus) decodeOptimusEnvelope(body []byte) ([]byte, error) {
 	// truly bare.
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed != "" && !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		if !looksLikePGPCiphertext(trimmed) {
+			return nil, &OptimusPlaintextError{Body: trimmed}
+		}
 		plaintext, err := pgpDecrypt(o.PrivateKey, trimmed)
 		if err != nil {
 			log.Printf("optimus: decrypt response (raw body) failed: %v", err)
@@ -278,6 +334,14 @@ func (o *Optimus) getToken(ctx context.Context) (string, error) {
 	return o.cachedToken, nil
 }
 
+// walletAPIURL joins WalletBaseURL with a versioned path. The base may or
+// may not already end in "/v1"; the segment is added exactly once.
+func (o *Optimus) walletAPIURL(path string) string {
+	base := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/")
+	base = strings.TrimSuffix(base, "/v1")
+	return base + "/v1" + path
+}
+
 func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {
 	baseURL := strings.TrimSpace(o.WalletBaseURL)
 	if baseURL == "" || strings.TrimSpace(o.Username) == "" {
@@ -294,7 +358,7 @@ func (o *Optimus) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	// TODO: confirm with Optimus API docs the exact plaintext to encrypt
 	// (likely the BVN, but could be a JSON blob of multiple fields).
 
-	url := baseURL + "/v1/Customer/create-by-bvn"
+	url := o.walletAPIURL("/Customer/create-by-bvn")
 	log.Printf("Optimus URL for creating customer account with BVN: %s", url)
 	payload := OptimusPayload{
 		RequestId:         walletInfo.RequestID,
@@ -426,12 +490,12 @@ func (o *Optimus) LookupWalletByCustomerID(ctx context.Context, customerID strin
 // both successful and failed responses in its own response envelope, including
 // when the HTTP status itself is not 2xx.
 func (o *Optimus) ValidateBVN(ctx context.Context, payload registerv2.OptimusBVNValidationRequest) (*registerv2.OptimusResponse, error) {
-	return o.validateIdentity(ctx, "/v1/Customer/validate-bvn", payload)
+	return o.validateIdentity(ctx, "/Customer/validate-bvn", payload)
 }
 
 // ValidateNIN validates a NIN through the Optimus wallet API.
 func (o *Optimus) ValidateNIN(ctx context.Context, payload registerv2.OptimusNINValidationRequest) (*registerv2.OptimusResponse, error) {
-	return o.validateIdentity(ctx, "/v1/Customer/validate-nin", payload)
+	return o.validateIdentity(ctx, "/Customer/validate-nin", payload)
 }
 
 func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any) (*registerv2.OptimusResponse, error) {
@@ -458,7 +522,8 @@ func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any
 		return nil, fmt.Errorf("optimus: marshal validation request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(reqBody))
+	requestURL := o.walletAPIURL(path)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(reqBody))
 	if err != nil {
 		log.Printf("optimus: build validation request failed: %v", err)
 		return nil, fmt.Errorf("optimus: build validation request: %w", err)
@@ -482,8 +547,15 @@ func (o *Optimus) validateIdentity(ctx context.Context, path string, payload any
 
 	result, decodeErr := o.decodeValidationResponse(body)
 	if decodeErr != nil {
+		var plainErr *OptimusPlaintextError
+		if errors.As(decodeErr, &plainErr) {
+			// Not user-fixable (e.g. "Decryption failed or empty data." means
+			// Optimus could not decrypt our request — wrong public key).
+			log.Printf("optimus: plaintext error url=%s status=%d body=%q", requestURL, resp.StatusCode, plainErr.Body)
+			return nil, fmt.Errorf("we could not verify your details right now. Please try again")
+		}
 		log.Printf("optimus: raw response = %s", string(body))
-		log.Printf("optimus: validation response decode failed status=%d err=%v", resp.StatusCode, decodeErr)
+		log.Printf("optimus: validation response decode failed url=%s status=%d err=%v", requestURL, resp.StatusCode, decodeErr)
 		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 			return nil, fmt.Errorf("we could not verify your details right now. Please try again")
 		}
@@ -557,9 +629,8 @@ func (o *Optimus) VerifyOTPWithOptimus(ctx context.Context, phone, otpToken, ema
 
 	// /Customer/validate-otp lives alongside /Customer/validate-bvn and
 	// /Customer/validate-nin (see validateIdentity) - same WalletBaseURL, not
-	// AuthBaseURL. WalletBaseURL ends at .../opti-finserve-api, so the version
-	// segment is added here, matching the identity calls.
-	url := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/v1/Customer/validate-otp"
+	// AuthBaseURL. walletAPIURL adds the "/v1" segment exactly once.
+	url := o.walletAPIURL("/Customer/validate-otp")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		log.Printf("optimus: build otp verify request failed: %v", err)
@@ -614,11 +685,11 @@ func (o *Optimus) ResendOTPWithOptimus(ctx context.Context, referenceID string) 
 		return "", err
 	}
 
-	// Mirrors /Customer/validate-otp (see VerifyOTPWithOptimus): WalletBaseURL
-	// ends at .../opti-finserve-api, so the version segment is added here.
+	// Mirrors /Customer/validate-otp (see VerifyOTPWithOptimus): built on
+	// WalletBaseURL via walletAPIURL, which adds "/v1" exactly once.
 	query := url.Values{}
 	query.Set("referenceId", strings.TrimSpace(referenceID))
-	requestURL := strings.TrimRight(strings.TrimSpace(o.WalletBaseURL), "/") + "/v1/Otp/resend?" + query.Encode()
+	requestURL := o.walletAPIURL("/Otp/resend?" + query.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
