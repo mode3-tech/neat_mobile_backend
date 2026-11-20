@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	appErr "neat_mobile_app_backend/internal/errors"
+	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
 	"neat_mobile_app_backend/providers/baas"
 )
 
@@ -83,5 +84,45 @@ func TestAdapter_EnvelopeStatusFalseIsAnError(t *testing.T) {
 	var alatErr *appErr.AlatError
 	if !errors.As(err, &alatErr) || alatErr.Message != "Account is not on PND" {
 		t.Fatalf("err = %v; want ALAT's message", err)
+	}
+}
+
+// ALAT wants the local 11-digit phone (08012345678); we store 2348012345678.
+func TestAdapter_SendsLocalPhoneFormatToALAT(t *testing.T) {
+	f, alat := newFakeALAT(t, map[string]string{
+		facePhoneLookup: `{"status":true,"data":{"accountNumber":"0123456789"}}`,
+		"/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2": `{"status":true,"data":{"trackingId":"t-1"}}`,
+	})
+	a := New(alat)
+	if _, err := a.GetPartnershipAccountDetails(context.Background(), "2348012345678"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{PhoneNumber: "2348012345678"}); err != nil {
+		t.Fatal(err)
+	}
+
+	var lookupQuery string
+	if c := f.call(facePhoneLookup); c != nil {
+		lookupQuery = c.query
+	}
+	if lookupQuery != "phoneNumber=08012345678" {
+		t.Errorf("lookup query = %q, want phoneNumber=08012345678", lookupQuery)
+	}
+	if c := f.call("/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2"); c == nil || c.body["phoneNumber"] != "08012345678" {
+		t.Errorf("tier 2 phoneNumber = %v, want 08012345678", c)
+	}
+}
+
+func TestAlatPhone(t *testing.T) {
+	for in, want := range map[string]string{
+		"2348012345678":  "08012345678",
+		"+2348012345678": "08012345678",
+		"08012345678":    "08012345678",
+		"8012345678":     "08012345678",
+		"bad":            "bad",
+	} {
+		if got := alatPhone(in); got != want {
+			t.Errorf("alatPhone(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

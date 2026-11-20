@@ -99,8 +99,8 @@ type fakeALAT struct {
 }
 
 type recordedCall struct {
-	method, path string
-	body         map[string]any
+	method, path, query string
+	body                map[string]any
 }
 
 func (f *fakeALAT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func (f *fakeALAT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
 	_ = json.Unmarshal(raw, &body)
 	f.mu.Lock()
-	f.calls = append(f.calls, recordedCall{r.Method, r.URL.Path, body})
+	f.calls = append(f.calls, recordedCall{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, body: body})
 	f.mu.Unlock()
 	resp, ok := f.bodies[r.URL.Path]
 	if !ok {
