@@ -1,6 +1,6 @@
 # Wema Frontend Handover
 
-This note describes the current Wema signup, account-upgrade, bank lookup/name-resolution, and bank-statement API flows. Swagger is served from `/openapi/doc.yaml` and `/openapi/doc.json`; these endpoints are documented there.
+This note describes the current Wema signup, account-upgrade, bank lookup/name-resolution, transfer (including ALAT-to-ALAT), and bank-statement API flows. Swagger is served from `/openapi/doc.yaml` and `/openapi/doc.json`; these endpoints are documented there.
 
 ## Wema signup
 
@@ -73,6 +73,35 @@ The Wema-specific v2 lookup endpoints require `Authorization: Bearer <access_tok
 - `GET /api/v2/wallet/bank/details?account_number=...&bank_code=...` performs ALAT account-name enquiry. Use a bank code returned by the first endpoint; the response's `data` contains `bankCode`, `accountName`, and `accountNumber`.
 
 These v2 endpoints reject accounts that do not have a Wema wallet. The existing transfer operation remains `POST /api/v1/wallet/transfer`; this change only adds Wema bank listing and recipient-name resolution in v2.
+
+## ALAT-to-ALAT (Wema-to-Wema) transfers
+
+There is no separate intra-bank endpoint. A transfer to another Wema/ALAT account uses the same flow as an interbank transfer, with Wema's bank code ` ` (`WEMA BANK`) as the destination bank. ALAT receives the same `ProcessClientTransfer` call either way and routes it internally when the destination is Wema.
+
+1. **Pick the bank.** If the `GET /api/v2/wallet/banks` list contains a Wema entry, use it. It is not yet confirmed whether ALAT includes Wema in that list. If it doesn't, add a pinned "Wema Bank / ALAT" option with code `000017`. Don't add a second Wema entry if the list already has one.
+2. **Resolve the name.** Call `GET /api/v2/wallet/bank/details?account_number=...&bank_code=000017`. Show the returned `data.accountName` and let the user confirm it. Don't let the user type the recipient name.
+3. **Send the transfer.** Call `POST /api/v1/wallet/transfer` with the same headers as other wallet calls:
+
+   ```json
+   {
+     "amount": 1000,
+     "sort_code": "000017",
+     "account_number": "0123456789",
+     "account_name": "NAME FROM STEP 2",
+     "narration": "optional, max 255 chars",
+     "transaction_pin": "1234"
+   }
+   ```
+
+   `amount` is in naira and must be greater than 50. `account_name` should be the exact `accountName` from step 2. The backend checks the live ALAT balance before debiting and returns an insufficient-balance error if needed.
+4. **Treat a successful response as pending, not completed.** ALAT transfers are asynchronous. ALAT returns "pending" and only moves the money after it calls the backend's authentication callback. A background status sweep also checks unfinished transfers. A 2xx response means ALAT accepted the request. Show a "processing" state, not "successful".
+5. **Get the final status.** Store `data.reference`, which is the backend transaction ID (it also appears as `transactionReference`). Poll `GET /api/v1/transaction/{reference}` with backoff, or refresh the transactions list, until the status is final. Don't resend the transfer while it is pending: every request creates a new debit, so a retry can send the money twice.
+
+Other notes:
+
+- Self-transfers (to the user's own ALAT account number) aren't blocked by the backend. Block them in the UI.
+- The Wema adapter reports `charges` and `vat` as 0. Don't show a fee for ALAT-to-ALAT transfers unless the backend starts returning one.
+- Beneficiaries saved with `bank_code: "000017"` work the same way. Run the name enquiry again before sending if the saved name could be stale.
 
 ## Account statement
 

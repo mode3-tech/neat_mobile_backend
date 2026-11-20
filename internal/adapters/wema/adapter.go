@@ -13,6 +13,7 @@ import (
 	appErr "neat_mobile_app_backend/internal/errors"
 	"neat_mobile_app_backend/internal/modules/auth"
 	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
+	phoneutil "neat_mobile_app_backend/internal/phone"
 	"neat_mobile_app_backend/providers/baas"
 
 	"github.com/google/uuid"
@@ -84,7 +85,7 @@ func (a *Adapter) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	}
 
 	resp, err := a.alat.CreateTier1AlatAccountWithBVN(ctx, baas.AlatTier1BVNRequest{
-		PhoneNumber:   walletInfo.PhoneNumber,
+		PhoneNumber:   alatPhone(walletInfo.PhoneNumber),
 		Email:         walletInfo.Email,
 		BVN:           walletInfo.BVN,
 		CorrelationID: uuid.NewString(),
@@ -130,7 +131,7 @@ func (a *Adapter) liftPnd(ctx context.Context, accountNumber string) error {
 // PostPartnershipAccountCreationWithBvn is Wallet Creation (BVN) Step 1. It returns the trackingId for Step 2.
 func (a *Adapter) PostPartnershipAccountCreationWithBvn(ctx context.Context, phone, email, bvn string) (string, error) {
 	resp, err := a.alat.PostPartnershipAccountCreationWithBvn(ctx, baas.AlatPartnershipRequestWithBvn{
-		PhoneNumber: phone,
+		PhoneNumber: alatPhone(phone),
 		Email:       email,
 		BVN:         bvn,
 	})
@@ -149,7 +150,7 @@ func (a *Adapter) PostPartnershipAccountCreationWithBvn(ctx context.Context, pho
 // ValidateBVNandEnqueueAccountCreation is Wallet Creation (BVN) Step 2: it confirms the customer's OTP.
 func (a *Adapter) ValidateBVNandEnqueueAccountCreation(ctx context.Context, phone, otp, trackingID string) error {
 	resp, err := a.alat.ValidateBVNandEnqueueAccountCreation(ctx, baas.AlatValidateBvnRequest{
-		PhoneNumber: phone,
+		PhoneNumber: alatPhone(phone),
 		OTP:         otp,
 		TrackingID:  trackingID,
 	})
@@ -172,7 +173,7 @@ func (a *Adapter) ResendOtp(ctx context.Context, trackingID string) error {
 // for phoneNumber. A nil result with a nil error, or an *appErr.AlatError ALAT
 // sent, means no account; any other error means ALAT couldn't be asked.
 func (a *Adapter) GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*registerv2.AlatAccountDetails, error) {
-	resp, err := a.alat.GetAccountDetailsWithPhoneNumber(ctx, phoneNumber)
+	resp, err := a.alat.GetAccountDetailsWithPhoneNumber(ctx, alatPhone(phoneNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 	resp, err := a.alat.CreateTier2AlatAccount(ctx, baas.AlatAccountCreationRequest{
 		BVN:                req.BVN,
 		NIN:                req.NIN,
-		PhoneNumber:        req.PhoneNumber,
+		PhoneNumber:        alatPhone(req.PhoneNumber),
 		EmailAddress:       req.EmailAddress,
 		ResidentialAddress: address,
 		LiveImageOfFace:    req.LiveImageOfFace,
@@ -284,6 +285,17 @@ func resultError(hasError bool, message string, messages []string) error {
 func isAlatAnswer(err error) bool {
 	var alatErr *appErr.AlatError
 	return errors.As(err, &alatErr) && !alatErr.NoResponse
+}
+
+// alatPhone converts a phone number to the local 11-digit form ALAT expects
+// (08012345678). We store and compare phones normalised to 2348012345678,
+// which ALAT rejects as "not a valid phone number". Anything that isn't a
+// recognisable Nigerian number is passed through for ALAT to reject.
+func alatPhone(p string) string {
+	if local, err := phoneutil.ToLocalFormat(p); err == nil {
+		return local
+	}
+	return strings.TrimSpace(p)
 }
 
 func maskTail(s string) string {
