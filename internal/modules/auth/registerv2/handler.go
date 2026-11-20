@@ -213,6 +213,9 @@ func (h *Handler) writeRegistration(c *gin.Context, resp *RegisterResponse) {
 	switch resp.Status {
 	case RegistrationStatusPending:
 		code, message = http.StatusAccepted, "Your account is being opened. Check the registration status shortly."
+		if resp.Message != "" {
+			message = resp.Message
+		}
 	case RegistrationStatusFailed, RegistrationStatusExpired:
 		message = resp.Message
 	}

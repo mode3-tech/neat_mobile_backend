@@ -160,8 +160,13 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 	rl.step("alat_tier2_create")
 	rl.with("correlation_id", tier2Req.CorrelationID)
 	trackingID, err := s.alat.PostTier2PartnershipAccountWithFace(ctx, tier2Req)
+	pendingMsg := ""
 	switch {
 	case errors.Is(err, ErrAlatAccountGenerationPending):
+		var pe *AlatPendingError
+		if errors.As(err, &pe) {
+			pendingMsg = pe.Message
+		}
 		// An earlier request is still being generated at ALAT; wait for it
 		// exactly as if this one had just been accepted.
 		rl.with("tracking_id", trackingID)
@@ -213,7 +218,9 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 	}
 	rl.with("registration_id", pending.ID)
 	rl.Infof("alat account still queued - saved pending registration for the webhook/sweep to complete")
-	return pendingResponse(pending.ID, claimToken), nil
+	resp := pendingResponse(pending.ID, claimToken)
+	resp.Message = pendingMsg
+	return resp, nil
 }
 
 // resumePendingWema handles a /register for a phone whose earlier attempt is

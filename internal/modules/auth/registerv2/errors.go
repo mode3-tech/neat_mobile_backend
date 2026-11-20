@@ -54,3 +54,12 @@ func otpError(err error) error {
 // accountGenerationStatus "Pending"). The account will appear, so it's
 // treated like an accepted creation, not a failure.
 var ErrAlatAccountGenerationPending = errors.New("alat account generation is already pending for these details")
+
+// AlatPendingError is ErrAlatAccountGenerationPending carrying ALAT's own
+// message, so the client can be shown exactly what Wema said.
+type AlatPendingError struct{ Message string }
+
+func (e *AlatPendingError) Error() string { return ErrAlatAccountGenerationPending.Error() }
+func (e *AlatPendingError) Is(target error) bool {
+	return target == ErrAlatAccountGenerationPending
+}
