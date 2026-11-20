@@ -15,7 +15,9 @@ import (
 )
 
 // alatDo sends a JSON request to ALAT and decodes the response into T.
-// body may be nil (e.g. for GET). Every failure is logged and returned as an
+// body may be nil (e.g. for GET). On an error reply that carries ALAT's
+// envelope, the decoded body is returned too (non-nil *T with a non-nil
+// error). Every failure is logged and returned as an
 // *appErr.AlatError so the error mapper renders it consistently. Errors ALAT
 // didn't send itself have NoResponse set, so callers can tell "ALAT said no"
 // from "we don't know".
@@ -71,11 +73,19 @@ func alatDo[T any](ctx context.Context, a *Alat, method, url string, body any) (
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("[ALAT] level=WARN %s %s status=%d dur=%s request_id=%s body=%s",
 			method, path, resp.StatusCode, elapsed, alatRequestID(resp.Header), truncateForLog(respBytes))
-		// Prefer ALAT's own error envelope when it sends one.
+		// Prefer ALAT's own error envelope when it sends one. ALAT also puts
+		// meaningful data in some error bodies (e.g. a 400 whose data says an
+		// account is already being generated), so the decoded body is
+		// returned alongside the error when it parses. Callers that only
+		// check err are unaffected.
 		var alatErr appErr.AlatError
 		if json.Unmarshal(respBytes, &alatErr) == nil && (alatErr.Message != "" || alatErr.Code != "" || len(alatErr.Errors) > 0) {
 			// A 5xx is ALAT failing, not ALAT answering, even with a body.
 			alatErr.NoResponse = resp.StatusCode >= 500
+			var out T
+			if json.Unmarshal(respBytes, &out) == nil {
+				return &out, &alatErr
+			}
 			return nil, &alatErr
 		}
 		return nil, &appErr.AlatError{
