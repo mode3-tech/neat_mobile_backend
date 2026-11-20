@@ -3,6 +3,7 @@ package wema
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -124,5 +125,43 @@ func TestAlatPhone(t *testing.T) {
 		if got := alatPhone(in); got != want {
 			t.Errorf("alatPhone(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A retry for details ALAT is already generating an account for comes back
+// as HTTP 400 / status false with data.accountGenerationStatus "Pending":
+// reported as ErrAlatAccountGenerationPending, not a creation failure.
+func TestAdapter_Tier2AlreadyPendingAtALAT(t *testing.T) {
+	const body = `{"data":{"accountGenerationStatus":"Pending","trackingId":"00000000-0000-0000-0000-000000000000"},` +
+		`"message":"00000000 0000000 || example@gmail.com || 080123456789 provided already exist for this channel.",` +
+		`"status":false,"code":0,"statusCode":0}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	id, err := New(baas.NewAlat(srv.URL, "key", "sub", "")).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{PhoneNumber: "2348012345678"})
+	if !errors.Is(err, registerv2.ErrAlatAccountGenerationPending) {
+		t.Fatalf("err = %v, want ErrAlatAccountGenerationPending", err)
+	}
+	if id != "" {
+		t.Errorf("tracking id = %q, want the all-zero placeholder dropped", id)
+	}
+}
+
+// Any other refusal is still a failure.
+func TestAdapter_Tier2RejectedIsStillAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message":"Hi, please provide a valid phone number","status":false,"code":0,"statusCode":0}`))
+	}))
+	defer srv.Close()
+
+	_, err := New(baas.NewAlat(srv.URL, "key", "sub", "")).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{})
+	var alatErr *appErr.AlatError
+	if errors.Is(err, registerv2.ErrAlatAccountGenerationPending) || !errors.As(err, &alatErr) || alatErr.Message != "Hi, please provide a valid phone number" {
+		t.Fatalf("err = %v, want ALAT's rejection", err)
 	}
 }

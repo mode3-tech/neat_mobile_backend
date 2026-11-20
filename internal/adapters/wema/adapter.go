@@ -229,6 +229,14 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 		LiveImageOfFace:    req.LiveImageOfFace,
 		CorrelationID:      req.CorrelationID,
 	})
+	// A retry for details ALAT is already generating an account for comes
+	// back as a failure (status false, usually HTTP 400) whose data says
+	// "Pending". The account is on its way - report that, not a failure.
+	if resp != nil && !resp.Status && resp.Data != nil &&
+		strings.EqualFold(strings.TrimSpace(resp.Data.AccountGenerationStatus), "pending") {
+		log.Printf("[ALAT] level=INFO op=tier2_create account generation already pending at alat: %s", resp.Message)
+		return trackingID(resp.Data.TrackingID), registerv2.ErrAlatAccountGenerationPending
+	}
 	if err != nil {
 		return "", err
 	}
@@ -238,7 +246,16 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 	if resp.Data == nil {
 		return "", nil
 	}
-	return resp.Data.TrackingID, nil
+	return trackingID(resp.Data.TrackingID), nil
+}
+
+// trackingID drops ALAT's all-zero placeholder ID.
+func trackingID(id string) string {
+	id = strings.TrimSpace(id)
+	if strings.Trim(id, "0-") == "" {
+		return ""
+	}
+	return id
 }
 
 // GetAddressDropDownList is face biometric Step 0: country, state, LGA, LCDA, city and housing type options.

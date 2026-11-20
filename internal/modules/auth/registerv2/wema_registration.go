@@ -160,11 +160,18 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 	rl.step("alat_tier2_create")
 	rl.with("correlation_id", tier2Req.CorrelationID)
 	trackingID, err := s.alat.PostTier2PartnershipAccountWithFace(ctx, tier2Req)
-	if err != nil {
+	switch {
+	case errors.Is(err, ErrAlatAccountGenerationPending):
+		// An earlier request is still being generated at ALAT; wait for it
+		// exactly as if this one had just been accepted.
+		rl.with("tracking_id", trackingID)
+		rl.Infof("alat is already generating an account for these details - waiting for it")
+	case err != nil:
 		return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", err)
+	default:
+		rl.with("tracking_id", trackingID)
+		rl.Infof("tier 2 account creation accepted by alat")
 	}
-	rl.with("tracking_id", trackingID)
-	rl.Infof("tier 2 account creation accepted by alat")
 
 	// 5. Poll briefly - ALAT usually finishes quickly, and finishing inline
 	// saves the client a round trip.
