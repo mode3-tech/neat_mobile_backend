@@ -235,7 +235,7 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 	if resp != nil && !resp.Status && resp.Data != nil &&
 		strings.EqualFold(strings.TrimSpace(resp.Data.AccountGenerationStatus), "pending") {
 		log.Printf("[ALAT] level=INFO op=tier2_create account generation already pending at alat: %s", resp.Message)
-		return trackingID(resp.Data.TrackingID), registerv2.ErrAlatAccountGenerationPending
+		return trackingID(resp.Data.TrackingID), &registerv2.AlatPendingError{Message: strings.TrimSpace(resp.Message)}
 	}
 	if err != nil {
 		return "", err
