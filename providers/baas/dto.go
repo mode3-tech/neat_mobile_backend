@@ -962,3 +962,36 @@ type AlatPndRequest struct {
 	PndType       AlatPndType `json:"pndType"`
 	AccountNumber string      `json:"accountNumber"`
 }
+
+// ALAT documents code/statusCode as enum names ("InvalidBvn", "Continue"),
+// but live responses also send them as numbers ("code": 0). Both decode to a
+// string so a numeric code doesn't fail the whole response.
+
+func (c *AlatResponseCode) UnmarshalJSON(data []byte) error {
+	s, err := stringOrNumber(data)
+	*c = AlatResponseCode(s)
+	return err
+}
+
+func (c *AlatHTTPStatusCode) UnmarshalJSON(data []byte) error {
+	s, err := stringOrNumber(data)
+	*c = AlatHTTPStatusCode(s)
+	return err
+}
+
+func stringOrNumber(data []byte) (string, error) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+	if trimmed[0] == '"' {
+		var s string
+		err := json.Unmarshal(trimmed, &s)
+		return s, err
+	}
+	var n json.Number
+	if err := json.Unmarshal(trimmed, &n); err != nil {
+		return "", err
+	}
+	return n.String(), nil
+}

@@ -47,3 +47,10 @@ func otpError(err error) error {
 	}
 	return err
 }
+
+// ErrAlatAccountGenerationPending means ALAT already has an account being
+// generated for these details - typically a retry after an earlier tier 2
+// request it accepted ("... provided already exist for this channel" with
+// accountGenerationStatus "Pending"). The account will appear, so it's
+// treated like an accepted creation, not a failure.
+var ErrAlatAccountGenerationPending = errors.New("alat account generation is already pending for these details")
