@@ -4,6 +4,7 @@ package wema
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -220,7 +221,7 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 			FullAddress:    r.FullAddress,
 		}
 	}
-	resp, err := a.alat.CreateTier2AlatAccount(ctx, baas.AlatAccountCreationRequest{
+	payload := baas.AlatAccountCreationRequest{
 		BVN:                req.BVN,
 		NIN:                req.NIN,
 		PhoneNumber:        alatPhone(req.PhoneNumber),
@@ -228,7 +229,10 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 		ResidentialAddress: address,
 		LiveImageOfFace:    req.LiveImageOfFace,
 		CorrelationID:      req.CorrelationID,
-	})
+	}
+	logTier2Request(payload)
+	resp, err := a.alat.CreateTier2AlatAccount(ctx, payload)
+	logTier2Response(payload.CorrelationID, resp, err)
 	// A retry for details ALAT is already generating an account for comes
 	// back as a failure (status false, usually HTTP 400) whose data says
 	// "Pending". The account is on its way - report that, not a failure.
@@ -247,6 +251,82 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 		return "", nil
 	}
 	return trackingID(resp.Data.TrackingID), nil
+}
+
+// logTier2Request logs the tier 2 account creation payload as sent to ALAT,
+// with the sensitive parts redacted: BVN/NIN keep their last 4 digits, the
+// phone and email keep their shape (so a wrong format is visible), and the
+// selfie is reduced to its length and leading characters. The correlation ID
+// is logged in full - it's what Wema needs to trace the request.
+func logTier2Request(p baas.AlatAccountCreationRequest) {
+	redacted := map[string]any{
+		"bvn":                maskTail(p.BVN),
+		"nin":                maskTail(p.NIN),
+		"phoneNumber":        maskPhoneShape(p.PhoneNumber),
+		"emailAddress":       maskEmailShape(p.EmailAddress),
+		"residentialAddress": "omitted",
+		"liveImageOfFace":    describeImage(p.LiveImageOfFace),
+		"correlationId":      p.CorrelationID,
+	}
+	if p.ResidentialAddress != nil {
+		redacted["residentialAddress"] = "provided"
+	}
+	b, err := json.Marshal(redacted)
+	if err != nil {
+		b = []byte("<unprintable>")
+	}
+	log.Printf("[ALAT] level=INFO op=tier2_create request correlation_id=%s payload=%s", p.CorrelationID, b)
+}
+
+// logTier2Response logs ALAT's answer to tier 2 creation. alatDo logs the
+// body only for non-2xx replies, so a success would otherwise leave no trace
+// of the tracking ID or generation status. Nothing sensitive is in it.
+func logTier2Response(correlationID string, resp *baas.AlatAccountCreationResponse, err error) {
+	if resp == nil {
+		log.Printf("[ALAT] level=INFO op=tier2_create response correlation_id=%s none (err=%v)", correlationID, err)
+		return
+	}
+	generation, tracking, address := "", "", ""
+	if resp.Data != nil {
+		generation, tracking, address = resp.Data.AccountGenerationStatus, resp.Data.TrackingID, resp.Data.AddressVerificationStatus
+	}
+	log.Printf("[ALAT] level=INFO op=tier2_create response correlation_id=%s status=%t code=%q status_code=%q message=%q errors=%v account_generation_status=%q tracking_id=%q address_verification_status=%q",
+		correlationID, resp.Status, resp.Code, resp.StatusCode, resp.Message, resp.Errors, generation, tracking, address)
+}
+
+// describeImage summarises a base64 selfie without logging it: its length,
+// whether it carries a data: URI prefix (ALAT may want raw base64), and its
+// first characters, which are the file header and identify nothing.
+func describeImage(img string) string {
+	img = strings.TrimSpace(img)
+	if img == "" {
+		return "<empty>"
+	}
+	head := img
+	if len(head) > 12 {
+		head = head[:12]
+	}
+	return fmt.Sprintf("<%d chars, data_uri=%t, starts=%q>", len(img), strings.HasPrefix(img, "data:"), head)
+}
+
+// maskPhoneShape keeps a phone's first 3 and last 4 digits, so the format
+// (080..., 234...) is visible without logging the number.
+func maskPhoneShape(p string) string {
+	p = strings.TrimSpace(p)
+	if len(p) <= 7 {
+		return "***"
+	}
+	return p[:3] + strings.Repeat("*", len(p)-7) + p[len(p)-4:]
+}
+
+// maskEmailShape keeps an email's first character and its domain.
+func maskEmailShape(e string) string {
+	e = strings.TrimSpace(e)
+	at := strings.LastIndex(e, "@")
+	if at < 1 {
+		return "***"
+	}
+	return e[:1] + strings.Repeat("*", at-1) + e[at:]
 }
 
 // trackingID drops ALAT's all-zero placeholder ID.
