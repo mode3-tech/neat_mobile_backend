@@ -4,7 +4,6 @@ package wema
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/logredact"
 	"neat_mobile_app_backend/internal/modules/auth"
 	registerv2 "neat_mobile_app_backend/internal/modules/auth/registerv2"
 	phoneutil "neat_mobile_app_backend/internal/phone"
@@ -259,23 +259,8 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 // selfie is reduced to its length and leading characters. The correlation ID
 // is logged in full - it's what Wema needs to trace the request.
 func logTier2Request(p baas.AlatAccountCreationRequest) {
-	redacted := map[string]any{
-		"bvn":                maskTail(p.BVN),
-		"nin":                maskTail(p.NIN),
-		"phoneNumber":        maskPhoneShape(p.PhoneNumber),
-		"emailAddress":       maskEmailShape(p.EmailAddress),
-		"residentialAddress": "omitted",
-		"liveImageOfFace":    describeImage(p.LiveImageOfFace),
-		"correlationId":      p.CorrelationID,
-	}
-	if p.ResidentialAddress != nil {
-		redacted["residentialAddress"] = "provided"
-	}
-	b, err := json.Marshal(redacted)
-	if err != nil {
-		b = []byte("<unprintable>")
-	}
-	log.Printf("[ALAT] level=INFO op=tier2_create request correlation_id=%s payload=%s", p.CorrelationID, b)
+	log.Printf("[ALAT] level=INFO op=tier2_create request correlation_id=%s payload=%s", p.CorrelationID,
+		logredact.Tier2Payload(p.BVN, p.NIN, p.PhoneNumber, p.EmailAddress, p.LiveImageOfFace, p.ResidentialAddress != nil, p.CorrelationID))
 }
 
 // logTier2Response logs ALAT's answer to tier 2 creation. alatDo logs the
@@ -292,41 +277,6 @@ func logTier2Response(correlationID string, resp *baas.AlatAccountCreationRespon
 	}
 	log.Printf("[ALAT] level=INFO op=tier2_create response correlation_id=%s status=%t code=%q status_code=%q message=%q errors=%v account_generation_status=%q tracking_id=%q address_verification_status=%q",
 		correlationID, resp.Status, resp.Code, resp.StatusCode, resp.Message, resp.Errors, generation, tracking, address)
-}
-
-// describeImage summarises a base64 selfie without logging it: its length,
-// whether it carries a data: URI prefix (ALAT may want raw base64), and its
-// first characters, which are the file header and identify nothing.
-func describeImage(img string) string {
-	img = strings.TrimSpace(img)
-	if img == "" {
-		return "<empty>"
-	}
-	head := img
-	if len(head) > 12 {
-		head = head[:12]
-	}
-	return fmt.Sprintf("<%d chars, data_uri=%t, starts=%q>", len(img), strings.HasPrefix(img, "data:"), head)
-}
-
-// maskPhoneShape keeps a phone's first 3 and last 4 digits, so the format
-// (080..., 234...) is visible without logging the number.
-func maskPhoneShape(p string) string {
-	p = strings.TrimSpace(p)
-	if len(p) <= 7 {
-		return "***"
-	}
-	return p[:3] + strings.Repeat("*", len(p)-7) + p[len(p)-4:]
-}
-
-// maskEmailShape keeps an email's first character and its domain.
-func maskEmailShape(e string) string {
-	e = strings.TrimSpace(e)
-	at := strings.LastIndex(e, "@")
-	if at < 1 {
-		return "***"
-	}
-	return e[:1] + strings.Repeat("*", at-1) + e[at:]
 }
 
 // trackingID drops ALAT's all-zero placeholder ID.
@@ -395,13 +345,7 @@ func alatPhone(p string) string {
 	return strings.TrimSpace(p)
 }
 
-func maskTail(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= 4 {
-		return "***"
-	}
-	return "***" + s[len(s)-4:]
-}
+func maskTail(s string) string { return logredact.Tail(s) }
 
 // Compile-time interface checks.
 var (
