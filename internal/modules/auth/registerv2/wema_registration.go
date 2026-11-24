@@ -13,6 +13,7 @@ import (
 	"time"
 
 	appErr "neat_mobile_app_backend/internal/errors"
+	"neat_mobile_app_backend/internal/logredact"
 	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/internal/modules/device"
 	"neat_mobile_app_backend/internal/modules/referrals"
@@ -861,4 +862,24 @@ func newClaimToken() (string, error) {
 func hashClaimToken(token string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
 	return hex.EncodeToString(sum[:])
+}
+
+// logRejectedTier2Payload logs, redacted, the tier 2 payload this request
+// would have sent to ALAT when the registration lock turned it away - so it
+// can be compared with the attempt that holds the lock. Nothing is sent. The
+// selfie is read from the face check named by the request (best effort) and
+// logged by size only.
+func (s *Service) logRejectedTier2Payload(ctx context.Context, rl *opLogger, req OptimusRegisterRequest, normalizedPhone, normalizedEmail string) {
+	phone := normalizedPhone
+	if local, err := phoneutil.ToLocalFormat(normalizedPhone); err == nil {
+		phone = local
+	}
+	image := ""
+	if id := strings.TrimSpace(req.BVNWithFaceVerificationID); id != "" && s.repo != nil && s.repo.db != nil {
+		if fc, err := s.repo.GetFaceCheckRecord(ctx, id); err == nil && fc != nil && fc.FaceImageProvided != nil {
+			image = strings.TrimSpace(*fc.FaceImageProvided)
+		}
+	}
+	rl.Infof("rejected request would have sent to alat: tier2 payload=%s",
+		logredact.Tier2Payload(strings.TrimSpace(req.BVN), strings.TrimSpace(req.NIN), phone, normalizedEmail, image, false, "not-sent"))
 }
