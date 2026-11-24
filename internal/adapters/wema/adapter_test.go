@@ -170,40 +170,29 @@ func TestAdapter_Tier2RejectedIsStillAnError(t *testing.T) {
 	}
 }
 
-// The tier 2 payload is logged for debugging, with BVN, NIN, phone, email and
-// the selfie redacted; the correlation ID and phone format stay visible.
-func TestTier2Payload_LoggedRedacted(t *testing.T) {
+// The tier 2 payload is logged as sent, so it can be shared with Wema; only
+// the selfie is summarised.
+func TestTier2Payload_Logged(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer log.SetOutput(os.Stderr)
 
-	const (
-		bvn   = "12345678901"
-		nin   = "10987654321"
-		image = "/9j/4AAQSkZJRgABAQAAAQABAAD-very-long-selfie-base64-payload"
-	)
+	const image = "/9j/4AAQSkZJRgABAQAAAQABAAD-very-long-selfie-base64-payload"
 	_, alat := newFakeALAT(t, map[string]string{
 		"/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2": `{"status":true,"message":"ok","data":{"accountGenerationStatus":"Pending","trackingId":"track-123"}}`,
 	})
-	_, err := New(alat).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{
-		BVN: bvn, NIN: nin, PhoneNumber: "2348012345678", EmailAddress: "adebayo@example.com",
+	if _, err := New(alat).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{
+		BVN: "12345678901", NIN: "10987654321", PhoneNumber: "2348012345678", EmailAddress: "adebayo@example.com",
 		LiveImageOfFace: image, CorrelationID: "corr-1",
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	out := buf.String()
-	for _, secret := range []string{bvn, nin, "08012345678", "adebayo", image, "very-long-selfie"} {
-		if strings.Contains(out, secret) {
-			t.Errorf("log leaks %q:\n%s", secret, out)
-		}
-	}
 	for _, want := range []string{
 		`op=tier2_create request correlation_id=corr-1`,
-		`***8901`, `***4321`, // BVN / NIN last 4
-		`080****5678`, // phone format visible, number not
-		`a******@example.com`,
+		`"bvn":"12345678901"`, `"nin":"10987654321"`,
+		`"phoneNumber":"08012345678"`, `"emailAddress":"adebayo@example.com"`,
 		`data_uri=false`, `chars`,
 		`op=tier2_create response correlation_id=corr-1`,
 		`account_generation_status="Pending"`, `tracking_id="track-123"`,
@@ -211,5 +200,8 @@ func TestTier2Payload_LoggedRedacted(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("log missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "very-long-selfie") {
+		t.Error("selfie must stay summarised")
 	}
 }
