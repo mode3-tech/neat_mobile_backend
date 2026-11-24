@@ -149,6 +149,42 @@ func (h *Handler) HandleAlatTransactionNotification(c *gin.Context) {
 	})
 }
 
+// HandleAlatFacialVerification is ALAT's facial biometric verification
+// callback. Wema's payload schema for it is not yet known, so for now it only
+// logs the envelope and the names of the data fields (never their values - the
+// payload may carry BVN, NIN or selfie data) and acts on nothing. Registration
+// still completes through the account creation webhook and the sweep. It
+// answers 200 once the body is read, so ALAT does not retry.
+func (h *Handler) HandleAlatFacialVerification(c *gin.Context) {
+	rawBody, err := c.GetRawData()
+	if err != nil {
+		log.Printf("[ALAT webhook] level=ERROR event=facial_verification: read body failed: %v", err)
+		abortWithError(c, appErr.ErrInvalidRequestBody)
+		return
+	}
+
+	var ev AlatWebhook[map[string]json.RawMessage]
+	if err := json.Unmarshal(rawBody, &ev); err != nil {
+		log.Printf("[ALAT webhook] level=ERROR event=facial_verification: invalid JSON: %v", err)
+		abortWithError(c, appErr.ErrInvalidRequestBody)
+		return
+	}
+
+	var fields []string
+	if ev.Data != nil {
+		for k := range *ev.Data {
+			fields = append(fields, k)
+		}
+	}
+	log.Printf("[ALAT webhook] level=INFO event=facial_verification request=%d request_type=%d title=%q message=%q data_fields=%v",
+		ev.Request, ev.RequestType, ev.Title, ev.Message, fields)
+
+	c.JSON(http.StatusOK, response.APIResponse[any]{
+		Status:  "success",
+		Message: "Webhook received",
+	})
+}
+
 // truncateForLog caps a webhook body in logs.
 func truncateForLog(b []byte) string {
 	const max = 2048
