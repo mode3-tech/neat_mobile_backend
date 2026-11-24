@@ -53,19 +53,20 @@ func Image(img string) string {
 }
 
 // Tier2Payload renders the ALAT tier 2 (face) account creation payload as
-// JSON with every sensitive field redacted. phone is logged as given, so pass
-// it in the format ALAT will receive. The correlation ID is kept in full -
-// it's what Wema needs to trace a request.
+// JSON, as sent, so it can be shared with Wema when debugging. BVN, NIN, phone
+// and email are NOT redacted. Only the selfie is summarised (size and
+// prefix): it is hundreds of KB of base64. phone is logged as given, so pass
+// it in the format ALAT will receive.
 func Tier2Payload(bvn, nin, phone, email, image string, hasAddress bool, correlationID string) string {
 	addr := "omitted"
 	if hasAddress {
 		addr = "provided"
 	}
 	b, err := json.Marshal(map[string]any{
-		"bvn":                Tail(bvn),
-		"nin":                Tail(nin),
-		"phoneNumber":        PhoneShape(phone),
-		"emailAddress":       EmailShape(email),
+		"bvn":                bvn,
+		"nin":                nin,
+		"phoneNumber":        phone,
+		"emailAddress":       email,
 		"residentialAddress": addr,
 		"liveImageOfFace":    Image(image),
 		"correlationId":      correlationID,
