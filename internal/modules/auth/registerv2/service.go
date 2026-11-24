@@ -188,6 +188,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	}
 	if !locked {
 		rl.Warnf("another registration for this phone or bvn is in progress")
+		s.logRejectedTier2Payload(ctx, rl, req, normalizedPhone, normalizedEmail)
 		return nil, userErrorf("a registration for this phone number or BVN is already in progress, please wait a moment and try again")
 	}
 	defer release()
