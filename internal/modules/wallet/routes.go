@@ -61,6 +61,7 @@ func RegisterAlatWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAut
 	alat := rg.Group("/alat", webhookAuth)
 	{
 		alat.POST("/account/creation", handler.HandleAlatAccountCreation)
+		alat.POST("/facial-verification", handler.HandleAlatFacialVerification)
 		alat.POST("/auth", handler.HandleAlatAuthentication)
 		alat.POST("/transaction", handler.HandleAlatTransaction)
 		alat.POST("/transaction/notification", handler.HandleAlatTransactionNotification)
