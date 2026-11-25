@@ -17,6 +17,21 @@ type Handler struct {
 	// alatAccountListener finishes registrations waiting on an ALAT account
 	// (registerv2). Optional: without it the webhook only logs.
 	alatAccountListener AlatAccountCreationListener
+	// wemaFaceRecorder stores the correlationId from Wema's face biometric
+	// web app (registerv2). Optional: without it the callback only logs.
+	wemaFaceRecorder WemaFaceVerificationRecorder
+}
+
+// WemaFaceVerificationRecorder saves a successful Wema face verification: the
+// correlationId Wema issued for a BVN or NIN (idType "bvn" or "nin").
+type WemaFaceVerificationRecorder interface {
+	RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string) error
+}
+
+// SetWemaFaceVerificationRecorder wires the facial-verification callback to
+// the registration service.
+func (h *Handler) SetWemaFaceVerificationRecorder(r WemaFaceVerificationRecorder) {
+	h.wemaFaceRecorder = r
 }
 
 // AlatAccountCreationListener is told when ALAT's Account Creation webhook

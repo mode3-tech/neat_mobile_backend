@@ -200,3 +200,72 @@ func TestHandleAlatAccountCreation_NotifiesListener(t *testing.T) {
 		t.Fatal("listener was not called")
 	}
 }
+
+type recordingFaceRecorder struct{ calls [][3]string }
+
+func (r *recordingFaceRecorder) RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string) error {
+	r.calls = append(r.calls, [3]string{idType, id, correlationID})
+	return nil
+}
+
+func postFacialVerification(t *testing.T, h *Handler, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), h, passThrough)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alat/facial-verification", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// A successful Wema face check saves the correlationId against the BVN/NIN.
+func TestHandleAlatFacialVerification_SavesSuccessfulResult(t *testing.T) {
+	rec := &recordingFaceRecorder{}
+	h := &Handler{}
+	h.SetWemaFaceVerificationRecorder(rec)
+
+	w := postFacialVerification(t, h, `{"success":true,"c_id":" abc-123 ","id":"12345678901","id_type":"BVN"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if len(rec.calls) != 1 || rec.calls[0] != [3]string{"bvn", "12345678901", "abc-123"} {
+		t.Fatalf("recorded %v", rec.calls)
+	}
+}
+
+// Failed or incomplete results are acknowledged but never saved.
+func TestHandleAlatFacialVerification_IgnoresUnsuccessfulOrIncomplete(t *testing.T) {
+	for name, body := range map[string]string{
+		"not successful": `{"success":false,"c_id":"abc","id":"12345678901","id_type":"bvn"}`,
+		"no c_id":        `{"success":true,"id":"12345678901","id_type":"bvn"}`,
+		"no id":          `{"success":true,"c_id":"abc","id_type":"nin"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := &recordingFaceRecorder{}
+			h := &Handler{}
+			h.SetWemaFaceVerificationRecorder(rec)
+			if w := postFacialVerification(t, h, body); w.Code != http.StatusOK {
+				t.Fatalf("status = %d", w.Code)
+			}
+			if len(rec.calls) != 0 {
+				t.Fatalf("nothing should be saved, got %v", rec.calls)
+			}
+		})
+	}
+}
+
+func TestHandleAlatFacialVerification_InvalidJSON(t *testing.T) {
+	if w := postFacialVerification(t, &Handler{}, `{not json`); w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// Without a recorder wired the callback still answers 200.
+func TestHandleAlatFacialVerification_NoRecorder(t *testing.T) {
+	w := postFacialVerification(t, &Handler{}, `{"success":true,"c_id":"abc","id":"12345678901","id_type":"bvn"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+}

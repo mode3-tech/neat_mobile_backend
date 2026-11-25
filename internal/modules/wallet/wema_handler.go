@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -149,12 +150,22 @@ func (h *Handler) HandleAlatTransactionNotification(c *gin.Context) {
 	})
 }
 
-// HandleAlatFacialVerification is ALAT's facial biometric verification
-// callback. Wema's payload schema for it is not yet known, so for now it only
-// logs the envelope and the names of the data fields (never their values - the
-// payload may carry BVN, NIN or selfie data) and acts on nothing. Registration
-// still completes through the account creation webhook and the sweep. It
-// answers 200 once the body is read, so ALAT does not retry.
+// wemaFaceVerificationPayload is what Wema's face biometric web app POSTs to
+// our cb_uri after the customer's face check.
+type wemaFaceVerificationPayload struct {
+	Success       bool   `json:"success"`
+	CorrelationID string `json:"c_id"`
+	ID            string `json:"id"`
+	IDType        string `json:"id_type"`
+}
+
+// HandleAlatFacialVerification receives the result of Wema's face biometric
+// web app. On success it saves the correlationId (c_id) against the BVN/NIN it
+// was done for - ALAT's tier 2 account creation needs that exact ID. The
+// payload is unsigned, so nothing is trusted beyond storing it: ALAT rejects a
+// correlationId it didn't issue when the account is created. It answers 200
+// once the body is read, so Wema does not retry; BVN/NIN values are never
+// logged in full.
 func (h *Handler) HandleAlatFacialVerification(c *gin.Context) {
 	rawBody, err := c.GetRawData()
 	if err != nil {
@@ -163,26 +174,55 @@ func (h *Handler) HandleAlatFacialVerification(c *gin.Context) {
 		return
 	}
 
-	var ev AlatWebhook[map[string]json.RawMessage]
-	if err := json.Unmarshal(rawBody, &ev); err != nil {
-		log.Printf("[ALAT webhook] level=ERROR event=facial_verification: invalid JSON: %v", err)
+	// Log how it arrived first: whether Wema's servers or a browser call this
+	// decides if the IP allowlist can apply, and Wema's payload shape isn't
+	// guaranteed. The BVN/NIN is masked below; c_id is not sensitive.
+	log.Printf("[ALAT webhook] level=INFO event=facial_verification received peer=%s xff=%q origin=%q referer=%q user_agent=%q content_type=%q bytes=%d fields=%v",
+		c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), c.GetHeader("Origin"), c.GetHeader("Referer"),
+		c.GetHeader("User-Agent"), c.GetHeader("Content-Type"), len(rawBody), jsonKeys(rawBody))
+
+	var p wemaFaceVerificationPayload
+	if err := json.Unmarshal(rawBody, &p); err != nil {
+		log.Printf("[ALAT webhook] level=ERROR event=facial_verification: invalid JSON: %v (body not logged: may hold a BVN/NIN)", err)
 		abortWithError(c, appErr.ErrInvalidRequestBody)
 		return
 	}
+	p.CorrelationID, p.ID, p.IDType = strings.TrimSpace(p.CorrelationID), strings.TrimSpace(p.ID), strings.ToLower(strings.TrimSpace(p.IDType))
 
-	var fields []string
-	if ev.Data != nil {
-		for k := range *ev.Data {
-			fields = append(fields, k)
+	switch {
+	case !p.Success:
+		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s id=%s c_id=%q: face verification was not successful (success=false) - nothing saved", p.IDType, maskAccount(p.ID), p.CorrelationID)
+	case p.CorrelationID == "" || p.ID == "":
+		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s has_c_id=%t has_id=%t: success without c_id or id - nothing saved, check Wema's payload shape", p.IDType, p.CorrelationID != "", p.ID != "")
+	case h.wemaFaceRecorder == nil:
+		log.Printf("[ALAT webhook] level=WARN event=facial_verification: no recorder wired, dropping result")
+	default:
+		if err := h.wemaFaceRecorder.RecordWemaFaceVerification(c.Request.Context(), p.IDType, p.ID, p.CorrelationID); err != nil {
+			log.Printf("[ALAT webhook] level=ERROR event=facial_verification id_type=%s id=%s: save failed: %v", p.IDType, maskAccount(p.ID), err)
+		} else {
+			log.Printf("[ALAT webhook] level=INFO event=facial_verification id_type=%s id=%s c_id=%s: saved", p.IDType, maskAccount(p.ID), p.CorrelationID)
 		}
 	}
-	log.Printf("[ALAT webhook] level=INFO event=facial_verification request=%d request_type=%d title=%q message=%q data_fields=%v",
-		ev.Request, ev.RequestType, ev.Title, ev.Message, fields)
 
 	c.JSON(http.StatusOK, response.APIResponse[any]{
 		Status:  "success",
 		Message: "Webhook received",
 	})
+}
+
+// jsonKeys lists a JSON object's top-level keys (for logging the shape of a
+// payload without its values); nil if it isn't an object.
+func jsonKeys(raw []byte) []string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // truncateForLog caps a webhook body in logs.

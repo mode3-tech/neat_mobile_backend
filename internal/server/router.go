@@ -470,6 +470,10 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	// ALAT's Account Creation webhook finishes registrations still waiting on
 	// their Wema account.
 	walletHandler.SetAlatAccountCreationListener(optimusRegistrationService)
+	// Wema's face web app reports its correlationId to the facial-verification
+	// callback; registration reads it back when opening the tier 2 account.
+	walletHandler.SetWemaFaceVerificationRecorder(optimusRegistrationService)
+	optimusRegistrationService.SetWemaFaceConfig(cfg.AlatFaceVerificationURL, cfg.AlatAPIKey, cfg.AlatFaceCallbackURL)
 	wallet.RegisterRoutes(apiV1, walletHandler, authGuard, deviceValidator)
 	wallet.RegisterV2AccountStatementRoutes(apiV2, walletHandler, authGuard, deviceValidator)
 	wallet.RegisterV2BankRoutes(apiV2, walletHandler, authGuard, deviceValidator)
