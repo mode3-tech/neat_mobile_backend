@@ -5,6 +5,7 @@ package logredact
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -52,15 +53,22 @@ func Image(img string) string {
 	return fmt.Sprintf("<%d chars, data_uri=%t, starts=%q>", len(img), strings.HasPrefix(img, "data:"), head)
 }
 
+// isNilPointer reports whether v is a typed nil pointer wrapped in an any.
+func isNilPointer(v any) bool {
+	rv := reflect.ValueOf(v)
+	return rv.Kind() == reflect.Ptr && rv.IsNil()
+}
+
 // Tier2Payload renders the ALAT tier 2 (face) account creation payload as
 // JSON, as sent, so it can be shared with Wema when debugging. BVN, NIN, phone
 // and email are NOT redacted. Only the selfie is summarised (size and
 // prefix): it is hundreds of KB of base64. phone is logged as given, so pass
 // it in the format ALAT will receive.
-func Tier2Payload(bvn, nin, phone, email, image string, hasAddress bool, correlationID string) string {
-	addr := "omitted"
-	if hasAddress {
-		addr = "provided"
+// address is logged as sent (a nil pointer, or nil, is "omitted").
+func Tier2Payload(bvn, nin, phone, email, image string, address any, correlationID string) string {
+	var addr any = "omitted"
+	if address != nil && !isNilPointer(address) {
+		addr = address
 	}
 	b, err := json.Marshal(map[string]any{
 		"bvn":                bvn,

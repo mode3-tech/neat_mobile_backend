@@ -629,7 +629,7 @@
       "post": {
         "tags": ["Registration v2"],
         "summary": "Validate a BVN",
-        "description": "Uses snake_case client fields. With Providus, requires_otp is false and both IDs are empty. With Optimus, requires_otp is true and provider_reference_id is used by the OTP endpoints. For Wema, requires_otp is false; continue with /v2/auth/wema/face-url to run Wema's own face check, then send the c_id it produces as wema_face_correlation_id to /v2/auth/register.",
+        "description": "Uses snake_case client fields. With Providus, requires_otp is false and both IDs are empty. With Optimus, requires_otp is true and provider_reference_id is used by the OTP endpoints. For Wema, requires_otp is false; continue with /v2/auth/wema/face-url to run Wema's own face check, poll /v2/auth/wema/face-status until the result arrives (Wema reports it to the backend), then call /v2/auth/register.",
         "requestBody": {
           "required": true,
           "content": {
@@ -715,7 +715,7 @@
       "post": {
         "tags": ["Registration v2"],
         "summary": "Get the URL of Wema's face biometric web app",
-        "description": "Wema signup only. Public (no token, no X-Device-ID). Returns the URL of Wema's face biometric web app for the customer's BVN or NIN; open it in a webview. Replaces /v2/auth/validate/bvn-with-face for Wema.\n\nWhen the check ends, the web app navigates to the same site with the result in the query string. On success: `?success=true&c_id=<correlation id>&id=<bvn or nin>&id_type=bvn`. On failure: `?success=false&error=<message>&c_id=&id=<bvn or nin>&id_type=bvn` (c_id is empty). The client must read `c_id` from that URL and send it to /v2/auth/register as `wema_face_correlation_id` - the backend does not receive it from Wema.\n\nThe returned URL contains the bank's API key (`x_tk`); do not log or store it.",
+        "description": "Wema signup only. Public (no token, no X-Device-ID). Returns the URL of Wema's face biometric web app for the customer's BVN or NIN; open it in a webview. Replaces /v2/auth/validate/bvn-with-face for Wema.\n\nThe URL carries a cb_uri (the callback URL Wema has whitelisted); when the check ends, Wema POSTs the result, including its correlation ID (c_id), to the backend. The client never handles the c_id: poll /v2/auth/wema/face-status until the result arrives, then call /v2/auth/register.\n\nThe returned URL contains the bank's API key (`x_tk`); do not log or store it.",
         "requestBody": {
           "required": true,
           "content": {
@@ -745,6 +745,54 @@
         }
       }
     },
+    "/v2/auth/wema/face-status": {
+      "servers": [
+        { "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }
+      ],
+      "post": {
+        "tags": ["Registration v2"],
+        "summary": "Check the result of Wema's face check",
+        "description": "Wema signup only. Public. Poll it (about every 2 seconds) after opening the URL from /v2/auth/wema/face-url, until data.status is \"verified\" or \"failed\". \"pending\" means Wema has not reported a result to the backend yet. On \"failed\", data.message is Wema's own error text; get a new URL from /v2/auth/wema/face-url to try again. A verified result stays valid for 24 hours. The correlation ID is never returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/V2WemaFaceURLRequest" },
+              "example": { "id_type": "bvn", "id": "22222222222" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current state of the face check",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2WemaFaceStatusResponse" },
+                "examples": {
+                  "pending": {
+                    "value": { "status": "success", "data": { "status": "pending", "message": "waiting for wema's face verification result" } }
+                  },
+                  "verified": {
+                    "value": { "status": "success", "data": { "status": "verified", "message": "face verification completed" } }
+                  },
+                  "failed": {
+                    "value": { "status": "success", "data": { "status": "failed", "message": "Oops an error occurred while adding selfie. Please try the request again." } }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/API400Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/auth/validate/bvn-with-face": {
       "servers": [
         { "url": "https://neat-mobile-backend-2wbh.onrender.com/api" }
@@ -752,7 +800,7 @@
       "post": {
         "tags": ["Registration v2"],
         "summary": "Verify BVN with face",
-        "description": "Face check by our own KYC provider (not Wema). The returned face-check ID is sent to /v2/auth/register as bvn_w_face_verification_id. Not used for Wema, which uses /v2/auth/wema/face-url and wema_face_correlation_id instead.",
+        "description": "Face check by our own KYC provider (not Wema). The returned face-check ID is sent to /v2/auth/register as bvn_w_face_verification_id. Not used for Wema, which uses /v2/auth/wema/face-url and /v2/auth/wema/face-status instead.",
         "requestBody": {
           "required": true,
           "content": {
@@ -930,7 +978,7 @@
       "post": {
         "tags": ["Registration v2"],
         "summary": "Complete registration",
-        "description": "Creates the account. Wema account creation can return pending; set supports_pending=true and retain registration_id and claim_token to poll /v2/auth/register/status. Wema requires wema_face_correlation_id: the c_id the client read from the URL of Wema's face biometric web app after a successful check (see /v2/auth/wema/face-url). bvn_w_face_verification_id is not used for Wema. Resend the same c_id on every retry. If it is missing, registration fails with \"face biometric verification with wema is required\".",
+        "description": "Creates the account. Wema account creation is asynchronous: when the account is not ready within a few seconds the response is HTTP 202 with data.status \"pending\" (for every client, whether or not supports_pending is sent) and message set to Wema's own text, e.g. \"your account will be created shortly\". Show a pending screen with that message, keep registration_id and claim_token, and poll /v2/auth/register/status. Wema also requires a verified face check (/v2/auth/wema/face-url): the backend uses the correlation ID Wema reported to its callback for this BVN/NIN, so the client sends nothing extra (bvn_w_face_verification_id is not used for Wema). If no verified result is stored, registration fails with \"face biometric verification with wema is required\".",
         "requestBody": {
           "required": true,
           "content": {
@@ -958,7 +1006,7 @@
             }
           },
           "202": {
-            "description": "Wema account creation is still pending",
+            "description": "Wema account creation is still pending. Returned for every Wema client; the message carries Wema's own text.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/V2RegisterResponse" },
@@ -10346,6 +10394,25 @@
           }
         }
       },
+      "V2WemaFaceStatusResponse": {
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string" },
+          "data": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": { "type": "string", "enum": ["pending", "verified", "failed"] },
+              "message": {
+                "type": "string",
+                "description": "On failed, Wema's own error text."
+              }
+            }
+          }
+        }
+      },
       "V2VerificationResponse": {
         "type": "object",
         "required": ["status", "data"],
@@ -10554,15 +10621,11 @@
           "device": { "$ref": "#/components/schemas/DeviceRegistrationRequest" },
           "bvn_w_face_verification_id": {
             "type": "string",
-            "description": "Not used for Wema (send wema_face_correlation_id instead); returned by /v2/auth/validate/bvn-with-face."
-          },
-          "wema_face_correlation_id": {
-            "type": "string",
-            "description": "Wema only. The c_id from the URL of Wema's face biometric web app after a successful check (/v2/auth/wema/face-url). Sent to ALAT as the correlationId for tier 2 account creation; ALAT rejects one it did not issue for this BVN/NIN."
+            "description": "Not used for Wema (its face check is /v2/auth/wema/face-url + /v2/auth/wema/face-status); returned by /v2/auth/validate/bvn-with-face."
           },
           "supports_pending": {
             "type": "boolean",
-            "description": "Set true to receive a pending registration ID and poll /v2/auth/register/status if ALAT account creation is still in progress."
+            "description": "Not needed for Wema, which always returns a pending registration (HTTP 202) when the account is not ready yet; poll /v2/auth/register/status."
           }
         }
       },

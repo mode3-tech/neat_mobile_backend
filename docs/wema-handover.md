@@ -11,10 +11,10 @@ Signup v2 endpoints are public and use the `/api/v2/auth` prefix. Do not send an
    - `POST /api/v2/auth/otp/phone/verify` with `{"otp_id":"...","code":"..."}` returns `data.verification_id`. Keep this as `phone_verification_id`.
 2. Request and verify the email OTP in the same way using `/api/v2/auth/otp/email/request` and `/api/v2/auth/otp/email/verify`. Keep its `data.verification_id` as `email_verification_id`.
 3. Validate BVN with `POST /api/v2/auth/validate/bvn` using `bvn`, `dob`, and `email`. For Wema, `data.requires_otp` is false; there is no provider OTP step.
-4. Do Wema's face check: `POST /api/v2/auth/wema/face-url` returns the URL of Wema's face web app, which the app opens in a webview; when the check ends, the web app's URL carries `success` and `c_id`. This replaces `POST /api/v2/auth/validate/bvn-with-face` and `bvn_w_face_verification_id` for Wema. See [wema-face-verification-frontend.md](wema-face-verification-frontend.md).
-5. Submit `POST /api/v2/auth/register` with the verified contact IDs, applicant details, BVN/NIN, password/PIN and device object, plus `wema_face_correlation_id` (the `c_id` from the web app's URL; no `bvn_w_face_verification_id`). Set `supports_pending: true`.
+4. Do Wema's face check: `POST /api/v2/auth/wema/face-url` returns the URL of Wema's face web app, which the app opens in a webview. Wema reports the result (including its correlation ID) to the backend's callback, so the app never handles the correlation ID. Poll `POST /api/v2/auth/wema/face-status` (same body) until `data.status` is `verified` (or `failed`, with Wema's reason in `data.message`). This replaces `POST /api/v2/auth/validate/bvn-with-face` and `bvn_w_face_verification_id` for Wema. See [wema-face-verification-frontend.md](wema-face-verification-frontend.md).
+5. Submit `POST /api/v2/auth/register` with the verified contact IDs, applicant details, BVN/NIN, password/PIN and device object (no `bvn_w_face_verification_id`). `supports_pending` is not needed for Wema.
 
-   Account creation can finish immediately (`data.status: "completed"`, tokens returned) or be asynchronous (`data.status: "pending"`, HTTP 202). For pending results, securely retain both `data.registration_id` and `data.claim_token`, then poll `POST /api/v2/auth/register/status` with:
+   Account creation can finish immediately (`data.status: "completed"`, tokens returned) or be asynchronous (`data.status: "pending"`, HTTP 202, always returned for Wema when the account isn't ready, with Wema's own text in `message`; show a pending screen with it). For pending results, securely retain both `data.registration_id` and `data.claim_token`, then poll `POST /api/v2/auth/register/status` with:
 
    ```json
    {

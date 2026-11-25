@@ -146,12 +146,12 @@ func TestAdapter_Tier2AlreadyPendingAtALAT(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	id, err := New(baas.NewAlat(srv.URL, "key", "sub", "")).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{PhoneNumber: "2348012345678"})
+	res, err := New(baas.NewAlat(srv.URL, "key", "sub", "")).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{PhoneNumber: "2348012345678"})
 	if !errors.Is(err, registerv2.ErrAlatAccountGenerationPending) {
 		t.Fatalf("err = %v, want ErrAlatAccountGenerationPending", err)
 	}
-	if id != "" {
-		t.Errorf("tracking id = %q, want the all-zero placeholder dropped", id)
+	if res.TrackingID != "" {
+		t.Errorf("tracking id = %q, want the all-zero placeholder dropped", res.TrackingID)
 	}
 }
 
@@ -203,5 +203,58 @@ func TestTier2Payload_Logged(t *testing.T) {
 	}
 	if strings.Contains(out, "very-long-selfie") {
 		t.Error("selfie must stay summarised")
+	}
+}
+
+// ALAT requires the whole residential address on tier 2 creation: every field
+// is sent, as an empty string when there is no value.
+func TestPostTier2_SendsEveryResidentialAddressField(t *testing.T) {
+	f, alat := newFakeALAT(t, map[string]string{
+		"/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2": `{"status":true,"message":"ok","data":{"accountGenerationStatus":"Pending","trackingId":"track-1"}}`,
+	})
+	_, err := New(alat).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{
+		BVN: "12345678901", NIN: "10987654321", PhoneNumber: "2348012345678", EmailAddress: "a@example.com",
+		CorrelationID: "corr-1",
+		ResidentialAddress: &registerv2.AlatResidentialAddress{
+			BuildingNumber: "12", FullAddress: "12 Broad Street, Lagos",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(f.calls))
+	}
+	addr, ok := f.calls[0].body["residentialAddress"].(map[string]any)
+	if !ok {
+		t.Fatalf("residentialAddress missing from %v", f.calls[0].body)
+	}
+	for _, field := range []string{"buildingNumber", "apartment", "street", "city", "town", "state", "lga", "lcda",
+		"landmark", "additionalInformation", "country", "fullAddress", "postalCode"} {
+		if _, ok := addr[field]; !ok {
+			t.Errorf("residentialAddress.%s missing: %v", field, addr)
+		}
+	}
+	if addr["buildingNumber"] != "12" || addr["fullAddress"] != "12 Broad Street, Lagos" || addr["street"] != "" {
+		t.Errorf("unexpected values: %v", addr)
+	}
+	if _, has := f.calls[0].body["liveImageOfFace"]; has {
+		t.Error("no selfie should be sent")
+	}
+}
+
+// A successful tier 2 request is only "queued": ALAT's message (and no data)
+// comes back so the client can show it on a pending screen.
+func TestAdapter_Tier2QueuedReturnsAlatMessage(t *testing.T) {
+	const msg = "Hello! Charles, your account will be created shortly. If your account is not generated, please try again in ten minutes."
+	_, alat := newFakeALAT(t, map[string]string{
+		"/create-account-face/api/partnership/tier2-partnershipaccount-withoutOtp-v2": `{"message":"` + msg + `","status":true,"code":0,"statusCode":"OK"}`,
+	})
+	res, err := New(alat).PostTier2PartnershipAccountWithFace(context.Background(), registerv2.AlatTier2FaceRequest{PhoneNumber: "2348012345678"})
+	if err != nil {
+		t.Fatalf("err = %v, want success", err)
+	}
+	if res.Message != msg || res.TrackingID != "" {
+		t.Fatalf("result = %+v, want ALAT's message and no tracking id", res)
 	}
 }

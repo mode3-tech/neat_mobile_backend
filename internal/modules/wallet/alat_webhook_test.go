@@ -201,10 +201,16 @@ func TestHandleAlatAccountCreation_NotifiesListener(t *testing.T) {
 	}
 }
 
-type recordingFaceRecorder struct{ calls [][3]string }
+type faceCall struct {
+	idType, id, correlationID string
+	success                   bool
+	reason                    string
+}
 
-func (r *recordingFaceRecorder) RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string) error {
-	r.calls = append(r.calls, [3]string{idType, id, correlationID})
+type recordingFaceRecorder struct{ calls []faceCall }
+
+func (r *recordingFaceRecorder) RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string, success bool, errorMessage string) error {
+	r.calls = append(r.calls, faceCall{idType, id, correlationID, success, errorMessage})
 	return nil
 }
 
@@ -230,17 +236,39 @@ func TestHandleAlatFacialVerification_SavesSuccessfulResult(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
-	if len(rec.calls) != 1 || rec.calls[0] != [3]string{"bvn", "12345678901", "abc-123"} {
-		t.Fatalf("recorded %v", rec.calls)
+	if len(rec.calls) != 1 || rec.calls[0] != (faceCall{"bvn", "12345678901", "abc-123", true, ""}) {
+		t.Fatalf("recorded %+v", rec.calls)
 	}
 }
 
-// Failed or incomplete results are acknowledged but never saved.
-func TestHandleAlatFacialVerification_IgnoresUnsuccessfulOrIncomplete(t *testing.T) {
+// A failed check is recorded with Wema's reason, so the status endpoint can
+// report it; the c_id is empty.
+func TestHandleAlatFacialVerification_SavesFailedResultWithReason(t *testing.T) {
 	for name, body := range map[string]string{
-		"not successful": `{"success":false,"c_id":"abc","id":"12345678901","id_type":"bvn"}`,
-		"no c_id":        `{"success":true,"id":"12345678901","id_type":"bvn"}`,
-		"no id":          `{"success":true,"c_id":"abc","id_type":"nin"}`,
+		"error field":   `{"success":false,"error":"Oops an error occurred while adding selfie.","c_id":"","id":"12345678901","id_type":"bvn"}`,
+		"message field": `{"success":false,"message":"Oops an error occurred while adding selfie.","c_id":"","id":"12345678901","id_type":"bvn"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := &recordingFaceRecorder{}
+			h := &Handler{}
+			h.SetWemaFaceVerificationRecorder(rec)
+			if w := postFacialVerification(t, h, body); w.Code != http.StatusOK {
+				t.Fatalf("status = %d", w.Code)
+			}
+			want := faceCall{"bvn", "12345678901", "", false, "Oops an error occurred while adding selfie."}
+			if len(rec.calls) != 1 || rec.calls[0] != want {
+				t.Fatalf("recorded %+v, want %+v", rec.calls, want)
+			}
+		})
+	}
+}
+
+// Results that can't be used are acknowledged but never saved.
+func TestHandleAlatFacialVerification_IgnoresIncomplete(t *testing.T) {
+	for name, body := range map[string]string{
+		"success without c_id": `{"success":true,"id":"12345678901","id_type":"bvn"}`,
+		"no id":                `{"success":true,"c_id":"abc","id_type":"nin"}`,
+		"failure without id":   `{"success":false,"error":"x","id_type":"bvn"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := &recordingFaceRecorder{}
@@ -250,7 +278,7 @@ func TestHandleAlatFacialVerification_IgnoresUnsuccessfulOrIncomplete(t *testing
 				t.Fatalf("status = %d", w.Code)
 			}
 			if len(rec.calls) != 0 {
-				t.Fatalf("nothing should be saved, got %v", rec.calls)
+				t.Fatalf("nothing should be saved, got %+v", rec.calls)
 			}
 		})
 	}

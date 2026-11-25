@@ -151,21 +151,26 @@ func (h *Handler) HandleAlatTransactionNotification(c *gin.Context) {
 }
 
 // wemaFaceVerificationPayload is what Wema's face biometric web app POSTs to
-// our cb_uri after the customer's face check.
+// our cb_uri after the customer's face check. A failed check has success=false
+// and an empty c_id; Wema's reason is in "error" (or "message").
 type wemaFaceVerificationPayload struct {
 	Success       bool   `json:"success"`
 	CorrelationID string `json:"c_id"`
 	ID            string `json:"id"`
 	IDType        string `json:"id_type"`
+	Error         string `json:"error"`
+	Message       string `json:"message"`
 }
 
 // HandleAlatFacialVerification receives the result of Wema's face biometric
-// web app. On success it saves the correlationId (c_id) against the BVN/NIN it
-// was done for - ALAT's tier 2 account creation needs that exact ID. The
-// payload is unsigned, so nothing is trusted beyond storing it: ALAT rejects a
-// correlationId it didn't issue when the account is created. It answers 200
-// once the body is read, so Wema does not retry; BVN/NIN values are never
-// logged in full.
+// web app. A success saves the correlationId (c_id) against the BVN/NIN it was
+// done for - ALAT's tier 2 account creation needs that exact ID, and
+// registration takes it from here, never from the client. A failure is saved
+// too, with Wema's error text, so the status endpoint can report it. The
+// payload is unsigned (the IP allowlist is the only gate), so nothing is
+// trusted beyond storing it: ALAT rejects a correlationId it didn't issue when
+// the account is created. It answers 200 once the body is read, so Wema does
+// not retry; BVN/NIN values are never logged in full.
 func (h *Handler) HandleAlatFacialVerification(c *gin.Context) {
 	rawBody, err := c.GetRawData()
 	if err != nil {
@@ -188,19 +193,25 @@ func (h *Handler) HandleAlatFacialVerification(c *gin.Context) {
 		return
 	}
 	p.CorrelationID, p.ID, p.IDType = strings.TrimSpace(p.CorrelationID), strings.TrimSpace(p.ID), strings.ToLower(strings.TrimSpace(p.IDType))
+	reason := strings.TrimSpace(p.Error)
+	if reason == "" {
+		reason = strings.TrimSpace(p.Message)
+	}
 
 	switch {
-	case !p.Success:
-		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s id=%s c_id=%q: face verification was not successful (success=false) - nothing saved", p.IDType, maskAccount(p.ID), p.CorrelationID)
-	case p.CorrelationID == "" || p.ID == "":
-		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s has_c_id=%t has_id=%t: success without c_id or id - nothing saved, check Wema's payload shape", p.IDType, p.CorrelationID != "", p.ID != "")
+	case p.ID == "":
+		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s success=%t: no id in the payload - nothing saved, check Wema's payload shape", p.IDType, p.Success)
+	case p.Success && p.CorrelationID == "":
+		log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s id=%s: success without c_id - nothing saved, check Wema's payload shape", p.IDType, maskAccount(p.ID))
 	case h.wemaFaceRecorder == nil:
 		log.Printf("[ALAT webhook] level=WARN event=facial_verification: no recorder wired, dropping result")
 	default:
-		if err := h.wemaFaceRecorder.RecordWemaFaceVerification(c.Request.Context(), p.IDType, p.ID, p.CorrelationID); err != nil {
-			log.Printf("[ALAT webhook] level=ERROR event=facial_verification id_type=%s id=%s: save failed: %v", p.IDType, maskAccount(p.ID), err)
+		if err := h.wemaFaceRecorder.RecordWemaFaceVerification(c.Request.Context(), p.IDType, p.ID, p.CorrelationID, p.Success, reason); err != nil {
+			log.Printf("[ALAT webhook] level=ERROR event=facial_verification id_type=%s id=%s success=%t: save failed: %v", p.IDType, maskAccount(p.ID), p.Success, err)
+		} else if p.Success {
+			log.Printf("[ALAT webhook] level=INFO event=facial_verification id_type=%s id=%s c_id=%s: verified result saved", p.IDType, maskAccount(p.ID), p.CorrelationID)
 		} else {
-			log.Printf("[ALAT webhook] level=INFO event=facial_verification id_type=%s id=%s c_id=%s: saved", p.IDType, maskAccount(p.ID), p.CorrelationID)
+			log.Printf("[ALAT webhook] level=WARN event=facial_verification id_type=%s id=%s c_id=%q reason=%q: failed result saved (success=false)", p.IDType, maskAccount(p.ID), p.CorrelationID, reason)
 		}
 	}
 

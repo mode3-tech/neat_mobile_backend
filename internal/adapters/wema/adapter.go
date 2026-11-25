@@ -207,18 +207,23 @@ func (a *Adapter) PartnerDebitRestrictionManagement(ctx context.Context, pndType
 }
 
 // PostTier2PartnershipAccountWithFace is face biometric Step 1c: it queues a tier 2 account and returns the trackingId.
-func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req registerv2.AlatTier2FaceRequest) (string, error) {
+func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req registerv2.AlatTier2FaceRequest) (registerv2.AlatTier2Result, error) {
 	var address *baas.ResidentialAddress
 	if r := req.ResidentialAddress; r != nil {
 		address = &baas.ResidentialAddress{
-			BuildingNumber: r.BuildingNumber,
-			Street:         r.Street,
-			City:           r.City,
-			State:          r.State,
-			LGA:            r.Lga,
-			Landmark:       r.Landmark,
-			Country:        r.Country,
-			FullAddress:    r.FullAddress,
+			BuildingNumber:        r.BuildingNumber,
+			Apartment:             r.Apartment,
+			Street:                r.Street,
+			City:                  r.City,
+			Town:                  r.Town,
+			State:                 r.State,
+			LGA:                   r.Lga,
+			LCDA:                  r.Lcda,
+			Landmark:              r.Landmark,
+			AdditionalInformation: r.AdditionalInformation,
+			Country:               r.Country,
+			FullAddress:           r.FullAddress,
+			PostalCode:            r.PostalCode,
 		}
 	}
 	payload := baas.AlatAccountCreationRequest{
@@ -239,18 +244,22 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 	if resp != nil && !resp.Status && resp.Data != nil &&
 		strings.EqualFold(strings.TrimSpace(resp.Data.AccountGenerationStatus), "pending") {
 		log.Printf("[ALAT] level=INFO op=tier2_create account generation already pending at alat: %s", resp.Message)
-		return trackingID(resp.Data.TrackingID), &registerv2.AlatPendingError{Message: strings.TrimSpace(resp.Message)}
+		msg := strings.TrimSpace(resp.Message)
+		return registerv2.AlatTier2Result{TrackingID: trackingID(resp.Data.TrackingID), Message: msg}, &registerv2.AlatPendingError{Message: msg}
 	}
 	if err != nil {
-		return "", err
+		return registerv2.AlatTier2Result{}, err
 	}
 	if err := envelopeError(resp.Status, resp.Message, resp.Code, resp.StatusCode, resp.Errors); err != nil {
-		return "", err
+		return registerv2.AlatTier2Result{}, err
 	}
-	if resp.Data == nil {
-		return "", nil
+	// A successful reply is "queued": ALAT's message says the account will be
+	// created shortly, and data may be absent.
+	result := registerv2.AlatTier2Result{Message: strings.TrimSpace(resp.Message)}
+	if resp.Data != nil {
+		result.TrackingID = trackingID(resp.Data.TrackingID)
 	}
-	return trackingID(resp.Data.TrackingID), nil
+	return result, nil
 }
 
 // logTier2Request logs the tier 2 account creation payload as sent to ALAT,
@@ -260,7 +269,7 @@ func (a *Adapter) PostTier2PartnershipAccountWithFace(ctx context.Context, req r
 // is logged in full - it's what Wema needs to trace the request.
 func logTier2Request(p baas.AlatAccountCreationRequest) {
 	log.Printf("[ALAT] level=INFO op=tier2_create request correlation_id=%s payload=%s", p.CorrelationID,
-		logredact.Tier2Payload(p.BVN, p.NIN, p.PhoneNumber, p.EmailAddress, p.LiveImageOfFace, p.ResidentialAddress != nil, p.CorrelationID))
+		logredact.Tier2Payload(p.BVN, p.NIN, p.PhoneNumber, p.EmailAddress, p.LiveImageOfFace, p.ResidentialAddress, p.CorrelationID))
 }
 
 // logTier2Response logs ALAT's answer to tier 2 creation. alatDo logs the
