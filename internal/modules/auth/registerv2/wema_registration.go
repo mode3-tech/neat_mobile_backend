@@ -87,15 +87,16 @@ type registration struct {
 // or the client's status poll.
 func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusRegisterRequest, reg *registration, bvnRecord *models.VerificationRecord) (*RegisterResponse, error) {
 	// 1. Wema's own face biometric check must have been done for this BVN or
-	// NIN: its web app reports a correlationId to our facial-verification
-	// callback, and ALAT only opens a tier 2 account against one of those.
+	// NIN: its web app issues a correlationId (the client sends it in the
+	// request; our facial-verification callback may have stored one), and ALAT
+	// only opens a tier 2 account against one of those.
 	// Required on every path, including reuse of an existing account below -
 	// otherwise anyone with verified phone/email/BVN records could claim an
 	// existing Wema account without ever passing the face check.
 	rl.step("face_check")
-	faceCorrelationID, err := s.wemaFaceCorrelation(ctx, rl, reg.bvn, reg.nin)
+	faceCorrelationID, err := s.resolveWemaFaceCorrelation(ctx, rl, req.WemaFaceCorrelationID, reg.bvn, reg.nin)
 	if err != nil {
-		rl.Warnf("cannot continue without wema's face verification (the face web app's callback may not have arrived - check the [ALAT webhook] event=facial_verification logs and the IP allowlist): %v", err)
+		rl.Warnf("cannot continue without wema's face verification: the client sent no wema_face_correlation_id and none is stored (callback not in use for now; check the app read c_id from the face web app's final URL): %v", err)
 		return nil, err
 	}
 	rl.with("face_correlation_id", faceCorrelationID)

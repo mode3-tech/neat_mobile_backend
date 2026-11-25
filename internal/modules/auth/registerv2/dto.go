@@ -33,6 +33,10 @@ type OptimusRegisterRequest struct {
 	ReferralCode              string              `json:"referral_code" binding:"omitempty"`
 	Device                    DeviceRegisteration `json:"device" binding:"required"`
 	BVNWithFaceVerificationID string              `json:"bvn_w_face_verification_id,omitempty"`
+	// WemaFaceCorrelationID is the c_id Wema's face biometric web app puts in
+	// its final URL after a successful check (Wema only). Required for Wema
+	// unless the callback already stored one for this BVN/NIN.
+	WemaFaceCorrelationID string `json:"wema_face_correlation_id,omitempty"`
 	// SupportsPending tells /register this client can follow a registration
 	// that finishes after the request (status "pending" + /register/status).
 	// Without it, a Wema account ALAT is still queueing returns "try again".
