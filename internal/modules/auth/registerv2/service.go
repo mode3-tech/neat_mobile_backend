@@ -182,21 +182,39 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	// it isn't sent to either provider's wallet-creation call, so validating
 	// it up front only added friction without changing the outcome.
 
+	rl.step("provider_preference")
+	provider, err := s.CurrentProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rl.with("provider", strings.TrimSpace(provider))
+
 	// One registration per person at a time: without this, two parallel
 	// calls both pass the duplicate checks below, both reach the provider,
 	// and only one can be saved - the other's account is orphaned. Held
 	// until Register returns.
-	rl.step("registration_lock")
-	release, locked, err := s.lockRegistration(ctx, "phone:"+normalizedPhone, "bvn:"+bvnSubjectHash(req.BVN))
-	if err != nil {
-		return nil, err
+	//
+	// Not for Wema: every request goes to ALAT, which dedups by the customer's
+	// details and answers "pending" for one it's already generating (handled
+	// as in-progress below). Locally, one active pending registration per
+	// phone and unique user rows make a parallel call fail cleanly, and a
+	// retry reuses the account - so a lock would only turn a retry, while an
+	// earlier call is still waiting on ALAT, into a rejection.
+	if p := strings.ToLower(strings.TrimSpace(provider)); p == "wema" || p == "alat" {
+		rl.Infof("wema: not taking the registration lock, ALAT reports in-progress requests itself")
+	} else {
+		rl.step("registration_lock")
+		release, locked, err := s.lockRegistration(ctx, "phone:"+normalizedPhone, "bvn:"+bvnSubjectHash(req.BVN))
+		if err != nil {
+			return nil, err
+		}
+		if !locked {
+			rl.Warnf("another registration for this phone or bvn is in progress")
+			s.logRejectedTier2Payload(ctx, rl, req, normalizedPhone, normalizedEmail)
+			return nil, userErrorf("a registration for this phone number or BVN is already in progress, please wait a moment and try again")
+		}
+		defer release()
 	}
-	if !locked {
-		rl.Warnf("another registration for this phone or bvn is in progress")
-		s.logRejectedTier2Payload(ctx, rl, req, normalizedPhone, normalizedEmail)
-		return nil, userErrorf("a registration for this phone number or BVN is already in progress, please wait a moment and try again")
-	}
-	defer release()
 
 	// The demo account is the exception: it already exists, so reuse it rather
 	// than provisioning another wallet or inserting a second user.
@@ -226,13 +244,6 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 		rl.Warnf("user already exists with this bvn or nin (nin=%s)", maskIdentityNumber(strings.TrimSpace(req.NIN)))
 		return nil, appErr.ErrUserExists
 	}
-
-	rl.step("provider_preference")
-	provider, err := s.CurrentProvider(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rl.with("provider", strings.TrimSpace(provider))
 
 	var latestBVNRecord *models.VerificationRecord
 	if strings.TrimSpace(provider) != "providus" {
