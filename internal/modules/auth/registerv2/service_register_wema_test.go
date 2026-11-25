@@ -98,21 +98,39 @@ func expectLatestBVNRecord(mock sqlmock.Sqlmock, row []driver.Value) {
 		WillReturnRows(rows)
 }
 
-func expectNoFaceCheckForVerification(mock sqlmock.Sqlmock, verificationID string) {
-	mock.ExpectQuery(`SELECT \* FROM "wallet_face_check_records" WHERE verification_record_id = \$1`).
-		WithArgs(verificationID, 1).
-		WillReturnRows(sqlmock.NewRows(faceCheckCols))
-}
-
 func verifiedBVNRow(id string) []driver.Value {
 	return []driver.Value{id, "bvn", "verified", bvnSubjectHash(testBVN), nil, nil, nil}
 }
 
-// expectMatchedFaceForBVN sets up the happy path through face resolution: the
-// requested face check points at bvnID, which is a valid verified record.
+const testWemaCorrelationID = "wema-c-id-1"
+
+var wemaFaceCols = []string{"id", "id_type", "subject_hash", "correlation_id"}
+
+// expectWemaFaceVerification: Wema's face web app reported a correlationId for
+// the applicant's BVN.
+func expectWemaFaceVerification(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2 AND expires_at > \$3`).
+		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows(wemaFaceCols).AddRow("wf-1", "bvn", wemaFaceSubjectHash(testBVN), testWemaCorrelationID))
+}
+
+// expectNoWemaFaceVerification: nothing reported for the BVN or the NIN.
+func expectNoWemaFaceVerification(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2`).
+		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows(wemaFaceCols))
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2`).
+		WithArgs("nin", wemaFaceSubjectHash(testNIN), sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows(wemaFaceCols))
+}
+
+// expectMatchedFaceForBVN sets up the happy path through the face step: the
+// requested face check resolves bvnID (a valid verified record), and Wema has
+// reported a correlationId for the BVN.
 func expectMatchedFaceForBVN(mock sqlmock.Sqlmock, bvnID string) {
 	expectFaceCheckByID(mock, testFaceCheck, bvnID, true)
 	expectVerificationByID(mock, bvnID, verifiedBVNRow(bvnID))
+	expectWemaFaceVerification(mock)
 }
 
 // expectNoPendingWemaRegistration: no earlier attempt is waiting on ALAT for
@@ -240,17 +258,17 @@ func TestCheckApplicantMatchesBVN(t *testing.T) {
 	}
 }
 
-// Reusing an existing Wema account still requires a matched face check.
-func TestRegisterWema_ExistingAccountWithoutMatchedFaceRejected(t *testing.T) {
+// Reusing an existing Wema account still requires Wema's own face check.
+func TestRegisterWema_ExistingAccountWithoutWemaFaceVerificationRejected(t *testing.T) {
 	s, mock, alat := newWemaService(t)
 
 	expectRegisterPreamble(t, mock, 0)
-	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", false) // not matched
+	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", true)
 	expectVerificationByID(mock, "bvn-1", verifiedBVNRow("bvn-1"))
-	expectNoFaceCheckForVerification(mock, "bvn-1")
+	expectNoWemaFaceVerification(mock)
 
 	_, err := s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
-	if err == nil || !strings.Contains(err.Error(), "face biometric verification is required") {
+	if err == nil || !strings.Contains(err.Error(), "face biometric verification with wema is required") {
 		t.Fatalf("expected face verification error, got %v", err)
 	}
 	if alat.getStep3Calls != 0 {
@@ -357,8 +375,11 @@ func TestRegisterWema_AlatErrorOnLookupProceedsToCreation(t *testing.T) {
 		return nil, &appErr.AlatError{StatusCode: "404", Message: "account not found"}
 	}
 	alat.tier2Func = func(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
-		if req.LiveImageOfFace != "live-image-b64" {
-			t.Errorf("expected live image from the face check record, got %q", req.LiveImageOfFace)
+		if req.CorrelationID != testWemaCorrelationID {
+			t.Errorf("expected wema's correlationId, got %q", req.CorrelationID)
+		}
+		if req.LiveImageOfFace != "" {
+			t.Errorf("no selfie should be sent, got %d chars", len(req.LiveImageOfFace))
 		}
 		return "", errors.New("stop here")
 	}

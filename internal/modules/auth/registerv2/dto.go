@@ -45,6 +45,17 @@ type BVNWithFaceRequest struct {
 	Image          string `json:"image" binding:"required"`
 }
 
+// WemaFaceURLRequest asks for the URL of Wema's face biometric web app for a
+// BVN or NIN.
+type WemaFaceURLRequest struct {
+	IDType string `json:"id_type" binding:"required,oneof=bvn nin"`
+	ID     string `json:"id" binding:"required,len=11,numeric"`
+}
+
+type WemaFaceURLResponse struct {
+	URL string `json:"url"`
+}
+
 type BVNWithFaceResponse struct {
 	BVNWithFaceVerificationID string `json:"bvn_w_face_verification_id"`
 }

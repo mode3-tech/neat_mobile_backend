@@ -13,6 +13,7 @@ func RegisterRoutes(rg *gin.RouterGroup, handler *Handler) {
 		optimus.POST("/otp/email/verify", handler.VerifyEmailOTP)
 		optimus.POST("/validate/bvn", handler.ValidateBVN)
 		optimus.POST("/validate/bvn-with-face", handler.ValidateBVNWithFace)
+		optimus.POST("/wema/face-url", handler.GetWemaFaceURL)
 		optimus.GET("/address-dropdown", handler.GetAddressDropDownList)
 		// No /validate/nin: NIN is collected via /register without a separate
 		// pre-flight validation step.

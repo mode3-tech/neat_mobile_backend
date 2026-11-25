@@ -300,6 +300,7 @@ func Migrate(db *gorm.DB) error {
 		&models.RefreshToken{},
 		&models.VerificationRecord{},
 		&models.FaceCheckRecord{},
+		&models.WemaFaceVerification{},
 		&auth.RegistrationJob{},
 		&models.PendingDeviceSession{},
 		&otp.OTPModel{},

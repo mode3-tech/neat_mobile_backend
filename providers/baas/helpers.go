@@ -104,8 +104,22 @@ func alatDo[T any](ctx context.Context, a *Alat, method, url string, body any) (
 		}
 	}
 
-	log.Printf("[ALAT] level=INFO %s %s status=%d dur=%s", method, path, resp.StatusCode, elapsed)
+	if logsSuccessBody(path) {
+		// Account creation replies carry the tracking ID and generation
+		// status Wema needs when escalating; nothing sensitive is in them.
+		log.Printf("[ALAT] level=INFO %s %s status=%d dur=%s request_id=%s body=%s",
+			method, path, resp.StatusCode, elapsed, alatRequestID(resp.Header), truncateForLog(respBytes))
+	} else {
+		log.Printf("[ALAT] level=INFO %s %s status=%d dur=%s", method, path, resp.StatusCode, elapsed)
+	}
 	return &out, nil
+}
+
+// logsSuccessBody reports whether a 2xx reply's body is logged too: account
+// creation calls only. Other replies (account details, transactions) hold
+// customer data.
+func logsSuccessBody(path string) bool {
+	return strings.Contains(path, "/partnership/tier1-") || strings.Contains(path, "/partnership/tier2-")
 }
 
 // alatRequestID picks out whichever correlation header the gateway sets, to
@@ -122,7 +136,7 @@ func alatRequestID(h http.Header) string {
 // truncateForLog caps response bodies in logs. Bodies are only logged on
 // error/decode paths, which carry ALAT messages rather than account data.
 func truncateForLog(b []byte) string {
-	const max = 512
+	const max = 2048
 	s := strings.TrimSpace(string(b))
 	if len(s) > max {
 		return s[:max] + "...(truncated)"
