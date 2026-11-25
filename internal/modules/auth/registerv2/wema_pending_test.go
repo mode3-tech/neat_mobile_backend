@@ -1,13 +1,10 @@
 package registerv2
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
 	"encoding/base64"
 	"errors"
-	"log"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -578,10 +575,37 @@ func TestFaceCheckRecord_ImageDecryptedOnRead(t *testing.T) {
 	h.done(t)
 }
 
-// A second /register for the same person while one is running stops before
-// the duplicate checks and before ALAT.
-func TestRegister_ConcurrentRegistrationRejected(t *testing.T) {
+// Wema requests are never turned away by the registration lock: every one
+// goes on to ALAT, which says itself when an account is already being
+// generated. (A held lock is simulated, and must not even be consulted.)
+func TestRegister_WemaIgnoresRegistrationLock(t *testing.T) {
 	h := newPendingHarness(t)
+	lockCalls := 0
+	h.s.lockOverride = func(ctx context.Context, k ...string) (func(), bool, error) {
+		lockCalls++
+		return nil, false, nil
+	}
+	h.alat.getStep3Func = alatNotFound
+	expectRegisterUpToALAT(t, h)
+
+	_, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1") // SupportsPending false
+	if !errors.Is(err, errWemaAccountNotReady) {
+		t.Fatalf("err = %v, want it to reach ALAT and end at errWemaAccountNotReady", err)
+	}
+	if lockCalls != 0 {
+		t.Fatalf("wema must not take the registration lock, got %d lock calls", lockCalls)
+	}
+	if h.alat.tier2Calls != 1 {
+		t.Fatalf("tier2 calls = %d, want the request sent to ALAT", h.alat.tier2Calls)
+	}
+	h.done(t)
+}
+
+// Other providers still serialize per person: a second /register while one is
+// running stops before the duplicate checks and before the provider.
+func TestRegister_ConcurrentRegistrationRejected_NonWema(t *testing.T) {
+	h := newPendingHarness(t)
+	h.s.providerPreference = &mockProviderPref{provider: "optimus"}
 	var keys []string
 	h.s.lockOverride = func(ctx context.Context, k ...string) (func(), bool, error) {
 		keys = k
@@ -591,20 +615,9 @@ func TestRegister_ConcurrentRegistrationRejected(t *testing.T) {
 	expectVerificationByID(h.mock, testPhoneVer, []driver.Value{testPhoneVer, "phone", "verified", "h", phone, nil, nil})
 	expectVerificationByID(h.mock, testEmailVer, []driver.Value{testEmailVer, "email", "verified", "h", nil, testEmail, nil})
 
-	var logs bytes.Buffer
-	log.SetOutput(&logs)
-	defer log.SetOutput(os.Stderr)
-
 	_, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
 	if err == nil || !strings.Contains(err.Error(), "already in progress") {
 		t.Fatalf("err = %v, want in-progress rejection", err)
-	}
-	// The payload this request would have sent is logged, redacted.
-	out := logs.String()
-	for _, want := range []string{"would have sent to alat", "payload={", `"bvn":"` + testBVN + `"`, `"nin":"` + testNIN + `"`, "correlationId", "not-sent"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("log missing %q:\n%s", want, out)
-		}
 	}
 	if len(keys) != 2 || keys[0] != "phone:"+phone || keys[1] != "bvn:"+bvnSubjectHash(testBVN) {
 		t.Fatalf("lock keys = %v; want phone and bvn", keys)
