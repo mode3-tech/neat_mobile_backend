@@ -425,3 +425,64 @@ func TestRegisterWema_NameMismatchWithBVNRejectedBeforeProviderCalls(t *testing.
 		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
+
+// The c_id the client read from Wema's face web app goes to ALAT as the
+// correlationId, with no selfie, and no stored-callback lookup is needed. It's
+// also saved so a retry that omits it still works.
+func TestRegisterWema_ClientSentCorrelationIDUsedForTier2(t *testing.T) {
+	s, mock, alat := newWemaService(t)
+	alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) {
+		return nil, &appErr.AlatError{StatusCode: "404", Message: "account not found"}
+	}
+	alat.tier2Func = func(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
+		if req.CorrelationID != "client-c-id" {
+			t.Errorf("correlationId = %q, want the client's", req.CorrelationID)
+		}
+		if req.LiveImageOfFace != "" {
+			t.Errorf("no selfie should be sent")
+		}
+		return "", errors.New("stop here")
+	}
+
+	expectRegisterPreamble(t, mock, 0)
+	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", true)
+	expectVerificationByID(mock, "bvn-1", verifiedBVNRow("bvn-1"))
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO "wallet_wema_face_verifications"`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	expectNoPendingWemaRegistration(mock)
+
+	req := wemaRegisterRequest()
+	req.WemaFaceCorrelationID = "  client-c-id "
+	_, err := s.Register(context.Background(), req, "127.0.0.1")
+	if err == nil || !strings.Contains(err.Error(), "tier 2 account creation failed") {
+		t.Fatalf("expected to reach Tier 2 creation, got %v", err)
+	}
+	if alat.tier2Calls != 1 {
+		t.Fatalf("tier2 calls = %d, want 1", alat.tier2Calls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+// No c_id from the client and none stored: nothing reaches ALAT.
+func TestRegisterWema_NoCorrelationIDAnywhereRejected(t *testing.T) {
+	s, mock, alat := newWemaService(t)
+	expectRegisterPreamble(t, mock, 0)
+	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", true)
+	expectVerificationByID(mock, "bvn-1", verifiedBVNRow("bvn-1"))
+	expectNoWemaFaceVerification(mock)
+
+	_, err := s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
+	if err == nil || !strings.Contains(err.Error(), "face biometric verification with wema is required") {
+		t.Fatalf("expected face verification error, got %v", err)
+	}
+	if alat.getStep3Calls != 0 {
+		t.Fatal("no ALAT call before a correlation id is available")
+	}
+	assertNoAccountCreated(t, alat)
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
