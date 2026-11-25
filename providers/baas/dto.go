@@ -440,8 +440,8 @@ type AlatAccountCreationRequest struct {
 	NIN                string              `json:"nin"`
 	PhoneNumber        string              `json:"phoneNumber"`
 	EmailAddress       string              `json:"emailAddress"`
-	ResidentialAddress *ResidentialAddress `json:"residentialAddress,omitempty"` // omitted for tier 2; added at the tier 3 upgrade
-	LiveImageOfFace    string              `json:"liveImageOfFace,omitempty"` // empty: Wema already did the face check, identified by CorrelationID
+	ResidentialAddress *ResidentialAddress `json:"residentialAddress,omitempty"` // required by ALAT for tier 2; every field sent, empty string if no value
+	LiveImageOfFace    string              `json:"liveImageOfFace,omitempty"`    // empty: Wema already did the face check, identified by CorrelationID
 	CorrelationID      string              `json:"correlationId"`
 }
 

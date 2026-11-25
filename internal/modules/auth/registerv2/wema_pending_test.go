@@ -193,16 +193,30 @@ func TestRegisterWema_AccountStillQueued_SavesPendingWhenClientSupportsIt(t *tes
 	h.done(t)
 }
 
-func TestRegisterWema_AccountStillQueued_OldClientGetsTryAgain(t *testing.T) {
+// Pending is returned to every client for Wema - even one that doesn't send
+// supports_pending - together with ALAT's own message, so the app can show a
+// pending screen instead of an error.
+func TestRegisterWema_AccountStillQueued_PendingForClientWithoutFlag(t *testing.T) {
+	const wemaMsg = "Hello! Charles, your account will be created shortly. If your account is not generated, please try again in ten minutes."
 	h := newPendingHarness(t)
 	h.alat.getStep3Func = alatNotFound
+	h.alat.tier2Message = wemaMsg
 	expectRegisterUpToALAT(t, h)
+	h.mock.ExpectBegin()
+	h.mock.ExpectExec(`INSERT INTO "wallet_pending_wema_registrations"`).WillReturnResult(sqlmock.NewResult(0, 1))
+	h.mock.ExpectCommit()
 
-	_, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1") // SupportsPending false
-	if !errors.Is(err, errWemaAccountNotReady) {
-		t.Fatalf("err = %v, want errWemaAccountNotReady", err)
+	resp, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1") // SupportsPending false
+	if err != nil {
+		t.Fatalf("Register: %v", err)
 	}
-	h.done(t) // no pending row inserted
+	if resp.Status != RegistrationStatusPending || resp.RegistrationID == "" || resp.ClaimToken == "" || resp.AccessToken != "" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if resp.Message != wemaMsg {
+		t.Fatalf("message = %q, want ALAT's message", resp.Message)
+	}
+	h.done(t)
 }
 
 func TestRegisterWema_AccountReadyWhilePolling_CompletesInline(t *testing.T) {
@@ -587,10 +601,13 @@ func TestRegister_WemaIgnoresRegistrationLock(t *testing.T) {
 	}
 	h.alat.getStep3Func = alatNotFound
 	expectRegisterUpToALAT(t, h)
+	h.mock.ExpectBegin()
+	h.mock.ExpectExec(`INSERT INTO "wallet_pending_wema_registrations"`).WillReturnResult(sqlmock.NewResult(0, 1))
+	h.mock.ExpectCommit()
 
-	_, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1") // SupportsPending false
-	if !errors.Is(err, errWemaAccountNotReady) {
-		t.Fatalf("err = %v, want it to reach ALAT and end at errWemaAccountNotReady", err)
+	resp, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
+	if err != nil || resp.Status != RegistrationStatusPending {
+		t.Fatalf("resp=%+v err=%v, want it to reach ALAT and end pending", resp, err)
 	}
 	if lockCalls != 0 {
 		t.Fatalf("wema must not take the registration lock, got %d lock calls", lockCalls)
@@ -685,17 +702,23 @@ func TestRegisterWema_ALATAlreadyGenerating_GoesPending(t *testing.T) {
 	h.done(t)
 }
 
-func TestRegisterWema_ALATAlreadyGenerating_OldClientGetsTryAgain(t *testing.T) {
+func TestRegisterWema_ALATAlreadyGenerating_PendingForClientWithoutFlag(t *testing.T) {
 	h := newPendingHarness(t)
 	h.alat.getStep3Func = alatNotFound
 	h.alat.tier2Func = func(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
-		return "", ErrAlatAccountGenerationPending
+		return "", &AlatPendingError{Message: "already being generated"}
 	}
 	expectRegisterUpToALAT(t, h)
+	h.mock.ExpectBegin()
+	h.mock.ExpectExec(`INSERT INTO "wallet_pending_wema_registrations"`).WillReturnResult(sqlmock.NewResult(0, 1))
+	h.mock.ExpectCommit()
 
-	_, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
-	if !errors.Is(err, errWemaAccountNotReady) {
-		t.Fatalf("err = %v, want errWemaAccountNotReady (not a creation failure)", err)
+	resp, err := h.s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1") // SupportsPending false
+	if err != nil || resp.Status != RegistrationStatusPending || resp.ClaimToken == "" {
+		t.Fatalf("resp=%+v err=%v; want pending, not a creation failure", resp, err)
+	}
+	if resp.Message != "already being generated" {
+		t.Fatalf("message = %q, want ALAT's", resp.Message)
 	}
 	h.done(t)
 }

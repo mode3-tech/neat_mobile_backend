@@ -22,10 +22,11 @@ type Handler struct {
 	wemaFaceRecorder WemaFaceVerificationRecorder
 }
 
-// WemaFaceVerificationRecorder saves a successful Wema face verification: the
-// correlationId Wema issued for a BVN or NIN (idType "bvn" or "nin").
+// WemaFaceVerificationRecorder saves a result Wema's face web app reported for
+// a BVN or NIN (idType "bvn" or "nin"): on success the correlationId Wema
+// issued, on failure Wema's error text.
 type WemaFaceVerificationRecorder interface {
-	RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string) error
+	RecordWemaFaceVerification(ctx context.Context, idType, id, correlationID string, success bool, errorMessage string) error
 }
 
 // SetWemaFaceVerificationRecorder wires the facial-verification callback to

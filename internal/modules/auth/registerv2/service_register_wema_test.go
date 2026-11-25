@@ -109,18 +109,18 @@ var wemaFaceCols = []string{"id", "id_type", "subject_hash", "correlation_id"}
 // expectWemaFaceVerification: Wema's face web app reported a correlationId for
 // the applicant's BVN.
 func expectWemaFaceVerification(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2 AND expires_at > \$3`).
-		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), 1).
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE \(id_type = \$1 AND subject_hash = \$2 AND expires_at > \$3\) AND status = \$4 AND correlation_id <> ''`).
+		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), "verified", 1).
 		WillReturnRows(sqlmock.NewRows(wemaFaceCols).AddRow("wf-1", "bvn", wemaFaceSubjectHash(testBVN), testWemaCorrelationID))
 }
 
 // expectNoWemaFaceVerification: nothing reported for the BVN or the NIN.
 func expectNoWemaFaceVerification(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2`).
-		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), 1).
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE \(id_type = \$1 AND subject_hash = \$2`).
+		WithArgs("bvn", wemaFaceSubjectHash(testBVN), sqlmock.AnyArg(), "verified", 1).
 		WillReturnRows(sqlmock.NewRows(wemaFaceCols))
-	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE id_type = \$1 AND subject_hash = \$2`).
-		WithArgs("nin", wemaFaceSubjectHash(testNIN), sqlmock.AnyArg(), 1).
+	mock.ExpectQuery(`SELECT \* FROM "wallet_wema_face_verifications" WHERE \(id_type = \$1 AND subject_hash = \$2`).
+		WithArgs("nin", wemaFaceSubjectHash(testNIN), sqlmock.AnyArg(), "verified", 1).
 		WillReturnRows(sqlmock.NewRows(wemaFaceCols))
 }
 
@@ -426,20 +426,26 @@ func TestRegisterWema_NameMismatchWithBVNRejectedBeforeProviderCalls(t *testing.
 	}
 }
 
-// The c_id the client read from Wema's face web app goes to ALAT as the
-// correlationId, with no selfie, and no stored-callback lookup is needed. It's
-// also saved so a retry that omits it still works.
-func TestRegisterWema_ClientSentCorrelationIDUsedForTier2(t *testing.T) {
+// The c_id Wema's callback delivered goes to ALAT as the correlationId, with
+// no selfie. A c_id the client sends is not read at all (the field no longer
+// exists; unknown JSON fields are dropped).
+func TestRegisterWema_CallbackCorrelationIDUsedForTier2(t *testing.T) {
 	s, mock, alat := newWemaService(t)
 	alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) {
 		return nil, &appErr.AlatError{StatusCode: "404", Message: "account not found"}
 	}
 	alat.tier2Func = func(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
-		if req.CorrelationID != "client-c-id" {
-			t.Errorf("correlationId = %q, want the client's", req.CorrelationID)
+		if req.CorrelationID != testWemaCorrelationID {
+			t.Errorf("correlationId = %q, want the one from wema's callback", req.CorrelationID)
 		}
 		if req.LiveImageOfFace != "" {
 			t.Errorf("no selfie should be sent")
+		}
+		// ALAT requires the residential address: house number and address
+		// line from the request, everything else an empty string.
+		want := AlatResidentialAddress{BuildingNumber: "12", FullAddress: "12 Broad Street, Lagos"}
+		if req.ResidentialAddress == nil || *req.ResidentialAddress != want {
+			t.Errorf("residential address = %+v, want %+v", req.ResidentialAddress, want)
 		}
 		return "", errors.New("stop here")
 	}
@@ -447,13 +453,12 @@ func TestRegisterWema_ClientSentCorrelationIDUsedForTier2(t *testing.T) {
 	expectRegisterPreamble(t, mock, 0)
 	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", true)
 	expectVerificationByID(mock, "bvn-1", verifiedBVNRow("bvn-1"))
-	mock.ExpectBegin()
-	mock.ExpectExec(`INSERT INTO "wallet_wema_face_verifications"`).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
+	expectWemaFaceVerification(mock)
 	expectNoPendingWemaRegistration(mock)
 
 	req := wemaRegisterRequest()
-	req.WemaFaceCorrelationID = "  client-c-id "
+	req.HouseNo = " 12 "
+	req.Address = "12 Broad Street, Lagos"
 	_, err := s.Register(context.Background(), req, "127.0.0.1")
 	if err == nil || !strings.Contains(err.Error(), "tier 2 account creation failed") {
 		t.Fatalf("expected to reach Tier 2 creation, got %v", err)
@@ -466,8 +471,8 @@ func TestRegisterWema_ClientSentCorrelationIDUsedForTier2(t *testing.T) {
 	}
 }
 
-// No c_id from the client and none stored: nothing reaches ALAT.
-func TestRegisterWema_NoCorrelationIDAnywhereRejected(t *testing.T) {
+// No verified result from Wema's callback: nothing reaches ALAT.
+func TestRegisterWema_NoCallbackResultRejected(t *testing.T) {
 	s, mock, alat := newWemaService(t)
 	expectRegisterPreamble(t, mock, 0)
 	expectFaceCheckByID(mock, testFaceCheck, "bvn-1", true)

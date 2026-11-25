@@ -52,7 +52,6 @@ var (
 	// alike, so the status endpoint doesn't reveal which IDs exist.
 	errRegistrationNotFound error = &userError{msg: "registration not found"}
 	errRegistrationClaimed  error = &userError{msg: "registration is complete and its session was already issued - please log in"}
-	errWemaAccountNotReady  error = &userError{msg: "your wema account is still being opened, please try again shortly"}
 )
 
 // registration is everything needed to save a user once the provider account
@@ -87,16 +86,16 @@ type registration struct {
 // or the client's status poll.
 func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusRegisterRequest, reg *registration, bvnRecord *models.VerificationRecord) (*RegisterResponse, error) {
 	// 1. Wema's own face biometric check must have been done for this BVN or
-	// NIN: its web app issues a correlationId (the client sends it in the
-	// request; our facial-verification callback may have stored one), and ALAT
+	// NIN: its web app issues a correlationId and reports it to our
+	// facial-verification callback (never taken from the client), and ALAT
 	// only opens a tier 2 account against one of those.
 	// Required on every path, including reuse of an existing account below -
 	// otherwise anyone with verified phone/email/BVN records could claim an
 	// existing Wema account without ever passing the face check.
 	rl.step("face_check")
-	faceCorrelationID, err := s.resolveWemaFaceCorrelation(ctx, rl, req.WemaFaceCorrelationID, reg.bvn, reg.nin)
+	faceCorrelationID, err := s.wemaFaceCorrelation(ctx, rl, reg.bvn, reg.nin)
 	if err != nil {
-		rl.Warnf("cannot continue without wema's face verification: the client sent no wema_face_correlation_id and none is stored (callback not in use for now; check the app read c_id from the face web app's final URL): %v", err)
+		rl.Warnf("cannot continue without wema's face verification: no verified result from wema's callback is stored for this bvn/nin (check the [ALAT webhook] event=facial_verification logs: did the callback arrive, was it rejected by the IP allowlist, or was success=false?): %v", err)
 		return nil, err
 	}
 	rl.with("face_correlation_id", faceCorrelationID)
@@ -144,23 +143,27 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		return s.finishWema(ctx, rl, reg, existingDetails, nil)
 	}
 
-	// 4. Invoke Step 1c (Tier 2 Face Account Creation) without residential address
+	// 4. Invoke Step 1c (Tier 2 Face Account Creation). ALAT requires the
+	// residential address on it.
 	tier2Req := AlatTier2FaceRequest{
 		BVN:                reg.bvn,
 		NIN:                reg.nin,
 		PhoneNumber:        reg.phone,
 		EmailAddress:       reg.email,
-		ResidentialAddress: nil, // Omitted for Tier 2; address is added when upgrading to Tier 3
+		ResidentialAddress: wemaResidentialAddress(req.HouseNo, reg.address),
 		CorrelationID:      faceCorrelationID,
 	}
 	rl.step("alat_tier2_create")
 	rl.with("correlation_id", tier2Req.CorrelationID)
-	trackingID, err := s.alat.PostTier2PartnershipAccountWithFace(ctx, tier2Req)
-	pendingMsg := ""
+	tier2Res, err := s.alat.PostTier2PartnershipAccountWithFace(ctx, tier2Req)
+	trackingID := tier2Res.TrackingID
+	// Wema's own words ("your account will be created shortly..."), shown to
+	// the customer if registration ends up pending.
+	pendingMsg := tier2Res.Message
 	switch {
 	case errors.Is(err, ErrAlatAccountGenerationPending):
 		var pe *AlatPendingError
-		if errors.As(err, &pe) {
+		if errors.As(err, &pe) && pe.Message != "" {
 			pendingMsg = pe.Message
 		}
 		// An earlier request is still being generated at ALAT; wait for it
@@ -180,7 +183,7 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", err)
 	default:
 		rl.with("tracking_id", trackingID)
-		rl.Infof("tier 2 account creation accepted by alat")
+		rl.Infof("tier 2 account creation accepted by alat: message=%q", tier2Res.Message)
 	}
 
 	// 5. Poll briefly - ALAT usually finishes quickly, and finishing inline
@@ -206,13 +209,9 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		rl.Infof("alat account not ready on poll attempt %d/%d (err=%v)", attempt, maxAccountPollAttempts, err)
 	}
 
-	// 6. Still queued at ALAT. Hand off to the pending flow if the client can
-	// follow it; older clients get "try again" and pick the account up on
-	// retry through the existing-account path above.
-	if !req.SupportsPending {
-		rl.Warnf("alat accepted tier 2 creation but no account appeared while polling - a retry should pick it up via the existing-account path")
-		return nil, errWemaAccountNotReady
-	}
+	// 6. Still queued at ALAT: hand off to the pending flow for every client
+	// (the webhook, sweep or the client's status poll finishes it), so the app
+	// can show a pending screen instead of an error.
 	rl.step("pending_create")
 	pending, claimToken, err := s.newPendingWema(reg, trackingID)
 	if err != nil {
@@ -222,10 +221,22 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		return nil, err
 	}
 	rl.with("registration_id", pending.ID)
-	rl.Infof("alat account still queued - saved pending registration for the webhook/sweep to complete")
+	rl.Infof("alat account still queued after %d polls - saved pending registration for the webhook/sweep to complete; returning pending to the client: tracking_id=%q alat_message=%q",
+		maxAccountPollAttempts, trackingID, pendingMsg)
 	resp := pendingResponse(pending.ID, claimToken)
 	resp.Message = pendingMsg
 	return resp, nil
+}
+
+// wemaResidentialAddress builds the address ALAT's tier 2 creation requires
+// from what registration collects: the house number and a single address line.
+// There is no further breakdown (street, city, state...) at signup, and ALAT
+// wants every field present, so those are sent as empty strings.
+func wemaResidentialAddress(houseNo, address string) *AlatResidentialAddress {
+	return &AlatResidentialAddress{
+		BuildingNumber: strings.TrimSpace(houseNo),
+		FullAddress:    strings.TrimSpace(address),
+	}
 }
 
 // resumePendingWema handles a /register for a phone whose earlier attempt is
@@ -263,7 +274,7 @@ func (s *Service) resumePendingWema(ctx context.Context, rl *opLogger, req Optim
 			return nil, err
 		}
 		rl.Infof("pending registration is being completed by another worker - returning it as pending")
-		return s.pendingOrRetry(req, existing.ID, claimToken)
+		return s.pendingOrRetry(existing.ID, claimToken)
 	}
 
 	completed, err := s.tryCompletePendingWema(ctx, existing.ID)
@@ -272,7 +283,7 @@ func (s *Service) resumePendingWema(ctx context.Context, rl *opLogger, req Optim
 	}
 	if !completed {
 		rl.Infof("pending registration still waiting on alat")
-		return s.pendingOrRetry(req, existing.ID, claimToken)
+		return s.pendingOrRetry(existing.ID, claimToken)
 	}
 	// Completed inline: hand the session to this request directly.
 	if _, err := s.repo.ClaimPendingWemaRegistration(ctx, existing.ID, time.Now().UTC()); err != nil {
@@ -285,10 +296,7 @@ func (s *Service) resumePendingWema(ctx context.Context, rl *opLogger, req Optim
 	return s.issueSession(ctx, rl, p.MobileUserID, p.DeviceID, reg.ip)
 }
 
-func (s *Service) pendingOrRetry(req OptimusRegisterRequest, id, claimToken string) (*RegisterResponse, error) {
-	if !req.SupportsPending {
-		return nil, errWemaAccountNotReady
-	}
+func (s *Service) pendingOrRetry(id, claimToken string) (*RegisterResponse, error) {
 	return pendingResponse(id, claimToken), nil
 }
 
@@ -885,5 +893,5 @@ func (s *Service) logRejectedTier2Payload(ctx context.Context, rl *opLogger, req
 		}
 	}
 	rl.Infof("rejected request would have sent to alat: tier2 payload=%s",
-		logredact.Tier2Payload(strings.TrimSpace(req.BVN), strings.TrimSpace(req.NIN), phone, normalizedEmail, image, false, "not-sent"))
+		logredact.Tier2Payload(strings.TrimSpace(req.BVN), strings.TrimSpace(req.NIN), phone, normalizedEmail, image, nil, "not-sent"))
 }

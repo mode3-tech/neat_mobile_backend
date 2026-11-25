@@ -22,16 +22,23 @@ type AlatAccountDetails struct {
 	PhoneNumber   string
 }
 
-// AlatResidentialAddress holds customer address breakdown for Tier 2 face account creation.
+// AlatResidentialAddress is the customer's address for Tier 2 face account
+// creation. ALAT requires the whole object; a field with no value is sent as
+// an empty string.
 type AlatResidentialAddress struct {
-	BuildingNumber string
-	Street         string
-	City           string
-	State          string
-	Lga            string
-	Landmark       string
-	Country        string
-	FullAddress    string
+	BuildingNumber        string
+	Apartment             string
+	Street                string
+	City                  string
+	Town                  string
+	State                 string
+	Lga                   string
+	Lcda                  string
+	Landmark              string
+	AdditionalInformation string
+	Country               string
+	FullAddress           string
+	PostalCode            string
 }
 
 // AlatTier2FaceRequest holds parameters for Step 1c (Tier 2 Face Account Creation).
@@ -45,6 +52,14 @@ type AlatTier2FaceRequest struct {
 	CorrelationID      string
 }
 
+// AlatTier2Result is ALAT's answer to a tier 2 account creation request:
+// the tracking ID (if it sent one) and its own message, e.g. "your account
+// will be created shortly", which the client can show on a pending screen.
+type AlatTier2Result struct {
+	TrackingID string
+	Message    string
+}
+
 // AlatValidator defines Wema ALAT account creation operations needed by registerv2.
 // Defined with local types to avoid import cycle between registerv2 and baas.
 // Registration uses the face biometric (liveness) API only; ALAT's BVN + OTP
@@ -52,7 +67,7 @@ type AlatTier2FaceRequest struct {
 type AlatValidator interface {
 	GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
 	PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error
-	PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (trackingID string, err error)
+	PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (AlatTier2Result, error)
 	GetAddressDropDownList(ctx context.Context) (any, error)
 }
 

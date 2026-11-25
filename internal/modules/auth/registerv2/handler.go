@@ -268,6 +268,26 @@ func (h *Handler) GetWemaFaceURL(c *gin.Context) {
 	})
 }
 
+// GetWemaFaceStatus tells the app whether Wema has reported the result of the
+// customer's face check yet; the app polls it before calling /register.
+func (h *Handler) GetWemaFaceStatus(c *gin.Context) {
+	var request WemaFaceURLRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+	status, message, err := h.service.WemaFaceStatus(c.Request.Context(), request.IDType, request.ID)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[WemaFaceStatusResponse]{
+		Status:  "success",
+		Message: "Wema face verification status retrieved.",
+		Data:    &WemaFaceStatusResponse{Status: status, Message: message},
+	})
+}
+
 func (h *Handler) GetAddressDropDownList(c *gin.Context) {
 	data, err := h.service.GetAddressDropDownList(c.Request.Context())
 	if err != nil {

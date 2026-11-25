@@ -23,25 +23,32 @@ func wemaFaceSubjectHash(value string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (r *Repository) CreateWemaFaceVerification(ctx context.Context, idType, id, correlationID string, now time.Time) error {
+func (r *Repository) CreateWemaFaceVerification(ctx context.Context, idType, id, correlationID, status, errorMessage string, now time.Time) error {
 	return r.db.WithContext(ctx).Create(&models.WemaFaceVerification{
 		ID:            uuid.NewString(),
 		IDType:        idType,
 		SubjectHash:   wemaFaceSubjectHash(id),
 		CorrelationID: correlationID,
+		Status:        status,
+		ErrorMessage:  errorMessage,
 		ExpiresAt:     now.Add(wemaFaceVerificationTTL),
 	}).Error
 }
 
-// GetLatestWemaFaceVerification returns the newest unexpired
-// verification for the BVN or NIN, or nil if there is none.
-func (r *Repository) GetLatestWemaFaceVerification(ctx context.Context, idType, id string, now time.Time) (*models.WemaFaceVerification, error) {
+// GetLatestWemaFaceVerification returns the newest unexpired result for the
+// BVN or NIN, or nil if there is none. status "" matches any result; otherwise
+// only that one (registration asks for verified ones that carry a c_id).
+func (r *Repository) GetLatestWemaFaceVerification(ctx context.Context, idType, id, status string, now time.Time) (*models.WemaFaceVerification, error) {
+	q := r.db.WithContext(ctx).
+		Where("id_type = ? AND subject_hash = ? AND expires_at > ?", idType, wemaFaceSubjectHash(id), now)
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if status == models.WemaFaceStatusVerified {
+		q = q.Where("correlation_id <> ''")
+	}
 	var rec models.WemaFaceVerification
-	result := r.db.WithContext(ctx).
-		Where("id_type = ? AND subject_hash = ? AND expires_at > ?", idType, wemaFaceSubjectHash(id), now).
-		Order("created_at DESC").
-		Limit(1).
-		Find(&rec)
+	result := q.Order("created_at DESC").Limit(1).Find(&rec)
 	if result.Error != nil {
 		return nil, result.Error
 	}

@@ -27,6 +27,7 @@ type mockAlatValidator struct {
 	getStep3Func func(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
 	pndStep4Func func(ctx context.Context, pndType, accountNumber string) error
 	tier2Func    func(ctx context.Context, req AlatTier2FaceRequest) (string, error)
+	tier2Message string // ALAT's message returned with the tier 2 result
 
 	getStep3Calls int
 	tier2Calls    int
@@ -55,12 +56,13 @@ func (m *mockAlatValidator) PartnerDebitRestrictionManagement(ctx context.Contex
 	return nil
 }
 
-func (m *mockAlatValidator) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (string, error) {
+func (m *mockAlatValidator) PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (AlatTier2Result, error) {
 	m.tier2Calls++
 	if m.tier2Func != nil {
-		return m.tier2Func(ctx, req)
+		id, err := m.tier2Func(ctx, req)
+		return AlatTier2Result{TrackingID: id, Message: m.tier2Message}, err
 	}
-	return "mock-tracking-face-123", nil
+	return AlatTier2Result{TrackingID: "mock-tracking-face-123", Message: m.tier2Message}, nil
 }
 
 func (m *mockAlatValidator) GetAddressDropDownList(ctx context.Context) (any, error) {
