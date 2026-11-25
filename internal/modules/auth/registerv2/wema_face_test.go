@@ -22,8 +22,8 @@ func TestWemaFaceURL(t *testing.T) {
 		t.Fatalf("unexpected base in %q", got)
 	}
 	q := u.Query()
-	if q.Get("bvn") != "12345678901" || q.Get("x_tk") != "key-123" ||
-		q.Get("cb_uri") != "https://api.example.com/api/v1/alat/facial-verification" || q.Get("rd_uri") != "" {
+	// No callback or redirect for now: the client reads c_id from the final URL.
+	if q.Get("bvn") != "12345678901" || q.Get("x_tk") != "key-123" || q.Get("cb_uri") != "" || q.Get("rd_uri") != "" {
 		t.Fatalf("unexpected query in %q", got)
 	}
 
@@ -45,9 +45,5 @@ func TestWemaFaceURL_Rejects(t *testing.T) {
 	}
 	if _, err := (&Service{}).WemaFaceURL("bvn", "12345678901"); err == nil {
 		t.Fatal("an unconfigured service should refuse to build a URL")
-	}
-	// No callback configured: cb_uri is simply omitted.
-	if got, err := configured.WemaFaceURL("bvn", "12345678901"); err != nil || strings.Contains(got, "cb_uri") {
-		t.Fatalf("url = %q, err = %v", got, err)
 	}
 }

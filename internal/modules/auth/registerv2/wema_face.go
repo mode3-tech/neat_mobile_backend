@@ -19,7 +19,9 @@ var errWemaFaceRequired = &userError{msg: "face biometric verification with wema
 
 // SetWemaFaceConfig sets Wema's face biometric web app: its base URL, the
 // x-api-key it takes as x_tk, and the public URL of our facial-verification
-// callback (cb_uri).
+// callback. The callback is not passed to the app for now (the client reads
+// the c_id from the web app's final URL and sends it to /register), so
+// callbackURL is only logged; the callback route itself stays available.
 func (s *Service) SetWemaFaceConfig(baseURL, apiKey, callbackURL string) {
 	s.wemaFaceBaseURL = strings.TrimSpace(baseURL)
 	s.wemaFaceAPIKey = strings.TrimSpace(apiKey)
@@ -42,17 +44,11 @@ func (s *Service) WemaFaceURL(idType, id string) (string, error) {
 			s.wemaFaceBaseURL != "", s.wemaFaceAPIKey != "")
 		return "", userErrorf("wema face verification is not available right now")
 	}
-	log.Printf("[registerv2] level=INFO op=wema_face_url id_type=%s id=%s base_url=%s callback_set=%t callback=%s",
-		idType, maskIdentityNumber(id), s.wemaFaceBaseURL, s.wemaFaceCallbackURL != "", s.wemaFaceCallbackURL)
-	if s.wemaFaceCallbackURL == "" {
-		log.Printf("[registerv2] level=WARN op=wema_face_url: ALAT_FACE_CALLBACK_URL is empty, cb_uri omitted - Wema will not report the c_id to us")
-	}
+	log.Printf("[registerv2] level=INFO op=wema_face_url id_type=%s id=%s base_url=%s (no cb_uri/rd_uri: the client reads c_id from the web app's final URL)",
+		idType, maskIdentityNumber(id), s.wemaFaceBaseURL)
 	q := url.Values{}
 	q.Set(idType, id)
 	q.Set("x_tk", s.wemaFaceAPIKey)
-	if s.wemaFaceCallbackURL != "" {
-		q.Set("cb_uri", s.wemaFaceCallbackURL)
-	}
 	return strings.TrimRight(s.wemaFaceBaseURL, "/") + "/?" + q.Encode(), nil
 }
 
@@ -73,6 +69,24 @@ func (s *Service) RecordWemaFaceVerification(ctx context.Context, idType, id, co
 		return err
 	}
 	return nil
+}
+
+// resolveWemaFaceCorrelation picks the correlationId for ALAT's tier 2
+// creation: the one the client read from Wema's face web app and sent in the
+// /register body, else the latest one Wema's callback stored. We can't check
+// a client-sent ID ourselves; ALAT rejects one it didn't issue for this
+// BVN/NIN when the account is created. A client-sent ID is also saved so a
+// retry that omits it still works.
+func (s *Service) resolveWemaFaceCorrelation(ctx context.Context, rl *opLogger, fromRequest, bvn, nin string) (string, error) {
+	if cid := strings.TrimSpace(fromRequest); cid != "" {
+		rl.Infof("using wema face correlation id sent by the client: c_id=%s", cid)
+		if err := s.RecordWemaFaceVerification(ctx, wemaFaceIDTypeBVN, bvn, cid); err != nil {
+			rl.Warnf("could not save the client-sent wema c_id for retries: %v", err)
+		}
+		return cid, nil
+	}
+	rl.Infof("no wema c_id in the request - looking for one stored from wema's callback")
+	return s.wemaFaceCorrelation(ctx, rl, bvn, nin)
 }
 
 // wemaFaceCorrelation returns Wema's latest unexpired correlationId for the
