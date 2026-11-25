@@ -57,6 +57,11 @@ type Service struct {
 	// Registration for it skips wallet generation and user inserts; empty disables it.
 	demoPhone string
 
+	// Wema's face biometric web app (see SetWemaFaceConfig).
+	wemaFaceBaseURL     string
+	wemaFaceAPIKey      string
+	wemaFaceCallbackURL string
+
 	// Test seams; zero values mean production behaviour.
 	wemaPollInterval time.Duration // between ALAT account polls (default 1s)
 	lockOverride     func(ctx context.Context, keys ...string) (release func(), ok bool, err error)
@@ -230,9 +235,6 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	rl.with("provider", strings.TrimSpace(provider))
 
 	var latestBVNRecord *models.VerificationRecord
-	// requestedFace is the face check named by bvn_w_face_verification_id, if
-	// any - loaded once here and reused by the wema branch below.
-	var requestedFace *models.FaceCheckRecord
 	if strings.TrimSpace(provider) != "providus" {
 		rl.step("bvn_record")
 		rec, face, err := s.resolveBVNRecord(ctx, req.BVN, req.BVNWithFaceVerificationID)
@@ -240,7 +242,6 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 			return nil, err
 		}
 		latestBVNRecord = rec
-		requestedFace = face
 		rl.Infof("bvn record resolved: %s; requested_face=%s", describeBVNRecord(rec), describeFaceRecord(face))
 	}
 	if err := checkBVNRecordUsable(latestBVNRecord); err != nil {
@@ -395,7 +396,7 @@ func (s *Service) Register(ctx context.Context, req OptimusRegisterRequest, ip s
 	defer cancel()
 
 	if actualProvider == "wema" {
-		return s.registerWema(providerCtx, rl, req, reg, requestedFace, bvnRecord)
+		return s.registerWema(providerCtx, rl, req, reg, bvnRecord)
 	}
 
 	rl.step("wallet_generate")

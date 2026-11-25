@@ -71,10 +71,14 @@ type Config struct {
 
 	WalletProvider string
 
-	AlatBaseURL         string
-	AlatAPIKey          string
-	AlatSubscriptionKey string
-	AlatChannelID       string
+	AlatBaseURL string
+	// AlatFaceVerificationURL is Wema's face biometric web app; the callback
+	// URL is our public facial-verification endpoint, passed to it as cb_uri.
+	AlatFaceVerificationURL string
+	AlatFaceCallbackURL     string
+	AlatAPIKey              string
+	AlatSubscriptionKey     string
+	AlatChannelID           string
 	// AlatSecuritySecret keys the HMAC we send ALAT as securityInfo on
 	// debits/payouts and check in the Authentication Callback.
 	AlatSecuritySecret string
@@ -166,11 +170,13 @@ func Load() Config {
 
 		WalletProvider: getEnv("WALLET_PROVIDER", "providus"),
 
-		AlatBaseURL:         getEnv("ALAT_BASE_URL", ""),
-		AlatAPIKey:          getEnv("ALAT_API_KEY", ""),
-		AlatSubscriptionKey: getEnv("ALAT_SUBSCRIPTION_KEY", ""),
-		AlatChannelID:       getEnv("ALAT_CHANNEL_ID", ""),
-		AlatSecuritySecret:  getEnv("ALAT_SECURITY_SECRET", ""),
+		AlatBaseURL:             getEnv("ALAT_BASE_URL", ""),
+		AlatFaceVerificationURL: getEnv("ALAT_FACE_VERIFICATION_URL", ""),
+		AlatFaceCallbackURL:     getEnv("ALAT_FACE_CALLBACK_URL", ""),
+		AlatAPIKey:              getEnv("ALAT_API_KEY", ""),
+		AlatSubscriptionKey:     getEnv("ALAT_SUBSCRIPTION_KEY", ""),
+		AlatChannelID:           getEnv("ALAT_CHANNEL_ID", ""),
+		AlatSecuritySecret:      getEnv("ALAT_SECURITY_SECRET", ""),
 
 		AlatWebhookAllowedIPs:     getEnv("ALAT_WEBHOOK_ALLOWED_IPS", ""),
 		AlatWebhookTrustedProxies: getEnv("ALAT_WEBHOOK_TRUSTED_PROXIES", ""),

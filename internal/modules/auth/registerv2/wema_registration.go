@@ -85,25 +85,20 @@ type registration struct {
 // request must answer, and the client supports it, the registration is saved
 // as pending and completed later by the Account Creation webhook, the sweep,
 // or the client's status poll.
-func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusRegisterRequest, reg *registration, requestedFace *models.FaceCheckRecord, bvnRecord *models.VerificationRecord) (*RegisterResponse, error) {
-	// 1. Resolve and verify the face check record. Required on every path,
-	// including reuse of an existing account below - otherwise anyone with
-	// verified phone/email/BVN records could claim an existing Wema account
-	// without ever passing the face check.
-	// Security: live image MUST come from an authoritative, matched
-	// FaceCheckRecord linked to this BVN. Client-supplied raw images or
-	// unverified/mismatched face checks are rejected.
+func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusRegisterRequest, reg *registration, bvnRecord *models.VerificationRecord) (*RegisterResponse, error) {
+	// 1. Wema's own face biometric check must have been done for this BVN or
+	// NIN: its web app reports a correlationId to our facial-verification
+	// callback, and ALAT only opens a tier 2 account against one of those.
+	// Required on every path, including reuse of an existing account below -
+	// otherwise anyone with verified phone/email/BVN records could claim an
+	// existing Wema account without ever passing the face check.
 	rl.step("face_check")
-	faceRecord, err := s.resolveMatchedFaceRecord(ctx, requestedFace, bvnRecord)
+	faceCorrelationID, err := s.wemaFaceCorrelation(ctx, rl, reg.bvn, reg.nin)
 	if err != nil {
+		rl.Warnf("cannot continue without wema's face verification (the face web app's callback may not have arrived - check the [ALAT webhook] event=facial_verification logs and the IP allowlist): %v", err)
 		return nil, err
 	}
-	if faceRecord == nil || faceRecord.FaceImageProvided == nil || strings.TrimSpace(*faceRecord.FaceImageProvided) == "" {
-		rl.Warnf("no usable face check: %s requested_face=%s resolved_face=%s",
-			describeBVNRecord(bvnRecord), describeFaceRecord(requestedFace), describeFaceRecord(faceRecord))
-		return nil, userErrorf("face biometric verification is required for wema registration and must be verified")
-	}
-	rl.with("face_check", faceRecord.ID)
+	rl.with("face_correlation_id", faceCorrelationID)
 
 	// 2. An earlier attempt is already waiting on its ALAT account: resume it
 	// with this request's details instead of asking ALAT again.
@@ -155,8 +150,7 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		PhoneNumber:        reg.phone,
 		EmailAddress:       reg.email,
 		ResidentialAddress: nil, // Omitted for Tier 2; address is added when upgrading to Tier 3
-		LiveImageOfFace:    strings.TrimSpace(*faceRecord.FaceImageProvided),
-		CorrelationID:      uuid.NewString(),
+		CorrelationID:      faceCorrelationID,
 	}
 	rl.step("alat_tier2_create")
 	rl.with("correlation_id", tier2Req.CorrelationID)
@@ -173,6 +167,15 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 		rl.with("tracking_id", trackingID)
 		rl.Infof("alat is already generating an account for these details - waiting for it")
 	case err != nil:
+		// Wema's own words: a rejected c_id (unknown, already used, or not
+		// matching this BVN/NIN) shows up here and in the [ALAT] POST line
+		// above, which has the HTTP status and raw body.
+		var alatErr *appErr.AlatError
+		if errors.As(err, &alatErr) {
+			rl.Errorf("alat rejected tier 2 creation for c_id=%s: %s no_response=%t", tier2Req.CorrelationID, describeAlatError(alatErr), alatErr.NoResponse)
+		} else {
+			rl.Errorf("tier 2 creation for c_id=%s failed: %v", tier2Req.CorrelationID, err)
+		}
 		return nil, fmt.Errorf("wema alat tier 2 account creation failed: %w", err)
 	default:
 		rl.with("tracking_id", trackingID)

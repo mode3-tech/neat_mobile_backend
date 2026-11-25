@@ -41,8 +41,11 @@ func AlatWebhookIPAllowlist(allowed, trustedProxies string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip, ok := sourceIP(c.Request, proxySet)
 		if !ok || !containsAddr(allowedSet, ip) {
-			log.Printf("[ALAT webhook] level=WARN rejected %s %s from ip=%s peer=%s",
-				c.Request.Method, c.Request.URL.Path, ip, c.Request.RemoteAddr)
+			// Origin/User-Agent show whether a browser (not Wema's servers) is
+			// calling - e.g. the face web app posting its own callback.
+			log.Printf("[ALAT webhook] level=WARN rejected %s %s from ip=%s peer=%s xff=%q origin=%q user_agent=%q",
+				c.Request.Method, c.Request.URL.Path, ip, c.Request.RemoteAddr,
+				c.GetHeader("X-Forwarded-For"), c.GetHeader("Origin"), c.GetHeader("User-Agent"))
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}

@@ -248,6 +248,26 @@ func (h *Handler) ValidateBVNWithFace(c *gin.Context) {
 	})
 }
 
+// GetWemaFaceURL returns the Wema face biometric web app URL the app opens for
+// the customer's BVN or NIN. Wema reports the result to our callback.
+func (h *Handler) GetWemaFaceURL(c *gin.Context) {
+	var request WemaFaceURLRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.writeInvalidRequest(c)
+		return
+	}
+	faceURL, err := h.service.WemaFaceURL(request.IDType, request.ID)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.APIResponse[WemaFaceURLResponse]{
+		Status:  "success",
+		Message: "Wema face verification URL generated.",
+		Data:    &WemaFaceURLResponse{URL: faceURL},
+	})
+}
+
 func (h *Handler) GetAddressDropDownList(c *gin.Context) {
 	data, err := h.service.GetAddressDropDownList(c.Request.Context())
 	if err != nil {
