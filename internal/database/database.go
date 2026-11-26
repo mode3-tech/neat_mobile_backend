@@ -33,7 +33,12 @@ import (
 )
 
 func NewPostgres(dsn string) (*gorm.DB, error) {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN: dsn,
+		// Disable pgx's prepared-statement cache; it breaks behind
+		// transaction-mode poolers (PgBouncer etc.) with SQLSTATE 08P01.
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 
