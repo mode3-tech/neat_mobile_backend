@@ -19,6 +19,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -61,6 +62,11 @@ type Service struct {
 	wemaFaceBaseURL     string
 	wemaFaceAPIKey      string
 	wemaFaceCallbackURL string
+
+	// alatBackoffUntil pauses ALAT account lookups after a 429 (see
+	// alat_backoff.go), so retries don't keep hitting the rate limit.
+	alatBackoffMu    sync.Mutex
+	alatBackoffUntil time.Time
 
 	// Test seams; zero values mean production behaviour.
 	wemaPollInterval time.Duration // between ALAT account polls (default 1s)

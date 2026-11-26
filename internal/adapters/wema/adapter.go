@@ -62,8 +62,8 @@ func (a *Adapter) LookupWalletByCustomerID(ctx context.Context, phoneNumber stri
 	}, true, nil
 }
 
-// GenerateWallet creates a tier 1 (BVN) account, or returns the existing one,
-// and lifts PND so it can be debited. Used by v1 registration jobs when
+// GenerateWallet creates a tier 1 (BVN) account, or returns the existing one.
+// ALAT accounts are already active, so no debit restriction is lifted. Used by v1 registration jobs when
 // WALLET_PROVIDER is wema.
 func (a *Adapter) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPayload) (*auth.WalletResponse, error) {
 	if walletInfo == nil {
@@ -78,10 +78,6 @@ func (a *Adapter) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		return nil, fmt.Errorf("alat account lookup failed: %w", err)
 	}
 	if found {
-		// An earlier attempt may have created the account and then failed to lift PND.
-		if err := a.liftPnd(ctx, existing.Wallet.AccountNumber); err != nil {
-			return nil, err
-		}
 		return existing, nil
 	}
 
@@ -108,10 +104,6 @@ func (a *Adapter) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 		}
 		wallet, found, lookupErr := a.LookupWalletByCustomerID(ctx, walletInfo.PhoneNumber)
 		if lookupErr == nil && found {
-			// On failure the job retries, finds the account above and lifts PND there.
-			if err := a.liftPnd(ctx, wallet.Wallet.AccountNumber); err != nil {
-				return nil, err
-			}
 			return wallet, nil
 		}
 	}
@@ -119,14 +111,6 @@ func (a *Adapter) GenerateWallet(ctx context.Context, walletInfo *auth.WalletPay
 	log.Printf("[ALAT] level=WARN op=GenerateWallet account not visible after %d polls phone=%s - a retry should find it",
 		maxPollAttempts, maskTail(walletInfo.PhoneNumber))
 	return nil, errors.New("alat account generation pending; please check status shortly")
-}
-
-func (a *Adapter) liftPnd(ctx context.Context, accountNumber string) error {
-	if err := a.PartnerDebitRestrictionManagement(ctx, string(baas.AlatPndTypeLift), accountNumber); err != nil {
-		log.Printf("[ALAT] level=ERROR op=liftPnd account=%s: %v", maskTail(accountNumber), err)
-		return fmt.Errorf("alat lift pnd failed for account %s: %w", accountNumber, err)
-	}
-	return nil
 }
 
 // PostPartnershipAccountCreationWithBvn is Wallet Creation (BVN) Step 1. It returns the trackingId for Step 2.

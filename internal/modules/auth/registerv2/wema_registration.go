@@ -39,9 +39,9 @@ const (
 	pendingWemaTTL = auth.BVNVerificationTTL
 	// pendingWemaPollRetryAfter stops a client polling the status endpoint
 	// from hitting ALAT on every request.
-	pendingWemaPollRetryAfter = 10 * time.Second
+	pendingWemaPollRetryAfter = 30 * time.Second
 	// pendingWemaSweepRetryAfter spaces the sweep's attempts per row.
-	pendingWemaSweepRetryAfter = time.Minute
+	pendingWemaSweepRetryAfter = 2 * time.Minute
 	// pendingWemaStuckAfter returns a row left processing by a crashed worker
 	// to pending.
 	pendingWemaStuckAfter = 5 * time.Minute
@@ -123,7 +123,9 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 	existingDetails, fetchErr := s.alat.GetPartnershipAccountDetails(ctx, reg.phone)
 	if fetchErr != nil {
 		var alatErr *appErr.AlatError
-		if !errors.As(fetchErr, &alatErr) || alatErr.NoResponse {
+		// A 429 is ALAT refusing to answer, not saying "no account": creating
+		// one now could duplicate an account that already exists.
+		if s.noteAlatRateLimit(fetchErr) || !errors.As(fetchErr, &alatErr) || alatErr.NoResponse {
 			rl.Errorf("transient alat account lookup error, not creating an account: %v", fetchErr)
 			return nil, userErrorf("wema is temporarily unavailable, please try again shortly")
 		}
@@ -207,6 +209,10 @@ func (s *Service) registerWema(ctx context.Context, rl *opLogger, req OptimusReg
 			return s.finishWema(ctx, rl, reg, details, nil)
 		}
 		rl.Infof("alat account not ready on poll attempt %d/%d (err=%v)", attempt, maxAccountPollAttempts, err)
+		if s.noteAlatRateLimit(err) {
+			rl.Warnf("alat rate limited the account poll - handing off to the pending flow")
+			break
+		}
 	}
 
 	// 6. Still queued at ALAT: hand off to the pending flow for every client
@@ -404,41 +410,14 @@ func (s *Service) registrationFromPending(p *PendingWemaRegistration) (*registra
 	}, nil
 }
 
-// finishWema lifts PND on the ALAT account, saves the user and wallet, and
-// issues the session - the synchronous end of a /register call.
+// finishWema saves the user and wallet for the ALAT account and issues the
+// session - the synchronous end of a /register call. ALAT accounts are already
+// active, so there is no debit restriction to lift.
 func (s *Service) finishWema(ctx context.Context, rl *opLogger, reg *registration, acct *AlatAccountDetails, inTx func(*gorm.DB) error) (*RegisterResponse, error) {
-	if err := s.liftPndWithRetry(ctx, rl, acct.AccountNumber); err != nil {
-		return nil, err
-	}
 	if err := s.persistRegistration(ctx, rl, reg, wemaWalletResponse(reg, acct), "wema", inTx); err != nil {
 		return nil, err
 	}
 	return s.issueSession(ctx, rl, reg.mobileUserID, reg.device.DeviceID, reg.ip)
-}
-
-// liftPndWithRetry lifts the post-no-debit restriction ALAT places on new
-// accounts so they can be debited.
-func (s *Service) liftPndWithRetry(ctx context.Context, rl *opLogger, accountNumber string) error {
-	rl.step("alat_lift_pnd")
-	const maxPndAttempts = 3
-	var pndErr error
-	for attempt := 1; attempt <= maxPndAttempts; attempt++ {
-		pndErr = s.alat.PartnerDebitRestrictionManagement(ctx, "LiftPnd", accountNumber)
-		if pndErr == nil {
-			rl.Infof("lifted PND on attempt %d/%d", attempt, maxPndAttempts)
-			return nil
-		}
-		rl.Warnf("lift PND attempt %d/%d failed: %v", attempt, maxPndAttempts, pndErr)
-		if attempt < maxPndAttempts {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Duration(attempt*500) * time.Millisecond):
-			}
-		}
-	}
-	rl.Criticalf("could not lift PND after %d attempts - account exists at alat but nothing is saved locally yet: %v", maxPndAttempts, pndErr)
-	return fmt.Errorf("failed to lift debit restriction on account: %w", pndErr)
 }
 
 func wemaWalletResponse(reg *registration, acct *AlatAccountDetails) *auth.WalletResponse {
@@ -653,14 +632,20 @@ func (s *Service) issueSession(ctx context.Context, rl *opLogger, userID, device
 
 // tryCompletePendingWema makes one attempt to finish a pending registration:
 // confirm the account with ALAT (webhooks are unsigned, so their word alone
-// is never trusted), check it's the applicant's, lift PND, and save the user
-// and wallet. It returns true only when this call completed it. Anything
+// is never trusted), check it's the applicant's, and save the user and wallet. It returns true only when this call completed it. Anything
 // retryable hands the row back to pending for the next webhook, sweep or poll.
 func (s *Service) tryCompletePendingWema(ctx context.Context, id string) (bool, error) {
 	rl := newOpLogger("complete_pending_wema")
 	rl.with("registration_id", id)
 	var retErr error
 	defer rl.finish(&retErr)
+
+	// ALAT rate-limited us recently: don't claim the row or call it again until
+	// its window has passed. The row stays pending for the next trigger.
+	if wait := s.alatBackoffRemaining(); wait > 0 {
+		rl.Infof("alat rate limit in effect for another %s - skipping this attempt", wait.Round(time.Second))
+		return false, nil
+	}
 
 	rl.step("claim_attempt")
 	now := time.Now().UTC()
@@ -700,6 +685,9 @@ func (s *Service) tryCompletePendingWema(ctx context.Context, id string) (bool, 
 	rl.step("alat_account_lookup")
 	acct, err := s.alat.GetPartnershipAccountDetails(ctx, p.Phone)
 	if err != nil {
+		if s.noteAlatRateLimit(err) {
+			rl.Warnf("alat rate limited the account lookup - pausing lookups for %s", s.alatBackoffRemaining().Round(time.Second))
+		}
 		return release(fmt.Sprintf("alat lookup: %v", err))
 	}
 	if acct == nil || strings.TrimSpace(acct.AccountNumber) == "" {
@@ -720,9 +708,6 @@ func (s *Service) tryCompletePendingWema(ctx context.Context, id string) (bool, 
 	reg, err := s.registrationFromPending(p)
 	if err != nil {
 		return fail(err.Error())
-	}
-	if err := s.liftPndWithRetry(ctx, rl, acct.AccountNumber); err != nil {
-		return release(err.Error())
 	}
 	err = s.persistRegistration(ctx, rl, reg, wemaWalletResponse(reg, acct), "wema", func(txDB *gorm.DB) error {
 		return NewRepository(txDB, s.repo.cipher).CompletePendingWemaRegistration(ctx, id, acct.AccountNumber, time.Now().UTC())
