@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"neat_mobile_app_backend/internal/modules/auth"
 	"neat_mobile_app_backend/models"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"gorm.io/gorm"
 
 	appErr "neat_mobile_app_backend/internal/errors"
 	phoneutil "neat_mobile_app_backend/internal/phone"
@@ -145,9 +147,6 @@ func assertNoAccountCreated(t *testing.T, alat *mockAlatValidator) {
 	if alat.tier2Calls != 0 {
 		t.Fatalf("expected no Tier 2 account creation, got %d calls", alat.tier2Calls)
 	}
-	if alat.pndCalls != 0 {
-		t.Fatalf("expected no PND calls, got %d", alat.pndCalls)
-	}
 }
 
 func TestRegisterWema_DuplicateBVNRejectedBeforeProviderCalls(t *testing.T) {
@@ -180,9 +179,11 @@ func TestRegisterWema_ExistingAccountWithDifferentDetailsRejected(t *testing.T) 
 			s, mock, alat := newWemaService(t)
 			details := tc.details
 			alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) { return &details, nil }
-			// If the identity check ever regresses, fail at PND rather than
+			// If the identity check ever regresses, fail at persist rather than
 			// running on into the DB transaction this harness doesn't set up.
-			alat.pndStep4Func = func(ctx context.Context, pndType, accountNumber string) error { return errors.New("reuse attempted") }
+			s.persistOverride = func(context.Context, *opLogger, *registration, *auth.WalletResponse, string, func(*gorm.DB) error) error {
+				return errors.New("reuse attempted")
+			}
 
 			expectRegisterPreamble(t, mock, 0)
 			expectMatchedFaceForBVN(mock, "bvn-1")
@@ -287,9 +288,11 @@ func TestRegisterWema_FaceCheckOnOlderVerifiedRecordAccepted(t *testing.T) {
 	s, mock, alat := newWemaService(t)
 	reuse := &AlatAccountDetails{AccountNumber: "0123456789", FirstName: "Test", LastName: "User", Email: testEmail}
 	alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) { return reuse, nil }
-	// Stop right after the face check + identity check: failing PND ends the
-	// call before the DB transaction this harness doesn't set up.
-	alat.pndStep4Func = func(ctx context.Context, pndType, accountNumber string) error { return errors.New("stop here") }
+	// Stop right after the face check + identity check: failing persist ends
+	// the call before the DB transaction this harness doesn't set up.
+	s.persistOverride = func(context.Context, *opLogger, *registration, *auth.WalletResponse, string, func(*gorm.DB) error) error {
+		return errors.New("stop here")
+	}
 
 	expectRegisterPreamble(t, mock, 0)
 	expectMatchedFaceForBVN(mock, "bvn-older")
@@ -298,8 +301,8 @@ func TestRegisterWema_FaceCheckOnOlderVerifiedRecordAccepted(t *testing.T) {
 	// face's own record is used directly.
 
 	_, err := s.Register(context.Background(), wemaRegisterRequest(), "127.0.0.1")
-	if err == nil || !strings.Contains(err.Error(), "failed to lift debit restriction") {
-		t.Fatalf("expected to reach the PND step, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "stop here") {
+		t.Fatalf("expected to reach the persist step, got %v", err)
 	}
 	if alat.getStep3Calls != 1 {
 		t.Fatalf("expected the ALAT account lookup to run once, got %d", alat.getStep3Calls)

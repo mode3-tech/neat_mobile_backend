@@ -66,7 +66,6 @@ type AlatTier2Result struct {
 // account creation API is not part of it.
 type AlatValidator interface {
 	GetPartnershipAccountDetails(ctx context.Context, phoneNumber string) (*AlatAccountDetails, error)
-	PartnerDebitRestrictionManagement(ctx context.Context, pndType, accountNumber string) error
 	PostTier2PartnershipAccountWithFace(ctx context.Context, req AlatTier2FaceRequest) (AlatTier2Result, error)
 	GetAddressDropDownList(ctx context.Context) (any, error)
 }
