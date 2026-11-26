@@ -187,8 +187,8 @@ func TestRegisterWema_AccountStillQueued_SavesPendingWhenClientSupportsIt(t *tes
 	if resp.Status != RegistrationStatusPending || resp.RegistrationID == "" || resp.ClaimToken == "" || resp.AccessToken != "" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
-	if h.alat.tier2Calls != 1 || h.alat.pndCalls != 0 || h.persist != 0 {
-		t.Fatalf("tier2=%d pnd=%d persist=%d; want 1/0/0", h.alat.tier2Calls, h.alat.pndCalls, h.persist)
+	if h.alat.tier2Calls != 1 || h.persist != 0 {
+		t.Fatalf("tier2=%d persist=%d; want 1/0", h.alat.tier2Calls, h.persist)
 	}
 	h.done(t)
 }
@@ -240,8 +240,8 @@ func TestRegisterWema_AccountReadyWhilePolling_CompletesInline(t *testing.T) {
 	if resp.Status != RegistrationStatusCompleted || resp.AccessToken == "" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
-	if h.persist != 1 || h.alat.pndCalls != 1 {
-		t.Fatalf("persist=%d pnd=%d; want 1/1", h.persist, h.alat.pndCalls)
+	if h.persist != 1 {
+		t.Fatalf("persist=%d; want 1", h.persist)
 	}
 	h.done(t)
 }
@@ -283,8 +283,8 @@ func TestTryCompletePendingWema_Completes(t *testing.T) {
 	if err != nil || !done {
 		t.Fatalf("done=%v err=%v; want completed", done, err)
 	}
-	if h.persist != 1 || h.alat.pndCalls != 1 {
-		t.Fatalf("persist=%d pnd=%d; want 1/1", h.persist, h.alat.pndCalls)
+	if h.persist != 1 {
+		t.Fatalf("persist=%d; want 1", h.persist)
 	}
 	h.done(t)
 }
@@ -336,6 +336,63 @@ func TestTryCompletePendingWema_ALATUnreachableReleases(t *testing.T) {
 	h.done(t)
 }
 
+func TestTryCompletePendingWema_RateLimitPausesLookups(t *testing.T) {
+	h := newPendingHarness(t)
+	h.alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) {
+		return nil, &appErr.AlatError{StatusCode: "429", Message: "Rate limit is exceeded. Try again in 85 seconds."}
+	}
+	h.expectStartAttempt(1)
+	h.expectGetPending(h.pendingRow(t, PendingWemaStatusProcessing, "tok", nil))
+	h.expectRelease()
+
+	if done, err := h.s.tryCompletePendingWema(context.Background(), pendingID); err != nil || done {
+		t.Fatalf("done=%v err=%v; want released", done, err)
+	}
+	if got := h.s.alatBackoffRemaining(); got < 80*time.Second || got > 95*time.Second {
+		t.Fatalf("backoff = %s; want about 87s", got)
+	}
+
+	// While paused: no claim, no ALAT call (no SQL expectations are set).
+	if done, err := h.s.tryCompletePendingWema(context.Background(), pendingID); err != nil || done {
+		t.Fatalf("done=%v err=%v; want skipped", done, err)
+	}
+	if h.alat.getStep3Calls != 1 {
+		t.Fatalf("alat lookups = %d; want 1", h.alat.getStep3Calls)
+	}
+
+	// Once the window passes, lookups resume.
+	h.s.alatBackoffMu.Lock()
+	h.s.alatBackoffUntil = time.Now().Add(-time.Second)
+	h.s.alatBackoffMu.Unlock()
+	h.alat.getStep3Func = func(ctx context.Context, phone string) (*AlatAccountDetails, error) { return nil, nil }
+	h.expectStartAttempt(1)
+	h.expectGetPending(h.pendingRow(t, PendingWemaStatusProcessing, "tok", nil))
+	h.expectRelease()
+	if _, err := h.s.tryCompletePendingWema(context.Background(), pendingID); err != nil {
+		t.Fatal(err)
+	}
+	if h.alat.getStep3Calls != 2 {
+		t.Fatalf("alat lookups = %d; want 2", h.alat.getStep3Calls)
+	}
+	h.done(t)
+}
+
+func TestAlatRateLimitDelay(t *testing.T) {
+	d, ok := alatRateLimitDelay(&appErr.AlatError{StatusCode: "429", Message: "Rate limit is exceeded. Try again in 85 seconds."})
+	if !ok || d != 85*time.Second {
+		t.Fatalf("got %s, %v", d, ok)
+	}
+	if d, ok := alatRateLimitDelay(&appErr.AlatError{StatusCode: "429"}); !ok || d != defaultAlatBackoff {
+		t.Fatalf("default: got %s, %v", d, ok)
+	}
+	if _, ok := alatRateLimitDelay(&appErr.AlatError{StatusCode: "400", Message: "bad request"}); ok {
+		t.Fatal("400 is not a rate limit")
+	}
+	if _, ok := alatRateLimitDelay(errors.New("boom")); ok {
+		t.Fatal("plain error is not a rate limit")
+	}
+}
+
 // The webhook is unsigned: an account that isn't the applicant's is never
 // attached to them.
 func TestTryCompletePendingWema_AccountNotApplicantsFails(t *testing.T) {
@@ -349,26 +406,8 @@ func TestTryCompletePendingWema_AccountNotApplicantsFails(t *testing.T) {
 	if done, err := h.s.tryCompletePendingWema(context.Background(), pendingID); err != nil || done {
 		t.Fatalf("done=%v err=%v; want failed", done, err)
 	}
-	if h.alat.pndCalls != 0 || h.persist != 0 {
-		t.Fatal("no PND lift or save for someone else's account")
-	}
-	h.done(t)
-}
-
-func TestTryCompletePendingWema_PNDFailureReleases(t *testing.T) {
-	h := newPendingHarness(t)
-	h.alat.getStep3Func = alatAccount
-	h.alat.pndStep4Func = func(ctx context.Context, pndType, acct string) error { return errors.New("pnd down") }
-	h.expectStartAttempt(1)
-	h.expectGetPending(h.pendingRow(t, PendingWemaStatusProcessing, "tok", nil))
-	h.expectBVNRecord("Test User")
-	h.expectRelease()
-
-	if done, err := h.s.tryCompletePendingWema(context.Background(), pendingID); err != nil || done {
-		t.Fatalf("done=%v err=%v; want released", done, err)
-	}
 	if h.persist != 0 {
-		t.Fatal("nothing should be saved before PND is lifted")
+		t.Fatal("no save for someone else's account")
 	}
 	h.done(t)
 }
