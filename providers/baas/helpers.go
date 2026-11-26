@@ -88,6 +88,11 @@ func alatDo[T any](ctx context.Context, a *Alat, method, url string, body any) (
 			}
 			return nil, &alatErr
 		}
+		// The debit/credit wallet APIs reply with a different envelope
+		// ({errorMessage, errorMessages, hasError}); surface its message.
+		if walletErr := decodeWalletEnvelopeError(resp.StatusCode, respBytes); walletErr != nil {
+			return nil, walletErr
+		}
 		return nil, &appErr.AlatError{
 			StatusCode: strconv.Itoa(resp.StatusCode),
 			Message:    "alat request returned an unexpected status",
@@ -113,6 +118,30 @@ func alatDo[T any](ctx context.Context, a *Alat, method, url string, body any) (
 		log.Printf("[ALAT] level=INFO %s %s status=%d dur=%s", method, path, resp.StatusCode, elapsed)
 	}
 	return &out, nil
+}
+
+// decodeWalletEnvelopeError reads the error message out of a debit/credit
+// wallet API reply ({"errorMessage":..., "errorMessages":[...], "hasError":true}).
+// It returns nil when the body isn't that envelope or carries no message.
+func decodeWalletEnvelopeError(statusCode int, body []byte) *appErr.AlatError {
+	var env struct {
+		ErrorMessage  string   `json:"errorMessage"`
+		ErrorMessages []string `json:"errorMessages"`
+	}
+	if json.Unmarshal(body, &env) != nil {
+		return nil
+	}
+	msg := strings.TrimSpace(env.ErrorMessage)
+	if msg == "" && len(env.ErrorMessages) == 0 {
+		return nil
+	}
+	return &appErr.AlatError{
+		StatusCode: strconv.Itoa(statusCode),
+		Message:    msg,
+		Errors:     env.ErrorMessages,
+		// A 5xx is ALAT failing, not ALAT answering, even with a body.
+		NoResponse: statusCode >= 500,
+	}
 }
 
 // logsSuccessBody reports whether a 2xx reply's body is logged too: account
