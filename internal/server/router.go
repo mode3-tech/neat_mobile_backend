@@ -557,7 +557,8 @@ func NewRouter(cfg config.Config) (*gin.Engine, func(), error) {
 	wallet.RegisterWebhookRoutes(webhooksGroup, walletHandler, middleware.ProvidusWebhookAuth(cfg.ProvidusSecretKey))
 	alatWebhookAuth := middleware.AlatWebhookIPAllowlist(cfg.AlatWebhookAllowedIPs, cfg.AlatWebhookTrustedProxies)
 	wallet.RegisterAlatCallbackRoutes(webhooksGroup, walletHandler, alatWebhookAuth)
-	wallet.RegisterAlatWebhookRoutes(apiV1, walletHandler, alatWebhookAuth)
+	alatFaceAuth := middleware.FaceCallbackGuard(cfg.AlatFaceAllowedOrigins, cfg.AlatWebhookAllowedIPs, cfg.AlatWebhookTrustedProxies)
+	wallet.RegisterAlatWebhookRoutes(apiV1, walletHandler, alatWebhookAuth, alatFaceAuth)
 
 	notificationHandler := notification.NewHandler(notificationService)
 	notification.RegisterRoutes(apiV1, notificationHandler, authGuard, deviceValidator)
