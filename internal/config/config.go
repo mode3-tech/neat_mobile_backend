@@ -88,6 +88,10 @@ type Config struct {
 	// AlatWebhookTrustedProxies lists our own proxies/load balancers
 	// (IPs/CIDRs) whose X-Forwarded-For is believed. Empty = use the TCP peer.
 	AlatWebhookTrustedProxies string
+	// AlatFaceAllowedOrigins is a comma-separated list of origins (e.g. Wema's
+	// face web app) allowed to call our facial-verification callback from the
+	// browser; without it the CORS preflight is rejected.
+	AlatFaceAllowedOrigins string
 
 	XpressPublicKey  string
 	XpressPrivateKey string
@@ -180,6 +184,7 @@ func Load() Config {
 
 		AlatWebhookAllowedIPs:     getEnv("ALAT_WEBHOOK_ALLOWED_IPS", ""),
 		AlatWebhookTrustedProxies: getEnv("ALAT_WEBHOOK_TRUSTED_PROXIES", ""),
+		AlatFaceAllowedOrigins:    getEnv("ALAT_FACE_ALLOWED_ORIGINS", ""),
 
 		XpressPublicKey:  getEnv("XPRESS_PUBLIC_KEY", ""),
 		XpressPrivateKey: getEnv("XPRESS_PRIVATE_KEY", ""),
