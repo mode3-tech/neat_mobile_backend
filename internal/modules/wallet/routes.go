@@ -57,11 +57,14 @@ func RegisterAlatCallbackRoutes(rg *gin.RouterGroup, handler *Handler, webhookAu
 // them to Wema's IPs. Handlers still don't act on a payload alone: the
 // Authentication Callback checks the securityInfo HMAC we issued, the others
 // confirm with ALAT first.
-func RegisterAlatWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth gin.HandlerFunc) {
+//
+// faceAuth guards /facial-verification separately: Wema's face web app posts
+// that result from the customer's browser, so Wema's IPs can't gate it.
+func RegisterAlatWebhookRoutes(rg *gin.RouterGroup, handler *Handler, webhookAuth, faceAuth gin.HandlerFunc) {
+	rg.POST("/alat/facial-verification", faceAuth, handler.HandleAlatFacialVerification)
 	alat := rg.Group("/alat", webhookAuth)
 	{
 		alat.POST("/account/creation", handler.HandleAlatAccountCreation)
-		alat.POST("/facial-verification", handler.HandleAlatFacialVerification)
 		alat.POST("/auth", handler.HandleAlatAuthentication)
 		alat.POST("/transaction", handler.HandleAlatTransaction)
 		alat.POST("/transaction/notification", handler.HandleAlatTransactionNotification)

@@ -17,7 +17,7 @@ import (
 func newAlatWebhookRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{}, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{}, passThrough, passThrough)
 	return r
 }
 
@@ -112,7 +112,7 @@ func TestHandleAlatTransaction_Route(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{service: svc}, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{service: svc}, passThrough, passThrough)
 
 	body := `{"title":"string","message":"string","data":{"status":"Successful","message":"string","narration":"string","transactionReference":"tx-1","platformTransactionReference":"PLT-1","transactionStan":"123","orinalTxnTransactionDate":"0001-01-01T00:00:00"},"request":3,"requestType":3}`
 	w := httptest.NewRecorder()
@@ -133,7 +133,7 @@ func TestAlatWebhookRoutes_AuthAndNotification(t *testing.T) {
 	defer cleanup()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{service: svc}, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{service: svc}, passThrough, passThrough)
 
 	for _, tc := range []struct{ path, body string }{
 		// Empty reference: rejected before any DB lookup, still answered 200.
@@ -154,7 +154,7 @@ func TestAlatWebhookRoutes_AuthAndNotification(t *testing.T) {
 func TestHandleAlatTransactionNotification_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{}, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{}, passThrough, passThrough)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/alat/transaction/notification", strings.NewReader(`{not json`))
@@ -181,7 +181,7 @@ func TestHandleAlatAccountCreation_NotifiesListener(t *testing.T) {
 	h := &Handler{}
 	h.SetAlatAccountCreationListener(l)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), h, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), h, passThrough, passThrough)
 
 	body := `{"title":"t","message":"m","data":{"email":"user@alat.ng","nuban":"0123456789","nubanName":"JANE DOE","type":1,"nubanStatus":"Active","phoneNumber":"07011223344"},"requestType":2}`
 	w := httptest.NewRecorder()
@@ -218,7 +218,7 @@ func postFacialVerification(t *testing.T, h *Handler, body string) *httptest.Res
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterAlatWebhookRoutes(r.Group("/api/v1"), h, passThrough)
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), h, passThrough, passThrough)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/alat/facial-verification", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
