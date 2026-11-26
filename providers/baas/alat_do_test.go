@@ -46,3 +46,31 @@ func TestAlatEnvelope_NumericOrStringCodes(t *testing.T) {
 		}
 	}
 }
+
+// The debit/credit wallet APIs use {errorMessage, errorMessages, hasError};
+// their message must survive a non-2xx reply.
+func TestAlatDo_WalletEnvelopeErrorMessage(t *testing.T) {
+	const body = `{"result":null,"errorMessage":"Account enquiry failed, confirm that account number is valid","errorMessages":null,"hasError":true}`
+	for _, tc := range []struct {
+		status     int
+		body       string
+		wantMsg    string
+		noResponse bool
+	}{
+		{http.StatusBadRequest, body, "Account enquiry failed, confirm that account number is valid", false},
+		{http.StatusInternalServerError, body, "Account enquiry failed, confirm that account number is valid", true},
+		{http.StatusBadRequest, "not json", "alat request returned an unexpected status", true},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+			_, _ = w.Write([]byte(tc.body))
+		}))
+		a := NewAlat(srv.URL, "key", "sub", "")
+		_, err := alatDo[AlatAccountNameEnquiryResponse](context.Background(), a, http.MethodGet, srv.URL+"/x", nil)
+		srv.Close()
+		var alatErr *appErr.AlatError
+		if !errors.As(err, &alatErr) || alatErr.Message != tc.wantMsg || alatErr.NoResponse != tc.noResponse {
+			t.Fatalf("status %d: err = %v, want message %q noResponse=%t", tc.status, err, tc.wantMsg, tc.noResponse)
+		}
+	}
+}
