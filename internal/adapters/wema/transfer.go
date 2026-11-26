@@ -140,7 +140,7 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 		return nil, errors.New("wema: transfer has no internal_transaction_id to use as the ALAT reference")
 	}
 	sourceAccount := strings.TrimSpace(source.AccountNumber)
-	if err := walletEnquiry(ctx, a.alat.WalletNameEnquiry, sourceAccount); err != nil {
+	if err := a.sourceAccountEnquiry(ctx, sourceAccount); err != nil {
 		return nil, fmt.Errorf("wema: source account enquiry: %w", err)
 	}
 	securityInfo, err := a.signer.Sign(PurposeSecurityInfo, ref)
@@ -178,6 +178,22 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 		return nil, err
 	}
 	return transferResponse(resp.Result, ref, amountNaira, strings.TrimSpace(transferInfo.AccountNumber)), nil
+}
+
+// sourceAccountEnquiry confirms ALAT recognises the wallet we're about to debit,
+// using the standard name enquiry with Wema's bank code.
+func (a *TransferAdapter) sourceAccountEnquiry(ctx context.Context, accountNumber string) error {
+	resp, err := a.alat.AccountNameEnquiry(ctx, baas.WemaNameEnquiryBankCode, accountNumber)
+	if err != nil {
+		return err
+	}
+	if err := resultError(resp.HasError, resp.ErrorMessage, resp.ErrorMessages); err != nil {
+		return err
+	}
+	if resp.Result == nil {
+		return errors.New("wema: source account enquiry returned no result")
+	}
+	return nil
 }
 
 // FundWallet runs Credit Wallet Steps 1 and 2: it checks the destination
