@@ -163,7 +163,14 @@ func (s *Service) AuthorizeAlatTransaction(ctx context.Context, reference, secur
 		log.Printf("wallet service: alat auth callback rejected: empty reference")
 		return false
 	}
-	tx, err := s.repo.FindTransactionByID(ctx, reference)
+	// ALAT echoes our UUID reference with the dashes stripped; our IDs are dashed.
+	lookupID := reference
+	if looksLikeDashlessUUID(reference) {
+		if id, perr := uuid.Parse(reference); perr == nil {
+			lookupID = id.String()
+		}
+	}
+	tx, err := s.repo.FindTransactionByID(ctx, lookupID)
 	if err != nil {
 		log.Printf("wallet service: alat auth callback rejected ref=%s: transaction lookup: %v", reference, err)
 		return false
