@@ -47,6 +47,11 @@ func alatDo[T any](ctx context.Context, a *Alat, method, url string, body any) (
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("x-api-key", a.APIKey)
+	// The Debit Wallet API (source enquiry, ProcessClientTransfer, ...) reads
+	// the key from an "Access" header.
+	if strings.Contains(req.URL.Path, alatDebitWalletAPI+"/") {
+		req.Header.Set("Access", a.APIKey)
+	}
 	if a.SubscriptionKey != "" {
 		req.Header.Set("Ocp-Apim-Subscription-Key", a.SubscriptionKey)
 	}
