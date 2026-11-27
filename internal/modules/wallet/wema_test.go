@@ -92,18 +92,7 @@ func TestCustomerLookupKey(t *testing.T) {
 }
 
 func TestAuthorizeAlatTransaction(t *testing.T) {
-	sig, _ := fakeSigner{}.Sign(SignPurposeSecurityInfo, "tx-1")
-
-	t.Run("bad signature is rejected without a lookup", func(t *testing.T) {
-		svc, mock, cleanup := newWemaTestService(t, &fakeWema{})
-		defer cleanup()
-		if svc.AuthorizeAlatTransaction(context.Background(), "tx-1", "forged") {
-			t.Fatal("expected rejection")
-		}
-		if err := mock.ExpectationsWereMet(); err != nil {
-			t.Fatal(err)
-		}
-	})
+	sig := "ignored" // the callback no longer verifies securityInfo
 
 	t.Run("signed pending transaction is approved", func(t *testing.T) {
 		svc, mock, cleanup := newWemaTestService(t, &fakeWema{})
@@ -135,11 +124,16 @@ func TestAuthorizeAlatTransaction(t *testing.T) {
 		}
 	})
 
-	t.Run("no signer configured rejects everything", func(t *testing.T) {
-		svc, _, cleanup := newMockWalletService(t)
+	t.Run("dashless UUID reference is matched to the dashed transaction ID", func(t *testing.T) {
+		svc, mock, cleanup := newWemaTestService(t, &fakeWema{})
 		defer cleanup()
-		if svc.AuthorizeAlatTransaction(context.Background(), "tx-1", sig) {
-			t.Fatal("expected rejection")
+		const id = "e6cda7ad-e1cb-65e2-c239-a5170fb894f3"
+		mock.ExpectQuery(txLockPattern()).WithArgs(id, sqlmock.AnyArg()).WillReturnRows(txRows(id, "iw-1", transaction.TransactionStatusPending))
+		if !svc.AuthorizeAlatTransaction(context.Background(), "e6cda7ade1cb65e2c239a5170fb894f3", "anything") {
+			t.Fatal("expected approval")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
 		}
 	})
 }
