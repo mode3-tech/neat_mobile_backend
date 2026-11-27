@@ -164,7 +164,8 @@ func (s *Service) AuthorizeAlatTransaction(ctx context.Context, reference, secur
 		return false
 	}
 	if !s.signer.Verify(SignPurposeSecurityInfo, reference, securityInfo) {
-		log.Printf("wallet service: alat auth callback rejected ref=%s: securityInfo signature mismatch", reference)
+		log.Printf("wallet service: alat auth callback rejected ref=%s: securityInfo signature mismatch (ref_len=%d looks_like_dashless_uuid=%t)",
+			reference, len(reference), looksLikeDashlessUUID(reference))
 		return false
 	}
 	tx, err := s.repo.FindTransactionByID(ctx, reference)
@@ -177,6 +178,20 @@ func (s *Service) AuthorizeAlatTransaction(ctx context.Context, reference, secur
 		return false
 	}
 	log.Printf("wallet service: alat auth callback approved ref=%s type=%s amount_kobo=%d", reference, tx.Type, tx.Amount)
+	return true
+}
+
+// looksLikeDashlessUUID reports whether s is 32 hex characters - one of our
+// transaction IDs (UUIDs) with the dashes removed.
+func looksLikeDashlessUUID(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return false
+		}
+	}
 	return true
 }
 

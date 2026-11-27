@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -295,5 +296,55 @@ func TestHandleAlatFacialVerification_NoRecorder(t *testing.T) {
 	w := postFacialVerification(t, &Handler{}, `{"success":true,"c_id":"abc","id":"12345678901","id_type":"bvn"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
+	}
+}
+
+// ALAT's Authentication Callback always gets 200 with
+// {transactionReference, authorized}, echoing the reference as sent, whatever
+// the body looks like.
+func TestHandleAlatAuthentication_AlwaysAnswersWithReference(t *testing.T) {
+	svc, _, cleanup := newWemaTestService(t, &fakeWema{})
+	defer cleanup()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	RegisterAlatWebhookRoutes(r.Group("/api/v1"), &Handler{service: svc}, passThrough, passThrough)
+
+	for _, tc := range []struct {
+		name, body, wantRef string
+	}{
+		{"forged signature", `{"transactionReference":"tx-1","securityInfo":"forged"}`, "tx-1"},
+		{"dashless uuid is echoed as sent", `{"transactionReference":"e6cda7ade1cb65e2c239a5170fb894f3","securityInfo":"x"}`, "e6cda7ade1cb65e2c239a5170fb894f3"},
+		{"reference with the wrong type", `{"transactionReference":12345,"securityInfo":"x"}`, "12345"},
+		{"not json", `{`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/alat/auth", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", w.Code)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatalf("body %q is not JSON: %v", w.Body.String(), err)
+			}
+			if got["authorized"] != false || got["transactionReference"] != tc.wantRef {
+				t.Fatalf("body = %s, want authorized=false transactionReference=%q", w.Body.String(), tc.wantRef)
+			}
+		})
+	}
+}
+
+func TestLooksLikeDashlessUUID(t *testing.T) {
+	for s, want := range map[string]bool{
+		"e6cda7ade1cb65e2c239a5170fb894f3":     true,
+		"e6cda7ad-e1cb-65e2-c239-a5170fb894f3": false,
+		"tx-1":                                 false,
+		"zzcda7ade1cb65e2c239a5170fb894f3":     false,
+	} {
+		if got := looksLikeDashlessUUID(s); got != want {
+			t.Errorf("looksLikeDashlessUUID(%q) = %t, want %t", s, got, want)
+		}
 	}
 }
