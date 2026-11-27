@@ -14,6 +14,8 @@ import (
 	"neat_mobile_app_backend/internal/modules/tier"
 	"neat_mobile_app_backend/internal/modules/wallet"
 	"neat_mobile_app_backend/providers/baas"
+
+	"github.com/google/uuid"
 )
 
 const bankListTTL = 6 * time.Hour
@@ -144,10 +146,10 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 	if err := walletEnquiry(ctx, a.alat.WalletNameEnquiry, sourceAccount); err != nil {
 		return nil, fmt.Errorf("wema: source account enquiry: %w", err)
 	}
-	securityInfo, err := a.signer.Sign(PurposeSecurityInfo, ref)
-	if err != nil {
-		return nil, err
-	}
+	// securityInfo, err := a.signer.Sign(PurposeSecurityInfo, ref)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	bankCode := strings.TrimSpace(transferInfo.SortCode)
 	accountName := ""
@@ -162,7 +164,7 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 
 	bankName := a.bankName(ctx, bankCode)
 	req := baas.AlatClientTransferRequest{
-		SecurityInfo:             securityInfo,
+		SecurityInfo:             uuid.NewString(), // ALAT doesn't verify the signature, but we still need a value to echo back
 		Amount:                   amountNaira,
 		DestinationBankCode:      bankCode,
 		DestinationBankName:      bankName,
@@ -170,7 +172,7 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 		DestinationAccountName:   accountName,
 		SourceAccountNumber:      sourceAccount,
 		Narration:                narration,
-		TransactionReference:     ref,
+		TransactionReference:     ref, // our transaction ID; echoed back in the auth callback and used to look the transaction up
 		UseCustomNarration:       narration != "",
 	}
 	logTransferPayload(req)
