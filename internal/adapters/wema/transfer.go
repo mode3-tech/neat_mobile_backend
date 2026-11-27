@@ -161,8 +161,7 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 	amountNaira := transferInfo.Amount / 100
 
 	bankName := a.bankName(ctx, bankCode)
-	logTransferRequest(ref, sourceAccount, strings.TrimSpace(transferInfo.AccountNumber), bankCode, bankName, accountName, amountNaira)
-	resp, err := a.alat.ProcessClientTransfer(ctx, baas.AlatClientTransferRequest{
+	req := baas.AlatClientTransferRequest{
 		SecurityInfo:             securityInfo,
 		Amount:                   amountNaira,
 		DestinationBankCode:      bankCode,
@@ -173,7 +172,9 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 		Narration:                narration,
 		TransactionReference:     ref,
 		UseCustomNarration:       narration != "",
-	})
+	}
+	logTransferPayload(req)
+	resp, err := a.alat.ProcessClientTransfer(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +184,25 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 	return transferResponse(resp.Result, ref, amountNaira, strings.TrimSpace(transferInfo.AccountNumber)), nil
 }
 
-// logTransferRequest logs what ProcessClientTransfer is about to send, with the
-// account numbers masked, so a rejection can be compared with what ALAT
-// received. securityInfo is never logged.
-func logTransferRequest(ref, source, destination, bankCode, bankName, accountName string, amountNaira float64) {
-	log.Printf("[ALAT] level=INFO op=transfer_request ref=%s source=%s destination=%s bank_code=%s bank_name=%q destination_name=%q amount_naira=%.2f",
-		ref, maskTail(source), maskTail(destination), bankCode, bankName, accountName, amountNaira)
+// logTransferPayload logs the exact body ProcessClientTransfer is about to
+// send so it can be compared with a working call. securityInfo is a live
+// signature for a pending debit, so only its length and ends are shown.
+func logTransferPayload(req baas.AlatClientTransferRequest) {
+	req.SecurityInfo = redactSecurityInfo(req.SecurityInfo)
+	body, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("[ALAT] level=WARN op=transfer_payload ref=%s marshal_error=%v", req.TransactionReference, err)
+		return
+	}
+	log.Printf("[ALAT] level=INFO op=transfer_payload ref=%s body=%s", req.TransactionReference, body)
+}
+
+// redactSecurityInfo keeps the length and first/last 4 characters.
+func redactSecurityInfo(s string) string {
+	if len(s) <= 8 {
+		return fmt.Sprintf("len=%d", len(s))
+	}
+	return fmt.Sprintf("%s...%s (len=%d)", s[:4], s[len(s)-4:], len(s))
 }
 
 // FundWallet runs Credit Wallet Steps 1 and 2: it checks the destination

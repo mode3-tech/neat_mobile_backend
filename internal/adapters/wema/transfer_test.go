@@ -1,12 +1,15 @@
 package wema
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -346,5 +349,20 @@ func TestTransferAdapter_InitiateTransfer_SourceEnquiryRejected(t *testing.T) {
 	var alatErr *appErr.AlatError
 	if !errors.As(err, &alatErr) || alatErr.Message != "Account enquiry failed, confirm that account number is valid" || alatErr.NoResponse {
 		t.Fatalf("err = %v, want ALAT's message", err)
+	}
+}
+
+func TestLogTransferPayload_RedactsSecurityInfo(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	secret := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg"
+	logTransferPayload(baas.AlatClientTransferRequest{SecurityInfo: secret, Amount: 60, SourceAccountNumber: "0459373041", TransactionReference: "ref1"})
+	out := buf.String()
+	if strings.Contains(out, secret) {
+		t.Fatalf("securityInfo leaked: %s", out)
+	}
+	if !strings.Contains(out, "0459373041") || !strings.Contains(out, "(len=43)") {
+		t.Fatalf("unexpected log: %s", out)
 	}
 }
