@@ -75,7 +75,7 @@ func TestAlatDo_WalletEnvelopeErrorMessage(t *testing.T) {
 	}
 }
 
-func TestAlatDo_AccessHeaderOnDebitWalletOnly(t *testing.T) {
+func TestAlatDo_DebitWalletUsesAccessHeaderOnly(t *testing.T) {
 	got := map[string]string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got[r.URL.Path] = r.Header.Get("Access") + "|" + r.Header.Get("x-api-key")
@@ -86,7 +86,7 @@ func TestAlatDo_AccessHeaderOnDebitWalletOnly(t *testing.T) {
 	for _, p := range []string{"/debit-wallet/api/Shared/ProcessClientTransfer", "/credit-wallet/api/x"} {
 		_, _ = alatDo[AlatClientTransferResponse](context.Background(), a, http.MethodPost, srv.URL+p, map[string]string{})
 	}
-	if got["/debit-wallet/api/Shared/ProcessClientTransfer"] != "key|key" {
+	if got["/debit-wallet/api/Shared/ProcessClientTransfer"] != "key|" {
 		t.Fatalf("debit wallet headers = %q", got["/debit-wallet/api/Shared/ProcessClientTransfer"])
 	}
 	if got["/credit-wallet/api/x"] != "|key" {
