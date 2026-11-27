@@ -1,12 +1,15 @@
 package wema
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -145,9 +148,9 @@ const okTransfer = `{"result":{"status":"Pending","message":"Request received","
 
 func TestTransferAdapter_InitiateTransfer(t *testing.T) {
 	f, alat := newFakeALAT(t, map[string]string{
-		"/debit-wallet/api/Shared/AccountNameEnquiry/035/0123456789": `{"result":{"accountName":"ADA OBI","accountNumber":"0123456789"},"hasError":false}`,
-		"/debit-wallet/api/Shared/GetAllBanks":                       `{"result":[{"bankName":"ACCESS BANK","bankCode":"000014"}],"hasError":false}`,
-		"/debit-wallet/api/Shared/ProcessClientTransfer":             okTransfer,
+		"/debit-wallet/api/Shared/AccountNameEnquiry/Wallet/0123456789": `{"result":{"accountName":"ADA OBI","accountNumber":"0123456789"},"hasError":false}`,
+		"/debit-wallet/api/Shared/GetAllBanks":                          `{"result":[{"bankName":"ACCESS BANK","bankCode":"000014"}],"hasError":false}`,
+		"/debit-wallet/api/Shared/ProcessClientTransfer":                okTransfer,
 	})
 	signer := NewSigner("secret")
 	a := NewTransferAdapter(alat, signer)
@@ -188,7 +191,7 @@ func TestTransferAdapter_InitiateTransfer(t *testing.T) {
 	if si, _ := c.body["securityInfo"].(string); !signer.Verify(PurposeSecurityInfo, "tx-1", si) {
 		t.Errorf("securityInfo %q does not verify for the reference", si)
 	}
-	if f.call("/debit-wallet/api/Shared/AccountNameEnquiry/035/0123456789") == nil {
+	if f.call("/debit-wallet/api/Shared/AccountNameEnquiry/Wallet/0123456789") == nil {
 		t.Error("source account enquiry (Step 1) was skipped")
 	}
 }
@@ -200,7 +203,7 @@ func TestTransferAdapter_InitiateTransfer_Guards(t *testing.T) {
 	}
 
 	f, alat := newFakeALAT(t, map[string]string{
-		"/debit-wallet/api/Shared/AccountNameEnquiry/035/1": `{"result":{"accountName":"A"},"hasError":false}`,
+		"/debit-wallet/api/Shared/AccountNameEnquiry/Wallet/1": `{"result":{"accountName":"A"},"hasError":false}`,
 	})
 	_, err := NewTransferAdapter(alat, NewSigner("")).InitiateTransfer(context.Background(), wallet.TransferSource{AccountNumber: "1"},
 		&wallet.TransferRequest{Amount: 100, Metadata: map[string]any{"internal_transaction_id": "tx-1"}})
@@ -214,9 +217,9 @@ func TestTransferAdapter_InitiateTransfer_Guards(t *testing.T) {
 
 func TestTransferAdapter_InitiateTransfer_ExplicitFailureIsUnsuccessful(t *testing.T) {
 	_, alat := newFakeALAT(t, map[string]string{
-		"/debit-wallet/api/Shared/AccountNameEnquiry/035/1": `{"result":{"accountName":"A"},"hasError":false}`,
-		"/debit-wallet/api/Shared/GetAllBanks":              `{"result":[],"hasError":false}`,
-		"/debit-wallet/api/Shared/ProcessClientTransfer":    `{"result":{"status":"Failed","message":"Limit exceeded"},"hasError":false}`,
+		"/debit-wallet/api/Shared/AccountNameEnquiry/Wallet/1": `{"result":{"accountName":"A"},"hasError":false}`,
+		"/debit-wallet/api/Shared/GetAllBanks":                 `{"result":[],"hasError":false}`,
+		"/debit-wallet/api/Shared/ProcessClientTransfer":       `{"result":{"status":"Failed","message":"Limit exceeded"},"hasError":false}`,
 	})
 	resp, err := NewTransferAdapter(alat, NewSigner("s")).InitiateTransfer(context.Background(), wallet.TransferSource{AccountNumber: "1"},
 		&wallet.TransferRequest{Amount: 100, SortCode: "000014", Metadata: map[string]any{"internal_transaction_id": "tx-1"}})
@@ -332,7 +335,7 @@ func TestTierUpgrader(t *testing.T) {
 // ALAT's own message for a rejected source account reaches the caller.
 func TestTransferAdapter_InitiateTransfer_SourceEnquiryRejected(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/debit-wallet/api/Shared/AccountNameEnquiry/035/0459373041" {
+		if r.URL.Path != "/debit-wallet/api/Shared/AccountNameEnquiry/Wallet/0459373041" {
 			t.Errorf("unexpected ALAT call %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusBadRequest)
@@ -346,5 +349,20 @@ func TestTransferAdapter_InitiateTransfer_SourceEnquiryRejected(t *testing.T) {
 	var alatErr *appErr.AlatError
 	if !errors.As(err, &alatErr) || alatErr.Message != "Account enquiry failed, confirm that account number is valid" || alatErr.NoResponse {
 		t.Fatalf("err = %v, want ALAT's message", err)
+	}
+}
+
+func TestLogTransferPayload_RedactsSecurityInfo(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	secret := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg"
+	logTransferPayload(baas.AlatClientTransferRequest{SecurityInfo: secret, Amount: 60, SourceAccountNumber: "0459373041", TransactionReference: "ref1"})
+	out := buf.String()
+	if strings.Contains(out, secret) {
+		t.Fatalf("securityInfo leaked: %s", out)
+	}
+	if !strings.Contains(out, "0459373041") || !strings.Contains(out, "(len=43)") {
+		t.Fatalf("unexpected log: %s", out)
 	}
 }

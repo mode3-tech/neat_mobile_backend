@@ -12,10 +12,6 @@ import (
 const (
 	WemaBankCode = "000017"
 	WemaBankName = "WEMA BANK"
-	// WemaNameEnquiryBankCode is the bank code ALAT's AccountNameEnquiry takes
-	// for a Wema account (the source wallet check before a transfer). It
-	// differs from WemaBankCode, which is what we store on wallets.
-	WemaNameEnquiryBankCode = "035"
 )
 
 // ALAT gateway API path prefixes. ALAT_BASE_URL is the gateway root

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,7 +141,7 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 		return nil, errors.New("wema: transfer has no internal_transaction_id to use as the ALAT reference")
 	}
 	sourceAccount := strings.TrimSpace(source.AccountNumber)
-	if err := a.sourceAccountEnquiry(ctx, sourceAccount); err != nil {
+	if err := walletEnquiry(ctx, a.alat.WalletNameEnquiry, sourceAccount); err != nil {
 		return nil, fmt.Errorf("wema: source account enquiry: %w", err)
 	}
 	securityInfo, err := a.signer.Sign(PurposeSecurityInfo, ref)
@@ -159,18 +160,21 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 	}
 	amountNaira := transferInfo.Amount / 100
 
-	resp, err := a.alat.ProcessClientTransfer(ctx, baas.AlatClientTransferRequest{
+	bankName := a.bankName(ctx, bankCode)
+	req := baas.AlatClientTransferRequest{
 		SecurityInfo:             securityInfo,
 		Amount:                   amountNaira,
 		DestinationBankCode:      bankCode,
-		DestinationBankName:      a.bankName(ctx, bankCode),
+		DestinationBankName:      bankName,
 		DestinationAccountNumber: strings.TrimSpace(transferInfo.AccountNumber),
 		DestinationAccountName:   accountName,
 		SourceAccountNumber:      sourceAccount,
 		Narration:                narration,
 		TransactionReference:     ref,
 		UseCustomNarration:       narration != "",
-	})
+	}
+	logTransferPayload(req)
+	resp, err := a.alat.ProcessClientTransfer(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -180,20 +184,25 @@ func (a *TransferAdapter) InitiateTransfer(ctx context.Context, source wallet.Tr
 	return transferResponse(resp.Result, ref, amountNaira, strings.TrimSpace(transferInfo.AccountNumber)), nil
 }
 
-// sourceAccountEnquiry confirms ALAT recognises the wallet we're about to debit,
-// using the standard name enquiry with Wema's bank code.
-func (a *TransferAdapter) sourceAccountEnquiry(ctx context.Context, accountNumber string) error {
-	resp, err := a.alat.AccountNameEnquiry(ctx, baas.WemaNameEnquiryBankCode, accountNumber)
+// logTransferPayload logs the exact body ProcessClientTransfer is about to
+// send so it can be compared with a working call. securityInfo is a live
+// signature for a pending debit, so only its length and ends are shown.
+func logTransferPayload(req baas.AlatClientTransferRequest) {
+	req.SecurityInfo = redactSecurityInfo(req.SecurityInfo)
+	body, err := json.Marshal(req)
 	if err != nil {
-		return err
+		log.Printf("[ALAT] level=WARN op=transfer_payload ref=%s marshal_error=%v", req.TransactionReference, err)
+		return
 	}
-	if err := resultError(resp.HasError, resp.ErrorMessage, resp.ErrorMessages); err != nil {
-		return err
+	log.Printf("[ALAT] level=INFO op=transfer_payload ref=%s body=%s", req.TransactionReference, body)
+}
+
+// redactSecurityInfo keeps the length and first/last 4 characters.
+func redactSecurityInfo(s string) string {
+	if len(s) <= 8 {
+		return fmt.Sprintf("len=%d", len(s))
 	}
-	if resp.Result == nil {
-		return errors.New("wema: source account enquiry returned no result")
-	}
-	return nil
+	return fmt.Sprintf("%s...%s (len=%d)", s[:4], s[len(s)-4:], len(s))
 }
 
 // FundWallet runs Credit Wallet Steps 1 and 2: it checks the destination

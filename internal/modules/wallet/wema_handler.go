@@ -28,18 +28,46 @@ type alatAuthResponse struct {
 	Authorized           bool   `json:"authorized"`
 }
 
-// HandleAlatAuthentication is ALAT's Authentication Callback. It always
-// answers 200 with authorized true/false - ALAT reads the flag, not the
-// status code.
+// HandleAlatAuthentication is ALAT's Authentication Callback. It takes no
+// headers and always answers 200 with {transactionReference, authorized} -
+// ALAT reads the flag, not the status code - echoing the reference exactly as
+// ALAT sent it, even when the body can't be fully read.
 func (h *Handler) HandleAlatAuthentication(c *gin.Context) {
-	var req alatAuthRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("wallet handler: alat auth callback: invalid body: %v", err)
+	rawBody, err := c.GetRawData()
+	if err != nil {
+		log.Printf("wallet handler: alat auth callback: read body failed: %v", err)
 		c.JSON(http.StatusOK, alatAuthResponse{Authorized: false})
+		return
+	}
+	var req alatAuthRequest
+	if err := json.Unmarshal(rawBody, &req); err != nil {
+		log.Printf("wallet handler: alat auth callback: invalid body: %v", err)
+		c.JSON(http.StatusOK, alatAuthResponse{TransactionReference: authReferenceFrom(rawBody), Authorized: false})
 		return
 	}
 	ok := h.service.AuthorizeAlatTransaction(c.Request.Context(), req.TransactionReference, req.SecurityInfo)
 	c.JSON(http.StatusOK, alatAuthResponse{TransactionReference: req.TransactionReference, Authorized: ok})
+}
+
+// authReferenceFrom pulls transactionReference out of a body that didn't fit
+// alatAuthRequest (a number instead of a string, say), so the reply can still
+// carry it. It returns "" when there is none.
+func authReferenceFrom(raw []byte) string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return ""
+	}
+	for k, v := range m {
+		if !strings.EqualFold(k, "transactionReference") {
+			continue
+		}
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			return s
+		}
+		return strings.Trim(strings.TrimSpace(string(v)), `"`)
+	}
+	return ""
 }
 
 // HandleAlatAccountCreation is ALAT's account creation webhook, sent when a
