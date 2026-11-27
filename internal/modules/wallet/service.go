@@ -184,10 +184,6 @@ func (s *Service) InitiateTransfer(ctx context.Context, mobileUserID string, req
 		return nil, err
 	}
 
-	if req.Amount <= 50 {
-		return nil, appErr.ErrInvalidTransferAmount
-	}
-
 	txID := uuid.NewString()
 
 	wallet, err := s.repo.GetWallet(ctx, mobileUserID)
